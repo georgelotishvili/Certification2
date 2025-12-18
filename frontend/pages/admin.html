@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ადმინისტრატორის პანელი - Certification</title>
+    <meta name="api-base" content="http://127.0.0.1:8000" />
+    <script src="../scripts/config.js" defer></script>
+    <script src="../scripts/admin/shared.js" defer></script>
+    <script src="../scripts/admin/exam-settings.js" defer></script>
+    <script src="../scripts/admin/blocks.js" defer></script>
+    <script src="../scripts/admin/multi-apartment.js" defer></script>
+    <script src="../scripts/admin/multi-functional.js" defer></script>
+    <script src="../scripts/admin/statements.js" defer></script>
+    <script src="../scripts/admin/results.js" defer></script>
+    <script src="../scripts/admin/certificate.js" defer></script>
+    <script src="../scripts/admin/users.js" defer></script>
+    <script src="../scripts/admin/guide-videos.js" defer></script>
+    <script src="../scripts/admin/app-files.js" defer></script>
+    <link rel="stylesheet" href="../styles/admin.css" />
+  </head>
+  <body>
+    <header>
+
+        
+      <div class="auth-banner">ადმინისტრატორის გვერდი</div>
+
+      <button class="login-btn">მთავარი გვერდი</button>
+
+      <!-- Burger toggle for <=1050px (JS-driven) -->
+      <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="overlay" aria-hidden="true"></div>
+      <aside id="mobile-drawer" class="drawer" aria-label="მობილური მენიუ">
+        <button class="drawer-close" aria-label="დახურვა" type="button"></button>
+        <div class="drawer-auth-banner">ადმინისტრატორის გვერდი</div>
+        <nav class="drawer-nav">
+          <a href="#" data-target="registrations">რეგისტრირებული პირები</a>
+          <a href="#" data-target="exam">გამოცდა</a>
+          <a href="#" data-target="multiApartment">მრავალბინიანი</a>
+          <a href="#" data-target="multiFunctional">მრავალფუნქციური</a>
+          <a href="#" data-target="guide">გზამკვლევი</a>
+          <a href="#" data-target="app">APP</a>
+        </nav>
+        <button class="drawer-login">მთავარი გვერდი</button>
+      </aside>
+
+    </header>
+    <div class="nav-bar">
+      <nav class="nav">
+        <a href="#" data-target="registrations">რეგისტრაციები</a>
+        <a href="#" data-target="exam">გამოცდა</a>
+        <a href="#" data-target="multiApartment">მრავალბინიანი</a>
+        <a href="#" data-target="multiFunctional">მრავალფუნქციური</a>
+        <a href="#" data-target="guide">გზამკვლევი</a>
+        <a href="#" data-target="app">APP</a>
+      </nav>
+    </div>
+
+    <main>
+      <section id="exam-settings" class="exam-settings" style="display:none;">
+        <div class="exam-topbar">
+          <div class="duration-group">
+            <label for="examDuration" class="duration-label">ხანგრძლივობა (წუთი)</label>
+            <input id="examDuration" class="duration-input" type="number" min="1" max="300" value="60" />
+            <button id="saveExamDuration" class="duration-save">შენახვა</button>
+          </div>
+          <div id="durationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+          <div class="duration-group">
+            <label for="adminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
+            <input id="adminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <button id="saveAdminGatePassword" class="duration-save">შენახვა</button>
+          </div>
+          <div id="gatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+        </div>
+
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="საგამოცდო ბლოკები">
+            <h2 class="exam-blocks-title">საგამოცდო ბლოკები</h2>
+            <div class="exam-blocks-stats">
+              <span class="stat stat-blocks"><span class="label">ბლოკი</span> <span id="adminBlocksCount">0</span></span>
+              <span class="stat stat-questions"><span class="label">კითხვა</span> <span id="adminQuestionsCount">0</span></span>
+            </div>
+            <input id="examBlocksSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="საგამოცდო ბლოკების ძებნა" />
+          </div>
+
+          <div class="exam-blocks-grid">
+            <button id="addBlockTile" class="block-tile add-tile" type="button" aria-label="ბლოკის დამატება">
+              <span class="add-icon" aria-hidden="true">+</span>
+              <span class="add-text">ბლოკის დამატება</span>
+            </button>
+            <!-- აქ შემდგომ დაემატება ინდივიდუალური ბლოკების ბარათები -->
+          </div>
+        </div>
+      </section>
+      <section id="registrations-section" class="exam-settings" style="display:none;">
+        <div class="exam-content">
+          <div class="users-filters-section">
+            <div class="users-filters-header">
+              <h2 class="exam-blocks-title">რეგისტრირებული პირები</h2>
+              <div class="users-filters-controls">
+                <input id="usersSearch" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი/გვარი/ელფოსტა/ტელეფონი/კოდი/პირადი)" />
+                <select id="usersSort" class="users-sort-select">
+                  <option value="date_desc">თარიღი ↓ (ნაგულისხმევი)</option>
+                  <option value="date_asc">თარიღი ↑</option>
+                  <option value="name_asc">სახელი/გვარი ა-ჰ</option>
+                  <option value="name_desc">სახელი/გვარი ჰ-ა</option>
+                </select>
+              </div>
+            </div>
+            <div class="users-filters-checkboxes">
+              <label class="users-filter-label">
+                <input id="onlyAdmins" type="checkbox" />
+                <span>მხოლოდ ადმინები</span>
+              </label>
+              <label class="users-filter-label">
+                <input id="filterArchitects" type="checkbox" />
+                <span>არქიტექტორები</span>
+              </label>
+              <label class="users-filter-label">
+                <input id="filterExperts" type="checkbox" />
+                <span>არქიტექტორი ექსპერტები</span>
+              </label>
+              <label class="users-filter-label">
+                <input id="filterCertified" type="checkbox" />
+                <span>სერტიფიცირებული პირები</span>
+              </label>
+            </div>
+          </div>
+          <div id="usersGrid" class="exam-blocks-grid"></div>
+        </div>
+      </section>
+      <section id="multi-apartment-section" class="exam-settings" style="display:none;">
+        <div class="exam-topbar">
+          <div class="duration-group">
+            <label for="multiApartmentDuration" class="duration-label">ხანგრძლივობა (წუთი)</label>
+            <input id="multiApartmentDuration" class="duration-input" type="number" min="1" max="300" value="60" />
+            <button id="saveMultiApartmentDuration" class="duration-save">შენახვა</button>
+          </div>
+          <div id="multiApartmentDurationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+          <div class="duration-group">
+            <label for="multiApartmentAdminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
+            <input id="multiApartmentAdminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <button id="saveMultiApartmentAdminGatePassword" class="duration-save">შენახვა</button>
+          </div>
+          <div id="multiApartmentGatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+        </div>
+
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="მრავალბინიანი">
+            <h2 class="exam-blocks-title">მრავალბინიანი</h2>
+            <div class="exam-blocks-stats">
+              <span class="stat stat-blocks"><span class="label">პროექტი</span> <span id="multiApartmentBlocksCount">0</span></span>
+            </div>
+            <input id="multiApartmentSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალბინიანის ძებნა" />
+          </div>
+
+          <div class="exam-blocks-grid" id="multiApartmentGrid">
+            <button id="addMultiApartmentTile" class="block-tile add-tile" type="button" aria-label="პროექტის დამატება">
+              <span class="add-icon" aria-hidden="true">+</span>
+              <span class="add-text">პროექტის დამატება</span>
+            </button>
+            <!-- აქ შემდგომ დაემატება ინდივიდუალური ბლოკების ბარათები -->
+          </div>
+        </div>
+      </section>
+      <section id="multi-functional-section" class="exam-settings" style="display:none;">
+        <div class="exam-topbar">
+          <div class="duration-group">
+            <label for="multiFunctionalDuration" class="duration-label">ხანგრძლივობა (წუთი)</label>
+            <input id="multiFunctionalDuration" class="duration-input" type="number" min="1" max="300" value="60" />
+            <button id="saveMultiFunctionalDuration" class="duration-save">შენახვა</button>
+          </div>
+          <div id="multiFunctionalDurationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+          <div class="duration-group">
+            <label for="multiFunctionalAdminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
+            <input id="multiFunctionalAdminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <button id="saveMultiFunctionalAdminGatePassword" class="duration-save">შენახვა</button>
+          </div>
+          <div id="multiFunctionalGatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+        </div>
+
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="მრავალფუნქციური">
+            <h2 class="exam-blocks-title">მრავალფუნქციური</h2>
+            <div class="exam-blocks-stats">
+              <span class="stat stat-blocks"><span class="label">პროექტი</span> <span id="multiFunctionalBlocksCount">0</span></span>
+            </div>
+            <input id="multiFunctionalSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალფუნქციურის ძებნა" />
+          </div>
+
+          <div class="exam-blocks-grid" id="multiFunctionalGrid">
+            <button id="addMultiFunctionalTile" class="block-tile add-tile" type="button" aria-label="პროექტის დამატება">
+              <span class="add-icon" aria-hidden="true">+</span>
+              <span class="add-text">პროექტის დამატება</span>
+            </button>
+            <!-- აქ შემდგომ დაემატება ინდივიდუალური ბლოკების ბარათები -->
+          </div>
+        </div>
+      </section>
+      <section id="guide-section" class="exam-settings" style="display:none;">
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="გზამკვლევი ადმინებისთვის">
+            <h2 class="exam-blocks-title">გზამკვლევის ვიდეოები</h2>
+            <button id="guideAddVideoBtn" class="primary-btn" type="button">ვიდეოს დამატება</button>
+            <input id="guideFileInput" type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime,video/x-msvideo,video/x-matroska" style="display:none;" />
+          </div>
+          <div class="exam-blocks-grid" id="guideVideosGrid">
+            <!-- ხაზზე არის გზამკვლევის ვიდეოების სია -->
+          </div>
+        </div>
+      </section>
+      <section id="app-section" class="exam-settings" style="display:none;">
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="საინსტალაციო აპლიკაცია">
+            <h2 class="exam-blocks-title">საინსტალაციო აპლიკაცია</h2>
+            <button id="appAddFileBtn" class="primary-btn" type="button">ფაილის დამატება</button>
+            <input id="appFileInput" type="file" accept=".zip,.rar,.7z,.exe,.msi" style="display:none;" />
+          </div>
+          <div class="exam-blocks-grid" id="appFilesGrid">
+            <!-- ხაზზე არის საინსტალაციო ფაილების სია -->
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="candidateResultsOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="candidateResultsTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="candidateResultsTitle">გამოცდის შედეგები</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="candidateResultsFullName"></span>
+              <span class="meta-item" id="candidateResultsCode"></span>
+              <span class="meta-item" id="candidateResultsPersonalId"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="candidateResultsClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div id="candidateResultsList" class="attempts-list" role="list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="userStatementsOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="userStatementsTitle">განცხადებები</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="userStatementsMeta"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="userStatementsClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div id="userStatementsList" class="statements-list" role="list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="userCertificateOverlay" class="results-overlay" aria-hidden="true">
+      <div class="certificate-modal" role="dialog" aria-modal="true" aria-labelledby="userCertificateTitle">
+        <div class="certificate-modal-head">
+          <div class="certificate-modal-actions">
+            <button type="button" class="secondary-btn certificate-action-btn certificate-action-btn--danger" id="userCertificateDelete" disabled>სერტიფიკატის წაშლა</button>
+            <button type="button" class="secondary-btn certificate-action-btn" id="userCertificateDownload">PDF</button>
+            <button type="button" class="secondary-btn certificate-action-btn" id="certificateEditBtn">რედაქტირება</button>
+            <button type="button" class="modal-close" id="userCertificateClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="certificate-modal-body">
+          <div id="certificateCard" class="certificate-card" data-cert-tier="architect">
+            <!-- აქ იტვირთება architect.html ან expert.html JavaScript-ით -->
+            <div id="certificateTemplateContainer"></div>
+          </div>
+          <div id="certificateEmptyState" class="certificate-empty hidden">
+            <div class="certificate-empty__badge">სერტიფიკატი არ არის შექმნილი</div>
+            <h3>ამ პირს ჯერ არ გააჩნია სერტიფიკატი</h3>
+            <p>დააჭირე ღილაკს „სერტიფიკატის შექმნა“, შეავსე მონაცემები და სისტემა ავტომატურად შექმნის სერტიფიკატის ბარათს.</p>
+            <button type="button" class="primary-btn certificate-action-btn" id="certificateEmptyCreate">სერტიფიკატის შექმნა</button>
+          </div>
+          <form id="certificateForm" class="certificate-form hidden" novalidate>
+            <input type="hidden" id="certificateFormCode" name="uniqueCode" />
+            <input type="hidden" id="certificateFormValidUntil" name="validUntil" />
+            <div class="certificate-form__summary">
+              <div class="certificate-form__summary-item">
+                <span class="certificate-form__summary-label">სახელი, გვარი</span>
+                <span class="certificate-form__summary-value" id="certificateFormName">—</span>
+              </div>
+              <div class="certificate-form__summary-item">
+                <span class="certificate-form__summary-label">ტელეფონი</span>
+                <span class="certificate-form__summary-value" id="certificateFormPhone">—</span>
+              </div>
+              <div class="certificate-form__summary-item">
+                <span class="certificate-form__summary-label">ელფოსტა</span>
+                <span class="certificate-form__summary-value" id="certificateFormEmail">—</span>
+              </div>
+              <div class="certificate-form__summary-item">
+                <span class="certificate-form__summary-label">უნიკალური კოდი</span>
+                <span class="certificate-form__summary-value" id="certificateFormCodeDisplay">—</span>
+              </div>
+            </div>
+            <div class="certificate-form__grid">
+              <label class="certificate-form__field certificate-form__field--qualification">
+                <span class="certificate-form__label">კვალიფიკაცია</span>
+                <select id="certificateFormLevel" name="level" required>
+                  <option value="architect">შენობა-ნაგებობის არქიტექტორი</option>
+                  <option value="expert">არქიტექტურული პროექტის ექსპერტი</option>
+                </select>
+              </label>
+              <label class="certificate-form__field certificate-form__field--status">
+                <span class="certificate-form__label">სტატუსი</span>
+                <select id="certificateFormStatus" name="status" required>
+                  <option value="active">მოქმედი</option>
+                  <option value="suspended">შეჩერებული</option>
+                  <option value="expired">ვადაგასული</option>
+                </select>
+              </label>
+              <label class="certificate-form__field certificate-form__field--score">
+                <span class="certificate-form__label">შეფასება</span>
+                <input type="number" id="certificateFormScore" name="examScore" min="1" max="100" step="1" placeholder="მაგ: 87" required />
+              </label>
+              <label class="certificate-form__field certificate-form__field--issue-date">
+                <span class="certificate-form__label">გაცემის თარიღი</span>
+                <input type="text" id="certificateFormIssueDate" name="issueDate" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off" required />
+              </label>
+              <label class="certificate-form__field certificate-form__field--validity-term">
+                <span class="certificate-form__label">მოქმედების ვადა (წელი)</span>
+                <input type="number" min="1" max="20" step="1" id="certificateFormValidityTerm" name="validityTerm" value="5" required />
+              </label>
+            </div>
+            <div class="certificate-form__meta">
+              <div class="certificate-form__meta-label">მოქმედების საბოლოო თარიღი</div>
+              <div class="certificate-form__meta-value" id="certificateFormValidUntilDisplay">—</div>
+            </div>
+            <div class="certificate-form__actions">
+              <button type="submit" class="primary-btn certificate-action-btn" id="certificateFormSubmit">შენახვა</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div id="userEditOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userEditTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="userEditTitle">მონაცემების რედაქტირება</h2>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="userEditClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <form id="userEditForm" class="user-edit-form">
+            <div class="user-edit-grid">
+              <label class="user-edit-field">
+                <span class="user-edit-label">სახელი</span>
+                <input id="userEditFirstName" type="text" name="firstName" autocomplete="given-name" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">გვარი</span>
+                <input id="userEditLastName" type="text" name="lastName" autocomplete="family-name" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">პირადი ნომერი</span>
+                <input id="userEditPersonalId" type="text" name="personalId" inputmode="numeric" pattern="\d*" maxlength="11" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">ტელეფონი</span>
+                <input id="userEditPhone" type="tel" name="phone" autocomplete="tel" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">ელფოსტა</span>
+                <input id="userEditEmail" type="email" name="email" autocomplete="email" required />
+              </label>
+              <label class="user-edit-field">
+                <span class="user-edit-label">უნიკალური კოდი</span>
+                <input id="userEditCode" type="text" name="code" autocomplete="off" readonly />
+              </label>
+            </div>
+            <div class="user-edit-actions">
+              <button type="button" class="secondary-btn" id="userEditCancel">გაუქმება</button>
+              <button type="submit" class="primary-btn" id="userEditSave">შენახვა</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div id="resultDetailOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal results-modal--wide" role="dialog" aria-modal="true" aria-labelledby="resultDetailTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="resultDetailTitle">შედეგის დეტალები</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="resultDetailExamTitle"></span>
+              <span class="meta-item" id="resultDetailStatus"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="result-media-trigger disabled" id="resultDetailMedia" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M17 10.5V7a2 2 0 0 0-2-2H5A2 2 0 0 0 3 7v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3.5l4 3v-9l-4 3Z" fill="currentColor"/>
+              </svg>
+              ვიდეოთვალი
+            </button>
+            <button type="button" class="result-media-trigger disabled" id="resultDetailScreenMedia" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-6l1.5 2h-6L9 17H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 2v8h16V7H4z" fill="currentColor"/>
+              </svg>
+              სკრინი
+            </button>
+            <button type="button" class="primary-btn" id="resultDetailDownload">შედეგების ჩამოტვირთვა</button>
+            <button type="button" class="modal-close" id="resultDetailClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body results-detail-body">
+          <section class="result-section">
+            <h3>ძირითადი ინფორმაცია</h3>
+            <div class="result-info-grid">
+              <div><span class="label">კანდიდატი</span><span id="resultDetailCandidate"></span></div>
+              <div><span class="label">პირადი №</span><span id="resultDetailPersonalId"></span></div>
+              <div><span class="label">კოდი</span><span id="resultDetailCode"></span></div>
+              <div><span class="label">დაწყება</span><span id="resultDetailStartedAt"></span></div>
+              <div><span class="label">დასრულება</span><span id="resultDetailFinishedAt"></span></div>
+              <div><span class="label">ხანგრძლივობა</span><span id="resultDetailDuration"></span></div>
+              <div><span class="label">საერთო ქულა</span><span id="resultDetailScore"></span></div>
+            </div>
+          </section>
+
+          <section class="result-section">
+            <h3>ბლოკების შედეგები</h3>
+            <div id="resultBlockStats" class="block-stats-grid"></div>
+          </section>
+
+          <section class="result-section" id="resultMediaSection" hidden>
+            <h3>ვიდეო ჩანაწერი</h3>
+            <div class="result-media">
+              <div class="result-media-player">
+                <video id="resultMediaPlayer" controls preload="metadata"></video>
+              </div>
+              <div class="result-media-actions">
+                <a href="#" class="secondary-btn result-media-download" id="resultMediaDownload" aria-disabled="true" role="button">ჩანაწერის ჩამოტვირთვა</a>
+                <span class="result-media-info" id="resultMediaInfo"></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="result-section">
+            <div class="section-head">
+              <h3>კითხვების დეტალები</h3>
+              <div class="section-head-meta" id="resultDetailSummary"></div>
+            </div>
+            <div id="resultQuestionList" class="result-question-list"></div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="footer-bottom">
+        <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია</p>
+      </div>
+    </footer>
+
+    <script src="../vendor/jspdf.umd.min.js"></script>
+    <script src="../vendor/svg2pdf.min.js"></script>
+    <script src="../scripts/admin.js?v=5" defer></script>
+  </body>
+</html>

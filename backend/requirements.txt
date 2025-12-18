@@ -1,0 +1,9 @@
+fastapi==0.111.1
+uvicorn[standard]==0.30.0
+SQLAlchemy==2.0.32
+pydantic==2.8.2
+pydantic-settings==2.3.4
+passlib[bcrypt]==1.7.4
+bcrypt==4.1.2
+python-dotenv==1.0.1
+

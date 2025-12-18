@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>რეგისტრირებული პირები</title>
+    <meta name="api-base" content="http://127.0.0.1:8000" />
+    <script src="../scripts/config.js" defer></script>
+    <link rel="stylesheet" href="../styles/admin.css" />
+  </head>
+  <body>
+    <header>
+      <div class="auth-banner">ადმინისტრატორის გვერდი</div>
+      <button class="login-btn" onclick="location.href='admin.html'">მთავარი გვერდი</button>
+    </header>
+
+    <div class="nav-bar">
+      <nav class="nav">
+        <a href="admin.html">რეესტრი</a>
+        <a href="registrations.html">რეგისტრაციები</a>
+        <a href="admin.html">განცხადებები</a>
+        <a href="admin.html">გამოცდა</a>
+        <a href="admin.html">შედეგები</a>
+      </nav>
+    </div>
+
+    <main>
+      <section class="exam-settings" style="display:block;">
+        <div class="exam-content">
+          <div class="exam-blocks-header">
+            <h2 class="exam-blocks-title">რეგისტრირებული პირები</h2>
+            <input id="usersSearch" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი/გვარი/ელფოსტა/ტელეფონი/კოდი/პირადი)" />
+            <select id="usersSort" class="duration-input" style="width:auto;">
+              <option value="date_desc">თარიღი ↓ (ნაგულისხმევი)</option>
+              <option value="date_asc">თარიღი ↑</option>
+              <option value="name_asc">სახელი/გვარი ა-ჰ</option>
+              <option value="name_desc">სახელი/გვარი ჰ-ა</option>
+            </select>
+            <label class="duration-label" style="display:inline-flex;align-items:center;gap:6px;">
+              <input id="onlyAdmins" type="checkbox" /> მხოლოდ ადმინები
+            </label>
+          <button id="btnDeleteAllUsers" type="button" title="ყველა რეგისტრაციის წაშლა" style="margin-left:auto;padding:8px 12px;border:2px solid #fecaca;border-radius:8px;background:#fee2e2;color:#991b1b;cursor:pointer;font-weight:700;">ყველას წაშლა</button>
+          </div>
+          <div id="usersGrid" class="exam-blocks-grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer><div class="footer-bottom"><p>© სერტიფიკაცია</p></div></footer>
+    <script src="../scripts/registrations.js?v=20251101"></script>
+  </body>
+  </html>
+
+

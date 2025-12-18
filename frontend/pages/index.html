@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>certification</title>
+    <!-- instant black cover between pages -->
+    <script>
+      (function(){
+        try {
+          if (sessionStorage.getItem('pageCover') === '1') {
+            var s = document.createElement('style');
+            s.textContent = '#pageCover{position:fixed;inset:0;background:#fff;z-index:2147483647;opacity:1;pointer-events:none;}';
+            document.head.appendChild(s);
+            var d = document.createElement('div');
+            d.id = 'pageCover';
+            document.documentElement.appendChild(d);
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <meta name="api-base" content="http://127.0.0.1:8000" />
+    <script src="../scripts/config.js" defer></script>
+    <script src="../scripts/header.js" defer></script>
+    <link rel="stylesheet" href="../styles/styles.css" />
+    <link rel="stylesheet" href="../styles/header.css" />
+  </head>
+  <body>
+    <!-- Header will be loaded dynamically by header.js -->
+
+    <main>
+      <section class="main-hero" aria-label="პლატფორმის აღწერა">
+        <p class="gi-line"><span class="initial">G</span>eorgian <span class="initial">I</span>nstitute of <span class="initial">P</span>rofessional <span class="initial">C</span>ertification</p>
+        <p>Architect Certification Platform</p>
+        <h1>არქიტექტორთა სასერტიფიკაციო პლატფორმა</h1>
+        <p>საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი</p>
+      </section>
+    </main>
+
+
+
+    <div class="registry-overlay" id="registryOverlay" aria-hidden="true">
+      <div class="registry-modal" role="dialog" aria-modal="true" aria-labelledby="registryTitle">
+        <div class="registry-head">
+          <h2 id="registryTitle">სერტიფიცირებული პირების რეესტრი</h2>
+          <button type="button" class="registry-close" id="registryClose" aria-label="დახურვა">×</button>
+        </div>
+        <div class="registry-controls">
+          <input type="text" id="registrySearch" class="registry-search" placeholder="ძებნა (სახელი, გვარი ან კოდი)" aria-label="ძიება" />
+          <div class="registry-checkboxes" role="group" aria-label="კვალიფიკაციის ფილტრები">
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterArchitect" />
+              <span>არქიტექტორი</span>
+            </label>
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterExpert" />
+              <span>არქიტექტორი ექსპერტი</span>
+            </label>
+          </div>
+          <label class="registry-sort">
+            <span>დალაგება</span>
+            <select id="registrySort">
+              <option value="date_desc">უახლესი რეგისტრაციები</option>
+              <option value="date_asc">ძველი რეგისტრაციები</option>
+              <option value="name_asc">სახელი (ა-ჰ)</option>
+              <option value="name_desc">სახელი (ჰ-ა)</option>
+              <option value="score_desc">ქულა მაღალი → დაბალი</option>
+              <option value="score_asc">ქულა დაბალი → მაღალი</option>
+              <option value="rating_desc">რეიტინგი მაღალი → დაბალი</option>
+              <option value="rating_asc">რეიტინგი დაბალი → მაღალი</option>
+            </select>
+          </label>
+        </div>
+        <div class="registry-body">
+          <div class="registry-list" id="registryList" role="list"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="footer-content footer-only-contact">
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/E-mail.svg" alt="" aria-hidden="true" />
+          <a href="mailto:naormala@gmail.com" aria-label="ელფოსტა">naormala@gmail.com</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/phone.svg" alt="" aria-hidden="true" />
+          <a href="tel:+995593222033" aria-label="ტელეფონი">+995 593 222 033</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/location.svg" alt="" aria-hidden="true" />
+          <span aria-label="მისამართი">თბილისი, საქართველო</span>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/world.svg" alt="" aria-hidden="true" />
+          <a href="https://gipc.ge/" aria-label="ვებსაიტი">gipc.ge</a>
+        </div>
+      </div>
+      
+      <div class="footer-bottom">
+        <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია <a href="admin.html" class="admin-link" style="display:none">/ ადმინ გვერდი</a></p>
+      </div>
+    </footer>
+    <script src="../scripts/registry.mini.js" defer></script>
+    <script src="../scripts/script.js?v=2" defer></script>
+  </body>
+</html>
+

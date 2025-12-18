@@ -1,0 +1,180 @@
+<header>
+  <!-- City silhouette SVG (sky is transparent) -->
+  <img src="../assets/svg/header.svg" alt="" class="header-hero" />
+
+  <!-- Login Modal -->
+  <div class="login-modal" id="loginModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-content" role="document">
+      <button class="modal-close" id="modalClose" aria-label="დახურვა">&times;</button>
+      <h3>ავტორიზაცია / რეგისტრაცია</h3>
+      <div class="modal-buttons">
+        <button class="modal-btn login-option">ავტორიზაცია</button>
+        <button class="modal-btn register-option">რეგისტრაცია</button>
+      </div>
+      <form class="login-form" id="loginForm" novalidate>
+        <div class="field">
+          <input type="email" name="email" placeholder="ელფოსტა" required />
+        </div>
+        <div class="field">
+          <input type="password" name="password" placeholder="პაროლი" required />
+        </div>
+        <div class="forgot-password-link">
+          <a href="#" id="forgotPasswordLink">დაგავიწყდათ პაროლი?</a>
+        </div>
+        <div class="modal-buttons">
+          <button type="submit" class="modal-btn submit">ავტორიზაცია</button>
+        </div>
+      </form>
+
+      <form class="register-form" id="registerForm" novalidate>
+        <!-- Step 1: Basic info -->
+        <div class="register-step" id="registerStep1">
+          <div class="field">
+            <input type="text" name="personalId" inputmode="numeric" maxlength="11" placeholder="პირადი ნომერი" required />
+          </div>
+          <div class="field">
+            <input type="text" name="firstName" placeholder="სახელი" required />
+          </div>
+          <div class="field">
+            <input type="text" name="lastName" placeholder="გვარი" required />
+          </div>
+          <div class="field">
+            <input type="tel" name="phone" placeholder="ტელეფონი" required />
+          </div>
+          <div class="field">
+            <input type="email" name="email" placeholder="ელფოსტა" required />
+          </div>
+          <div class="field">
+            <input type="password" name="password" placeholder="პაროლი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="confirmPassword" placeholder="გაიმეორეთ პაროლი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="button" class="modal-btn submit" id="registerSendCodeBtn">კოდის გაგზავნა</button>
+          </div>
+        </div>
+        <!-- Step 2: Verification code -->
+        <div class="register-step" id="registerStep2" style="display:none;">
+          <p class="verification-info">4-ნიშნა კოდი გაგზავნილია თქვენს ელფოსტაზე</p>
+          <div class="field">
+            <input type="text" name="verificationCode" inputmode="numeric" maxlength="4" placeholder="შეიყვანეთ კოდი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">რეგისტრაცია</button>
+            <button type="button" class="modal-btn back-to-login" id="registerBackBtn">უკან დაბრუნება</button>
+          </div>
+        </div>
+      </form>
+
+      <form class="forgot-password-form" id="forgotPasswordForm" novalidate>
+        <div class="field">
+          <input type="email" name="email" placeholder="ელფოსტა" required />
+        </div>
+        <div class="modal-buttons">
+          <button type="submit" class="modal-btn submit">პაროლის აღდგენა</button>
+          <button type="button" class="modal-btn back-to-login">უკან დაბრუნება</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Site Info Modal -->
+  <div class="site-info-modal" id="siteInfoModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="site-info-content" role="document" aria-labelledby="siteInfoTitle">
+      <button class="modal-close site-info-close" aria-label="დახურვა" type="button">&times;</button>
+      <h3 id="siteInfoTitle">ინფორმაცია</h3>
+      <div class="site-info-body" id="siteInfoBody"></div>
+    </div>
+  </div>
+
+  <div class="overlay" aria-hidden="true"></div>
+  <aside id="mobile-drawer" class="drawer" aria-label="მობილური მენიუ">
+    <button class="drawer-close" aria-label="დახურვა" type="button"></button>
+    <div class="drawer-auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
+    <nav class="drawer-nav">
+      <a href="#" class="drawer-registry">რეესტრი</a>
+      <a href="#" class="drawer-statements">განცხადებები</a>
+      <div class="drawer-item drawer-about">
+        <a href="#" class="drawer-about-trigger" aria-haspopup="true" aria-expanded="false">ინფორმაცია</a>
+        <div class="drawer-about-submenu drawer-submenu" role="menu" hidden>
+          <button type="button" class="drawer-submenu-item about-us">ჩვენს შესახებ</button>
+          <button type="button" class="drawer-submenu-item terms">წესები და პირობები</button>
+          <button type="button" class="drawer-submenu-item process">საგამოცდო პროცესი</button>
+          <button type="button" class="drawer-submenu-item contract">საგამოცდო ხელშეკრულება</button>
+          <button type="button" class="drawer-submenu-item certification-contract">სასერტიფიკაციო ხელშეკრულება</button>
+          <button type="button" class="drawer-submenu-item legal-base">საკანონმდებლო ბაზა</button>
+          <button type="button" class="drawer-submenu-item team">ჩვენი გუნდი</button>
+          <button type="button" class="drawer-submenu-item guide">გზამკვლევი</button>
+        </div>
+      </div>
+      <a href="#" class="drawer-profile" data-page-link>ჩემი გვერდი</a>
+    </nav>
+    <button class="drawer-login" data-auth-btn>ავტორიზაცია</button>
+  </aside>
+
+  <div class="nav-bar">
+    <div class="logo">
+      <img src="../assets/svg/logo.svg" alt="logo" />
+    </div>
+    <div class="auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
+    <nav class="nav">
+      <a href="#" class="nav-registry">რეესტრი</a>
+      <a href="#" class="nav-statements">განცხადებები</a>
+      <div class="nav-item nav-about">
+        <a href="#" class="about-trigger" aria-haspopup="true" aria-expanded="false">ინფორმაცია</a>
+        <div class="dropdown about-dropdown" role="menu" aria-hidden="true">
+          <button type="button" class="dropdown-item about-us">ჩვენს შესახებ</button>
+          <button type="button" class="dropdown-item terms">წესები და პირობები</button>
+          <button type="button" class="dropdown-item process">საგამოცდო პროცესი</button>
+          <button type="button" class="dropdown-item contract">საგამოცდო ხელშეკრულება</button>
+          <button type="button" class="dropdown-item certification-contract">სასერტიფიკაციო ხელშეკრულება</button>
+          <button type="button" class="dropdown-item legal-base">საკანონმდებლო ბაზა</button>
+          <button type="button" class="dropdown-item team">ჩვენი გუნდი</button>
+          <button type="button" class="dropdown-item guide">გზამკვლევი</button>
+        </div>
+      </div>
+      <a href="#" class="nav-profile" data-page-link>ჩემი გვერდი</a>
+    </nav>
+    <button class="login-btn" data-auth-btn>შესვლა</button>
+    <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </div>
+
+  <!-- Statements Modal -->
+  <div class="results-overlay" id="userStatementsOverlay" aria-hidden="true">
+    <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
+      <div class="results-modal-head">
+        <div class="results-modal-titles">
+          <h2 id="userStatementsTitle">განცხადებები</h2>
+          <div class="results-modal-meta">
+            <span class="meta-item" id="userStatementsMeta"></span>
+          </div>
+        </div>
+        <div class="results-modal-actions">
+          <button type="button" class="modal-close" id="userStatementsClose" aria-label="დახურვა">×</button>
+        </div>
+      </div>
+      <div class="results-modal-body">
+        <form id="userStatementForm" class="statement-compose">
+          <textarea name="message" placeholder="განცხადების ტექსტი" rows="4" required></textarea>
+          <div class="statement-file">
+            <div class="statement-file-controls">
+              <button type="button" class="statement-file-choose" id="statementFileChoose">ფაილის არჩევა</button>
+              <input type="file" name="attachment" id="statementFileInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg" />
+            </div>
+            <input type="text" class="statement-file-display" id="statementFileDisplay" placeholder="ZIP, RAR, PDF, JPEG" readonly />
+          </div>
+          <div class="compose-actions">
+            <button type="submit" class="submit">გაგზავნა</button>
+          </div>
+        </form>
+        <div id="userStatementsList" class="statements-list" role="list"></div>
+      </div>
+    </div>
+  </div>
+</header>
+

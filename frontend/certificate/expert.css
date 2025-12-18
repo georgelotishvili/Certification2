@@ -1,0 +1,118 @@
+.certificate-background {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1123 / 793;
+  background-image: url('expert bac.svg');
+  background-size: 100% 100%;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  display: block;
+  overflow: hidden;
+  contain: layout style paint;
+}
+
+
+.certificate-background > div {
+  position: absolute;
+  font-family: 'DejaVu Sans', sans-serif;
+  font-size: 12pt;
+  color: #000000;
+  font-weight: 700;
+  text-align: center;
+  padding: 2px 4px;
+  overflow: visible;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.owner-2 {
+  left: 10.33%;
+  top: 33%;
+  width: 58.24%;
+  height: 3.4%;
+}
+
+.personal-number-2 {
+  left: 13.33%;
+  top: 36.9%;
+  width: 10.42%;
+  height: 2.36%;
+}
+
+.identification-code-2 {
+  left: 74.58%;
+  top: 87.2%;
+  width: 11.27%;
+  height: 2.52%;
+}
+
+.issue-date-2 {
+  left: 11.49%;
+  top: 68.2%;
+  width: 7.57%;
+  height: 2.14%;
+}
+
+.validity-period-2 {
+  left: 34.10%;
+  top: 72.4%;
+  width: 3.65%;
+  height: 2.02%;
+}
+
+.expiry-date-2 {
+  left: 11.49%;
+  top: 76.5%;
+  width: 7.57%;
+  height: 2.14%;
+}
+
+@font-face {
+  font-family: 'DejaVu Sans';
+  src: url('../assets/fonts/dejavu-sans.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BPG Nino Mtavruli Bold';
+  /* Use local TTF available in assets */
+  src: url('../assets/fonts/bpg_nino_mtavruli_bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+.owner-2 {
+  font-family: 'BPG Nino Mtavruli Bold', 'DejaVu Sans', sans-serif;
+  font-size: 24pt;
+  font-weight: 700;
+  color: #990000;
+}
+
+.certificate-background .owner-2 {
+  font-family: 'BPG Nino Mtavruli Bold', 'DejaVu Sans', sans-serif;
+  font-size: 24pt;
+  font-weight: 700;
+  color: #990000;
+  line-height: 1;
+  padding: 7px 4px 0 4px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ჩემი გვერდი</title>
+    <!-- instant black cover between pages -->
+    <script>
+      (function(){
+        try {
+          if (sessionStorage.getItem('pageCover') === '1') {
+            var s = document.createElement('style');
+            s.textContent = '#pageCover{position:fixed;inset:0;background:#fff;z-index:2147483647;opacity:1;pointer-events:none;}';
+            document.head.appendChild(s);
+            var d = document.createElement('div');
+            d.id = 'pageCover';
+            document.documentElement.appendChild(d);
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <meta name="api-base" content="http://127.0.0.1:8000" />
+    <script src="../scripts/config.js" defer></script>
+    <script src="../scripts/header.js" defer></script>
+    <link rel="stylesheet" href="../styles/styles.css" />
+    <link rel="stylesheet" href="../styles/header.css" />
+    <link rel="stylesheet" href="../styles/my.css" />
+  </head>
+  <body>
+    <!-- Header will be loaded dynamically by header.js -->
+
+    <main>
+      <section class="page-section page-section--with-photo">
+        <div class="page-header-photo" id="pageHeaderPhoto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="default-photo-icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+          </svg>
+        </div>
+        <div class="page-header-info">
+          <h1 id="pageTitle">ჩემი გვერდი</h1>
+          <p class="muted">პერსონალური სივრცე.</p>
+        </div>
+      </section>
+
+      <div class="my-grid">
+        <section class="profile-section" aria-labelledby="profileTitle">
+          <div class="profile-card">
+            <h2 id="profileTitle">პირადი ინფორმაცია</h2>
+            <div class="profile-grid">
+              <div class="profile-row">
+                <span class="profile-label">სახელი</span>
+                <span class="profile-value" id="myFirstName">—</span>
+              </div>
+              <div class="profile-row">
+                <span class="profile-label">გვარი</span>
+                <span class="profile-value" id="myLastName">—</span>
+              </div>
+              <div class="profile-row">
+                <span class="profile-label">პირადი ნომერი</span>
+                <span class="profile-value" id="myPersonalId">—</span>
+              </div>
+              <div class="profile-row">
+                <span class="profile-label">ტელეფონი</span>
+                <span class="profile-value" id="myPhone">—</span>
+              </div>
+              <div class="profile-row">
+                <span class="profile-label">ელფოსტა</span>
+                <span class="profile-value" id="myEmail">—</span>
+              </div>
+              <div class="profile-row">
+                <span class="profile-label">უნიკალური კოდი</span>
+                <span class="profile-value" id="myCode">—</span>
+              </div>
+              <div class="profile-row">
+                <span class="profile-label">რეგისტრაციის დრო</span>
+                <span class="profile-value" id="myCreatedAt">—</span>
+              </div>
+            </div>
+            <div class="profile-actions">
+              <button type="button" class="profile-edit-btn" id="profileEditBtn" style="display:none;">რედაქტირება</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="cert-section" aria-labelledby="certTitle">
+          <div class="cert-card is-empty" id="certCard">
+            <div class="cert-head">
+              <h2 id="certTitle">სერტიფიკატი</h2>
+              <button type="button" class="cert-download" id="certDownloadBtn" disabled>სერტიფიკატის ჩამოტვირთვა</button>
+            </div>
+            <div class="cert-grid">
+              <div class="cert-row"><span class="cert-label">უნიკალური კოდი</span><span class="cert-value" id="myCertCode">—</span></div>
+              <div class="cert-row"><span class="cert-label">კვალიფიკაცია</span><span class="cert-value" id="myCertLevel">—</span></div>
+              <div class="cert-row"><span class="cert-label">სტატუსი</span><span class="cert-value" id="myCertStatus">—</span></div>
+              <div class="cert-row"><span class="cert-label">გაცემის თარიღი</span><span class="cert-value" id="myCertIssueDate">—</span></div>
+              <div class="cert-row"><span class="cert-label">ვადა (წელი)</span><span class="cert-value" id="myCertValidityTerm">—</span></div>
+              <div class="cert-row"><span class="cert-label">მოქმედების ბოლო თარიღი</span><span class="cert-value" id="myCertValidUntil">—</span></div>
+              <div class="cert-row"><span class="cert-label">საგამოცდო შეფასება</span><span class="cert-value" id="myCertExamScore">—</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="reviews-section" aria-labelledby="reviewsTitle">
+          <div class="reviews-card disabled" id="reviewsCard">
+            <div class="reviews-head">
+              <h2 id="reviewsTitle">შეფასებები და კომენტარები</h2>
+              <div class="reviews-rating">
+                <div class="stars" id="reviewStars" aria-label="შეფასება 0-დან 5-მდე">
+                  <button type="button" class="star" data-value="1" aria-label="1">★</button>
+                  <button type="button" class="star" data-value="2" aria-label="2">★</button>
+                  <button type="button" class="star" data-value="3" aria-label="3">★</button>
+                  <button type="button" class="star" data-value="4" aria-label="4">★</button>
+                  <button type="button" class="star" data-value="5" aria-label="5">★</button>
+                </div>
+                <span class="stars-score" id="reviewStarsScore" aria-live="polite">0.00</span>
+              </div>
+            </div>
+            <div class="reviews-comments">
+              <form class="comment-form" id="reviewCommentForm">
+                <textarea name="message" id="reviewCommentMessage" rows="3" placeholder="დაწერეთ კომენტარი" required></textarea>
+                <div class="comment-actions">
+                  <button type="submit" class="comment-submit">კომენტარის დამატება</button>
+                </div>
+              </form>
+              <div class="comments-list" id="reviewsComments" role="list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="expert-section" aria-labelledby="expertTitle">
+          <div class="expert-card disabled" id="expertCard">
+            <div class="expert-head">
+              <h2 id="expertTitle">პროექტები</h2>
+            </div>
+            <form id="expertForm" class="expert-form" enctype="multipart/form-data">
+              <div class="expert-grid">
+                <label class="expert-field">
+                  <span class="expert-label">პროექტის სახელწოდება</span>
+                  <input type="text" id="expertFunction" name="building_function" placeholder="მაგ: საცხოვრებელი" />
+                </label>
+                <label class="expert-field">
+                  <span class="expert-label">პროექტის მისამართი</span>
+                  <input type="text" id="expertAddress" name="project_address" placeholder="მაგ: მისამართი" />
+                </label>
+                <label class="expert-field">
+                  <span class="expert-label">საკადასტრო კოდი</span>
+                  <input type="text" id="expertCadastral" name="cadastral_code" placeholder="მაგ: 01.11.22.333" />
+                </label>
+              </div>
+              <div class="expert-files">
+                <div class="expert-field file-field">
+                  <span class="expert-label">საექსპერტო შეფასება</span>
+                  <div class="file-input-row">
+                    <button type="button" id="expertExpertiseClear" class="file-clear" aria-label="გასუფთავება" disabled>×</button>
+                    <button type="button" id="expertExpertiseChoose" class="file-choose">Choose File</button>
+                    <input type="file" id="expertFileExpertise" class="hidden-file-input" name="expertise" accept=".pdf,.zip,.rar" />
+                    <span class="file-chosen" id="expertExpertiseChosen">No file chosen</span>
+                  </div>
+                  <div class="file-actions">
+                    <button type="button" id="expertExpertiseDelete" class="file-delete" style="display:none">წაშლა</button>
+                  </div>
+                </div>
+                <div class="expert-field file-field">
+                  <span class="expert-label">პროექტი</span>
+                  <div class="file-input-row">
+                    <button type="button" id="expertProjectClear" class="file-clear" aria-label="გასუფთავება" disabled>×</button>
+                    <button type="button" id="expertProjectChoose" class="file-choose">Choose File</button>
+                    <input type="file" id="expertFileProject" class="hidden-file-input" name="project" accept=".pdf,.zip,.rar" />
+                    <span class="file-chosen" id="expertProjectChosen">No file chosen</span>
+                  </div>
+                  <div class="file-actions">
+                    <button type="button" id="expertProjectDelete" class="file-delete" style="display:none">წაშლა</button>
+                  </div>
+                </div>
+              </div>
+              <div class="expert-actions">
+                <button type="button" id="expertSubmitBtn" class="expert-btn" disabled>გაგზავნა</button>
+              </div>
+            </form>
+            <div class="expert-list" id="expertList" role="list"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <div class="registry-overlay" id="registryOverlay" aria-hidden="true">
+      <div class="registry-modal" role="dialog" aria-modal="true" aria-labelledby="registryTitle">
+        <div class="registry-head">
+          <h2 id="registryTitle">სერტიფიცირებული პირების რეესტრი</h2>
+          <button type="button" class="registry-close" id="registryClose" aria-label="დახურვა">×</button>
+        </div>
+        <div class="registry-controls">
+          <input type="text" id="registrySearch" class="registry-search" placeholder="ძებნა (სახელი, გვარი ან კოდი)" aria-label="ძიება" />
+          <div class="registry-checkboxes" role="group" aria-label="კვალიფიკაციის ფილტრები">
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterArchitect" />
+              <span>არქიტექტორი</span>
+            </label>
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterExpert" />
+              <span>არქიტექტორი ექსპერტი</span>
+            </label>
+          </div>
+          <label class="registry-sort">
+            <span>დალაგება</span>
+            <select id="registrySort">
+              <option value="date_desc">უახლესი რეგისტრაციები</option>
+              <option value="date_asc">ძველი რეგისტრაციები</option>
+              <option value="name_asc">სახელი (ა-ჰ)</option>
+              <option value="name_desc">სახელი (ჰ-ა)</option>
+              <option value="score_desc">ქულა მაღალი → დაბალი</option>
+              <option value="score_asc">ქულა დაბალი → მაღალი</option>
+              <option value="rating_desc">რეიტინგი მაღალი → დაბალი</option>
+              <option value="rating_asc">რეიტინგი დაბალი → მაღალი</option>
+            </select>
+          </label>
+        </div>
+        <div class="registry-body">
+          <div class="registry-list" id="registryList" role="list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ratings criteria overlay -->
+    <div class="ratings-overlay" id="ratingsOverlay" aria-hidden="true">
+      <div class="ratings-modal" role="dialog" aria-modal="true" aria-labelledby="ratingsTitle">
+        <div class="ratings-modal-head">
+          <h2 id="ratingsTitle">კრიტერიუმების შეფასება</h2>
+          <button type="button" class="modal-close" id="ratingsClose" aria-label="დახურვა">×</button>
+        </div>
+        <form id="criteriaForm" class="criteria-form">
+          <div class="criteria-grid">
+            <label class="criteria-row">
+              <span class="criteria-label">კეთილსინდისიერება</span>
+              <input type="range" min="0" max="5" step="0.01" id="critIntegrity" />
+              <span class="criteria-value" id="valIntegrity">0.00</span>
+            </label>
+            <label class="criteria-row">
+              <span class="criteria-label">პასუხისმგებლობა</span>
+              <input type="range" min="0" max="5" step="0.01" id="critResponsibility" />
+              <span class="criteria-value" id="valResponsibility">0.00</span>
+            </label>
+            <label class="criteria-row">
+              <span class="criteria-label">ცოდნა და გამოცდილება</span>
+              <input type="range" min="0" max="5" step="0.01" id="critKnowledge" />
+              <span class="criteria-value" id="valKnowledge">0.00</span>
+            </label>
+            <label class="criteria-row">
+              <span class="criteria-label">პროფესიული უნარები</span>
+              <input type="range" min="0" max="5" step="0.01" id="critSkills" />
+              <span class="criteria-value" id="valSkills">0.00</span>
+            </label>
+            <label class="criteria-row">
+              <span class="criteria-label">ფასი და ხარისხი</span>
+              <input type="range" min="0" max="5" step="0.01" id="critPrice" />
+              <span class="criteria-value" id="valPrice">0.00</span>
+            </label>
+          </div>
+          <div class="criteria-actions">
+            <button type="submit" class="expert-btn primary">შენახვა</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Profile edit overlay -->
+    <div class="profile-edit-overlay" id="profileEditOverlay" aria-hidden="true">
+      <div class="profile-edit-modal" role="dialog" aria-modal="true">
+        <div class="profile-edit-head">
+          <h2 class="profile-edit-title">პირადი ინფორმაციის რედაქტირება</h2>
+          <button type="button" class="profile-edit-close" id="profileEditClose" aria-label="დახურვა">×</button>
+        </div>
+        <form id="profileEditForm" class="profile-edit-form" novalidate>
+          <div class="profile-edit-grid">
+            <input type="text" id="editFirstName" class="profile-edit-input" autocomplete="given-name" placeholder="სახელი" required />
+            <input type="text" id="editLastName" class="profile-edit-input" autocomplete="family-name" placeholder="გვარი" required />
+            <input type="text" id="editPersonalId" class="profile-edit-input" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="პირადი ნომერი" />
+            <input type="tel" id="editPhone" class="profile-edit-input" autocomplete="tel" placeholder="ტელეფონი" required />
+            <input type="email" id="editEmail" class="profile-edit-input" autocomplete="email" placeholder="ელფოსტა" required />
+          </div>
+
+          <!-- Email verification (shown only when email changes) -->
+          <div class="profile-edit-verification" id="profileEditVerification" style="display:none;">
+            <input type="text" id="editEmailVerificationCode" class="profile-edit-input" inputmode="numeric" maxlength="4" placeholder="ვერიფიკაციის კოდი" />
+            <button type="button" class="profile-edit-send-code" id="profileEditSendCodeBtn">კოდის გაგზავნა</button>
+          </div>
+
+          <div class="profile-edit-grid">
+            <input type="password" id="editCurrentPassword" class="profile-edit-input" autocomplete="current-password" placeholder="არსებული პაროლი" />
+            <input type="password" id="editNewPassword" class="profile-edit-input" autocomplete="new-password" placeholder="ახალი პაროლი (არასავალდებულო)" />
+            <input type="password" id="editConfirmPassword" class="profile-edit-input" autocomplete="new-password" placeholder="გაიმეორეთ ახალი პაროლი" />
+          </div>
+
+          <div class="profile-edit-actions">
+            <button type="submit" class="profile-edit-submit" id="profileEditSubmit">შეცვლა</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+
+
+
+    <script src="../vendor/jspdf.umd.min.js"></script>
+    <script src="../scripts/registry.mini.js" defer></script>
+    <script src="../scripts/script.js" defer></script>
+    <script src="../scripts/my.js" defer></script>
+  </body>
+  </html>
+
+
