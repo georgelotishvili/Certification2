@@ -516,21 +516,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
       (async () => {
         try {
-          const response = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(email)}`, {
+          const response = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
             headers: {
+              'Content-Type': 'application/json',
               'Cache-Control': 'no-cache',
-              'x-actor-email': email,
             },
+            body: JSON.stringify({
+              email: email,
+              password: password,
+            }),
           });
           if (response.ok) {
             const data = await response.json();
+            // Store token if provided (for future authenticated requests)
+            if (data.token) {
+              try {
+                localStorage.setItem('auth_token', data.token);
+              } catch {}
+            }
+            // Normalize user data from response
+            const userData = data.user || data;
             const normalizedUser = {
-              id: data.id,
-              firstName: data.first_name,
-              lastName: data.last_name,
-              code: data.code,
-              isAdmin: !!data.is_admin,
-              email: data.email,
+              id: userData.id,
+              firstName: userData.first_name,
+              lastName: userData.last_name,
+              code: userData.code,
+              isAdmin: !!userData.is_admin,
+              email: userData.email,
             };
             saveCurrentUser(normalizedUser);
             setLoggedIn(true);
@@ -543,7 +556,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showOptions();
             return;
           }
-        } catch {}
+        } catch (error) {
+          console.error('Login error:', error);
+        }
         // Login failed - ensure UI shows logged out state
         setLoggedIn(false);
         updateAuthUI();

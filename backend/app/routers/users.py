@@ -230,13 +230,18 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
     settings = get_settings()
     is_founder = (settings.founder_admin_email or "").lower() == email_norm
 
+    # Trim password to match frontend behavior and login verification
+    password_trimmed = (payload.password or "").strip()
+    if not password_trimmed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="password required")
+    
     user = User(
         personal_id=personal_id_norm,
         first_name=first_name_norm,
         last_name=last_name_norm,
         phone=phone_norm,
         email=email_norm,
-        password_hash=hash_code(payload.password),
+        password_hash=hash_code(password_trimmed),
         code=code,
         is_admin=is_founder or False,
     )

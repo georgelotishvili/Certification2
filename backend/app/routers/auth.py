@@ -88,8 +88,24 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     
-    # Verify password
-    if not verify_code(payload.password, user.password_hash):
+    # Verify password (trim to match frontend behavior)
+    # Try trimmed password first (for new registrations), then original (for legacy users)
+    password_trimmed = (payload.password or "").strip()
+    password_original = payload.password or ""
+    
+    # First try trimmed password (standard case)
+    if verify_code(password_trimmed, user.password_hash):
+        pass  # Success
+    # Fallback: try original password (for legacy users with spaces in stored hash)
+    elif password_original != password_trimmed and verify_code(password_original, user.password_hash):
+        pass  # Success with original
+    else:
+        # Debug: check if password_hash might be empty or invalid
+        if not user.password_hash or len(user.password_hash.strip()) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="User password not properly configured. Please contact administrator."
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     
     # Generate token
