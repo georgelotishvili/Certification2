@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 import secrets
+from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import Depends, HTTPException, status, Header
 from passlib.context import CryptContext
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from .database import get_db
+from .models import User, UserSession
 
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -20,5 +29,131 @@ def verify_code(plain: str, hashed: str) -> bool:
 
 def generate_session_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def validate_password_strength(password: str) -> None:
+    """
+    Validate password strength.
+    Requirements:
+    - Minimum 8 characters
+    - At least one uppercase letter (Latin or Georgian)
+    - At least one lowercase letter (Latin or Georgian)
+    - At least one digit
+    """
+    import re
+    
+    if len(password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="პაროლი უნდა იყოს მინიმუმ 8 სიმბოლო"
+        )
+    
+    # Check for uppercase (Latin A-Z or Georgian uppercase)
+    if not re.search(r'[A-Zა-ჰ]', password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="პაროლი უნდა შეიცავდეს მინიმუმ ერთ დიდ ასოს"
+        )
+    
+    # Check for lowercase (Latin a-z or Georgian lowercase)
+    if not re.search(r'[a-zა-ჰ]', password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="პაროლი უნდა შეიცავდეს მინიმუმ ერთ პატარა ასოს"
+        )
+    
+    # Check for digit
+    if not re.search(r'\d', password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="პაროლი უნდა შეიცავდეს მინიმუმ ერთ რიცხვს"
+        )
+
+
+def get_current_user(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
+    db: Session = Depends(get_db),
+) -> User:
+    """
+    Get current authenticated user from Bearer token or x-actor-email header.
+    
+    Priority:
+    1. Bearer token (new secure method)
+    2. x-actor-email header (backward compatibility - less secure)
+    
+    For new endpoints, use require_auth() which only accepts Bearer tokens.
+    """
+    # Try Bearer token first (preferred method)
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+        session = db.scalar(
+            select(UserSession).where(
+                UserSession.token == token,
+                UserSession.expires_at > datetime.utcnow()
+            )
+        )
+        if session:
+            user = db.get(User, session.user_id)
+            if user:
+                # Update last_used_at
+                session.last_used_at = datetime.utcnow()
+                db.commit()
+                return user
+    
+    # Fallback to x-actor-email (backward compatibility)
+    if x_actor_email:
+        email_lower = (x_actor_email or "").strip().lower()
+        if email_lower:
+            user = db.scalar(select(User).where(User.email == email_lower))
+            if user:
+                return user
+    
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required"
+    )
+
+
+def require_auth(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+) -> User:
+    """
+    Require Bearer token authentication (no fallback to x-actor-email).
+    Use this for new secure endpoints.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bearer token required"
+        )
+    
+    token = authorization.split(" ", 1)[1]
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow()
+        )
+    )
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
+    
+    user = db.get(User, session.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+    
+    # Update last_used_at
+    session.last_used_at = datetime.utcnow()
+    db.commit()
+    
+    return user
 
 

@@ -15,8 +15,16 @@ from ..config import get_settings
 # Structure: {email: {"code": "1234", "expires_at": timestamp, "purpose": "register|update"}}
 _verification_codes: Dict[str, dict] = {}
 
+# In-memory storage for verification attempts (brute force protection)
+# Structure: {email: {"count": int, "locked_until": timestamp or None}}
+_verification_attempts: Dict[str, dict] = {}
+
 # Code expires after 5 minutes
 CODE_EXPIRY_SECONDS = 300
+
+# Maximum verification attempts before lockout
+MAX_VERIFICATION_ATTEMPTS = 5
+LOCKOUT_DURATION_SECONDS = 900  # 15 minutes
 
 
 def _generate_code() -> str:
@@ -30,6 +38,14 @@ def _cleanup_expired():
     expired = [email for email, data in _verification_codes.items() if data["expires_at"] < now]
     for email in expired:
         del _verification_codes[email]
+    
+    # Clean up expired lockouts
+    expired_lockouts = [
+        email for email, data in _verification_attempts.items()
+        if data.get("locked_until") and data["locked_until"] < now
+    ]
+    for email in expired_lockouts:
+        _verification_attempts[email] = {"count": 0, "locked_until": None}
 
 
 def send_verification_code(email: str, purpose: str = "register") -> str:
@@ -63,12 +79,18 @@ def send_verification_code(email: str, purpose: str = "register") -> str:
         pass
     
     # Console mode (development) - print code to console and save to file
-    print(f"\n{'='*50}")
-    print(f"📧 VERIFICATION CODE for {email_lower}")
-    print(f"   Purpose: {purpose}")
-    print(f"   Code: {code}")
-    print(f"   Expires in: {CODE_EXPIRY_SECONDS // 60} minutes")
-    print(f"{'='*50}\n")
+    # NOTE: On some Windows setups the default console encoding can't render emoji,
+    # which can raise UnicodeEncodeError and break the endpoint. Keep output ASCII.
+    try:
+        print(f"\n{'='*50}")
+        print(f"VERIFICATION CODE for {email_lower}")
+        print(f"   Purpose: {purpose}")
+        print(f"   Code: {code}")
+        print(f"   Expires in: {CODE_EXPIRY_SECONDS // 60} minutes")
+        print(f"{'='*50}\n")
+    except Exception:
+        # Best-effort logging only; never fail the request because stdout can't render.
+        pass
     
     # Also save to file for easy access
     try:
@@ -99,22 +121,62 @@ def verify_code(email: str, code: str, purpose: Optional[str] = None) -> bool:
     Returns:
         True if the code is valid, False otherwise
     """
+    from fastapi import HTTPException, status
+    
     _cleanup_expired()
     
     email_lower = email.strip().lower()
+    
+    # Check if account is locked due to too many attempts
+    attempts = _verification_attempts.get(email_lower, {"count": 0, "locked_until": None})
+    if attempts.get("locked_until") and attempts["locked_until"] > time.time():
+        remaining = int(attempts["locked_until"] - time.time())
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"ძალიან ბევრი მცდელობა. სცადეთ {remaining // 60 + 1} წუთის შემდეგ"
+        )
+    
     stored = _verification_codes.get(email_lower)
     
     if not stored:
+        # Increment failed attempts
+        _verification_attempts[email_lower] = {
+            "count": attempts.get("count", 0) + 1,
+            "locked_until": None
+        }
         return False
     
     if stored["code"] != code:
+        # Increment failed attempts
+        new_count = attempts.get("count", 0) + 1
+        locked_until = None
+        if new_count >= MAX_VERIFICATION_ATTEMPTS:
+            locked_until = time.time() + LOCKOUT_DURATION_SECONDS
+        
+        _verification_attempts[email_lower] = {
+            "count": new_count,
+            "locked_until": locked_until
+        }
+        
+        if locked_until:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"ძალიან ბევრი მცდელობა. სცადეთ {LOCKOUT_DURATION_SECONDS // 60} წუთის შემდეგ"
+            )
+        
         return False
     
     if purpose and stored["purpose"] != purpose:
+        # Increment failed attempts
+        _verification_attempts[email_lower] = {
+            "count": attempts.get("count", 0) + 1,
+            "locked_until": None
+        }
         return False
     
-    # Code is valid - remove it (single use)
+    # Code is valid - remove it (single use) and reset attempts
     del _verification_codes[email_lower]
+    _verification_attempts[email_lower] = {"count": 0, "locked_until": None}
     return True
 
 

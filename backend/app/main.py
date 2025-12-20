@@ -1,7 +1,16 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+# Try to import slowapi for rate limiting (optional)
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    SLOWAPI_AVAILABLE = True
+except ImportError:
+    SLOWAPI_AVAILABLE = False
 
 from .config import get_settings
 from .database import engine
@@ -18,6 +27,7 @@ try:
     from backend.scripts.migrate_multi_apartment import run as run_multi_apartment_migration
     from backend.scripts.migrate_multi_functional import run as run_multi_functional_migration
     from backend.scripts.migrate_guide_videos import run as run_guide_videos_migration
+    from backend.scripts.migrate_user_sessions import run as run_user_sessions_migration
 except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
     from scripts.migrate_results_cols import run as run_results_migration  # type: ignore
     from scripts.migrate_media_table import run as run_media_migration  # type: ignore
@@ -28,6 +38,7 @@ except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.
     from scripts.migrate_multi_apartment import run as run_multi_apartment_migration  # type: ignore
     from scripts.migrate_multi_functional import run as run_multi_functional_migration  # type: ignore
     from scripts.migrate_guide_videos import run as run_guide_videos_migration  # type: ignore
+    from scripts.migrate_user_sessions import run as run_user_sessions_migration  # type: ignore
 
 
 def create_app() -> FastAPI:
@@ -45,6 +56,7 @@ def create_app() -> FastAPI:
         run_multi_apartment_migration,
         run_multi_functional_migration,
         run_guide_videos_migration,
+        run_user_sessions_migration,
     ):
         try:
             migrate()
@@ -54,6 +66,20 @@ def create_app() -> FastAPI:
     ensure_media_root()
 
     app = FastAPI(title=settings.app_name)
+    
+    # Initialize rate limiter (if slowapi is available)
+    if SLOWAPI_AVAILABLE:
+        limiter = Limiter(key_func=get_remote_address)
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    else:
+        # Create a dummy limiter object to avoid AttributeError
+        class DummyLimiter:
+            def limit(self, *args, **kwargs):
+                def decorator(func):
+                    return func
+                return decorator
+        app.state.limiter = DummyLimiter()
 
     app.add_middleware(
         CORSMiddleware,

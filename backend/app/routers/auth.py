@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Exam, ExamCode, Session as ExamSession, User
+from ..models import Exam, ExamCode, Session as ExamSession, User, UserSession
 from ..schemas import AuthCodeRequest, AuthCodeResponse, LoginRequest, LoginResponse, UserOut
 from ..security import generate_session_token, verify_code
 from ..config import get_settings
@@ -78,8 +78,11 @@ def auth_with_code(payload: AuthCodeRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    """Login with email and password"""
+def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
+    """Login with email and password."""
+    # TODO: Add rate limiting with slowapi decorator when slowapi is installed
+    # Rate limiting temporarily disabled to ensure login works
+    
     email_norm = (payload.email or "").strip().lower()
     if not email_norm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email required")
@@ -108,8 +111,28 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     
-    # Generate token
+    # Generate token and store in database
     token = generate_session_token()
+    now = datetime.utcnow()
+    expires_at = now + timedelta(days=30)  # 30 days expiration
+    
+    # Create session in database
+    try:
+        session = UserSession(
+            user_id=user.id,
+            token=token,
+            created_at=now,
+            expires_at=expires_at,
+            last_used_at=now,
+        )
+        db.add(session)
+        db.commit()
+    except Exception as e:
+        # If session creation fails, still return token (backward compatibility)
+        # Log error but don't fail login
+        import logging
+        logging.error(f"Failed to create UserSession: {e}")
+        db.rollback()
     
     # Get user info with proper permissions
     settings = get_settings()
