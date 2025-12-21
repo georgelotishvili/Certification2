@@ -663,6 +663,16 @@ class VerifyCodeResponse(BaseModel):
     valid: bool
 
 
+# Password recovery
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    success: bool
+    message: str
+
+
 # Extended registration with verification
 class UserCreateWithVerification(BaseModel):
     personal_id: str

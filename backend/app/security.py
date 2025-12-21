@@ -31,6 +31,33 @@ def generate_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def generate_secure_password() -> str:
+    """Generate a secure random password that meets validation requirements."""
+    import string
+    # Generate password with: uppercase, lowercase, digits, and special chars
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    special = "!@#$%^&*"
+    
+    # Ensure at least one of each required type
+    password_chars = [
+        secrets.choice(uppercase),
+        secrets.choice(lowercase),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+    
+    # Fill the rest with random characters (total 12 characters)
+    all_chars = uppercase + lowercase + digits + special
+    password_chars.extend(secrets.choice(all_chars) for _ in range(8))
+    
+    # Shuffle to avoid predictable pattern
+    secrets.SystemRandom().shuffle(password_chars)
+    
+    return ''.join(password_chars)
+
+
 def validate_password_strength(password: str) -> None:
     """
     Validate password strength.

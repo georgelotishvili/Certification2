@@ -579,10 +579,34 @@ document.addEventListener('DOMContentLoaded', () => {
       const email = utils.getTrimmed(formData, 'email');
       if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
       if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
-      alert(`პაროლის აღდგენის ბმული გამოგზავნილია ელფოსტაზე: ${email}`);
-      closeModal();
-      DOM.forgotPasswordForm?.reset?.();
-      showOptions();
+      
+      (async () => {
+        try {
+          const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+          
+          if (!response.ok) {
+            let detail = '';
+            try {
+              const json = await response.json();
+              detail = json?.detail || '';
+            } catch {}
+            alert(detail || 'პაროლის აღდგენა ვერ მოხერხდა');
+            return;
+          }
+          
+          const result = await response.json();
+          alert(result.message || 'თუ ელფოსტა რეგისტრირებულია, პაროლი გამოგეგზავნათ');
+          closeModal();
+          DOM.forgotPasswordForm?.reset?.();
+          showOptions();
+        } catch {
+          alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
+        }
+      })();
     }
 
     // Registration state
@@ -712,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
       utils.on(DOM.loginBtn, 'click', () => handleAuthButtonClick(false));
       utils.on(DOM.drawerLoginBtn, 'click', () => handleAuthButtonClick(true));
       utils.on(DOM.modalClose, 'click', closeModal);
-      utils.on(DOM.loginModal, 'click', (event) => { if (event.target === DOM.loginModal) closeModal(); });
+      // Removed overlay click handler - modal should only close via close button
       utils.on(DOM.loginOption, 'click', showLogin);
       utils.on(DOM.registerOption, 'click', showRegister);
       utils.on(DOM.forgotPasswordLink, 'click', (event) => { event.preventDefault(); showForgot(); });

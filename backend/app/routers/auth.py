@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Exam, ExamCode, Session as ExamSession, User, UserSession
-from ..schemas import AuthCodeRequest, AuthCodeResponse, LoginRequest, LoginResponse, UserOut
-from ..security import generate_session_token, verify_code
+from ..schemas import AuthCodeRequest, AuthCodeResponse, LoginRequest, LoginResponse, UserOut, ForgotPasswordRequest, ForgotPasswordResponse
+from ..security import generate_session_token, verify_code, hash_code, generate_secure_password
 from ..config import get_settings
 
 
@@ -162,5 +162,70 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     )
     
     return LoginResponse(token=token, user=user_out)
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Password recovery endpoint.
+    Generates a new password for the user and sends it to their email.
+    In development mode, writes to verification_codes.txt file.
+    """
+    email_norm = (payload.email or "").strip().lower()
+    if not email_norm:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email required")
+    
+    user = db.scalar(select(User).where(User.email == email_norm))
+    if not user:
+        # Don't reveal if email exists or not (security best practice)
+        return ForgotPasswordResponse(
+            success=True,
+            message="თუ ელფოსტა რეგისტრირებულია, პაროლი გამოგეგზავნათ"
+        )
+    
+    # Generate new secure password
+    new_password = generate_secure_password()
+    
+    # Hash and update password
+    user.password_hash = hash_code(new_password)
+    db.add(user)
+    db.commit()
+    
+    # Send password via email/file (similar to email verification)
+    settings = get_settings()
+    email_mode = getattr(settings, "email_mode", "console")
+    
+    if email_mode == "smtp":
+        # TODO: Implement real SMTP sending when needed
+        # For now, fall through to console mode
+        pass
+    
+    # Console mode (development) - write to verification_codes.txt
+    try:
+        from pathlib import Path
+        log_file = Path(__file__).parent.parent.parent / "verification_codes.txt"
+        with open(log_file, "a", encoding="utf-8") as f:
+            from datetime import datetime
+            f.write(f"\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Email: {email_norm}\n")
+            f.write(f"Password: {new_password}\n")
+            f.write(f"Purpose: password_recovery\n")
+            f.write("-" * 30 + "\n")
+    except Exception:
+        pass
+    
+    # Also print to console for visibility
+    try:
+        print(f"\n{'='*50}")
+        print(f"PASSWORD RECOVERY for {email_norm}")
+        print(f"   New Password: {new_password}")
+        print(f"{'='*50}\n")
+    except Exception:
+        pass
+    
+    return ForgotPasswordResponse(
+        success=True,
+        message="თუ ელფოსტა რეგისტრირებულია, პაროლი გამოგეგზავნათ"
+    )
 
 

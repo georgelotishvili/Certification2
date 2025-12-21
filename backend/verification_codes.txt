@@ -16,3 +16,9 @@ Email: nomail@gmail.com
 Code: 3116
 Purpose: register
 ------------------------------
+
+2025-12-21 15:21:10
+Email: naormala@gmail.com
+Password: xz8ulxYiaq#*
+Purpose: password_recovery
+------------------------------
