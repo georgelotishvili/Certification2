@@ -1,0 +1,129 @@
+@font-face {
+    font-family: 'DejaVu Sans';
+    src: url('../../assets/fonts/dejavu-sans.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'DejaVu Sans', sans-serif;
+}
+
+html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    margin: 0;
+    padding: 5px;
+    background: rgb(54, 54, 54);
+    display: flex;
+    gap: 8px;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.left-section {
+    width: 20%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.camera-area {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: lightyellow;
+}
+
+.warning-text {
+    width: 100%;
+    background: lightcoral;
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.bottom-area {
+    width: 100%;
+    flex: 1;
+    background: lightgreen;
+}
+
+.right-section {
+    width: 80%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.header {
+    width: 100%;
+    height: 10%;
+    padding: 15px;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo-container {
+    width: 17%;
+    height: 70%;
+    display: flex;
+    justify-content: right;
+    align-items: center;
+}
+
+.logo-container img {
+    width: auto;
+    height: 90%;
+}
+
+.buttons-container {
+    width: 40%;
+    height: 70%;
+    display: flex;
+    gap: 8px;
+}
+
+.exam-button {
+    width: 50%;
+    height: 100%;
+}
+
+.timer-container {
+    width: 17%;
+    height: 70%;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.timer-text {
+    width: auto;
+    display: flex;
+    align-items: center;
+    font-size: 5vh;
+    color: rgb(255, 255, 255);
+}
+
+.exam-screen {
+    width: 100%;
+    height: 90%;
+    background: lightgreen;
+}
+

@@ -252,8 +252,12 @@ function initializeApp() {
             // Only work if user is logged in (card has 'active' class)
             if (!card.classList.contains('active')) return;
             
-            // Show "under construction" message
-            alert('ამ ელემენტის ფუნქციონალი ჯერ არ შექმნილა');
+            // პირველი ბარათი - გამოცდის გვერდი
+            if (index === 0) {
+                window.location.href = 'exam.html';
+            } else {
+                alert('ამ ელემენტის ფუნქციონალი ჯერ არ შექმნილა');
+            }
         });
     });
 

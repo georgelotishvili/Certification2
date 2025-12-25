@@ -88,6 +88,14 @@ ipcMain.on('window-is-maximized', (event) => {
   event.returnValue = mainWindow ? mainWindow.isMaximized() : false;
 });
 
+ipcMain.on('window-fullscreen', () => {
+  if (mainWindow) mainWindow.setFullScreen(true);
+});
+
+ipcMain.on('window-exit-fullscreen', () => {
+  if (mainWindow) mainWindow.setFullScreen(false);
+});
+
 app.whenReady().then(() => {
   // Set app user model ID for Windows (helps with taskbar icon)
   if (process.platform === 'win32') {
