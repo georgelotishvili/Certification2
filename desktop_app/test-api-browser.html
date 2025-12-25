@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Connection Test</title>
+    <style>
+        body {
+            font-family: 'DejaVu Sans', sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        input {
+            padding: 8px;
+            font-size: 14px;
+            width: 300px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 API Connection Test</h1>
+    
+    <div id="results"></div>
+    
+    <h2>Test Login</h2>
+    <input type="email" id="test-email" placeholder="Email" value="">
+    <input type="password" id="test-password" placeholder="Password" value="">
+    <br>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="runAllTests()">Run All Tests</button>
+    
+    <script src="src/services/api.js"></script>
+    <script>
+        const resultsDiv = document.getElementById('results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            resultsDiv.appendChild(div);
+        }
+        
+        function clearResults() {
+            resultsDiv.innerHTML = '';
+        }
+        
+        async function testBackend() {
+            addResult('1️⃣ Backend server-ის შემოწმება...', 'info');
+            try {
+                const response = await fetch('http://localhost:8000/docs');
+                if (response.ok) {
+                    addResult('✅ Backend server გაშვებულია და მუშაობს', 'success');
+                    return true;
+                } else {
+                    addResult(`⚠️ Backend server status: ${response.status}`, 'error');
+                    return false;
+                }
+            } catch (error) {
+                addResult(`❌ Backend server არ არის გაშვებული: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        async function testApiClient() {
+            addResult('2️⃣ API Client-ის შემოწმება...', 'info');
+            if (typeof window.apiClient === 'undefined') {
+                addResult('❌ API Client არ არის ხელმისაწვდომი', 'error');
+                return false;
+            }
+            addResult('✅ API Client ხელმისაწვდომია', 'success');
+            return true;
+        }
+        
+        async function testLoginEndpoint() {
+            addResult('3️⃣ Login endpoint-ის შემოწმება...', 'info');
+            try {
+                const response = await fetch('http://localhost:8000/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'test@test.com',
+                        password: 'test',
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    addResult('✅ Login endpoint მუშაობს (401 - არასწორი credentials)', 'success');
+                    return true;
+                } else if (response.status === 200) {
+                    addResult('✅ Login endpoint მუშაობს და authentication წარმატებულია', 'success');
+                    return true;
+                } else {
+                    addResult(`⚠️ Login endpoint status: ${response.status}`, 'error');
+                    return false;
+                }
+            } catch (error) {
+                addResult(`❌ Login endpoint შემოწმება ვერ მოხერხდა: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        async function testLogin() {
+            clearResults();
+            const email = document.getElementById('test-email').value;
+            const password = document.getElementById('test-password').value;
+            
+            if (!email || !password) {
+                addResult('❌ გთხოვთ შეიყვანოთ email და password', 'error');
+                return;
+            }
+            
+            addResult(`🔐 შესვლის ცდა: ${email}...`, 'info');
+            
+            if (typeof window.apiClient === 'undefined') {
+                addResult('❌ API Client არ არის ხელმისაწვდომი', 'error');
+                return;
+            }
+            
+            try {
+                const response = await window.apiClient.login(email, password);
+                addResult('✅ შესვლა წარმატებულია!', 'success');
+                addResult(`   User: ${response.user.first_name} ${response.user.last_name}`, 'success');
+                addResult(`   Email: ${response.user.email}`, 'success');
+                addResult(`   Token: ${response.token.substring(0, 20)}...`, 'info');
+            } catch (error) {
+                if (error.status === 401) {
+                    addResult('❌ არასწორი email ან password', 'error');
+                } else if (error.status === 0) {
+                    addResult('❌ Backend server არ არის გაშვებული', 'error');
+                } else {
+                    addResult(`❌ შეცდომა: ${error.message}`, 'error');
+                }
+            }
+        }
+        
+        async function runAllTests() {
+            clearResults();
+            addResult('🚀 ყველა ტესტის გაშვება...\n', 'info');
+            
+            const backendOk = await testBackend();
+            if (!backendOk) {
+                addResult('\n💡 გაუშვით backend: cd ../certification/backend && uvicorn app.main:app --reload', 'info');
+                return;
+            }
+            
+            await testApiClient();
+            await testLoginEndpoint();
+            
+            addResult('\n✨ ყველა ტესტი დასრულდა!', 'info');
+        }
+        
+        // Auto-run tests on load
+        window.addEventListener('DOMContentLoaded', () => {
+            runAllTests();
+        });
+    </script>
+</body>
+</html>
+

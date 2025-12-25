@@ -1,0 +1,37 @@
+{
+  "name": "certification-exam-app",
+  "version": "1.0.0",
+  "description": "საგამოცდო აპლიკაცია არქიტექტორთა სერტიფიკაციისთვის",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "exam",
+    "certification",
+    "electron"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-reload": "^2.0.0-alpha.1"
+  },
+  "build": {
+    "appId": "com.gipc.certification-exam",
+    "productName": "საგამოცდო აპლიკაცია",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/graphics/logo1-2.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
+
