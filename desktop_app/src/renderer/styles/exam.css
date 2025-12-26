@@ -124,6 +124,217 @@ body {
 .exam-screen {
     width: 100%;
     height: 90%;
-    background: lightgreen;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.navigation-buttons {
+    width: 100%;
+    height: 5%;
+    background: white;
+    display: flex;
+}
+
+.nav-button {
+    width: 50%;
+    height: 100%;
+    background: gray;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+.nav-button.active {
+    background: white;
+    color: black;
+}
+
+.nav-button:hover:not(.active) {
+    background: darkgray;
+}
+
+.exam-control-panel {
+    width: 100%;
+    height: 5%;
+    background: white;
+    z-index: 1;
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+}
+
+.block-number-field {
+    width: 15%;
+    height: 100%;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 14px;
+}
+
+.block-number-field .field-label {
+    color: #666;
+}
+
+.block-number-field .field-value {
+    color: #000;
+    font-weight: bold;
+}
+
+.block-count-field {
+    width: 10%;
+    height: 100%;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.block-count-field .count-value {
+    color: #000;
+    font-weight: bold;
+    font-family: 'DejaVu Sans', monospace;
+}
+
+.control-buttons {
+    width: 40%;
+    height: 100%;
+    background: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+.nav-arrow {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #333;
+    padding: 5px 10px;
+    transition: color 0.3s;
+}
+
+.nav-arrow:hover {
+    color: #000;
+}
+
+.question-dots {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid #333;
+    display: inline-block;
+}
+
+.dot.correct {
+    background: green;
+}
+
+.dot.incorrect {
+    background: red;
+}
+
+.dot.unanswered {
+    background: white;
+}
+
+.question-count-field {
+    width: 10%;
+    height: 100%;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.question-count-field .count-value {
+    color: #000;
+    font-weight: bold;
+    font-family: 'DejaVu Sans', monospace;
+}
+
+.question-code-field {
+    width: 15%;
+    height: 100%;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 14px;
+}
+
+.question-code-field .field-label {
+    color: #666;
+}
+
+.question-code-field .field-value {
+    color: #000;
+    font-weight: bold;
+}
+
+.exam-content {
+    width: 100%;
+    height: 90%;
+    background: #f5f5f5;
+    z-index: 1;
+    position: relative;
+    padding: 4px;
+    box-sizing: border-box;
+}
+
+.question-container {
+    width: 100%;
+    height: 100%;
+    background: #5e5e5e;
+}
+
+.documentation-viewer {
+    position: absolute;
+    top: 5%;
+    left: 0;
+    width: 100%;
+    height: 95%;
+    background: white;
+    z-index: 0;
+    padding: 4px;
+    box-sizing: border-box;
+    display: flex;
+    gap: 4px;
+}
+
+.documentation-viewer.active {
+    z-index: 2;
+}
+
+.doc-list {
+    width: 20%;
+    height: 100%;
+    background: #797979;
+}
+
+.pdf-viewer {
+    width: 80%;
+    height: 100%;
+    background: #797979;
 }
 
