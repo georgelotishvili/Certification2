@@ -11,6 +11,7 @@
     padding: 0;
     box-sizing: border-box;
     font-family: 'DejaVu Sans', sans-serif;
+    font-size: 16px;
 }
 
 html {
@@ -24,7 +25,7 @@ body {
     padding: 5px;
     background: rgb(54, 54, 54);
     display: flex;
-    gap: 8px;
+    gap: 4px;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
@@ -32,11 +33,11 @@ body {
 }
 
 .left-section {
-    width: 20%;
+    width: 17%;
     height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
 }
 
 .camera-area {
@@ -47,7 +48,7 @@ body {
 
 .warning-text {
     width: 100%;
-    background: lightcoral;
+    background: rgb(255, 255, 255);
     padding: 10px;
     box-sizing: border-box;
     display: flex;
@@ -59,11 +60,11 @@ body {
 .bottom-area {
     width: 100%;
     flex: 1;
-    background: lightgreen;
+    background: rgb(255, 255, 255);
 }
 
 .right-section {
-    width: 80%;
+    width: 83%;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -140,11 +141,10 @@ body {
 .nav-button {
     width: 50%;
     height: 100%;
-    background: gray;
+    background: rgb(0, 61, 147);
     color: white;
     border: none;
     cursor: pointer;
-    font-size: 16px;
     transition: background-color 0.3s;
 }
 
@@ -154,7 +154,7 @@ body {
 }
 
 .nav-button:hover:not(.active) {
-    background: darkgray;
+    background: rgb(60, 122, 255);
 }
 
 .exam-control-panel {
@@ -164,6 +164,7 @@ body {
     z-index: 1;
     position: relative;
     display: flex;
+    padding-top: 4px;
     justify-content: space-between;
 }
 
@@ -175,11 +176,10 @@ body {
     align-items: center;
     justify-content: center;
     gap: 5px;
-    font-size: 14px;
 }
 
 .block-number-field .field-label {
-    color: #666;
+    color: #000000;
 }
 
 .block-number-field .field-value {
@@ -194,7 +194,6 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
 }
 
 .block-count-field .count-value {
@@ -210,18 +209,27 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 10px;
+    padding: 1px;
+    border: 1px solid rgb(0, 61, 147);
+    border-radius: 4px;
     box-sizing: border-box;
 }
 
 .nav-arrow {
-    background: none;
-    border: none;
-    font-size: 20px;
+    width: 12%;
+    height: 100%;
+    background-color: rgb(0, 61, 147);
     cursor: pointer;
-    color: #333;
-    padding: 5px 10px;
+    color: #ffffff;
+    border-radius: 3px;
+    font-size: 24px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     transition: color 0.3s;
+    border: none;
+    padding-bottom: 2.5px;
 }
 
 .nav-arrow:hover {
@@ -237,10 +245,10 @@ body {
 }
 
 .dot {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    border: 1px solid #333;
+    border: 1px solid #848484;
     display: inline-block;
 }
 
@@ -263,7 +271,6 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
 }
 
 .question-count-field .count-value {
@@ -280,11 +287,10 @@ body {
     align-items: center;
     justify-content: center;
     gap: 5px;
-    font-size: 14px;
 }
 
 .question-code-field .field-label {
-    color: #666;
+    color: #000000;
 }
 
 .question-code-field .field-value {
@@ -305,7 +311,7 @@ body {
 .question-container {
     width: 100%;
     height: 100%;
-    background: #5e5e5e;
+    background: #b5b5b5;
 }
 
 .documentation-viewer {
