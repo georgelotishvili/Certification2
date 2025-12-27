@@ -22,10 +22,10 @@ html {
 
 body {
     margin: 0;
-    padding: 5px;
-    background: rgb(54, 54, 54);
+    padding: 10px;
+    background: linear-gradient(135deg, #BDDEE5 0%, #A5D3DC 100%);
     display: flex;
-    gap: 4px;
+    gap: 10px;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
@@ -37,13 +37,38 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 10px;
+}
+
+.logo-area {
+    width: 100%;
+    height: 12.5%;
+    background: rgb(255, 255, 255);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.left-logo {
+    height: 100%;
+    width: 70%;
+    object-fit: contain;
 }
 
 .camera-area {
     width: 100%;
     aspect-ratio: 16/9;
-    background: lightyellow;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+}
+
+#camera-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .warning-text {
@@ -96,14 +121,14 @@ body {
 
 .buttons-container {
     width: 40%;
-    height: 70%;
+    /* height: 70%; */
     display: flex;
     gap: 8px;
 }
 
 .exam-button {
     width: 50%;
-    height: 100%;
+    height: 50px;
 }
 
 .timer-container {
@@ -133,7 +158,7 @@ body {
 
 .navigation-buttons {
     width: 100%;
-    height: 5%;
+    height: 7%;
     background: white;
     display: flex;
 }
@@ -159,12 +184,12 @@ body {
 
 .exam-control-panel {
     width: 100%;
-    height: 5%;
+    height: 7%;
     background: white;
     z-index: 1;
     position: relative;
     display: flex;
-    padding-top: 4px;
+    padding: 4px;
     justify-content: space-between;
 }
 
@@ -300,26 +325,129 @@ body {
 
 .exam-content {
     width: 100%;
-    height: 90%;
-    background: #f5f5f5;
+    height: 87%;
+    background: linear-gradient(135deg, #BDDEE5 0%, #A5D3DC 100%);
     z-index: 1;
     position: relative;
-    padding: 4px;
+    padding-top: 10px;
     box-sizing: border-box;
 }
 
 .question-container {
     width: 100%;
     height: 100%;
-    background: #b5b5b5;
+    gap: 10px;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.question-element {
+    width: 100%;
+    height: 20%;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    /* border-radius: 4px; */
+    padding: 4px;
+    box-sizing: border-box;
+}
+
+.question-text-wrapper {
+    width: 100%;
+    height: 100%;
+    background: #cecece;
+    /* border-radius: 3px; */
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    overflow-y: auto;
+}
+
+.question-text-wrapper p {
+    margin: 0;
+    line-height: 1.6;
+    color: #212529;
+    font-weight: 500;
+}
+
+.answer-element {
+    width: 100%;
+    height: 20%;
+    background: #ffffff;
+    /* border-radius: 4px; */
+    padding: 4px;
+    box-sizing: border-box;
+    display: flex;
+    transition: all 0.2s ease;
+}
+
+.answer-element:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.answer-element.selected {
+    background: #e7f1ff;
+    border-color: #003d93;
+}
+
+.answer-left {
+    width: 5%;
+    height: 100%;
+    /* border-radius: 3px; */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.answer-letter {
+    font-size: 24px;
+    font-weight: bold;
+    color: #003d93;
+}
+
+.answer-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #003d93;
+}
+
+.answer-right {
+    width: 95%;
+    height: 100%;
+    background: #cecece;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+}
+
+.answer-text-wrapper {
+    width: 100%;
+    height: 100%;
+    padding: 15px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    overflow-y: auto;
+}
+
+.answer-text-wrapper p {
+    margin: 0;
+    line-height: 1.6;
+    color: #495057;
 }
 
 .documentation-viewer {
     position: absolute;
-    top: 5%;
+    top: 7%;
     left: 0;
     width: 100%;
-    height: 95%;
+    height: 93%;
     background: white;
     z-index: 0;
     padding: 4px;

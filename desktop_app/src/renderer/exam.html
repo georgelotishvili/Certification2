@@ -8,23 +8,16 @@
 </head>
 <body>
     <div class="left-section">
-        <div class="camera-area"></div>
+        <div class="logo-area">
+            <img src="../../assets/graphics/logo2.svg" alt="Logo" class="left-logo">
+        </div>
+        <div class="camera-area">
+            <video id="camera-video" autoplay playsinline></video>
+        </div>
         <div class="warning-text">მიმდინარეობს აუდიო/ვიდეო ჩაწერა. გთხოვთ გამოცდის მსვლელობისას არ გახვიდეთ ვიდეოთვალის ხედვის არედან</div>
         <div class="bottom-area"></div>
     </div>
     <div class="right-section">
-        <div class="header">
-            <div class="logo-container">
-                <img src="../../assets/graphics/exam logo 2.svg" alt="Logo">
-            </div>
-            <div class="buttons-container">
-                <button class="exam-button" id="start-button">დაწყება</button>
-                <button class="exam-button" id="finish-button">დასრულება</button>
-            </div>
-            <div class="timer-container">
-                <span class="timer-text">00:45:17</span>
-            </div>
-        </div>
         <div class="exam-screen">
             <div class="navigation-buttons">
                 <button class="nav-button active" data-tab="exam">გამოცდა</button>
@@ -58,11 +51,81 @@
                 </div>
             </div>
             <div class="exam-content">
-                <div class="question-container"></div>
+                <div class="question-container">
+                    <div class="question-element">
+                        <div class="question-text-wrapper">
+                            <!-- აქ განთავსდება კითხვის ტექსტი -->
+                            <p>აქედან რომელი არის სწორი პასუხი?</p>
+                        </div>
+                    </div>
+                    
+                    <div class="answer-element">
+                        <div class="answer-left">
+                            <span class="answer-letter">A</span>
+                            <input type="checkbox" name="answer" value="A" class="answer-checkbox">
+                        </div>
+                        <div class="answer-right">
+                            <div class="answer-text-wrapper">
+                                <!-- აქ განთავსდება პასუხის ტექსტი -->
+                                <p>პირველი სავარაუდო პასუხი</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="answer-element">
+                        <div class="answer-left">
+                            <span class="answer-letter">B</span>
+                            <input type="checkbox" name="answer" value="B" class="answer-checkbox">
+                        </div>
+                        <div class="answer-right">
+                            <div class="answer-text-wrapper">
+                                <!-- აქ განთავსდება პასუხის ტექსტი -->
+                                <p>მეორე სავარაუდო პასუხი</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="answer-element">
+                        <div class="answer-left">
+                            <span class="answer-letter">C</span>
+                            <input type="checkbox" name="answer" value="C" class="answer-checkbox">
+                        </div>
+                        <div class="answer-right">
+                            <div class="answer-text-wrapper">
+                                <!-- აქ განთავსდება პასუხის ტექსტი -->
+                                <p>მესამე სავარაუდო პასუხი</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="answer-element">
+                        <div class="answer-left">
+                            <span class="answer-letter">D</span>
+                            <input type="checkbox" name="answer" value="D" class="answer-checkbox">
+                        </div>
+                        <div class="answer-right">
+                            <div class="answer-text-wrapper">
+                                <!-- აქ განთავსდება პასუხის ტექსტი -->
+                                <p>მეოთხე სავარაუდო პასუხი</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="documentation-viewer">
                 <div class="pdf-viewer"></div>
                 <div class="doc-list"></div>
+            </div>
+        </div>
+        <div class="header">
+            <div class="logo-container">
+            </div>
+            <div class="buttons-container">
+                <button class="exam-button" id="start-button">დაწყება</button>
+                <button class="exam-button" id="finish-button">დასრულება</button>
+            </div>
+            <div class="timer-container">
+                <span class="timer-text">00:45:17</span>
             </div>
         </div>
     </div>
