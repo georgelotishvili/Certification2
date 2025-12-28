@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // კითხვების ინიციალიზაცია
     initializeAnswerSelection();
     
+    // წერტილების ინიციალიზაცია
+    updateCurrentQuestionDot();
+    
     const finishButton = document.getElementById('finish-button');
     
     if (finishButton) {
@@ -52,6 +55,40 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+    
+    // წერტილებზე click event-ი
+    const dots = document.querySelectorAll('.dot');
+    dots.forEach((dot, index) => {
+        dot.addEventListener('click', () => {
+            // აქ უნდა დაამატოთ ლოგიკა კითხვაზე გადასასვლელად
+            // მაგალითად: goToQuestion(index);
+            console.log(`Navigate to question ${index + 1}`);
+            
+            // განვაახლოთ active dot
+            dots.forEach(d => d.classList.remove('active'));
+            dot.classList.add('active');
+        });
+    });
+    
+    // Navigation arrows-ზე click event-ები
+    const prevButton = document.querySelector('.prev-question');
+    const nextButton = document.querySelector('.next-question');
+    
+    if (prevButton) {
+        prevButton.addEventListener('click', () => {
+            console.log('Previous question');
+            // აქ დაამატეთ ლოგიკა წინა კითხვაზე გადასასვლელად
+            // updateCurrentQuestionDot();
+        });
+    }
+    
+    if (nextButton) {
+        nextButton.addEventListener('click', () => {
+            console.log('Next question');
+            // აქ დაამატეთ ლოგიკა შემდეგ კითხვაზე გადასასვლელად
+            // updateCurrentQuestionDot();
+        });
+    }
 });
 
 // ჩექბოქსების ლოგიკა - მხოლოდ ერთის მონიშვნა
@@ -71,9 +108,13 @@ function initializeAnswerSelection() {
                 });
                 // დავამატოთ selected კლასი
                 answerElements[index].classList.add('selected');
+                
+                // განვაახლოთ შესაბამისი წერტილი
+                updateCurrentQuestionDot();
             } else {
                 // თუ გავუქმეთ მონიშვნა
                 answerElements[index].classList.remove('selected');
+                updateCurrentQuestionDot();
             }
         });
         
@@ -89,6 +130,22 @@ function initializeAnswerSelection() {
             });
         }
     });
+}
+
+// წერტილების active state-ის განახლება
+function updateCurrentQuestionDot() {
+    const dots = document.querySelectorAll('.dot');
+    
+    // ყველა წერტილიდან active-ის წაშლა
+    dots.forEach(dot => dot.classList.remove('active'));
+    
+    // მიმდინარე კითხვის ინდექსი (დროებით hardcoded, თქვენ უნდა ჩაანაცვლოთ რეალური ლოგიკით)
+    const currentQuestionIndex = 2; // მაგალითად მე-3 კითხვა (0-based index)
+    
+    // მიმდინარე კითხვის წერტილს active დაემატება
+    if (dots[currentQuestionIndex]) {
+        dots[currentQuestionIndex].classList.add('active');
+    }
 }
 
 // ვიდეოთვალის ინიციალიზაცია
