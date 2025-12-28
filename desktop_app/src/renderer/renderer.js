@@ -146,6 +146,20 @@ function initializeApp() {
             card.classList.add('active');
         });
         
+        // თეორიული გამოცდა (exam-card-1) - შემოწმება exam_permission-ის
+        const examCard1 = document.getElementById('exam-card-1');
+        if (examCard1) {
+            if (user.exam_permission) {
+                examCard1.classList.add('active');
+                examCard1.style.opacity = '1';
+                examCard1.style.cursor = 'pointer';
+            } else {
+                examCard1.classList.remove('active');
+                examCard1.style.opacity = '0.5';
+                examCard1.style.cursor = 'not-allowed';
+            }
+        }
+        
         window.currentUser = user;
     }
 
@@ -254,7 +268,13 @@ function initializeApp() {
             
             // პირველი ბარათი - გამოცდის გვერდი
             if (index === 0) {
-                window.location.href = 'exam.html';
+                // შემოწმება exam_permission-ის
+                const user = window.apiClient ? window.apiClient.getCurrentUser() : null;
+                if (user && user.exam_permission) {
+                    window.location.href = 'exam.html';
+                } else {
+                    alert('თქვენ არ გაქვთ გამოცდის გავლის უფლება');
+                }
             } else {
                 alert('ამ ელემენტის ფუნქციონალი ჯერ არ შექმნილა');
             }
