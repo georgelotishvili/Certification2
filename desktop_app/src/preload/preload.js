@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMaximize: (callback) => ipcRenderer.on('window-maximized', callback),
   onUnmaximize: (callback) => ipcRenderer.on('window-unmaximized', callback),
   setFullscreen: () => ipcRenderer.send('window-fullscreen'),
-  exitFullscreen: () => ipcRenderer.send('window-exit-fullscreen')
+  exitFullscreen: () => ipcRenderer.send('window-exit-fullscreen'),
+  lockExam: () => ipcRenderer.send('exam-lock'),
+  unlockExam: () => ipcRenderer.send('exam-unlock')
 });
 

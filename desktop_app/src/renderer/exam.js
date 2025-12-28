@@ -17,6 +17,10 @@ const examState = {
     remainingSeconds: 0,
     user: null, // user info from localStorage
     examPhase: 'gate', // 'gate', 'success', 'active', 'results'
+    // Focus loss tracking
+    focusWarningTimer: null,
+    focusWarningCountdown: 10,
+    isFocusWarningActive: false,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -91,10 +95,24 @@ function setupEventListeners() {
     const returnHomeBtn = document.getElementById('return-home-btn');
     if (returnHomeBtn) {
         returnHomeBtn.addEventListener('click', () => {
+            // Lockdown-ის გამორთვა
+            disableExamLockdown();
+            
             if (window.electronAPI) {
                 window.electronAPI.exitFullscreen();
             }
             window.location.href = 'index.html';
+        });
+    }
+    
+    // Return to exam button (in warning overlay)
+    const returnToExamBtn = document.getElementById('return-to-exam-btn');
+    if (returnToExamBtn) {
+        returnToExamBtn.addEventListener('click', () => {
+            console.log('✓ User clicked return to exam');
+            stopFocusWarningCountdown();
+            // Focus back to window
+            window.focus();
         });
     }
     
@@ -233,6 +251,9 @@ async function startExam() {
         
         // განვაახლოთ ეტაპი - გამოცდა აქტიურია
         examState.examPhase = 'active';
+        
+        // ჩავრთოთ Exam Lockdown Mode
+        enableExamLockdown();
         
         // ვიწყებთ გამოცდას
         await loadFirstBlock();
@@ -684,15 +705,14 @@ function handleFinishButtonClick() {
         const unansweredCount = totalQuestions - answeredQuestions;
         
         if (unansweredCount > 0) {
-            const confirmMessage = `თქვენ დაგრჩათ ${unansweredCount} პასუხგაუცემელი კითხვა. გამოცდის დასრულება გულისხმობს შეუქცევად პროცესს და კითხვებს ვეღარ დაუბრუნდებით. დარწმუნებული ხართ რომ გსურთ გამოცდის დასრულება?`;
-            
-            if (!confirm(confirmMessage)) {
-                return; // არ სურს დასრულება
-            }
+            // Custom confirmation modal
+            showConfirmation(() => {
+                finishExam(); // დასრულება თუ დაადასტურა
+            });
+        } else {
+            // თუ ყველა კითხვას უპასუხა, პირდაპირ დასრულება
+            finishExam();
         }
-        
-        // დასრულება
-        finishExam();
     }
 }
 
@@ -726,6 +746,220 @@ async function finishExam() {
         console.error('Error finishing exam:', error);
         alert('გამოცდის დასრულება ვერ მოხერხდა');
     }
+}
+
+// Exam Lockdown: keyboard shortcuts blocking
+function blockKeyboardShortcuts(e) {
+    // გამოცდის დროს დაბლოკილი კლავიშები
+    const blockedKeys = [
+        'F11',      // Fullscreen toggle
+        'Escape',   // Fullscreen exit
+        'F12',      // DevTools
+        'F5',       // Refresh
+    ];
+    
+    // დაბლოკილი კომბინაციები
+    const blockedCombos = [
+        { ctrl: true, key: 'w' },           // Close tab
+        { ctrl: true, key: 'W' },           // Close tab
+        { ctrl: true, key: 'r' },           // Refresh
+        { ctrl: true, key: 'R' },           // Refresh
+        { ctrl: true, shift: true, key: 'i' },  // DevTools
+        { ctrl: true, shift: true, key: 'I' },  // DevTools
+        { ctrl: true, shift: true, key: 'j' },  // DevTools
+        { ctrl: true, shift: true, key: 'J' },  // DevTools
+        { ctrl: true, shift: true, key: 'c' },  // DevTools
+        { ctrl: true, shift: true, key: 'C' },  // DevTools
+        { alt: true, key: 'F4' },           // Close window (ძალიან ძნელია დაბლოკვა)
+    ];
+    
+    // შემოწმება
+    if (blockedKeys.includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Blocked key:', e.key);
+        return false;
+    }
+    
+    // კომბინაციების შემოწმება
+    for (const combo of blockedCombos) {
+        const ctrlMatch = combo.ctrl ? e.ctrlKey : true;
+        const shiftMatch = combo.shift ? e.shiftKey : !e.shiftKey;
+        const altMatch = combo.alt ? e.altKey : !e.altKey;
+        const keyMatch = combo.key === e.key;
+        
+        if (ctrlMatch && shiftMatch && altMatch && keyMatch) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Blocked combo:', combo);
+            return false;
+        }
+    }
+}
+
+function enableExamLockdown() {
+    console.log('🔒 Exam Lockdown Enabled');
+    
+    // Keyboard shortcuts-ის დაბლოკვა
+    document.addEventListener('keydown', blockKeyboardShortcuts, true);
+    
+    // Right-click context menu-ს დაბლოკვა
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+    
+    // Focus loss detection
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Electron-ის lockdown (თუ არსებობს API)
+    if (window.electronAPI && window.electronAPI.lockExam) {
+        window.electronAPI.lockExam();
+    }
+}
+
+function disableExamLockdown() {
+    console.log('🔓 Exam Lockdown Disabled');
+    
+    // Keyboard shortcuts-ის განბლოკვა
+    document.removeEventListener('keydown', blockKeyboardShortcuts, true);
+    
+    // Focus loss detection-ის მოხსნა
+    window.removeEventListener('blur', handleWindowBlur);
+    window.removeEventListener('focus', handleWindowFocus);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Countdown-ის გაწმენდა
+    if (examState.focusWarningTimer) {
+        clearInterval(examState.focusWarningTimer);
+        examState.focusWarningTimer = null;
+    }
+    
+    // Electron-ის unlock (თუ არსებობს API)
+    if (window.electronAPI && window.electronAPI.unlockExam) {
+        window.electronAPI.unlockExam();
+    }
+}
+
+// Focus Loss Detection
+function handleWindowBlur() {
+    // მხოლოდ თუ გამოცდა აქტიურია
+    if (examState.examPhase !== 'active') return;
+    if (examState.isFocusWarningActive) return; // უკვე გამოჩნდა warning
+    
+    console.log('⚠️ Window lost focus - starting countdown');
+    startFocusWarningCountdown();
+}
+
+function handleWindowFocus() {
+    // როდესაც focus ბრუნდება, warning იმალება
+    if (examState.isFocusWarningActive) {
+        console.log('✓ Window regained focus - stopping countdown');
+        stopFocusWarningCountdown();
+    }
+}
+
+function handleVisibilityChange() {
+    if (document.hidden && examState.examPhase === 'active') {
+        // გვერდი უხილავი გახდა
+        if (!examState.isFocusWarningActive) {
+            console.log('⚠️ Page hidden - starting countdown');
+            startFocusWarningCountdown();
+        }
+    } else if (!document.hidden && examState.isFocusWarningActive) {
+        // გვერდი ხილული გახდა
+        console.log('✓ Page visible - stopping countdown');
+        stopFocusWarningCountdown();
+    }
+}
+
+function startFocusWarningCountdown() {
+    examState.isFocusWarningActive = true;
+    examState.focusWarningCountdown = 10;
+    
+    // ვაჩვენოთ warning overlay
+    const warningOverlay = document.getElementById('warning-overlay');
+    if (warningOverlay) {
+        warningOverlay.style.display = 'flex';
+    }
+    
+    // განახლება countdown display
+    updateCountdownDisplay();
+    
+    // countdown timer (ყოველ წამს)
+    examState.focusWarningTimer = setInterval(() => {
+        examState.focusWarningCountdown--;
+        updateCountdownDisplay();
+        
+        if (examState.focusWarningCountdown <= 0) {
+            // დრო ამოიწურა - გამოცდის დასრულება
+            console.log('❌ Countdown expired - finishing exam');
+            stopFocusWarningCountdown();
+            finishExam();
+        }
+    }, 1000);
+}
+
+function stopFocusWarningCountdown() {
+    examState.isFocusWarningActive = false;
+    
+    // გავაჩეროთ timer
+    if (examState.focusWarningTimer) {
+        clearInterval(examState.focusWarningTimer);
+        examState.focusWarningTimer = null;
+    }
+    
+    // დავმალოთ warning overlay
+    const warningOverlay = document.getElementById('warning-overlay');
+    if (warningOverlay) {
+        warningOverlay.style.display = 'none';
+    }
+}
+
+function updateCountdownDisplay() {
+    const countdownEl = document.getElementById('countdown-number');
+    if (countdownEl) {
+        countdownEl.textContent = examState.focusWarningCountdown;
+        
+        // ფერის შეცვლა დროის მიხედვით
+        if (examState.focusWarningCountdown <= 3) {
+            countdownEl.style.color = '#ff0000'; // ძალიან წითელი
+        } else if (examState.focusWarningCountdown <= 5) {
+            countdownEl.style.color = '#ff4444'; // წითელი
+        } else {
+            countdownEl.style.color = '#ff6666'; // ღია წითელი
+        }
+    }
+}
+
+// Helper: Custom confirmation modal
+function showConfirmation(onConfirm) {
+    const overlay = document.getElementById('confirm-overlay');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    const okBtn = document.getElementById('confirm-ok');
+    
+    // ვაჩვენოთ modal
+    overlay.style.display = 'flex';
+    
+    // Cancel button
+    const handleCancel = () => {
+        overlay.style.display = 'none';
+        cancelBtn.removeEventListener('click', handleCancel);
+        okBtn.removeEventListener('click', handleOk);
+    };
+    
+    // OK button
+    const handleOk = () => {
+        overlay.style.display = 'none';
+        cancelBtn.removeEventListener('click', handleCancel);
+        okBtn.removeEventListener('click', handleOk);
+        onConfirm(); // callback ფუნქცია
+    };
+    
+    cancelBtn.addEventListener('click', handleCancel);
+    okBtn.addEventListener('click', handleOk);
 }
 
 // Helper: პროცენტის ფერის განსაზღვრა

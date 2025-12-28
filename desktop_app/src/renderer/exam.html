@@ -168,6 +168,34 @@
                     <button class="results-button" id="return-home-btn">მთავარ გვერდზე დაბრუნება</button>
                 </div>
             </div>
+
+            <!-- Confirmation Modal -->
+            <div class="confirm-overlay" id="confirm-overlay" style="display: none;">
+                <div class="confirm-modal">
+                    <div class="confirm-icon">⚠️</div>
+                    <h3 class="confirm-title">გაფრთხილება</h3>
+                    <p class="confirm-message" id="confirm-message">თქვენ დაგრჩათ პასუხგაუცემელი კითხვები. გამოცდის დასრულება გულისხმობს შეუქცევად პროცესს და კითხვებს ვეღარ დაუბრუნდებით. დარწმუნებული ხართ რომ გსურთ გამოცდის დასრულება?</p>
+                    <div class="confirm-buttons">
+                        <button class="confirm-btn confirm-cancel" id="confirm-cancel">გაუქმება</button>
+                        <button class="confirm-btn confirm-ok" id="confirm-ok">დასრულება</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Focus Loss Warning -->
+            <div class="warning-overlay" id="warning-overlay" style="display: none;">
+                <div class="warning-modal">
+                    <div class="warning-icon">🚨</div>
+                    <h2 class="warning-title">გაფრთხილება!</h2>
+                    <p class="warning-text">თქვენ არღვევთ გამოცდის წესებს</p>
+                    <div class="countdown-display">
+                        <p class="countdown-text">გამოცდაზე დაბრუნება:</p>
+                        <div class="countdown-number" id="countdown-number">10</div>
+                        <p class="countdown-subtext">წამში დაბრუნდით გამოცდაზე, თორემ გამოცდა დასრულდება</p>
+                    </div>
+                    <button class="warning-btn" id="return-to-exam-btn">გამოცდაზე დაბრუნება</button>
+                </div>
+            </div>
         </div>
         <div class="footer">
             <div class="logo-container">

@@ -10,6 +10,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 let mainWindow;
+let isExamLocked = false; // Exam lockdown state
 
 // Set app icon - use ICO file for best Windows compatibility
 const iconPath = path.join(__dirname, '..', '..', 'assets', 'graphics', 'logo1-2.ico');
@@ -53,6 +54,23 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    isExamLocked = false; // Reset lockdown state
+  });
+
+  // Prevent window close during exam
+  mainWindow.on('close', (e) => {
+    if (isExamLocked) {
+      e.preventDefault();
+      console.log('Window close blocked: exam in progress');
+    }
+  });
+
+  // Block fullscreen exit during exam
+  mainWindow.on('leave-full-screen', () => {
+    if (isExamLocked) {
+      console.log('Fullscreen exit blocked: exam in progress');
+      mainWindow.setFullScreen(true); // Force back to fullscreen
+    }
   });
 
   // Send window state changes to renderer
@@ -94,6 +112,39 @@ ipcMain.on('window-fullscreen', () => {
 
 ipcMain.on('window-exit-fullscreen', () => {
   if (mainWindow) mainWindow.setFullScreen(false);
+});
+
+// Exam Lockdown IPC handlers
+ipcMain.on('exam-lock', () => {
+  if (mainWindow) {
+    isExamLocked = true;
+    console.log('🔒 Exam locked');
+    
+    // Force fullscreen
+    mainWindow.setFullScreen(true);
+    
+    // Keep window on top
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    
+    // Disable minimize
+    mainWindow.setMinimizable(false);
+    
+    // Block DevTools (production)
+    if (process.env.NODE_ENV === 'production') {
+      mainWindow.webContents.closeDevTools();
+    }
+  }
+});
+
+ipcMain.on('exam-unlock', () => {
+  if (mainWindow) {
+    isExamLocked = false;
+    console.log('🔓 Exam unlocked');
+    
+    // Restore normal behavior
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setMinimizable(true);
+  }
 });
 
 app.whenReady().then(() => {
