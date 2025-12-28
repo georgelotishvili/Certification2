@@ -223,7 +223,6 @@ body {
     height: 52px;
     cursor: pointer;
     border-radius: 4px;
-    font-weight: 600;
     font-size: 15px;
     letter-spacing: 0.3px;
     box-shadow: var(--elevation-2);
@@ -337,7 +336,6 @@ body {
     border: none;
     cursor: pointer;
     transition: all var(--transition-base);
-    font-weight: 600;
     font-size: 14.5px;
     letter-spacing: 0.3px;
     position: relative;
@@ -347,7 +345,6 @@ body {
 .nav-button.active {
     background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
     color: #ffffff;
-    font-weight: 700;
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
@@ -389,12 +386,10 @@ body {
 
 .block-number-field .field-label {
     color: #ffffff;
-    font-weight: 600;
 }
 
 .block-number-field .field-value {
     color: #ffffff;
-    font-weight: 700;
     font-size: 18px;
 }
 
@@ -408,7 +403,6 @@ body {
 
 .block-count-field .count-value {
     color: #ffffff;
-    font-weight: 700;
     font-family: 'DejaVu Sans', monospace;
     font-size: 17px;
 }
@@ -442,7 +436,6 @@ body {
     color: #ffffff;
     border-radius: 3px;
     font-size: 24px;
-    font-weight: bold;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -542,7 +535,6 @@ body {
 
 .question-count-field .count-value {
     color: #ffffff;
-    font-weight: 700;
     font-family: 'DejaVu Sans', monospace;
     font-size: 17px;
 }
@@ -558,12 +550,10 @@ body {
 
 .question-code-field .field-label {
     color: #ffffff;
-    font-weight: 600;
 }
 
 .question-code-field .field-value {
     color: #ffffff;
-    font-weight: 700;
     font-size: 18px;
 }
 
@@ -725,7 +715,6 @@ body {
 
 .answer-letter {
     font-size: 24px;
-    font-weight: bold;
     color: #1976d2;
     transition: all 0.3s ease;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
@@ -890,7 +879,6 @@ body {
     color: #ffffff;
     font-size: 24px;
     margin-bottom: 30px;
-    font-weight: bold;
 }
 
 .gate-input-group {
@@ -932,7 +920,6 @@ body {
     border: none;
     border-radius: 4px;
     font-size: 16px;
-    font-weight: bold;
     cursor: pointer;
     transition: background 0.3s;
 }
@@ -978,7 +965,6 @@ body {
     color: #4caf50;
     font-size: 60px;
     margin-bottom: 20px;
-    font-weight: bold;
 }
 
 .success-text {
@@ -1050,7 +1036,6 @@ body {
 .confirm-title {
     color: #ffa500;
     font-size: 24px;
-    font-weight: bold;
     margin-bottom: 20px;
 }
 
@@ -1073,7 +1058,6 @@ body {
     border: none;
     border-radius: 4px;
     font-size: 16px;
-    font-weight: bold;
     cursor: pointer;
     transition: all 0.3s;
     min-width: 140px;
@@ -1147,16 +1131,14 @@ body {
 .warning-title {
     color: #ff4444;
     font-size: 32px;
-    font-weight: bold;
     margin-bottom: 20px;
     text-transform: uppercase;
 }
 
-.warning-text {
+.warning-modal .warning-text {
     color: #ffcccc;
     font-size: 20px;
     margin-bottom: 30px;
-    font-weight: 600;
 }
 
 .countdown-display {
@@ -1176,7 +1158,6 @@ body {
 .countdown-number {
     color: #ff4444;
     font-size: 72px;
-    font-weight: bold;
     margin: 10px 0;
     animation: countdownPulse 1s ease-in-out infinite;
 }
@@ -1200,7 +1181,6 @@ body {
     border: none;
     border-radius: 4px;
     font-size: 20px;
-    font-weight: bold;
     cursor: pointer;
     transition: all 0.3s;
     text-transform: uppercase;
@@ -1247,7 +1227,6 @@ body {
     font-size: 32px;
     text-align: center;
     margin-bottom: 30px;
-    font-weight: bold;
 }
 
 .results-summary {
@@ -1272,13 +1251,11 @@ body {
 .result-label {
     color: #ffffff;
     font-size: 16px;
-    font-weight: 500;
 }
 
 .result-value {
     color: #4caf50;
     font-size: 16px;
-    font-weight: bold;
 }
 
 .result-item.result-main .result-value {
@@ -1336,7 +1313,6 @@ body {
 .block-result-value {
     color: #4a90e2;
     font-size: 16px;
-    font-weight: bold;
 }
 
 .results-button {
@@ -1347,7 +1323,6 @@ body {
     border: none;
     border-radius: 4px;
     font-size: 18px;
-    font-weight: bold;
     cursor: pointer;
     transition: background 0.3s, transform 0.2s;
     margin-top: 10px;
