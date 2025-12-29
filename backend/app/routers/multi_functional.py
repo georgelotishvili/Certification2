@@ -99,7 +99,7 @@ def _get_or_create_settings(db: Session) -> MultiFunctionalSettings:
     if settings:
         return settings
 
-    settings = MultiFunctionalSettings(duration_minutes=60, gate_password="cpig")
+    settings = MultiFunctionalSettings(duration_minutes=60)
     db.add(settings)
     db.commit()
     db.refresh(settings)

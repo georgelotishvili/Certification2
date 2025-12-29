@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement, Certificate, ExpertUpload, UserSession
+from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -105,13 +105,13 @@ def _get_or_create_exam(db: Session, exam_id: int | None = None) -> Exam:
     if not exam:
         exam = db.scalars(select(Exam).order_by(Exam.id.asc()).limit(1)).first()
     if not exam:
-        exam = Exam(title="Default Exam", duration_minutes=45, gate_password="cpig")
+        exam = Exam(title="Default Exam", duration_minutes=45)
         db.add(exam)
         db.commit()
         db.refresh(exam)
         return exam
     if not exam.gate_password:
-        exam.gate_password = "cpig"
+        exam.gate_password = _generate_gate_password()
         db.add(exam)
         db.commit()
         db.refresh(exam)

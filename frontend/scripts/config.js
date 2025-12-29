@@ -39,6 +39,36 @@
       API_BASE: defaults.API_BASE,
     });
   }
+
+  // Global toast function
+  function getToastContainer() {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  globalObject.showToast = function(message, type = 'info') {
+    const container = getToastContainer();
+    const toast = document.createElement('div');
+    const bgColor = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#333';
+    toast.style.cssText = `background:${bgColor};color:#fff;padding:12px 20px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:14px;max-width:320px;opacity:0;transform:translateX(100%);transition:all 0.3s ease;`;
+    toast.textContent = String(message || '');
+    container.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateX(0)';
+    });
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  };
 })();
 
 

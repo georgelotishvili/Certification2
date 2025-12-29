@@ -99,7 +99,7 @@ def _get_or_create_settings(db: Session) -> MultiApartmentSettings:
     if settings:
         return settings
 
-    settings = MultiApartmentSettings(duration_minutes=60, gate_password="cpig")
+    settings = MultiApartmentSettings(duration_minutes=60)
     db.add(settings)
     db.commit()
     db.refresh(settings)

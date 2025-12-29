@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import string
 from datetime import datetime
 from typing import List, Optional
 
@@ -17,6 +19,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
+def _generate_gate_password() -> str:
+    """Generate a random 6-character gate password."""
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -27,7 +34,7 @@ class Exam(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(255), default="Default Exam")
     duration_minutes: Mapped[int] = mapped_column(Integer, default=45)
-    gate_password: Mapped[str] = mapped_column(String(128), default="cpig")
+    gate_password: Mapped[str] = mapped_column(String(128), default=_generate_gate_password)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     blocks: Mapped[List[Block]] = relationship("Block", back_populates="exam", cascade="all, delete-orphan")
@@ -367,7 +374,7 @@ class MultiApartmentSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
-    gate_password: Mapped[str] = mapped_column(String(64), default="cpig")
+    gate_password: Mapped[str] = mapped_column(String(64), default=_generate_gate_password)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -454,6 +461,6 @@ class MultiFunctionalSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
-    gate_password: Mapped[str] = mapped_column(String(64), default="cpig")
+    gate_password: Mapped[str] = mapped_column(String(64), default=_generate_gate_password)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
