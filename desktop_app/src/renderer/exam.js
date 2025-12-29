@@ -66,6 +66,7 @@ function loadUserInfo() {
         if (userStr) {
             examState.user = JSON.parse(userStr);
             console.log('User loaded:', examState.user);
+            updateBottomAreaInfo();
         } else {
             console.error('No user found in localStorage');
             alert('მომხმარებელი ვერ მოიძებნა. გთხოვთ გაიაროთ ავტორიზაცია.');
@@ -75,6 +76,50 @@ function loadUserInfo() {
         }
     } catch (error) {
         console.error('Error loading user info:', error);
+    }
+}
+
+// ქვედა პანელის ინფორმაციის განახლება
+function updateBottomAreaInfo() {
+    const user = examState.user;
+    const now = new Date();
+    
+    // სახელი და გვარი
+    const nameEl = document.getElementById('candidate-name');
+    if (nameEl && user) {
+        nameEl.textContent = `${user.first_name} ${user.last_name}`;
+    }
+    
+    // უნიკალური კოდი
+    const codeEl = document.getElementById('candidate-code');
+    if (codeEl && user) {
+        codeEl.textContent = user.code || '---';
+    }
+    
+    // გამოცდის ხანგრძლივობა (00:45 ფორმატით)
+    const durationEl = document.getElementById('exam-duration');
+    if (durationEl) {
+        const minutes = examState.durationMinutes || 45;
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        durationEl.textContent = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    }
+    
+    // თარიღი (DD.MM.YYYY)
+    const dateEl = document.getElementById('exam-date');
+    if (dateEl) {
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        dateEl.textContent = `${day}.${month}.${year}`;
+    }
+    
+    // დრო (HH:MM)
+    const timeEl = document.getElementById('exam-time');
+    if (timeEl) {
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        timeEl.textContent = `${hours}:${minutes}`;
     }
 }
 
@@ -170,6 +215,7 @@ async function loadExamConfig() {
         examState.durationMinutes = config.duration_minutes || config.durationMinutes || 45;
         examState.blocks = config.blocks || [];
         
+        updateBottomAreaInfo();
         console.log('Exam config loaded:', config);
     } catch (error) {
         console.error('Error loading exam config:', error);

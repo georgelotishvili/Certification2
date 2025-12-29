@@ -75,7 +75,7 @@ body {
     padding: 10px;
     background: var(--background-color);
     display: flex;
-    gap: 10px;
+    gap: 6px;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
@@ -87,7 +87,7 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     background: linear-gradient(180deg, #0d47a1 0%, #1565c0 50%, #0d47a1 100%);
     padding: 8px;
     box-sizing: border-box;
@@ -97,8 +97,8 @@ body {
 
 .logo-area {
     width: 100%;
-    height: 12.35%;
-    /* background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%); */
+    height: 11.7%;
+    background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -123,7 +123,7 @@ body {
 
 .camera-area {
     width: 100%;
-    aspect-ratio: 16/9;
+    aspect-ratio: 1/1;
     background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
     position: relative;
     overflow: hidden;
@@ -200,15 +200,20 @@ body {
     padding: 8px;
     box-sizing: border-box;
     display: flex;
+    flex-direction: column;
     justify-content: center;
-    align-items: center;
-    text-align: center;
+    align-items: flex-start;
+    text-align: left;
     box-shadow: var(--elevation-2);
     color: #ffffff;
     font-size: 14px;
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     line-height: 1.3;
+}
+
+.warning-text p {
+    margin: 2px 0;
 }
 
 .bottom-area {
@@ -218,6 +223,24 @@ body {
     box-shadow: var(--elevation-1);
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.info-table {
+    width: 100%;
+    height: 100%;
+    border-collapse: collapse;
+    color: #ffffff;
+}
+
+.info-table td {
+    padding: 2px 5px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    text-align: left;
+    vertical-align: middle;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .right-section {
@@ -225,7 +248,7 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
 }
 
 .footer {
