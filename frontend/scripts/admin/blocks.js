@@ -92,6 +92,13 @@
       }, 400);
     }
 
+    function isEditorFocused() {
+      const active = document.activeElement;
+      if (!active || !DOM.blocksGrid) return false;
+      if (!DOM.blocksGrid.contains(active)) return false;
+      return active.tagName === 'TEXTAREA' || active.tagName === 'INPUT';
+    }
+
     async function persistBlocks() {
       const payload = {
         examId: state.examId || 1,
@@ -110,7 +117,10 @@
         const data = await response.json();
         state.examId = data.examId || state.examId || 1;
         state.data = migrate(data.blocks);
-        render();
+        // Skip render() if user is actively editing to prevent focus loss
+        if (!isEditorFocused()) {
+          render();
+        }
         updateStats();
         if (state.pendingNotify) showToast('ბლოკები შენახულია');
       } catch {

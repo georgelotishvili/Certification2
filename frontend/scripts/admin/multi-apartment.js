@@ -311,7 +311,10 @@
         }
         const data = await response.json();
         state.data = migrateProjects(data);
-        render();
+        // Skip render() if user is actively editing to prevent focus loss
+        if (!isEditorFocused()) {
+          render();
+        }
         updateStats();
         if (state.pendingNotify) {
           showToast('შენახულია', 'success');
@@ -321,6 +324,13 @@
       } finally {
         state.pendingNotify = false;
       }
+    }
+
+    function isEditorFocused() {
+      const active = document.activeElement;
+      if (!active || !DOM_ELEMENTS.grid) return false;
+      if (!DOM_ELEMENTS.grid.contains(active)) return false;
+      return active.tagName === 'TEXTAREA' || active.tagName === 'INPUT';
     }
 
     async function loadInitialProjects() {

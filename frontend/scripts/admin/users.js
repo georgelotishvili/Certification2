@@ -93,7 +93,7 @@
               <input type="checkbox" class="chk-exam" ${examChecked} ${examDisabled} style="width:16px;height:16px;accent-color:#9500FF;" />
               <span style="font-size:12px;color:#0f172a;font-weight:600;">გამოცდა</span>
             </label>
-            <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''}>×</button>
+            <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''} style="${founderRow ? 'display:none;' : ''}">×</button>
             <button class="head-toggle" type="button" aria-expanded="false">▾</button>
           </div>
           <div class="block-questions" aria-hidden="true">
