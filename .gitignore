@@ -12,11 +12,14 @@ venv/
 ENV/
 env/
 
-# Database
+# Database files - NEVER commit to Git!
 backend/app.db
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Environment variables
 .env
