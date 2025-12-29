@@ -252,6 +252,9 @@ async function startExam() {
         // განვაახლოთ ეტაპი - გამოცდა აქტიურია
         examState.examPhase = 'active';
         
+        // გავათიშოთ დაწყების ღილაკი გამოცდის მსვლელობისას
+        document.getElementById('start-button').disabled = true;
+        
         // ჩავრთოთ Exam Lockdown Mode
         enableExamLockdown();
         

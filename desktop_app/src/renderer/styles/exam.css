@@ -975,9 +975,21 @@ body {
 
 /* Start button disabled state */
 #start-button:disabled {
-    opacity: 0.5;
+    opacity: 0.75;
     cursor: not-allowed;
-    background: #666;
+    background: linear-gradient(135deg, #e8e8e8 0%, #d8d8d8 100%);
+    color: #9e9e9e;
+    pointer-events: none;
+}
+
+#start-button:disabled::before {
+    display: none;
+}
+
+#start-button:disabled:hover {
+    transform: none;
+    box-shadow: var(--elevation-2);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Confirmation Modal */
