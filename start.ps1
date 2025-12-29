@@ -11,7 +11,7 @@ function Stop-Port {
   param([int]$Port)
   try {
     $pids = (Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
-    foreach ($pid in $pids) { if ($pid) { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } }
+    foreach ($processId in $pids) { if ($processId) { Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue } }
   } catch {}
 }
 
@@ -20,13 +20,20 @@ Stop-Port -Port 3000
 Stop-Port -Port 8000
 
 # Choose Python launcher automatically
-$pyCmd = 'py -3'
-if (-not (Get-Command py -ErrorAction SilentlyContinue)) { $pyCmd = 'python' }
+if (Get-Command py -ErrorAction SilentlyContinue) { 
+    $pyVenvCmd = 'py -3 -m venv .venv'
+    $pyServerCmd = 'py -3 -m http.server 3000 --bind 127.0.0.1'
+} else { 
+    $pyVenvCmd = 'python -m venv .venv'
+    $pyServerCmd = 'python -m http.server 3000 --bind 127.0.0.1'
+}
 
 # Backend window
 $backendCmd = @"
 Set-Location -LiteralPath '$backend'
-if (!(Test-Path '.venv\Scripts\Activate.ps1')) { $pyCmd -m venv .venv }
+if (!(Test-Path '.venv\Scripts\Activate.ps1')) { 
+    $pyVenvCmd
+}
 . .\.venv\Scripts\Activate.ps1
 python -m pip install -U pip
 pip install -r requirements.txt
@@ -37,7 +44,7 @@ Start-Process powershell -ArgumentList @('-NoExit','-Command', $backendCmd) | Ou
 # Frontend window
 $frontendCmd = @"
 Set-Location -LiteralPath '$root'
-$pyCmd -m http.server 3000 --bind 127.0.0.1
+$pyServerCmd
 "@
 Start-Process powershell -ArgumentList @('-NoExit','-Command', $frontendCmd) | Out-Null
 
