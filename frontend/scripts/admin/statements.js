@@ -150,7 +150,7 @@
 
         // Attachment download button, if present
         if (item.attachment_filename) {
-          const actorEmail = (getActorHeaders()['x-actor-email'] || '').trim();
+          const actorEmail = (window.Auth?.getSavedEmail?.() || '').trim();
           const attachBtn = document.createElement('button');
           attachBtn.type = 'button';
           attachBtn.className = 'statement-attachment-download';
@@ -225,7 +225,7 @@
         });
         if (!response.ok) throw new Error('mark failed');
         const nowIso = new Date().toISOString();
-        cache = cache.map((item) => (ids.includes(item.id) ? { ...item, seen_at: nowIso, seen_by: getActorHeaders()['x-actor-email'] || 'admin' } : item));
+        cache = cache.map((item) => (ids.includes(item.id) ? { ...item, seen_at: nowIso, seen_by: window.Auth?.getSavedEmail?.() || 'admin' } : item));
         const remaining = cache.filter((item) => item.seen_at == null).length;
         if (list) {
           list.querySelectorAll('.statement-item').forEach((element) => {

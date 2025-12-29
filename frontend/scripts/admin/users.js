@@ -194,7 +194,7 @@
       if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
           const id = card.dataset.id;
-          if (!global.confirm('დარწმუნებული ხართ, რომ წაშალოთ ჩანაწერი?')) return;
+          if (!global.confirm('დარწმუნებული ხართ, რომ გსურთ რეგისტრირებული პირის წაშლა?')) return;
           try {
             const response = await fetch(`${API_BASE}/admin/users/${id}`, {
               method: 'DELETE',
@@ -279,7 +279,7 @@
 
       if (photoDeleteBtn) {
         photoDeleteBtn.addEventListener('click', async () => {
-          if (!global.confirm('დარწმუნებული ხართ, რომ წაშალოთ ფოტო?')) return;
+          if (!global.confirm('დარწმუნებული ხართ, რომ გსურთ ფოტოს წაშლა?')) return;
           try {
             const response = await fetch(`${API_BASE}/admin/users/${user.id}/photo`, {
               method: 'DELETE',

@@ -37,8 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return (localStorage.getItem(SAVED_EMAIL_KEY) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
     },
     adminHeaders() {
-      const actor = (localStorage.getItem(SAVED_EMAIL_KEY) || '').trim();
-      return actor ? { 'x-actor-email': actor } : {};
+      return window.Auth?.getAuthHeaders?.() || {};
     },
   };
 

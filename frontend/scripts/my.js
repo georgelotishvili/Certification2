@@ -126,8 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load read-only profile info (self or viewing other)
   function getActorHeaders() {
-    const email = (window.Auth?.getSavedEmail?.() || '').trim();
-    return email ? { 'x-actor-email': email } : {};
+    return window.Auth?.getAuthHeaders?.() || {};
   }
 
   // Page header photo element
@@ -479,8 +478,9 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('გთხოვთ შეიყვანოთ ახალი პაროლი');
         return;
       }
-      if (new_password.length < 6) {
-        alert('პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო');
+      const passwordCheck = window.Utils?.validatePassword?.(new_password);
+      if (passwordCheck && !passwordCheck.valid) {
+        alert(passwordCheck.message);
         return;
       }
       if (!confirm_new_password.trim()) {
@@ -550,9 +550,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Keep auth state in sync (email/name changes)
       setLocalAuthUser(updated);
-      if (wantsPasswordChange) {
-        try { localStorage.setItem('savedPassword', new_password); } catch {}
-      }
 
       closeProfileEdit();
       alert('მონაცემები განახლდა');
@@ -787,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
               const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/comments/${encodeURIComponent(c.id)}`, {
                 method: 'DELETE',
-                headers: { ...(state.actorEmail ? { 'x-actor-email': state.actorEmail } : {}) },
+                headers: { ...getActorHeaders() },
               });
               if (!res.ok) {
                 alert('წაშლა ვერ შესრულდა');
@@ -973,8 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function buildHeaders() {
-      const email = (window.Auth?.getSavedEmail?.() || state.actorEmail || (state.user && state.user.email) || '').trim();
-      return email ? { 'x-actor-email': email } : {};
+      return window.Auth?.getAuthHeaders?.() || {};
     }
 
     async function adminDeleteUpload(uploadId) {

@@ -19,8 +19,12 @@ from backend.app.security import hash_code
 from backend.app.config import get_settings
 
 
-def reset_founder_password(new_password: str = "Tamariami@1976") -> None:
+def reset_founder_password(new_password: str) -> None:
     """Reset password hash for founder user"""
+    if not new_password or len(new_password) < 8:
+        print("Error: პაროლი უნდა იყოს მინიმუმ 8 სიმბოლო")
+        return
+    
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
     
@@ -44,8 +48,6 @@ def reset_founder_password(new_password: str = "Tamariami@1976") -> None:
         db.commit()
         
         print(f"SUCCESS: Password hash updated for {founder_email}")
-        print(f"  New password: {new_password}")
-        print(f"  Hash preview: {password_hash[:50]}...")
         
     except Exception as e:
         print(f"Error: {e}")
@@ -56,5 +58,14 @@ def reset_founder_password(new_password: str = "Tamariami@1976") -> None:
 
 
 if __name__ == "__main__":
-    reset_founder_password()
+    print("=== Founder Password Reset ===")
+    new_pass = input("შეიყვანე ახალი პაროლი: ").strip()
+    if new_pass:
+        confirm = input("დაადასტურე პაროლი: ").strip()
+        if new_pass == confirm:
+            reset_founder_password(new_pass)
+        else:
+            print("Error: პაროლები არ ემთხვევა")
+    else:
+        print("Error: პაროლი არ შეიყვანე")
 

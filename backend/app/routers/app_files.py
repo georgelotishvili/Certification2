@@ -90,10 +90,10 @@ async def _save_app_file(upload: UploadFile) -> tuple[str, str, str, int | None]
 
 @router.get("/admin/app-files", response_model=List[AppFileOut])
 def admin_list_app_files(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     files = db.scalars(select(AppFile).order_by(AppFile.created_at.desc())).all()
     return [_app_file_out(f) for f in files]
 
@@ -101,10 +101,10 @@ def admin_list_app_files(
 @router.post("/admin/app-files", response_model=AppFileOut, status_code=status.HTTP_201_CREATED)
 async def admin_create_app_file(
     file: UploadFile = File(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     _validate_app_file(file)
 
     storage_path, stored_filename, mime_type, size_bytes = await _save_app_file(file)
@@ -125,10 +125,10 @@ async def admin_create_app_file(
 @router.delete("/admin/app-files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_app_file(
     file_id: int = FPath(..., ge=1),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     app_file = db.get(AppFile, file_id)
     if not app_file:
         return
@@ -151,10 +151,10 @@ def admin_delete_app_file(
 @router.get("/app-files/{file_id}/download")
 def download_app_file(
     file_id: int = FPath(..., ge=1),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     app_file = db.get(AppFile, file_id)
     if not app_file or not app_file.storage_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")

@@ -9,7 +9,7 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, Certificate, Rating, Comment, ExpertUpload
+from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession
 from ..schemas import (
     UserCreate, UserOut, UserProfileUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate,
     SendVerificationCodeRequest, SendVerificationCodeResponse, VerifyCodeRequest, VerifyCodeResponse,
@@ -19,9 +19,44 @@ from ..config import get_settings
 from ..security import hash_code, verify_code, validate_password_strength, get_current_user
 from ..services.media_storage import resolve_storage_path, relative_storage_path, certificate_file_path, delete_storage_file, ensure_media_root
 from ..services import email_verification
+from ..rate_limiter import verification_limiter, code_verify_limiter
 
 
 router = APIRouter()
+
+
+def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
+    """Get user from Bearer token."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1]
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow()
+        )
+    )
+    if not session:
+        return None
+    return db.get(User, session.user_id)
+
+
+def _require_auth(db: Session, authorization: str | None) -> User:
+    """Require authenticated user via Bearer token."""
+    user = _get_user_from_token(db, authorization)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    return user
+
+
+def _require_admin(db: Session, authorization: str | None) -> User:
+    """Require admin user via Bearer token."""
+    user = _require_auth(db, authorization)
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    if user.email.lower() == founder_email or user.is_admin:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
 
 
 def _gen_code(db: Session) -> str:
@@ -138,10 +173,10 @@ def send_verification_code_endpoint(
     """
     Send a 4-digit verification code to the given email.
     Purpose can be 'register' or 'update'.
-    Rate limited: 5 requests per minute per IP.
+    Rate limited: 3 requests per minute per IP.
     """
-    # TODO: Add rate limiting with slowapi decorator when slowapi is installed
-    # Rate limiting temporarily disabled to ensure endpoint works
+    # Rate limiting: 3 codes per minute per IP
+    verification_limiter.check(request)
     
     email_lower = payload.email.strip().lower()
     purpose = payload.purpose
@@ -167,13 +202,15 @@ def send_verification_code_endpoint(
 
 @router.post("/verify-code", response_model=VerifyCodeResponse)
 def verify_code_endpoint(request: Request, payload: VerifyCodeRequest):
-    # TODO: Add rate limiting with slowapi decorator when slowapi is installed
-    # Rate limiting temporarily disabled to ensure endpoint works
     """
     Verify a code for the given email.
     Returns whether the code is valid.
     Note: This does NOT consume the code - it just checks validity.
+    Rate limited: 5 attempts per minute per IP.
     """
+    # Rate limiting: 5 verifications per minute per IP
+    code_verify_limiter.check(request)
+    
     email_lower = payload.email.strip().lower()
     
     # Just check if code exists and matches (peek, don't consume)
@@ -508,7 +545,7 @@ def update_profile(
 @router.get("/{user_id}/certificate", response_model=CertificateOut)
 def get_certificate(
     user_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Get certificate for a user"""
@@ -516,12 +553,7 @@ def get_certificate(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     # AuthZ: allow any authenticated actor to view certificate metadata
-    actor_email = (x_actor_email or "").strip().lower()
-    if not actor_email:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor required")
-    actor = db.scalar(select(User).where(User.email == actor_email))
-    if not actor:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor not found")
+    _require_auth(db, authorization)
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
@@ -534,7 +566,7 @@ def get_certificate(
 def create_certificate(
     user_id: int,
     payload: CertificateCreate,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Create certificate for a user"""
@@ -542,12 +574,7 @@ def create_certificate(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     # Only admin/founder can create
-    actor_email = (x_actor_email or "").strip().lower()
-    actor = db.scalar(select(User).where(User.email == actor_email)) if actor_email else None
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    if not actor or not (actor.is_admin or actor.email.lower() == founder_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
+    _require_admin(db, authorization)
     
     existing = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if existing:
@@ -575,7 +602,7 @@ def create_certificate(
 def update_certificate(
     user_id: int,
     payload: CertificateUpdate,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Update certificate for a user"""
@@ -583,12 +610,7 @@ def update_certificate(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     # Only admin/founder can update
-    actor_email = (x_actor_email or "").strip().lower()
-    actor = db.scalar(select(User).where(User.email == actor_email)) if actor_email else None
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    if not actor or not (actor.is_admin or actor.email.lower() == founder_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
+    _require_admin(db, authorization)
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
@@ -619,7 +641,7 @@ def update_certificate(
 @router.delete("/{user_id}/certificate", status_code=status.HTTP_204_NO_CONTENT)
 def delete_certificate(
     user_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Delete certificate for a user"""
@@ -627,12 +649,7 @@ def delete_certificate(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     # Only admin/founder can delete
-    actor_email = (x_actor_email or "").strip().lower()
-    actor = db.scalar(select(User).where(User.email == actor_email)) if actor_email else None
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    if not actor or not (actor.is_admin or actor.email.lower() == founder_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
+    _require_admin(db, authorization)
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
@@ -679,7 +696,7 @@ def delete_certificate(
 def upload_certificate_file(
     user_id: int,
     file: UploadFile = File(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Upload certificate PDF for a user (admin/founder only)."""
@@ -688,12 +705,7 @@ def upload_certificate_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Only admin/founder can upload
-    actor_email = (x_actor_email or "").strip().lower()
-    actor = db.scalar(select(User).where(User.email == actor_email)) if actor_email else None
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    if not actor or not (actor.is_admin or actor.email.lower() == founder_email):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
+    _require_admin(db, authorization)
 
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
@@ -729,7 +741,7 @@ def upload_certificate_file(
 @router.get("/{user_id}/certificate/file")
 def download_certificate_file(
     user_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     actor: str | None = Query(None, alias="actor"),
     db: Session = Depends(get_db),
 ):

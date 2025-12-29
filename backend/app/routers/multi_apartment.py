@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import string
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as FPath, UploadFile, File
 from fastapi.responses import FileResponse
@@ -9,7 +10,7 @@ from sqlalchemy import select, func, exists
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, MultiApartmentSettings, User
+from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, MultiApartmentSettings, User, UserSession
 from ..schemas import (
     MultiApartmentProjectsResponse,
     MultiApartmentProjectsUpdateRequest,
@@ -34,14 +35,28 @@ from ..routers.admin import _require_admin
 router = APIRouter()
 
 
-def _actor(db: Session, actor_email: str | None) -> User | None:
-    """Get user by email, return None if not found."""
-    if not actor_email:
+def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
+    """Get user from Bearer token."""
+    if not authorization or not authorization.lower().startswith("bearer "):
         return None
-    eml = (actor_email or "").strip().lower()
-    if not eml:
+    token = authorization.split(" ", 1)[1]
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow()
+        )
+    )
+    if not session:
         return None
-    return db.scalar(select(User).where(User.email == eml))
+    return db.get(User, session.user_id)
+
+
+def _require_auth(db: Session, authorization: str | None) -> User:
+    """Require authenticated user via Bearer token."""
+    user = _get_user_from_token(db, authorization)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    return user
 
 
 def _gen_unique_code(db: Session) -> str:
@@ -128,10 +143,10 @@ def verify_multi_apartment_gate(
 # Admin endpoints
 @router.get("/admin/multi-apartment/settings", response_model=MultiApartmentSettingsResponse)
 def get_multi_apartment_settings(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     settings = _get_or_create_settings(db)
     return settings
 
@@ -139,10 +154,10 @@ def get_multi_apartment_settings(
 @router.put("/admin/multi-apartment/settings", response_model=MultiApartmentSettingsResponse)
 def update_multi_apartment_settings(
     payload: MultiApartmentSettingsUpdateRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     settings = _get_or_create_settings(db)
 
     if payload.duration_minutes is not None:
@@ -158,17 +173,17 @@ def update_multi_apartment_settings(
 
 @router.get("/admin/multi-apartment/projects", response_model=MultiApartmentProjectsResponse)
 def get_projects_endpoint(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    return get_projects(x_actor_email, db)
+    return get_projects(authorization, db)
 
 
 def get_projects(
-    x_actor_email: str | None,
+    authorization: str | None,
     db: Session,
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     projects = db.scalars(
         select(MultiApartmentProject)
         .order_by(MultiApartmentProject.order_index, MultiApartmentProject.id)
@@ -203,11 +218,11 @@ def get_projects(
 @router.post("/admin/multi-apartment/projects", response_model=MultiApartmentProjectsResponse)
 async def update_projects(
     payload: MultiApartmentProjectsUpdateRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     try:
-        _require_admin(db, x_actor_email)
+        _require_admin(db, authorization)
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -360,7 +375,7 @@ async def update_projects(
         )
     
     try:
-        return get_projects(x_actor_email, db)
+        return get_projects(authorization, db)
     except HTTPException:
         raise
     except Exception as e:
@@ -375,10 +390,10 @@ async def update_projects(
 @router.delete("/admin/multi-apartment/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(
     project_id: int = FPath(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     project = db.get(MultiApartmentProject, project_id)
     if not project:
         return
@@ -434,10 +449,10 @@ def delete_project(
 async def upload_pdf(
     project_id: int = FPath(...),
     file: UploadFile = File(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     project = db.get(MultiApartmentProject, project_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
@@ -463,10 +478,10 @@ async def upload_pdf(
 @router.get("/admin/multi-apartment/projects/{project_id}/pdf")
 def download_pdf(
     project_id: int = FPath(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     project = db.get(MultiApartmentProject, project_id)
     if not project or not project.pdf_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
@@ -496,11 +511,11 @@ def download_pdf(
 @router.delete("/admin/multi-apartment/projects/{project_id}/pdf", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project_pdf(
     project_id: int = FPath(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Delete project's PDF and clear its path/filename."""
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     project = db.get(MultiApartmentProject, project_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
@@ -620,13 +635,11 @@ def get_public_pdf(
 @router.post("/public/multi-apartment/evaluations", status_code=status.HTTP_201_CREATED)
 def submit_evaluation(
     payload: MultiApartmentEvaluationSubmitRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     # Get user
-    user = _actor(db, x_actor_email)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    user = _require_auth(db, authorization)
     
     # Get project
     project = db.scalar(

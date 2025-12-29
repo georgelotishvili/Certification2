@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Statement, User
+from ..models import Statement, User, UserSession
 from ..schemas import StatementOut
 from ..services.media_storage import ensure_statement_dir, relative_storage_path, resolve_storage_path
 
@@ -24,14 +24,26 @@ MAX_BYTES = 100 * 1024 * 1024  # 100MB
 
 def _get_actor_user(
     db: Session,
-    actor_email: str | None,
+    authorization: str | None = None,
 ) -> User:
-    email = (actor_email or "").strip().lower()
-    if not email:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    """Get user from Bearer token."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    
+    token = authorization.split(" ", 1)[1]
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow()
+        )
+    )
+    if not session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    
+    user = db.get(User, session.user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    
     return user
 
 
@@ -79,11 +91,11 @@ def _save_attachment(user_id: int, statement_id: int, upload: UploadFile) -> tup
 def create_statement(
     message: str = Form(...),
     attachment: UploadFile | None = File(None),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ) -> StatementOut:
     try:
-        user = _get_actor_user(db, x_actor_email)
+        user = _get_actor_user(db, authorization)
         msg = (message or "").strip()
         if not msg:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="message required")
@@ -120,11 +132,11 @@ def create_statement(
 
 @router.get("/me", response_model=List[StatementOut])
 def list_my_statements(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ) -> List[StatementOut]:
     try:
-        user = _get_actor_user(db, x_actor_email)
+        user = _get_actor_user(db, authorization)
         statements = db.scalars(
             select(Statement)
             .where(Statement.user_id == user.id)
@@ -156,13 +168,12 @@ def statements_summary(
 @router.get("/{statement_id}/attachment")
 def download_statement_attachment(
     statement_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
-    actor: str | None = Query(None, description="actor email (fallback for links)"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Download statement attachment. Only the owner can download their own statement attachments."""
     try:
-        user = _get_actor_user(db, x_actor_email or actor)
+        user = _get_actor_user(db, authorization)
         statement = db.scalar(select(Statement).where(Statement.id == statement_id))
         if not statement:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Statement not found")

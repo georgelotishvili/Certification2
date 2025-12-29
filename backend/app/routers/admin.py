@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement, Certificate, ExpertUpload
+from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement, Certificate, ExpertUpload, UserSession
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -46,35 +46,56 @@ router = APIRouter()
 MEDIA_TYPES = ("camera", "screen")
 
 
+def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
+    """Get user from Bearer token."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1]
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow()
+        )
+    )
+    if not session:
+        return None
+    return db.get(User, session.user_id)
+
+
 def _require_admin(
     db: Session,
-    x_actor_email: str | None = None,
-) -> None:
+    authorization: str | None = None,
+) -> User:
+    """Require admin access via Bearer token."""
+    user = _get_user_from_token(db, authorization)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    
     settings = get_settings()
-
-    actor_email = (x_actor_email or "").strip().lower()
     founder_email = (settings.founder_admin_email or "").lower()
-
-    if actor_email and actor_email == founder_email:
-        return
-
-    if actor_email:
-        user = db.scalar(select(User).where(func.lower(User.email) == actor_email))
-        if user and user.is_admin:
-            return
-
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials")
+    
+    if user.email.lower() == founder_email:
+        return user
+    
+    if user.is_admin:
+        return user
+    
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin access required")
 
 
-def _is_founder_actor(actor_email: str | None) -> bool:
+def _is_founder_actor(authorization: str | None, db: Session) -> bool:
+    """Check if the token belongs to founder."""
+    user = _get_user_from_token(db, authorization)
+    if not user:
+        return False
     settings = get_settings()
-    return (settings.founder_admin_email or "").lower() == (actor_email or "").strip().lower()
+    return (settings.founder_admin_email or "").lower() == user.email.lower()
 
 
-def _actor_email_normalized(actor_email: str | None) -> str | None:
-    if not actor_email:
-        return None
-    return actor_email.strip().lower() or None
+def _get_actor_email(authorization: str | None, db: Session) -> str | None:
+    """Get actor email from Bearer token."""
+    user = _get_user_from_token(db, authorization)
+    return user.email.lower() if user else None
 
 
 def _get_or_create_exam(db: Session, exam_id: int | None = None) -> Exam:
@@ -144,20 +165,20 @@ def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
 
 @router.get("/auth/verify", status_code=status.HTTP_204_NO_CONTENT)
 def verify_admin_access(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ) -> Response:
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/exam/settings", response_model=ExamSettingsResponse)
 def get_exam_settings(
     exam_id: int | None = None,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     exam = _get_or_create_exam(db, exam_id)
     return _exam_settings_payload(exam)
 
@@ -165,10 +186,10 @@ def get_exam_settings(
 @router.put("/exam/settings", response_model=ExamSettingsResponse)
 def update_exam_settings(
     payload: ExamSettingsUpdateRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     exam = _get_or_create_exam(db, payload.exam_id)
 
     if payload.title is not None:
@@ -192,10 +213,10 @@ def update_exam_settings(
 @router.get("/exam/blocks", response_model=AdminBlocksResponse)
 def get_exam_blocks(
     exam_id: int | None = None,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     exam = _get_or_create_exam(db, exam_id)
     return _blocks_payload(exam)
 
@@ -203,10 +224,10 @@ def get_exam_blocks(
 @router.put("/exam/blocks", response_model=AdminBlocksResponse)
 def update_exam_blocks(
     payload: AdminBlocksUpdateRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     exam = _get_or_create_exam(db, payload.exam_id)
 
     existing_blocks = db.scalars(
@@ -342,10 +363,10 @@ def update_exam_blocks(
 
 @router.get("/stats", response_model=AdminStatsResponse)
 def admin_stats(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
 
     total_blocks = db.scalar(select(func.count()).select_from(Block)) or 0
     total_questions = db.scalar(select(func.count()).select_from(Question)) or 0
@@ -391,10 +412,10 @@ def results_list(
     size: int = 50,
     candidate_code: str | None = None,
     personal_id: str | None = None,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
 
     candidate_code_norm = (candidate_code or "").strip().lower() or None
     personal_id_norm = (personal_id or "").strip().lower() or None
@@ -455,10 +476,10 @@ def results_list(
 @router.get("/results/{session_id}", response_model=ResultDetailResponse)
 def result_detail(
     session_id: int = FPath(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     s = db.get(ExamSession, session_id)
     if not s:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
@@ -691,14 +712,14 @@ def result_detail(
 @router.delete("/results/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_result(
     session_id: int = FPath(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    admin_user = _require_admin(db, authorization)
 
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
-    if founder_email != (x_actor_email or "").lower():
+    if founder_email != admin_user.email.lower():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete results")
 
     session_obj = db.get(ExamSession, session_id)
@@ -734,11 +755,11 @@ def delete_result(
 @router.get("/statements/{statement_id}/file")
 def admin_download_statement_file(
     statement_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     actor: str | None = Query(None, alias="actor"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, actor or x_actor_email)
+    _require_admin(db, authorization)
     st = db.get(Statement, statement_id)
     if not st or not st.attachment_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
@@ -766,10 +787,10 @@ def admin_users(
     search: str | None = None,
     only_admins: bool = False,
     sort: str = "date_desc",  # date_desc|date_asc|name_asc|name_desc
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     settings = get_settings()
 
     stmt = select(User)
@@ -868,11 +889,11 @@ def admin_users(
 def admin_toggle_user(
     user_id: int,
     payload: ToggleAdminRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
-    if not _is_founder_actor(x_actor_email):
+    if not _is_founder_actor(authorization, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can modify admin status")
 
     u = db.get(User, user_id)
@@ -897,10 +918,10 @@ def admin_toggle_user(
 def admin_toggle_exam_permission(
     user_id: int,
     payload: ToggleExamPermissionRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     settings = get_settings()
     
     u = db.get(User, user_id)
@@ -921,11 +942,11 @@ def admin_toggle_exam_permission(
 def admin_update_user(
     user_id: int,
     payload: AdminUserUpdateRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
-    if not _is_founder_actor(x_actor_email):
+    _require_admin(db, authorization)
+    if not _is_founder_actor(authorization, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can modify user data")
 
     user = db.get(User, user_id)
@@ -1034,11 +1055,11 @@ def admin_update_user(
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_user(
     user_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
-    if not _is_founder_actor(x_actor_email):
+    if not _is_founder_actor(authorization, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete")
 
     u = db.get(User, user_id)
@@ -1155,13 +1176,13 @@ def admin_delete_user(
 # Bulk delete all non-founder users
 @router.delete("/users", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_all_users(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     settings = get_settings()
     # Only founder can delete all users
     founder_email = (settings.founder_admin_email or "").lower()
-    if not _is_founder_actor(x_actor_email):
+    if not _is_founder_actor(authorization, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete all users")
 
     # Do not delete founder
@@ -1264,10 +1285,10 @@ def admin_delete_all_users(
 @router.get("/users/{user_id}/statements", response_model=AdminStatementsResponse)
 def admin_user_statements(
     user_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -1299,11 +1320,11 @@ def admin_user_statements(
 @router.delete("/statements/{statement_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_statement(
     statement_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
-    if not _is_founder_actor(x_actor_email):
+    _require_admin(db, authorization)
+    if not _is_founder_actor(authorization, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete statements")
 
     statement = db.get(Statement, statement_id)
@@ -1319,10 +1340,10 @@ def admin_delete_statement(
 
 @router.get("/statements/summary")
 def admin_statements_summary(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     total_unseen = db.scalar(
         select(func.count()).select_from(Statement).where(Statement.seen_at.is_(None))
     ) or 0
@@ -1332,11 +1353,11 @@ def admin_statements_summary(
 @router.post("/statements/mark-seen", status_code=status.HTTP_204_NO_CONTENT)
 def admin_mark_statements_seen(
     payload: StatementSeenRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
-    actor_email = _actor_email_normalized(x_actor_email) or "admin"
+    _require_admin(db, authorization)
+    actor_email = _get_actor_email(authorization, db) or "admin"
     statement_ids = [sid for sid in payload.statement_ids if isinstance(sid, int)]
     if not statement_ids:
         return
@@ -1371,11 +1392,11 @@ def _delete_user_photo_file(user: User) -> None:
 async def admin_upload_user_photo(
     user_id: int,
     file: UploadFile = File(...),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Upload or replace user profile photo."""
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
 
     user = db.get(User, user_id)
     if not user:
@@ -1435,12 +1456,12 @@ async def admin_upload_user_photo(
 @router.get("/users/{user_id}/photo/file")
 def admin_get_user_photo(
     user_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     actor: str | None = Query(None, alias="actor"),
     db: Session = Depends(get_db),
 ):
     """Get user photo file."""
-    _require_admin(db, actor or x_actor_email)
+    _require_admin(db, authorization)
 
     user = db.get(User, user_id)
     if not user or not user.photo_path:
@@ -1474,11 +1495,11 @@ def admin_get_user_photo(
 @router.delete("/users/{user_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_user_photo(
     user_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Delete user profile photo."""
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
 
     user = db.get(User, user_id)
     if not user:

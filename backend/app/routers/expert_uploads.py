@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..config import get_settings
-from ..models import User, Certificate, ExpertUpload
+from ..models import User, Certificate, ExpertUpload, UserSession
 from ..schemas import ExpertUploadOut
 from ..services.media_storage import ensure_media_root, resolve_storage_path, delete_storage_file
 
@@ -23,14 +23,38 @@ ALLOWED_EXTS = {".pdf", ".zip", ".rar"}
 MAX_BYTES = 1024 * 1024 * 1024  # 1GB
 
 
-def _actor(db: Session, actor_email: Optional[str]) -> User:
-    eml = (actor_email or "").strip().lower()
-    if not eml:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor required")
-    user = db.scalar(select(User).where(User.email == eml))
+def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
+    """Get user from Bearer token."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1]
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow()
+        )
+    )
+    if not session:
+        return None
+    return db.get(User, session.user_id)
+
+
+def _require_auth(db: Session, authorization: str | None) -> User:
+    """Require authenticated user via Bearer token."""
+    user = _get_user_from_token(db, authorization)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="actor not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
     return user
+
+
+def _require_admin(db: Session, authorization: str | None) -> User:
+    """Require admin user via Bearer token."""
+    user = _require_auth(db, authorization)
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    if user.email.lower() == founder_email or user.is_admin:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
 
 
 def _must_expert(db: Session, user_id: int) -> Certificate:
@@ -109,8 +133,8 @@ def _to_out(eu: ExpertUpload) -> ExpertUploadOut:
 
 
 @router.get("/mine", response_model=List[ExpertUploadOut])
-def list_mine(x_actor_email: Optional[str] = Header(None, alias="x-actor-email"), db: Session = Depends(get_db)):
-    user = _actor(db, x_actor_email)
+def list_mine(authorization: str | None = Header(None, alias="Authorization"), db: Session = Depends(get_db)):
+    user = _require_auth(db, authorization)
     rows = db.execute(select(ExpertUpload).where(ExpertUpload.user_id == user.id).order_by(ExpertUpload.created_at.desc(), ExpertUpload.id.desc())).scalars().all()
     return [_to_out(row) for row in rows]
 
@@ -143,10 +167,10 @@ async def create_upload(
     project_address: str = Form(""),
     expertise: UploadFile | None = File(None),
     project: UploadFile | None = File(None),
-    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    user = _actor(db, x_actor_email)
+    user = _require_auth(db, authorization)
     _must_expert(db, user.id)
     code = _gen_unique_code(db)
     eu = ExpertUpload(
@@ -177,10 +201,10 @@ async def update_upload(
     project_address: str = Form(""),
     expertise: UploadFile | None = File(None),
     project: UploadFile | None = File(None),
-    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    user = _actor(db, x_actor_email)
+    user = _require_auth(db, authorization)
     _must_expert(db, user.id)
     eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
     if not eu:
@@ -208,10 +232,10 @@ async def update_upload(
 def delete_file(
     upload_id: int,
     file_type: str = Query(..., pattern="^(expertise|project)$"),
-    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    user = _actor(db, x_actor_email)
+    user = _require_auth(db, authorization)
     eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
     if not eu:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
@@ -231,23 +255,22 @@ def delete_file(
 @router.post("/{upload_id}/delete")
 def admin_delete_upload_post(
     upload_id: int,
-    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
-    actor: Optional[str] = Query(None, description="actor email (fallback for links)"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """
     Admin delete via POST (fallback for environments blocking DELETE).
     """
-    return admin_delete_upload(upload_id=upload_id, x_actor_email=x_actor_email, actor=actor, db=db)
+    return admin_delete_upload(upload_id=upload_id, authorization=authorization, db=db)
 
 
 @router.post("/{upload_id}/submit", response_model=ExpertUploadOut)
 def submit_upload(
     upload_id: int,
-    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    user = _actor(db, x_actor_email)
+    user = _require_auth(db, authorization)
     eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
     if not eu:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
@@ -268,11 +291,13 @@ def submit_upload(
 def download_file(
     upload_id: int,
     file_type: str = Query(..., pattern="^(expertise|project)$"),
-    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
-    actor: Optional[str] = Query(None, description="actor email (fallback for links)"),
+    authorization: str | None = Header(None, alias="Authorization"),
+    token: str | None = Query(None, description="Bearer token (fallback for direct links)"),
     db: Session = Depends(get_db),
 ):
-    user = _actor(db, x_actor_email or actor)
+    # Support both header and query token for direct links
+    auth_str = authorization or (f"Bearer {token}" if token else None)
+    user = _require_auth(db, auth_str)
     eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
     if not eu:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
@@ -318,18 +343,13 @@ def public_download_file(
 @router.delete("/{upload_id}")
 def admin_delete_upload(
     upload_id: int,
-    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
-    actor: Optional[str] = Query(None, description="actor email (fallback for links)"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """
     Delete an expert upload (admin only). Removes DB row and stored files.
     """
-    actor = _actor(db, x_actor_email or actor)
-    settings = get_settings()
-    founder = (settings.founder_admin_email or "").strip().lower()
-    if not (actor.is_admin or (actor.email or "").strip().lower() == founder):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
+    _require_admin(db, authorization)
     eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
     if not eu:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")

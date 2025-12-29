@@ -231,8 +231,16 @@ document.addEventListener('DOMContentLoaded', () => {
   function getActorEmail() { return getSavedEmail(); }
 
   function getActorHeaders() {
-    const actor = getActorEmail();
-    return actor ? { 'x-actor-email': actor } : {};
+    // Try window.Auth first, fallback to direct localStorage access
+    if (window.Auth?.getAuthHeaders) {
+      return window.Auth.getAuthHeaders();
+    }
+    // Fallback: get token directly from localStorage
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      return { 'Authorization': 'Bearer ' + token };
+    }
+    return {};
   }
 
   async function ensureAdminAccess() {

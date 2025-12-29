@@ -601,8 +601,7 @@
     function getCurrentUser() { try { return window.Auth?.getCurrentUser?.() || null; } catch { return null; } }
     function getActorEmail() { return (window.Auth?.getSavedEmail?.() || '').trim(); }
     function getActorHeaders() {
-      const email = getActorEmail();
-      return email ? { 'x-actor-email': email } : {};
+      return window.Auth?.getAuthHeaders?.() || {};
     }
 
     function ensureAuthForCompose(event) {

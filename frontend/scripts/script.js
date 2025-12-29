@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
     CURRENT_USER: 'currentUser',
     USED_CODES: 'usedCodes',
     SAVED_EMAIL: 'savedEmail',
-    SAVED_PASSWORD: 'savedPassword',
   };
 
   const DOM = {
@@ -84,6 +83,22 @@ document.addEventListener('DOMContentLoaded', () => {
     on: (element, event, handler) => element && element.addEventListener(event, handler),
     isValidEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
     getTrimmed: (formData, name) => (formData.get(name) || '').toString().trim(),
+    validatePassword: (password) => {
+      // Backend-თან თანმიმდევრული ვალიდაცია
+      if (password.length < 8) {
+        return { valid: false, message: 'პაროლი უნდა იყოს მინიმუმ 8 სიმბოლო' };
+      }
+      if (!/[A-ZА-Яა-ჰ]/.test(password)) {
+        return { valid: false, message: 'პაროლი უნდა შეიცავდეს მინიმუმ ერთ დიდ ასოს' };
+      }
+      if (!/[a-zа-яა-ჰ]/.test(password)) {
+        return { valid: false, message: 'პაროლი უნდა შეიცავდეს მინიმუმ ერთ პატარა ასოს' };
+      }
+      if (!/\d/.test(password)) {
+        return { valid: false, message: 'პაროლი უნდა შეიცავდეს მინიმუმ ერთ რიცხვს' };
+      }
+      return { valid: true, message: '' };
+    },
     formatDateTime: (value) => {
       const date = parseUtcDate(value);
       if (!date) return String(value || '');
@@ -190,12 +205,21 @@ document.addEventListener('DOMContentLoaded', () => {
   window.Utils = window.Utils || {};
   window.Utils.formatDateTime = utils.formatDateTime;
   window.Utils.parseUtcDate = parseUtcDate;
+  window.Utils.validatePassword = utils.validatePassword;
 
   // Expose minimal auth helpers
   window.Auth = window.Auth || {};
   window.Auth.isLoggedIn = () => authModule.isLoggedIn?.() ?? false;
   window.Auth.getCurrentUser = () => authModule.getCurrentUser?.() ?? null;
   window.Auth.getSavedEmail = () => (localStorage.getItem(KEYS.SAVED_EMAIL) || '');
+  window.Auth.getToken = () => (localStorage.getItem('auth_token') || '');
+  window.Auth.getAuthHeaders = () => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      return { 'Authorization': 'Bearer ' + token };
+    }
+    return {};
+  };
   window.Auth.isFounder = () => {
     try {
       return (localStorage.getItem(KEYS.SAVED_EMAIL) || '').toLowerCase() === FOUNDER_EMAIL.toLowerCase();
@@ -437,12 +461,9 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.loginModal.classList.add('show');
       DOM.body.style.overflow = 'hidden';
       const savedEmail = localStorage.getItem(KEYS.SAVED_EMAIL);
-      const savedPassword = localStorage.getItem(KEYS.SAVED_PASSWORD);
       if (DOM.loginForm) {
         const emailInput = DOM.loginForm.querySelector('input[name="email"]');
-        const passwordInput = DOM.loginForm.querySelector('input[name="password"]');
         if (emailInput && savedEmail) emailInput.value = savedEmail;
-        if (passwordInput && savedPassword) passwordInput.value = savedPassword;
       }
     }
 
@@ -507,7 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
       if (!password) return alert('გთხოვთ შეიყვანოთ პაროლი');
       localStorage.setItem(KEYS.SAVED_EMAIL, email);
-      localStorage.setItem(KEYS.SAVED_PASSWORD, password);
       const user = getCurrentUser();
       const loginEmailLower = email.toLowerCase();
       if (user && String(user.email || '').toLowerCase() !== loginEmailLower) {
@@ -634,7 +654,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!firstName || !lastName) return alert('გთხოვთ შეიყვანოთ სახელი და გვარი');
       if (!/^[0-9]{9}$/.test(phone)) return alert('ტელეფონი უნდა იყოს 9 ციფრი (მაგ: 599123456)');
       if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
-      if (password.length < 6) return alert('პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო');
+      const passwordCheck = utils.validatePassword(password);
+      if (!passwordCheck.valid) return alert(passwordCheck.message);
       if (password !== confirmPassword) return alert('პაროლები არ ემთხვევა');
 
       try {
@@ -710,7 +731,6 @@ document.addEventListener('DOMContentLoaded', () => {
           };
           saveCurrentUser(normalizedUser);
           localStorage.setItem(KEYS.SAVED_EMAIL, registerData.email);
-          localStorage.setItem(KEYS.SAVED_PASSWORD, registerData.password);
           setLoggedIn(true);
           updateAuthUI();
           updateBanner();
@@ -823,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
           method: 'POST',
           headers: {
             // Do NOT set Content-Type manually; browser will add multipart/form-data with boundary
-            'x-actor-email': actorEmail,
+            ...window.Auth.getAuthHeaders(),
           },
           body: payload,
           credentials: 'include',

@@ -8,20 +8,34 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, Certificate, Rating, Comment
+from ..models import User, Certificate, Rating, Comment, UserSession
 from ..schemas import ReviewRatingCreate, ReviewCommentCreate, ReviewCommentOut, ReviewsSummaryOut, ReviewCriteria
 
 
 router = APIRouter()
 
 
-def _get_actor_user(db: Session, actor_email: str | None) -> User:
-    eml = (actor_email or "").strip().lower()
-    if not eml:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="actor required")
-    user = db.scalar(select(User).where(User.email == eml))
+def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
+    """Get user from Bearer token."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1]
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow()
+        )
+    )
+    if not session:
+        return None
+    return db.get(User, session.user_id)
+
+
+def _require_auth(db: Session, authorization: str | None) -> User:
+    """Require authenticated user via Bearer token."""
+    user = _get_user_from_token(db, authorization)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="actor not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
     return user
 
 
@@ -38,14 +52,14 @@ def _ensure_target_certified(db: Session, user_id: int) -> User:
 @router.get("/{user_id}/summary", response_model=ReviewsSummaryOut)
 def reviews_summary(
     user_id: int = Path(..., ge=1),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     # Actor is optional; present only for actor-specific score
     actor = None
-    if x_actor_email:
+    if authorization:
         try:
-            actor = _get_actor_user(db, x_actor_email)
+            actor = _require_auth(db, authorization)
         except HTTPException:
             actor = None
 
@@ -128,10 +142,10 @@ def reviews_summary(
 def set_rating(
     user_id: int,
     payload: ReviewRatingCreate,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    actor = _get_actor_user(db, x_actor_email)
+    actor = _require_auth(db, authorization)
     target = _ensure_target_certified(db, user_id)
     if actor.id == target.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="self rating is not allowed")
@@ -177,17 +191,17 @@ def set_rating(
         )
     db.commit()
 
-    return reviews_summary(user_id=user_id, x_actor_email=x_actor_email, db=db)
+    return reviews_summary(user_id=user_id, authorization=authorization, db=db)
 
 
 @router.post("/{user_id}/comments", response_model=ReviewCommentOut, status_code=status.HTTP_201_CREATED)
 def add_comment(
     user_id: int,
     payload: ReviewCommentCreate,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    actor = _get_actor_user(db, x_actor_email)
+    actor = _require_auth(db, authorization)
     _ensure_target_certified(db, user_id)
     message = (payload.message or "").strip()
     if not message:
@@ -212,11 +226,11 @@ def add_comment(
 def delete_comment(
     user_id: int,
     comment_id: int,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """Delete a comment. Allowed to the author or any admin."""
-    actor = _get_actor_user(db, x_actor_email)
+    actor = _require_auth(db, authorization)
     # Ensure target exists and is certified (optional for safety)
     _ensure_target_certified(db, user_id)
 

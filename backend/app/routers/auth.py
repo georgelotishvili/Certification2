@@ -12,6 +12,7 @@ from ..models import Exam, ExamCode, Session as ExamSession, User, UserSession
 from ..schemas import AuthCodeRequest, AuthCodeResponse, LoginRequest, LoginResponse, UserOut, ForgotPasswordRequest, ForgotPasswordResponse
 from ..security import generate_session_token, verify_code, hash_code, generate_secure_password
 from ..config import get_settings
+from ..rate_limiter import login_limiter
 
 
 router = APIRouter()
@@ -80,8 +81,8 @@ def auth_with_code(payload: AuthCodeRequest, db: Session = Depends(get_db)):
 @router.post("/login", response_model=LoginResponse)
 def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
     """Login with email and password."""
-    # TODO: Add rate limiting with slowapi decorator when slowapi is installed
-    # Rate limiting temporarily disabled to ensure login works
+    # Rate limiting: 5 attempts per minute per IP
+    login_limiter.check(request)
     
     email_norm = (payload.email or "").strip().lower()
     if not email_norm:

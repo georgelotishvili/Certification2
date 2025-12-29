@@ -30,10 +30,10 @@ def _guide_video_out(video: GuideVideo) -> GuideVideoOut:
 
 @router.get("/admin/guide/videos", response_model=List[GuideVideoOut])
 def admin_list_guide_videos(
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     videos = db.scalars(select(GuideVideo).order_by(GuideVideo.order_index.asc(), GuideVideo.id.asc())).all()
     return [_guide_video_out(v) for v in videos]
 
@@ -41,10 +41,10 @@ def admin_list_guide_videos(
 @router.post("/admin/guide/videos", response_model=GuideVideoOut, status_code=status.HTTP_201_CREATED)
 def admin_create_guide_video(
     payload: GuideVideoCreate,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
 
     max_order = db.scalar(select(func.max(GuideVideo.order_index))) or 0
 
@@ -64,10 +64,10 @@ def admin_create_guide_video(
 def admin_update_guide_video(
     payload: GuideVideoUpdate,
     video_id: int = FPath(..., ge=1),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     video = db.get(GuideVideo, video_id)
     if not video:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
@@ -89,10 +89,10 @@ def admin_update_guide_video(
 @router.post("/admin/guide/videos/reorder", status_code=status.HTTP_204_NO_CONTENT)
 def admin_reorder_guide_videos(
     payload: GuideVideosReorderRequest,
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     ids = [int(v) for v in (payload.ids or []) if isinstance(v, int) or (isinstance(v, str) and v.isdigit())]
     if not ids:
         return
@@ -117,10 +117,10 @@ def admin_reorder_guide_videos(
 @router.delete("/admin/guide/videos/{video_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_guide_video(
     video_id: int = FPath(..., ge=1),
-    x_actor_email: str | None = Header(None, alias="x-actor-email"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    _require_admin(db, x_actor_email)
+    _require_admin(db, authorization)
     video = db.get(GuideVideo, video_id)
     if not video:
         return

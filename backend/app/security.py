@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from .models import User, UserSession
+from .config import get_settings
 
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -99,47 +100,46 @@ def validate_password_strength(password: str) -> None:
 
 def get_current_user(
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_actor_email: Optional[str] = Header(None, alias="x-actor-email"),
     db: Session = Depends(get_db),
 ) -> User:
     """
-    Get current authenticated user from Bearer token or x-actor-email header.
+    Get current authenticated user from Bearer token.
     
-    Priority:
-    1. Bearer token (new secure method)
-    2. x-actor-email header (backward compatibility - less secure)
-    
-    For new endpoints, use require_auth() which only accepts Bearer tokens.
+    Only accepts Bearer tokens for security.
+    x-actor-email header is no longer accepted.
     """
-    # Try Bearer token first (preferred method)
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization.split(" ", 1)[1]
-        session = db.scalar(
-            select(UserSession).where(
-                UserSession.token == token,
-                UserSession.expires_at > datetime.utcnow()
-            )
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bearer token required"
         )
-        if session:
-            user = db.get(User, session.user_id)
-            if user:
-                # Update last_used_at
-                session.last_used_at = datetime.utcnow()
-                db.commit()
-                return user
     
-    # Fallback to x-actor-email (backward compatibility)
-    if x_actor_email:
-        email_lower = (x_actor_email or "").strip().lower()
-        if email_lower:
-            user = db.scalar(select(User).where(User.email == email_lower))
-            if user:
-                return user
-    
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required"
+    token = authorization.split(" ", 1)[1]
+    session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow()
+        )
     )
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
+    
+    user = db.get(User, session.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+    
+    # Update last_used_at
+    session.last_used_at = datetime.utcnow()
+    db.commit()
+    
+    return user
 
 
 def require_auth(
@@ -180,6 +180,56 @@ def require_auth(
     # Update last_used_at
     session.last_used_at = datetime.utcnow()
     db.commit()
+    
+    return user
+
+
+def is_founder(user: User) -> bool:
+    """Check if user is the founder (main admin)."""
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    return user.email.lower() == founder_email
+
+
+def is_admin_or_founder(user: User) -> bool:
+    """Check if user is admin or founder."""
+    return bool(user.is_admin) or is_founder(user)
+
+
+def require_admin(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+) -> User:
+    """
+    Require admin or founder access via Bearer token.
+    Returns the authenticated admin user.
+    """
+    user = require_auth(authorization=authorization, db=db)
+    
+    if not is_admin_or_founder(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    return user
+
+
+def require_founder(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+) -> User:
+    """
+    Require founder (main admin) access via Bearer token.
+    Returns the authenticated founder user.
+    """
+    user = require_auth(authorization=authorization, db=db)
+    
+    if not is_founder(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Founder access required"
+        )
     
     return user
 
