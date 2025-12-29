@@ -21,6 +21,12 @@ const examState = {
     focusWarningTimer: null,
     focusWarningCountdown: 10,
     isFocusWarningActive: false,
+    // Screen recording
+    mediaRecorder: null,
+    recordedChunks: [],
+    isRecording: false,
+    screenStream: null,
+    audioStream: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -94,7 +100,10 @@ function setupEventListeners() {
     // Return home button (in results overlay)
     const returnHomeBtn = document.getElementById('return-home-btn');
     if (returnHomeBtn) {
-        returnHomeBtn.addEventListener('click', () => {
+        returnHomeBtn.addEventListener('click', async () => {
+            // ჩაწერის შეჩერება
+            await stopScreenRecording();
+            
             // Lockdown-ის გამორთვა
             disableExamLockdown();
             
@@ -257,6 +266,9 @@ async function startExam() {
         
         // ჩავრთოთ Exam Lockdown Mode
         enableExamLockdown();
+        
+        // ვიწყებთ ეკრანის ჩაწერას
+        await startScreenRecording();
         
         // ვიწყებთ გამოცდას
         await loadFirstBlock();
@@ -667,6 +679,250 @@ async function initializeCamera() {
         }
     }
 }
+
+// ==========================================
+// Screen Recording Functions
+// ==========================================
+
+// ეკრანის ჩაწერის დაწყება
+async function startScreenRecording() {
+    try {
+        console.log('🎬 Starting screen recording...');
+        
+        // მივიღოთ ეკრანის წყაროები Electron-იდან
+        const sources = await window.electronAPI.getScreenSources();
+        
+        if (!sources || sources.length === 0) {
+            console.error('No screen sources available');
+            showRecordingError();
+            return false;
+        }
+        
+        // პირველი ეკრანის არჩევა
+        const screenSource = sources[0];
+        console.log('Selected screen source:', screenSource.name);
+        
+        // ეკრანის stream მიღება
+        const screenStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+                mandatory: {
+                    chromeMediaSource: 'desktop',
+                    chromeMediaSourceId: screenSource.id,
+                    minWidth: 1280,
+                    maxWidth: 1920,
+                    minHeight: 720,
+                    maxHeight: 1080
+                }
+            }
+        });
+        
+        examState.screenStream = screenStream;
+        
+        // აუდიო stream მიღება (მიკროფონი)
+        let audioStream = null;
+        try {
+            audioStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true
+                },
+                video: false
+            });
+            examState.audioStream = audioStream;
+            console.log('🎤 Microphone audio enabled');
+        } catch (audioError) {
+            console.warn('Could not get audio stream:', audioError);
+            // გავაგრძელოთ აუდიოს გარეშე
+        }
+        
+        // შევაერთოთ ვიდეო და აუდიო tracks
+        const combinedTracks = [...screenStream.getTracks()];
+        if (audioStream) {
+            combinedTracks.push(...audioStream.getTracks());
+        }
+        
+        const combinedStream = new MediaStream(combinedTracks);
+        
+        // MediaRecorder-ის შექმნა
+        const mimeType = 'video/webm;codecs=vp9,opus';
+        const fallbackMimeType = 'video/webm';
+        
+        const options = {
+            mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : fallbackMimeType,
+            videoBitsPerSecond: 2500000 // 2.5 Mbps
+        };
+        
+        examState.mediaRecorder = new MediaRecorder(combinedStream, options);
+        examState.recordedChunks = [];
+        
+        // მონაცემების მიღება
+        examState.mediaRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+                examState.recordedChunks.push(event.data);
+            }
+        };
+        
+        // ჩაწერის დასრულება
+        examState.mediaRecorder.onstop = async () => {
+            console.log('🎬 Recording stopped, saving file...');
+            await saveRecordingToFile();
+        };
+        
+        // ჩაწერის შეცდომა
+        examState.mediaRecorder.onerror = (error) => {
+            console.error('MediaRecorder error:', error);
+            examState.isRecording = false;
+            updateRecordingIndicator();
+        };
+        
+        // ჩაწერის დაწყება (ყოველ 1 წამში მონაცემების მიღება)
+        examState.mediaRecorder.start(1000);
+        examState.isRecording = true;
+        
+        console.log('📹 Screen recording started successfully');
+        updateRecordingIndicator();
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error starting screen recording:', error);
+        showRecordingError();
+        return false;
+    }
+}
+
+// ეკრანის ჩაწერის შეჩერება
+function stopScreenRecording() {
+    return new Promise((resolve) => {
+        if (!examState.mediaRecorder || examState.mediaRecorder.state === 'inactive') {
+            console.log('No active recording to stop');
+            resolve();
+            return;
+        }
+        
+        console.log('🛑 Stopping screen recording...');
+        
+        // ჩაწერის შეჩერებაზე გადავიდეს saveRecordingToFile
+        const originalOnStop = examState.mediaRecorder.onstop;
+        examState.mediaRecorder.onstop = async (event) => {
+            await saveRecordingToFile();
+            resolve();
+        };
+        
+        examState.mediaRecorder.stop();
+        examState.isRecording = false;
+        updateRecordingIndicator();
+        
+        // გავაჩეროთ streams
+        if (examState.screenStream) {
+            examState.screenStream.getTracks().forEach(track => track.stop());
+        }
+        if (examState.audioStream) {
+            examState.audioStream.getTracks().forEach(track => track.stop());
+        }
+    });
+}
+
+// ჩანაწერის შენახვა ფაილად
+async function saveRecordingToFile() {
+    if (examState.recordedChunks.length === 0) {
+        console.log('No recorded data to save');
+        return;
+    }
+    
+    try {
+        // Blob-ის შექმნა
+        const blob = new Blob(examState.recordedChunks, { type: 'video/webm' });
+        
+        // ArrayBuffer-ად გარდაქმნა
+        const arrayBuffer = await blob.arrayBuffer();
+        
+        // ფაილის სახელის გენერაცია
+        const filename = generateRecordingFilename();
+        
+        // Electron-ით შენახვა
+        const result = await window.electronAPI.saveRecording(arrayBuffer, filename);
+        
+        if (result.success) {
+            console.log('✅ Recording saved successfully:', result.path);
+        } else {
+            console.error('❌ Failed to save recording:', result.error);
+        }
+        
+        // გავწმინდოთ chunks
+        examState.recordedChunks = [];
+        
+    } catch (error) {
+        console.error('Error saving recording:', error);
+    }
+}
+
+// ფაილის სახელის გენერაცია
+function generateRecordingFilename() {
+    const user = examState.user;
+    const date = new Date();
+    
+    // თარიღის ფორმატირება: YYYY-MM-DD
+    const dateStr = date.toISOString().split('T')[0];
+    
+    // დროის ფორმატირება: HH-MM-SS
+    const timeStr = date.toTimeString().split(' ')[0].replace(/:/g, '-');
+    
+    // სახელი და გვარი (ლათინური ან ქართული)
+    let firstName = user?.first_name || 'Unknown';
+    let lastName = user?.last_name || 'User';
+    let code = user?.code || 'NOCODE';
+    
+    // სახელში სპეციალური სიმბოლოების ჩანაცვლება
+    firstName = firstName.replace(/[\\/:*?"<>|]/g, '_');
+    lastName = lastName.replace(/[\\/:*?"<>|]/g, '_');
+    code = code.replace(/[\\/:*?"<>|]/g, '_');
+    
+    return `${firstName}_${lastName}_${code}_${dateStr}_${timeStr}.webm`;
+}
+
+// ჩაწერის ინდიკატორის განახლება
+function updateRecordingIndicator() {
+    const indicator = document.getElementById('recording-indicator');
+    const errorMessage = document.getElementById('recording-error-message');
+    
+    if (examState.isRecording) {
+        // ჩაწერა მიმდინარეობს - ვაჩვენოთ წითელი წერტილი
+        if (indicator) {
+            indicator.style.display = 'flex';
+        }
+        if (errorMessage) {
+            errorMessage.style.display = 'none';
+        }
+    } else {
+        // ჩაწერა არ მიმდინარეობს
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+    }
+}
+
+// ჩაწერის შეცდომის ჩვენება
+function showRecordingError() {
+    examState.isRecording = false;
+    
+    const indicator = document.getElementById('recording-indicator');
+    const errorMessage = document.getElementById('recording-error-message');
+    
+    if (indicator) {
+        indicator.style.display = 'none';
+    }
+    if (errorMessage) {
+        errorMessage.style.display = 'flex';
+    }
+    
+    console.warn('⚠️ Recording not available, exam will continue without recording');
+}
+
+// ==========================================
+// End of Screen Recording Functions
+// ==========================================
 
 // 12. "დასრულება" ღილაკზე დაკლიკება
 function handleFinishButtonClick() {

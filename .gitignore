@@ -40,6 +40,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Exam screen recordings
+desktop_app/recordings/*.webm
+desktop_app/recordings/*.mp4
+
 # IDE
 .vscode/
 .idea/

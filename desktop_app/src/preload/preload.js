@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setFullscreen: () => ipcRenderer.send('window-fullscreen'),
   exitFullscreen: () => ipcRenderer.send('window-exit-fullscreen'),
   lockExam: () => ipcRenderer.send('exam-lock'),
-  unlockExam: () => ipcRenderer.send('exam-unlock')
+  unlockExam: () => ipcRenderer.send('exam-unlock'),
+  
+  // Screen Recording APIs
+  getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
+  saveRecording: (buffer, filename) => ipcRenderer.invoke('save-recording', { buffer, filename }),
+  getRecordingsPath: () => ipcRenderer.invoke('get-recordings-path')
 });
 

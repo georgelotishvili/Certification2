@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, desktopCapturer } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 // Auto-reload in development
 if (process.env.NODE_ENV !== 'production') {
@@ -145,6 +146,50 @@ ipcMain.on('exam-unlock', () => {
     mainWindow.setAlwaysOnTop(false);
     mainWindow.setMinimizable(true);
   }
+});
+
+// Screen Recording IPC handlers
+ipcMain.handle('get-screen-sources', async () => {
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 0, height: 0 }
+    });
+    return sources.map(source => ({
+      id: source.id,
+      name: source.name
+    }));
+  } catch (error) {
+    console.error('Error getting screen sources:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('save-recording', async (event, { buffer, filename }) => {
+  try {
+    // recordings ფოლდერის შექმნა აპის დირექტორიაში
+    const recordingsDir = path.join(__dirname, '..', '..', 'recordings');
+    
+    if (!fs.existsSync(recordingsDir)) {
+      fs.mkdirSync(recordingsDir, { recursive: true });
+    }
+    
+    const filePath = path.join(recordingsDir, filename);
+    
+    // Buffer-ის შენახვა ფაილად
+    const uint8Array = new Uint8Array(buffer);
+    fs.writeFileSync(filePath, uint8Array);
+    
+    console.log('📹 Recording saved:', filePath);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('Error saving recording:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-recordings-path', () => {
+  return path.join(__dirname, '..', '..', 'recordings');
 });
 
 app.whenReady().then(() => {
