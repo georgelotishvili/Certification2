@@ -14,10 +14,10 @@ from backend.app.database import engine  # noqa: E402
 
 def run() -> None:
     """
-    Ensure guide_videos table exists.
+    Ensure guide_videos table exists with URL-based structure.
 
-    ეს მიგრაცია იძახება აპის გაშვებისას და მხოლოდ ამატებს ცხრილს,
-    არაფერი არ შლის/ცვლის არსებულ სტრუქტურებს.
+    ეს მიგრაცია იძახება აპის გაშვებისას და ქმნის/განაახლებს ცხრილს
+    URL-ზე დაფუძნებული სტრუქტურით (title, url ნაცვლად storage_path, filename და ა.შ.)
     """
     try:
         with engine.connect() as connection:
@@ -26,24 +26,16 @@ def run() -> None:
 
             statements: list[str] = []
 
-            # თუ ცხრილი უკვე არსებობს, მაგრამ სქემა არ ემთხვევა მოსალოდნელს,
-            # (მაგალითად, ადრე ტესტურად შეიქმნა სხვა ველებით),
-            # ბოლომდე ვშლით და თავიდან ვქმნით. ამ ეტაპზე მონაცემები არ გვაქვს,
-            # ამიტომ ეს უსაფრთხოა.
+            # ახალი სტრუქტურა: title და url ველებით
+            required_new = {"id", "order_index", "title", "url", "created_at"}
+
             if "guide_videos" in tables:
                 cols = {col["name"] for col in inspector.get_columns("guide_videos")}
-                required = {
-                    "id",
-                    "order_index",
-                    "storage_path",
-                    "filename",
-                    "mime_type",
-                    "size_bytes",
-                    "created_at",
-                }
-                if not required.issubset(cols):
+                
+                # თუ ძველი სტრუქტურაა (storage_path არსებობს), ვშლით და ვქმნით ახალს
+                if "storage_path" in cols or not required_new.issubset(cols):
                     statements.append("DROP TABLE guide_videos")
-                    tables.remove("guide_videos")
+                    tables.discard("guide_videos")
 
             if "guide_videos" not in tables:
                 statements.append(
@@ -51,10 +43,8 @@ def run() -> None:
                     CREATE TABLE guide_videos (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         order_index INTEGER NOT NULL DEFAULT 0,
-                        storage_path VARCHAR(1024) NOT NULL,
-                        filename VARCHAR(255) NOT NULL,
-                        mime_type VARCHAR(128) NOT NULL DEFAULT 'video/mp4',
-                        size_bytes INTEGER,
+                        title VARCHAR(500) NOT NULL DEFAULT '',
+                        url VARCHAR(2048) NOT NULL DEFAULT '',
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                     """
@@ -68,9 +58,9 @@ def run() -> None:
 
             if statements:
                 connection.commit()
-                print("Migration completed: created guide_videos table")
+                print("Migration completed: created guide_videos table with URL structure")
             else:
-                print("guide_videos table already exists, no migration needed")
+                print("guide_videos table already exists with correct structure, no migration needed")
     except Exception as exc:  # pragma: no cover - defensive
         print(f"Error during guide_videos migration: {exc}")
         import traceback
@@ -81,5 +71,3 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-
-

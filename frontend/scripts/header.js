@@ -128,6 +128,51 @@
     return 'http://127.0.0.1:8000';
   }
 
+  /**
+   * Extract embed URL from various video platforms
+   */
+  function getVideoEmbedUrl(url) {
+    if (!url || typeof url !== 'string') return null;
+
+    // YouTube - various formats
+    // https://www.youtube.com/watch?v=VIDEO_ID
+    // https://youtu.be/VIDEO_ID
+    // https://www.youtube.com/embed/VIDEO_ID
+    const youtubeMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if (youtubeMatch) {
+      return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+    }
+
+    // Vimeo - various formats
+    // https://vimeo.com/VIDEO_ID
+    // https://player.vimeo.com/video/VIDEO_ID
+    const vimeoMatch = url.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/);
+    if (vimeoMatch) {
+      return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    }
+
+    // Dailymotion
+    // https://www.dailymotion.com/video/VIDEO_ID
+    const dailymotionMatch = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
+    if (dailymotionMatch) {
+      return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}`;
+    }
+
+    // Facebook video
+    const facebookMatch = url.match(/facebook\.com.*\/videos\/(\d+)/);
+    if (facebookMatch) {
+      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
+    }
+
+    // Already an embed URL or other platform - return as is for iframe
+    if (url.includes('embed') || url.includes('player')) {
+      return url;
+    }
+
+    // Unknown format - return null
+    return null;
+  }
+
   async function loadGuideVideosInto(container) {
     try {
       if (!container) return;
@@ -141,62 +186,57 @@
       }
       const items = await response.json();
       if (!Array.isArray(items) || !items.length) {
-        listEl.innerHTML = '<p style="opacity:.8">ამ ეტაპზე გზამკვლევის ვიდეო არ არის ატვირთული.</p>';
+        listEl.innerHTML = '<p style="opacity:.8">ამ ეტაპზე გზამკვლევის ვიდეო არ არის დამატებული.</p>';
         return;
       }
       listEl.innerHTML = '';
       items.forEach((video) => {
         const card = document.createElement('div');
         card.className = 'guide-video-public-card';
-        const size = typeof video.size_bytes === 'number' && video.size_bytes > 0
-          ? (video.size_bytes / (1024 * 1024)).toFixed(1) + ' MB'
-          : '';
-        const created = video.created_at || video.createdAt || null;
-        const title = (video.filename || 'ვიდეო');
-        const url = (video.url && typeof video.url === 'string')
-          ? (video.url.startsWith('http') ? video.url : `${API_BASE}${video.url}`)
-          : '';
+        const title = video.title || 'ვიდეო';
+        const url = video.url || '';
+        const embedUrl = getVideoEmbedUrl(url);
 
         const head = document.createElement('div');
         head.className = 'guide-video-public-head';
         const titleEl = document.createElement('div');
         titleEl.className = 'guide-video-public-title';
         titleEl.textContent = title;
-        const metaEl = document.createElement('div');
-        metaEl.className = 'guide-video-public-meta';
-        const parts = [];
-        if (size) parts.push(size);
-        if (created) parts.push(String(created));
-        metaEl.textContent = parts.join(' • ');
         head.appendChild(titleEl);
-        head.appendChild(metaEl);
-
-        const videoEl = document.createElement('video');
-        videoEl.className = 'guide-video-player';
-        videoEl.controls = true;
-        videoEl.preload = 'metadata';
-        if (url) {
-          videoEl.src = url;
-        }
 
         card.appendChild(head);
-        card.appendChild(videoEl);
+
+        if (embedUrl) {
+          // Create iframe for embed
+          const iframe = document.createElement('iframe');
+          iframe.className = 'guide-video-embed';
+          iframe.src = embedUrl;
+          iframe.setAttribute('frameborder', '0');
+          iframe.setAttribute('allowfullscreen', 'true');
+          iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+          iframe.loading = 'lazy';
+          card.appendChild(iframe);
+        } else if (url) {
+          // Fallback: show link if embed not supported
+          const linkWrapper = document.createElement('div');
+          linkWrapper.className = 'guide-video-link-wrapper';
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.className = 'guide-video-link';
+          link.textContent = 'ვიდეოს ნახვა →';
+          linkWrapper.appendChild(link);
+          card.appendChild(linkWrapper);
+        } else {
+          const noVideo = document.createElement('div');
+          noVideo.className = 'guide-video-no-url';
+          noVideo.textContent = 'ვიდეოს ლინკი არ არის მითითებული';
+          card.appendChild(noVideo);
+        }
+
         listEl.appendChild(card);
       });
-
-      // მხოლოდ ერთი ვიდეო ერთდროულად – ერთი რომ დაუკრავ, სხვა შეჩერდეს
-      try {
-        const videos = Array.from(listEl.querySelectorAll('video'));
-        videos.forEach((v) => {
-          v.addEventListener('play', () => {
-            videos.forEach((other) => {
-              if (other !== v && !other.paused) {
-                try { other.pause(); } catch {}
-              }
-            });
-          });
-        });
-      } catch {}
     } catch (error) {
       console.error('Failed to load guide videos', error);
       try {

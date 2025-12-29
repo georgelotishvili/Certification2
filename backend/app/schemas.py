@@ -546,12 +546,20 @@ class MultiApartmentEvaluationSubmitRequest(CamelModel):
 
 class GuideVideoOut(BaseModel):
     id: int
-    filename: str
-    mime_type: str | None = None
-    size_bytes: int | None = None
+    title: str
+    url: str
     order_index: int
     created_at: datetime
-    url: str
+
+
+class GuideVideoCreate(BaseModel):
+    title: str = ""
+    url: str = ""
+
+
+class GuideVideoUpdate(BaseModel):
+    title: Optional[str] = None
+    url: Optional[str] = None
 
 
 class GuideVideosReorderRequest(BaseModel):

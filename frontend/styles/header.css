@@ -725,6 +725,46 @@ body.modal-open {
   background: #020617;
 }
 
+.guide-video-embed {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  background: #020617;
+  border: none;
+}
+
+.guide-video-link-wrapper {
+  padding: 20px;
+  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.guide-video-link {
+  display: inline-block;
+  padding: 12px 24px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.guide-video-link:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.guide-video-no-url {
+  padding: 24px;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 14px;
+}
+
 /* Word-like concise typography */
 .site-info-body { font-size: 16px !important; line-height: 1.8; color: #0f172a; }
 .site-info-body p,

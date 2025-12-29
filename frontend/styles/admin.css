@@ -746,6 +746,59 @@ main {
 }
 .guide-head {
   grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.guide-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.guide-title-input,
+.guide-url-input {
+  height: 36px;
+  padding: 0 12px;
+  border: 2px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--surface-elevated);
+  color: var(--text-strong);
+  font-size: 14px;
+  width: 100%;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.guide-title-input:focus,
+.guide-url-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(47, 91, 168, 0.15);
+}
+
+.guide-title-input::placeholder,
+.guide-url-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.guide-url-input {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+}
+
+.guide-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.guide-actions .guide-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 .block-card.open .block-head { border-bottom: 2px solid var(--border-strong); }
 

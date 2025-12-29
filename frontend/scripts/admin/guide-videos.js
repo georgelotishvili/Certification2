@@ -14,16 +14,15 @@
     const state = {
       items: [],
       loading: false,
+      saveTimer: null,
     };
 
     const DOM = {
       grid: document.getElementById('guideVideosGrid'),
-      addBtn: document.getElementById('guideAddVideoBtn'),
-      fileInput: document.getElementById('guideFileInput'),
     };
 
     function ensureDom() {
-      return !!(DOM.grid && DOM.addBtn && DOM.fileInput);
+      return !!DOM.grid;
     }
 
     function sortItems() {
@@ -59,28 +58,16 @@
       }
     }
 
-    function formatSize(bytes) {
-      if (!bytes || typeof bytes !== 'number' || bytes <= 0) return '';
-      const mb = bytes / (1024 * 1024);
-      if (mb < 1) {
-        const kb = bytes / 1024;
-        return `${kb.toFixed(0)} KB`;
-      }
-      return `${mb.toFixed(1)} MB`;
+    function isEditorFocused() {
+      const active = document.activeElement;
+      if (!active || !DOM.grid) return false;
+      if (!DOM.grid.contains(active)) return false;
+      return active.tagName === 'TEXTAREA' || active.tagName === 'INPUT';
     }
 
     function render() {
       if (!DOM.grid) return;
       DOM.grid.innerHTML = '';
-
-      if (!state.items.length) {
-        const empty = document.createElement('div');
-        empty.className = 'empty-state block-tile add-tile';
-        empty.innerHTML = '<span class="add-text">ამ ეტაპზე გზამკვლევის ვიდეო არ არის ატვირთული</span>';
-        DOM.grid.appendChild(empty);
-
-        return;
-      }
 
       state.items.forEach((video, index) => {
         const card = document.createElement('div');
@@ -89,7 +76,6 @@
 
         const atTop = index === 0;
         const atBottom = index === state.items.length - 1;
-        const sizeText = formatSize(video.size_bytes);
         const createdText = video.created_at ? formatDateTime(video.created_at) : '';
 
         card.innerHTML = `
@@ -98,56 +84,98 @@
               <button class="i-btn up" ${atTop ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
               <button class="i-btn down" ${atBottom ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
             </div>
-            <div class="guide-title">
-              <div class="guide-filename" title="${escapeHtml(video.filename || '')}">
-                ${escapeHtml(video.filename || 'ვიდეო')}
-              </div>
-              <div class="guide-meta">
-                ${sizeText ? `<span>${escapeHtml(sizeText)}</span>` : ''}
-                ${createdText ? `<span>${escapeHtml(createdText)}</span>` : ''}
-              </div>
+            <div class="guide-fields">
+              <input class="guide-title-input" type="text" placeholder="სათაური" value="${escapeHtml(video.title || '')}" aria-label="ვიდეოს სათაური" />
+              <input class="guide-url-input" type="url" placeholder="ვიდეოს ლინკი (YouTube, Vimeo...)" value="${escapeHtml(video.url || '')}" aria-label="ვიდეოს ლინკი" />
             </div>
-            <button class="head-delete" type="button" aria-label="ვიდეოს წაშლა" title="წაშლა">×</button>
+            <div class="guide-actions">
+              ${createdText ? `<span class="guide-meta">${escapeHtml(createdText)}</span>` : ''}
+              <button class="head-delete" type="button" aria-label="ვიდეოს წაშლა" title="წაშლა">×</button>
+            </div>
           </div>
         `;
 
         DOM.grid.appendChild(card);
       });
+
+      // Add tile at the end
+      const addTile = document.createElement('button');
+      addTile.type = 'button';
+      addTile.id = 'addGuideVideoTile';
+      addTile.className = 'block-tile add-tile';
+      addTile.setAttribute('aria-label', 'ვიდეოს დამატება');
+      addTile.innerHTML = '<span class="add-icon" aria-hidden="true">+</span><span class="add-text">ვიდეოს დამატება</span>';
+      DOM.grid.appendChild(addTile);
     }
 
-    async function uploadVideo(file) {
-      if (!file) return;
+    function scheduleSave(videoId) {
+      clearTimeout(state.saveTimer);
+      state.saveTimer = setTimeout(() => {
+        state.saveTimer = null;
+        void saveVideo(videoId);
+      }, 400);
+    }
+
+    async function saveVideo(videoId) {
+      const video = state.items.find((v) => String(v.id) === String(videoId));
+      if (!video) return;
+
       try {
-        const maxBytes = 1024 * 1024 * 1024; // 1GB
-        if (file.size && file.size > maxBytes) {
-          showToast('ვიდეოს მაქსიმალური ზომა 1GB-ია', 'error');
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`${API_BASE}/admin/guide/videos`, {
-          method: 'POST',
-          headers: { ...getAdminHeaders(), ...getActorHeaders() },
-          body: formData,
+        const response = await fetch(`${API_BASE}/admin/guide/videos/${encodeURIComponent(videoId)}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAdminHeaders(),
+            ...getActorHeaders(),
+          },
+          body: JSON.stringify({
+            title: video.title || '',
+            url: video.url || '',
+          }),
         });
         if (!response.ok) {
-          await handleAdminErrorResponse(response, 'ვიდეოს ატვირთვა ვერ მოხერხდა', showToast);
+          await handleAdminErrorResponse(response, 'ვიდეოს შენახვა ვერ მოხერხდა', showToast);
+        }
+      } catch {
+        showToast('ვიდეოს შენახვა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    async function createVideo() {
+      try {
+        const response = await fetch(`${API_BASE}/admin/guide/videos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAdminHeaders(),
+            ...getActorHeaders(),
+          },
+          body: JSON.stringify({
+            title: '',
+            url: '',
+          }),
+        });
+        if (!response.ok) {
+          await handleAdminErrorResponse(response, 'ვიდეოს დამატება ვერ მოხერხდა', showToast);
           return;
         }
         const created = await response.json();
-        if (!created || typeof created !== 'object') {
-          await fetchVideos();
-          showToast('ვიდეო ატვირთულია', 'success');
-          return;
+        if (created && typeof created === 'object') {
+          state.items.push(created);
+          sortItems();
+          render();
+          // Focus the URL input of the new card
+          const newCard = DOM.grid?.querySelector?.(`.guide-video-card[data-video-id="${created.id}"]`);
+          if (newCard) {
+            const urlInput = newCard.querySelector('.guide-url-input');
+            if (urlInput) {
+              urlInput.focus();
+              urlInput.select();
+            }
+          }
         }
-        state.items.push(created);
-        sortItems();
-        render();
-        showToast('ვიდეო ატვირთულია', 'success');
       } catch {
-        showToast('ვიდეოს ატვირთვა ვერ მოხერხდა', 'error');
+        showToast('ვიდეოს დამატება ვერ მოხერხდა', 'error');
       }
     }
 
@@ -214,6 +242,12 @@
       const target = event.target;
       if (!target || !DOM.grid) return;
 
+      // Add video tile
+      if (target.closest?.('#addGuideVideoTile')) {
+        void createVideo();
+        return;
+      }
+
       const card = target.closest('.guide-video-card');
       if (!card) return;
 
@@ -236,25 +270,64 @@
       }
     }
 
-    function handleAddClick() {
-      if (!DOM.fileInput) return;
-      DOM.fileInput.click();
+    function handleGridFocusout(event) {
+      const target = event.target;
+      if (!target) return;
+
+      const card = target.closest?.('.guide-video-card');
+      if (!card) return;
+
+      const videoId = card.dataset.videoId;
+      if (!videoId) return;
+
+      const video = state.items.find((v) => String(v.id) === String(videoId));
+      if (!video) return;
+
+      if (target.classList.contains('guide-title-input')) {
+        video.title = String(target.value || '').trim();
+        scheduleSave(videoId);
+        return;
+      }
+
+      if (target.classList.contains('guide-url-input')) {
+        video.url = String(target.value || '').trim();
+        scheduleSave(videoId);
+        return;
+      }
     }
 
-    function handleFileChange(event) {
-      const input = event.target;
-      if (!input || !input.files || !input.files.length) return;
-      const file = input.files[0];
-      // Reset input so selecting the same file again still fires change
-      input.value = '';
-      void uploadVideo(file);
+    function handleGridKeydown(event) {
+      if (event.key !== 'Enter') return;
+      const target = event.target;
+      if (!target) return;
+
+      const card = target.closest?.('.guide-video-card');
+      if (!card) return;
+
+      const videoId = card.dataset.videoId;
+      if (!videoId) return;
+
+      const video = state.items.find((v) => String(v.id) === String(videoId));
+      if (!video) return;
+
+      if (target.classList.contains('guide-title-input')) {
+        video.title = String(target.value || '').trim();
+        scheduleSave(videoId);
+        return;
+      }
+
+      if (target.classList.contains('guide-url-input')) {
+        video.url = String(target.value || '').trim();
+        scheduleSave(videoId);
+        return;
+      }
     }
 
     function init() {
       if (!ensureDom()) return;
       on(DOM.grid, 'click', handleGridClick);
-      on(DOM.addBtn, 'click', handleAddClick);
-      on(DOM.fileInput, 'change', handleFileChange);
+      on(DOM.grid, 'focusout', handleGridFocusout);
+      on(DOM.grid, 'keydown', handleGridKeydown);
       void fetchVideos();
     }
 
@@ -268,5 +341,3 @@
   global.AdminModules = global.AdminModules || {};
   global.AdminModules.createGuideModule = createGuideModule;
 })(window);
-
-

@@ -377,10 +377,8 @@ class GuideVideo(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0, index=True)
-    storage_path: Mapped[str] = mapped_column(String(1024))
-    filename: Mapped[str] = mapped_column(String(255))
-    mime_type: Mapped[str] = mapped_column(String(128), default="video/mp4")
-    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    title: Mapped[str] = mapped_column(String(500), default="")
+    url: Mapped[str] = mapped_column(String(2048), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
