@@ -379,6 +379,37 @@ class MultiApartmentSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class MultiApartmentEvaluation(Base):
+    """მრავალბინიანის პროექტის შეფასების სრული შედეგი"""
+    __tablename__ = "multi_apartment_evaluations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("multi_apartment_projects.id", ondelete="CASCADE"), index=True)
+    project_code: Mapped[str] = mapped_column(String(50))
+    project_name: Mapped[str] = mapped_column(String(255))
+    
+    # შედეგები
+    percentage: Mapped[float] = mapped_column(Float, default=0.0)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_correct_answers: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # მონიშნული პასუხების ID-ები (JSON)
+    selected_answer_ids: Mapped[str] = mapped_column(Text, default="[]")
+    
+    # დრო
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    finished_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user: Mapped["User"] = relationship("User")
+    project: Mapped["MultiApartmentProject"] = relationship("MultiApartmentProject")
+
+
 class GuideVideo(Base):
     __tablename__ = "guide_videos"
 

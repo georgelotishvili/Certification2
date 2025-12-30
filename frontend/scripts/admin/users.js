@@ -238,7 +238,7 @@
       }));
       editBtns?.forEach((btn) => btn.addEventListener('click', () => openEditModal(user)));
       multiApartmentBtns?.forEach((btn) => btn.addEventListener('click', () => {
-        alert('მრავალბინიანის შეფასების შედეგები — მალე დაემატება');
+        showMultiApartmentResults(user);
       }));
       multiFunctionalBtns?.forEach((btn) => btn.addEventListener('click', () => {
         alert('მრავალფუნქციურის შეფასების შედეგები — მალე დაემატება');
@@ -629,6 +629,91 @@
         const data = await response.json();
         updateNavBadge(!!data?.has_unseen);
       } catch {}
+    }
+
+    async function showMultiApartmentResults(user) {
+      try {
+        const response = await fetch(`${API_BASE}/admin/multi-apartment/evaluations/${user.id}`, {
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          alert(error.detail || 'შედეგების ჩატვირთვა ვერ მოხერხდა');
+          return;
+        }
+        
+        const data = await response.json();
+        const items = data.items || [];
+        
+        if (items.length === 0) {
+          alert('მომხმარებელს ჯერ არ აქვს მრავალბინიანის შეფასების შედეგები');
+          return;
+        }
+        
+        // Build results HTML
+        let html = `<div style="max-height:400px;overflow-y:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">თარიღი</th>
+                <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">პროექტი</th>
+                <th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">პროცენტი</th>
+                <th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">არასწორი</th>
+              </tr>
+            </thead>
+            <tbody>`;
+        
+        items.forEach((item) => {
+          const date = new Date(item.createdAt).toLocaleString('ka-GE');
+          const percentColor = item.percentage >= 75 ? '#22c55e' : item.percentage >= 70 ? '#eab308' : '#ef4444';
+          const wrongColor = item.wrongCount <= 1 ? '#22c55e' : item.wrongCount === 2 ? '#eab308' : '#ef4444';
+          
+          html += `<tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:8px;">${date}</td>
+            <td style="padding:8px;">${item.projectName || item.projectCode}</td>
+            <td style="padding:8px;text-align:center;font-weight:bold;color:${percentColor}">${item.percentage.toFixed(1)}%</td>
+            <td style="padding:8px;text-align:center;font-weight:bold;color:${wrongColor}">${item.wrongCount}</td>
+          </tr>`;
+        });
+        
+        html += '</tbody></table></div>';
+        
+        // Show in modal
+        const userName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'მომხმარებელი';
+        showModal(`მრავალბინიანი: ${userName}`, html);
+        
+      } catch (e) {
+        console.error('Error fetching multi-apartment results:', e);
+        alert('შედეგების ჩატვირთვა ვერ მოხერხდა');
+      }
+    }
+    
+    function showModal(title, content) {
+      // Remove existing modal if any
+      const existing = document.getElementById('ma-results-modal');
+      if (existing) existing.remove();
+      
+      const modal = document.createElement('div');
+      modal.id = 'ma-results-modal';
+      modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      modal.innerHTML = `
+        <div style="background:white;border-radius:12px;max-width:600px;width:90%;max-height:90vh;overflow:hidden;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);">
+          <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;font-size:18px;color:#1f2937;">${title}</h3>
+            <button id="close-ma-modal" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280;">&times;</button>
+          </div>
+          <div style="padding:20px;">${content}</div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal || e.target.id === 'close-ma-modal') {
+          modal.remove();
+        }
+      });
     }
 
     return {

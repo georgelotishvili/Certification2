@@ -10,7 +10,7 @@ from sqlalchemy import select, func, exists
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, MultiApartmentSettings, User, UserSession
+from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, MultiApartmentSettings, MultiApartmentEvaluation, User, UserSession
 from ..schemas import (
     MultiApartmentProjectsResponse,
     MultiApartmentProjectsUpdateRequest,
@@ -18,6 +18,8 @@ from ..schemas import (
     MultiApartmentAnswerPayload,
     PublicMultiApartmentProjectResponse,
     MultiApartmentEvaluationSubmitRequest,
+    MultiApartmentEvaluationResponse,
+    MultiApartmentEvaluationListResponse,
     MultiApartmentSettingsResponse,
     MultiApartmentPublicSettingsResponse,
     MultiApartmentSettingsUpdateRequest,
@@ -632,12 +634,14 @@ def get_public_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
 
 
-@router.post("/public/multi-apartment/evaluations", status_code=status.HTTP_201_CREATED)
+@router.post("/public/multi-apartment/evaluations", status_code=status.HTTP_201_CREATED, response_model=MultiApartmentEvaluationResponse)
 def submit_evaluation(
     payload: MultiApartmentEvaluationSubmitRequest,
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
+    import json
+    
     # Get user
     user = _require_auth(db, authorization)
     
@@ -648,37 +652,80 @@ def submit_evaluation(
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     
-    # Verify answer exists and belongs to project
-    answer = db.scalar(
-        select(MultiApartmentAnswer)
-        .where(
-            MultiApartmentAnswer.id == payload.selectedAnswerId,
-            MultiApartmentAnswer.project_id == project.id,
-        )
-    )
-    if not answer:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid answer")
+    now = datetime.utcnow()
     
-    # Check if already submitted
-    existing = db.scalar(
-        select(MultiApartmentSubmission)
-        .where(
-            MultiApartmentSubmission.project_id == project.id,
-            MultiApartmentSubmission.user_id == user.id,
-        )
+    # Create evaluation record
+    evaluation = MultiApartmentEvaluation(
+        user_id=user.id,
+        project_id=project.id,
+        project_code=payload.projectCode,
+        project_name=payload.projectName,
+        percentage=payload.percentage,
+        correct_count=payload.correctCount,
+        wrong_count=payload.wrongCount,
+        total_correct_answers=payload.totalCorrectAnswers,
+        selected_answer_ids=json.dumps(payload.selectedAnswerIds),
+        finished_at=now,
+        duration_seconds=payload.durationSeconds,
     )
     
-    if existing:
-        existing.selected_answer_id = answer.id
-        db.add(existing)
-    else:
-        submission = MultiApartmentSubmission(
-            project_id=project.id,
-            user_id=user.id,
-            selected_answer_id=answer.id,
-        )
-        db.add(submission)
-    
+    db.add(evaluation)
     db.commit()
-    return {"message": "Evaluation submitted successfully"}
+    db.refresh(evaluation)
+    
+    return MultiApartmentEvaluationResponse(
+        id=evaluation.id,
+        userId=evaluation.user_id,
+        projectId=evaluation.project_id,
+        projectCode=evaluation.project_code,
+        projectName=evaluation.project_name,
+        percentage=evaluation.percentage,
+        correctCount=evaluation.correct_count,
+        wrongCount=evaluation.wrong_count,
+        totalCorrectAnswers=evaluation.total_correct_answers,
+        selectedAnswerIds=json.loads(evaluation.selected_answer_ids),
+        startedAt=evaluation.started_at,
+        finishedAt=evaluation.finished_at,
+        durationSeconds=evaluation.duration_seconds,
+        createdAt=evaluation.created_at,
+    )
+
+
+@router.get("/admin/multi-apartment/evaluations/{user_id}", response_model=MultiApartmentEvaluationListResponse)
+def get_user_evaluations(
+    user_id: int = FPath(...),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    import json
+    
+    _require_admin(db, authorization)
+    
+    evaluations = db.scalars(
+        select(MultiApartmentEvaluation)
+        .where(MultiApartmentEvaluation.user_id == user_id)
+        .order_by(MultiApartmentEvaluation.created_at.desc())
+    ).all()
+    
+    items = [
+        MultiApartmentEvaluationResponse(
+            id=e.id,
+            userId=e.user_id,
+            projectId=e.project_id,
+            projectCode=e.project_code,
+            projectName=e.project_name,
+            percentage=e.percentage,
+            correctCount=e.correct_count,
+            wrongCount=e.wrong_count,
+            totalCorrectAnswers=e.total_correct_answers,
+            selectedAnswerIds=json.loads(e.selected_answer_ids) if e.selected_answer_ids else [],
+            startedAt=e.started_at,
+            finishedAt=e.finished_at,
+            durationSeconds=e.duration_seconds,
+            createdAt=e.created_at,
+        )
+        for e in evaluations
+    ]
+    
+    return MultiApartmentEvaluationListResponse(items=items, total=len(items))
 

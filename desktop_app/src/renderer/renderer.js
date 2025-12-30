@@ -160,6 +160,20 @@ function initializeApp() {
             }
         }
         
+        // მრავალბინიანი (exam-card-2) - შემოწმება exam_permission-ის
+        const examCard2 = document.getElementById('exam-card-2');
+        if (examCard2) {
+            if (user.exam_permission) {
+                examCard2.classList.add('active');
+                examCard2.style.opacity = '1';
+                examCard2.style.cursor = 'pointer';
+            } else {
+                examCard2.classList.remove('active');
+                examCard2.style.opacity = '0.5';
+                examCard2.style.cursor = 'not-allowed';
+            }
+        }
+        
         window.currentUser = user;
     }
 
@@ -266,7 +280,7 @@ function initializeApp() {
             // Only work if user is logged in (card has 'active' class)
             if (!card.classList.contains('active')) return;
             
-            // პირველი ბარათი - გამოცდის გვერდი
+            // პირველი ბარათი - თეორიული გამოცდა
             if (index === 0) {
                 // შემოწმება exam_permission-ის
                 const user = window.apiClient ? window.apiClient.getCurrentUser() : null;
@@ -275,7 +289,18 @@ function initializeApp() {
                 } else {
                     alert('თქვენ არ გაქვთ გამოცდის გავლის უფლება');
                 }
-            } else {
+            } 
+            // მეორე ბარათი - მრავალბინიანი პროექტის შეფასება
+            else if (index === 1) {
+                const user = window.apiClient ? window.apiClient.getCurrentUser() : null;
+                if (user && user.exam_permission) {
+                    window.location.href = 'multi-apartment-eval.html';
+                } else {
+                    alert('თქვენ არ გაქვთ გამოცდის გავლის უფლება');
+                }
+            }
+            // მესამე ბარათი - მრავალფუნქციური (ჯერ არ არის იმპლემენტირებული)
+            else {
                 alert('ამ ელემენტის ფუნქციონალი ჯერ არ შექმნილა');
             }
         });

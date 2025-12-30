@@ -541,7 +541,35 @@ class PublicMultiApartmentProjectResponse(CamelModel):
 
 class MultiApartmentEvaluationSubmitRequest(CamelModel):
     projectCode: str
-    selectedAnswerId: int
+    projectName: str
+    selectedAnswerIds: List[int]
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    durationSeconds: int
+
+
+class MultiApartmentEvaluationResponse(CamelModel):
+    id: int
+    userId: int
+    projectId: int
+    projectCode: str
+    projectName: str
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    selectedAnswerIds: List[int]
+    startedAt: datetime
+    finishedAt: datetime
+    durationSeconds: int
+    createdAt: datetime
+
+
+class MultiApartmentEvaluationListResponse(CamelModel):
+    items: List[MultiApartmentEvaluationResponse]
+    total: int
 
 
 class GuideVideoOut(BaseModel):
