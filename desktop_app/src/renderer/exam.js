@@ -363,7 +363,7 @@ async function loadBlockQuestions(blockIndex) {
         renderQuestion();
     } catch (error) {
         console.error('Error loading questions:', error);
-        alert('კითხვები ვერ ჩაიტვირთა');
+        showInfoMessage('კითხვები ვერ ჩაიტვირთა');
     }
 }
 
@@ -538,7 +538,7 @@ function navigateQuestion(direction) {
         const allAnswered = currentQuestions.every(q => examState.answers[q.id]);
         
         if (!allAnswered) {
-            alert('გთხოვთ უპასუხოთ ყველა კითხვას ამ ბლოკში');
+            showInfoMessage('გთხოვთ უპასუხოთ ყველა კითხვას ამ ბლოკში');
             return;
         }
         
@@ -641,23 +641,17 @@ function updateTimerDisplay() {
 
 // 11. კითხვების რაოდენობის განახლება
 function updateQuestionCounts() {
-    // მთლიანი რაოდენობა (ყველა ბლოკიდან)
+    // მთლიანი რაოდენობა (ყველა ბლოკიდან - კონფიგურაციიდან)
     let totalQuestions = 0;
     examState.blocks.forEach(b => {
-        const qs = examState.questions[b.id];
-        if (qs) {
-            totalQuestions += qs.length;
-        }
+        totalQuestions += b.qty || 0;
     });
     
     // მიმდინარე კითხვის ნომერი (1-based)
     let currentQuestionNumber = 0;
     for (let i = 0; i < examState.currentBlockIndex; i++) {
         const b = examState.blocks[i];
-        const qs = examState.questions[b.id];
-        if (qs) {
-            currentQuestionNumber += qs.length;
-        }
+        currentQuestionNumber += b.qty || 0;
     }
     currentQuestionNumber += examState.currentQuestionIndex + 1;
     
@@ -1049,7 +1043,7 @@ async function finishExam() {
         
     } catch (error) {
         console.error('Error finishing exam:', error);
-        alert('გამოცდის დასრულება ვერ მოხერხდა');
+        showInfoMessage('გამოცდის დასრულება ვერ მოხერხდა');
     }
 }
 
@@ -1237,6 +1231,48 @@ function updateCountdownDisplay() {
             countdownEl.style.color = '#ff6666'; // ღია წითელი
         }
     }
+}
+
+// Helper: Custom info message modal (no confirmation needed)
+function showInfoMessage(message) {
+    const overlay = document.getElementById('confirm-overlay');
+    const messageEl = document.getElementById('confirm-message');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    const okBtn = document.getElementById('confirm-ok');
+    const titleEl = overlay.querySelector('.confirm-title');
+    const iconEl = overlay.querySelector('.confirm-icon');
+    
+    // შევინახოთ ორიგინალი მნიშვნელობები
+    const originalTitle = titleEl ? titleEl.textContent : '';
+    const originalIcon = iconEl ? iconEl.textContent : '';
+    const originalMessage = messageEl ? messageEl.textContent : '';
+    
+    // შევცვალოთ კონტენტი info message-ისთვის
+    if (titleEl) titleEl.textContent = 'შეტყობინება';
+    if (iconEl) iconEl.textContent = 'ℹ️';
+    if (messageEl) messageEl.textContent = message;
+    
+    // დავმალოთ cancel ღილაკი
+    cancelBtn.style.display = 'none';
+    okBtn.textContent = 'OK';
+    
+    // ვაჩვენოთ modal
+    overlay.style.display = 'flex';
+    
+    // OK button handler
+    const handleOk = () => {
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', handleOk);
+        
+        // აღვადგინოთ ორიგინალი მნიშვნელობები
+        if (titleEl) titleEl.textContent = originalTitle;
+        if (iconEl) iconEl.textContent = originalIcon;
+        if (messageEl) messageEl.textContent = originalMessage;
+        cancelBtn.style.display = '';
+        okBtn.textContent = 'დასრულება';
+    };
+    
+    okBtn.addEventListener('click', handleOk);
 }
 
 // Helper: Custom confirmation modal

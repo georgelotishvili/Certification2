@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
       multiApartment: document.getElementById('multi-apartment-section'),
       multiFunctional: document.getElementById('multi-functional-section'),
       guide: document.getElementById('guide-section'),
+      regulations: document.getElementById('regulations-section'),
       app: document.getElementById('app-section'),
     },
     durationInput: document.getElementById('examDuration'),
@@ -272,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return redirectToHome();
   }
 
-  function wireNavigation({ users, multiApartment, multiFunctional, guide, appFiles }) {
+  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, appFiles }) {
     const setMenu = (open) => {
       DOM.body?.classList.toggle('menu-open', open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -305,6 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
           multiApartment,
           multiFunctional,
           guide,
+          regulations,
           app: appFiles,
         };
         moduleMap[targetSection]?.render?.();
@@ -371,12 +373,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const multiApartmentModule = createModule(modules.createMultiApartmentModule, { init: noop, render: noop });
     const multiFunctionalModule = createModule(modules.createMultiFunctionalModule, { init: noop, render: noop });
     const guideModule = createModule(modules.createGuideModule, { init: noop, render: noop, reload: noop });
+    const regulationsModule = createModule(modules.createRegulationsModule, { init: noop, render: noop, reload: noop });
     const appFilesModule = createModule(modules.createAppFilesModule, { init: noop, render: noop, reload: noop });
 
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;
 
-    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, appFiles: appFilesModule });
+    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, appFiles: appFilesModule });
 
     examSettings.init();
     blocksModule.init();
@@ -387,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     multiApartmentModule.init();
     multiFunctionalModule.init();
     guideModule.init();
+    regulationsModule.init();
     appFilesModule.init();
 
     usersModule.refreshUnseenSummary?.();
