@@ -46,7 +46,7 @@ class RegulationsReorderRequest(BaseModel):
 
 # Constants
 REGULATIONS_FOLDER = "regulations"
-ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx"}
+ALLOWED_EXTENSIONS = {".pdf"}
 
 
 def _get_regulations_folder() -> Path:
@@ -260,12 +260,12 @@ def public_list_regulations(db: Session = Depends(get_db)):
     return [_regulation_out(r) for r in regulations]
 
 
-@router.get("/regulations/{regulation_id}/download")
-def public_download_regulation(
+@router.get("/regulations/{regulation_id}/view")
+def public_view_regulation(
     regulation_id: int = FPath(..., ge=1),
     db: Session = Depends(get_db),
 ):
-    """Public endpoint for exam - download regulation file."""
+    """Public endpoint for exam - view regulation PDF inline."""
     regulation = db.get(Regulation, regulation_id)
     if not regulation or not regulation.file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
@@ -274,9 +274,12 @@ def public_download_regulation(
     if not file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on disk")
 
+    # PDF inline display
     return FileResponse(
         path=str(file_path),
-        filename=regulation.filename or "document",
-        media_type="application/octet-stream",
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "inline",
+        },
     )
 

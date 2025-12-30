@@ -27,6 +27,9 @@ const examState = {
     isRecording: false,
     screenStream: null,
     audioStream: null,
+    // Regulations
+    regulations: [],
+    selectedRegulationId: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -43,6 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // გამოცდის კონფიგურაციის ჩატვირთვა
     loadExamConfig();
+    
+    // რეგულაციების ჩატვირთვა
+    loadRegulations();
     
     // ღილაკების event listeners
     setupEventListeners();
@@ -1148,8 +1154,28 @@ function handleWindowBlur() {
     if (examState.examPhase !== 'active') return;
     if (examState.isFocusWarningActive) return; // უკვე გამოჩნდა warning
     
-    console.log('⚠️ Window lost focus - starting countdown');
-    startFocusWarningCountdown();
+    // თუ საგამოცდო დოკუმენტაციის ტაბზეა, არ გააქტიუროთ warning
+    // (PDF-ში სქროლვა იწვევს blur-ს iframe-ის გამო)
+    const documentationViewer = document.querySelector('.documentation-viewer');
+    if (documentationViewer && documentationViewer.classList.contains('active')) {
+        console.log('📄 Documentation tab active - ignoring blur');
+        return;
+    }
+    
+    // პატარა დაყოვნება - შევამოწმოთ ფოკუსი დარჩა თუ არა iframe-ში
+    setTimeout(() => {
+        // თუ ფოკუსი დაბრუნდა, არ გააქტიუროთ
+        if (document.hasFocus()) {
+            console.log('✓ Focus returned quickly - no warning needed');
+            return;
+        }
+        
+        // ხელახლა შევამოწმოთ გამოცდის მდგომარეობა
+        if (examState.examPhase !== 'active' || examState.isFocusWarningActive) return;
+        
+        console.log('⚠️ Window lost focus - starting countdown');
+        startFocusWarningCountdown();
+    }, 150);
 }
 
 function handleWindowFocus() {
@@ -1392,4 +1418,126 @@ function showResults(results) {
     
     // ვაჩვენოთ results overlay
     document.getElementById('results-overlay').style.display = 'flex';
+}
+
+// ==========================================
+// Regulations / დადგენილებები
+// ==========================================
+
+// რეგულაციების ჩატვირთვა
+async function loadRegulations() {
+    try {
+        const response = await fetch(`${window.API_CONFIG.baseURL}/regulations`);
+        if (!response.ok) {
+            console.error('Failed to load regulations');
+            return;
+        }
+        
+        const data = await response.json();
+        examState.regulations = Array.isArray(data) ? data : [];
+        
+        console.log('Regulations loaded:', examState.regulations.length);
+        renderDocList();
+    } catch (error) {
+        console.error('Error loading regulations:', error);
+    }
+}
+
+// doc-list-ში რეგულაციების სიის რენდერი
+function renderDocList() {
+    const docList = document.querySelector('.doc-list');
+    if (!docList) return;
+    
+    docList.innerHTML = '';
+    
+    if (examState.regulations.length === 0) {
+        docList.innerHTML = '<div class="doc-list-empty">დადგენილებები არ არის ატვირთული</div>';
+        return;
+    }
+    
+    examState.regulations.forEach((reg, index) => {
+        const item = document.createElement('div');
+        item.className = 'doc-list-item';
+        item.dataset.regulationId = String(reg.id);
+        
+        if (examState.selectedRegulationId === reg.id) {
+            item.classList.add('active');
+        }
+        
+        item.innerHTML = `
+            <span class="doc-list-number">${index + 1}.</span>
+            <span class="doc-list-title">${escapeHtml(reg.title || 'დადგენილება')}</span>
+        `;
+        
+        item.addEventListener('click', () => selectRegulation(reg.id));
+        
+        docList.appendChild(item);
+    });
+    
+    // თუ არცერთი არ არის არჩეული, პირველს ავირჩევთ
+    if (examState.regulations.length > 0 && !examState.selectedRegulationId) {
+        selectRegulation(examState.regulations[0].id);
+    }
+}
+
+// რეგულაციის არჩევა და PDF-ის ჩვენება
+function selectRegulation(regulationId) {
+    const regId = Number(regulationId);
+    examState.selectedRegulationId = regId;
+    
+    console.log('Selecting regulation:', regId);
+    
+    // აქტიური კლასის განახლება
+    const items = document.querySelectorAll('.doc-list-item');
+    items.forEach(item => {
+        if (Number(item.dataset.regulationId) === regId) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+    
+    // PDF-ის ჩვენება
+    displayRegulationPdf(regId);
+}
+
+// PDF-ის ჩვენება pdf-viewer-ში
+function displayRegulationPdf(regulationId) {
+    const pdfViewer = document.querySelector('.pdf-viewer');
+    if (!pdfViewer) return;
+    
+    const regId = Number(regulationId);
+    const regulation = examState.regulations.find(r => Number(r.id) === regId);
+    
+    console.log('Display PDF for regulation:', regId, regulation);
+    
+    if (!regulation) {
+        pdfViewer.innerHTML = '<div class="pdf-empty">დადგენილება ვერ მოიძებნა</div>';
+        return;
+    }
+    
+    if (!regulation.filename) {
+        pdfViewer.innerHTML = '<div class="pdf-empty">ფაილი არ არის ატვირთული</div>';
+        return;
+    }
+    
+    // PDF URL - inline view
+    const pdfUrl = `${window.API_CONFIG.baseURL}/regulations/${regulationId}/view`;
+    
+    // iframe-ით ჩვენება (Chromium-ის ჩაშენებული PDF viewer)
+    pdfViewer.innerHTML = `
+        <iframe 
+            src="${pdfUrl}" 
+            class="pdf-iframe"
+            title="${escapeHtml(regulation.title || 'დადგენილება')}"
+        ></iframe>
+    `;
+}
+
+// HTML escape helper
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

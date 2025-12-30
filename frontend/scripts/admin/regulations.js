@@ -113,7 +113,7 @@
       if (!DOM.fileInput) {
         DOM.fileInput = document.createElement('input');
         DOM.fileInput.type = 'file';
-        DOM.fileInput.accept = '.pdf,.doc,.docx';
+        DOM.fileInput.accept = '.pdf';
         DOM.fileInput.style.display = 'none';
         DOM.fileInput.id = 'regulationFileInput';
         document.body.appendChild(DOM.fileInput);

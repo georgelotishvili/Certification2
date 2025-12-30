@@ -876,13 +876,84 @@ body {
 .doc-list {
     width: 20%;
     height: 100%;
-    background: #797979;
+    background: #2c3e50;
+    overflow-y: auto;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.doc-list-empty {
+    color: #95a5a6;
+    text-align: center;
+    padding: 20px 10px;
+    font-size: 14px;
+}
+
+.doc-list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 10px;
+    margin-bottom: 4px;
+    background: #34495e;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.doc-list-item:hover {
+    background: #3d566e;
+}
+
+.doc-list-item.active {
+    background: #1e88e5;
+    border-left-color: #fff;
+}
+
+.doc-list-number {
+    color: #bdc3c7;
+    font-weight: bold;
+    font-size: 13px;
+    min-width: 20px;
+}
+
+.doc-list-item.active .doc-list-number {
+    color: #fff;
+}
+
+.doc-list-title {
+    color: #ecf0f1;
+    font-size: 13px;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.doc-list-item.active .doc-list-title {
+    color: #fff;
+    font-weight: 500;
 }
 
 .pdf-viewer {
     width: 80%;
     height: 100%;
-    background: #797979;
+    background: #ecf0f1;
+    position: relative;
+}
+
+.pdf-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.pdf-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #7f8c8d;
+    font-size: 16px;
 }
 
 /* Subtle Animations */
