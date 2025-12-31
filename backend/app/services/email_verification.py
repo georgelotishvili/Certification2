@@ -74,9 +74,46 @@ def send_verification_code(email: str, purpose: str = "register") -> str:
     email_mode = getattr(settings, "email_mode", "console")
     
     if email_mode == "smtp":
-        # TODO: Implement real SMTP sending when needed
-        # For now, fall through to console mode
-        pass
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            
+            smtp_host = getattr(settings, "smtp_host", "smtp.gmail.com")
+            smtp_port = getattr(settings, "smtp_port", 587)
+            smtp_user = getattr(settings, "smtp_user", "")
+            smtp_password = getattr(settings, "smtp_password", "")
+            
+            if smtp_user and smtp_password:
+                msg = MIMEMultipart()
+                msg['From'] = smtp_user
+                msg['To'] = email_lower
+                msg['Subject'] = "GIPC - ვერიფიკაციის კოდი"
+                
+                body = f"""გამარჯობა!
+
+თქვენი ვერიფიკაციის კოდია: {code}
+
+კოდი მოქმედებს {CODE_EXPIRY_SECONDS // 60} წუთის განმავლობაში.
+
+პატივისცემით,
+საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)
+https://gipc.org.ge
+"""
+                
+                msg.attach(MIMEText(body, 'plain', 'utf-8'))
+                
+                server = smtplib.SMTP(smtp_host, smtp_port)
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
+                server.quit()
+                
+                print(f"Email sent successfully to {email_lower}")
+                return code  # Return early if SMTP succeeded
+        except Exception as e:
+            print(f"Failed to send email via SMTP: {e}")
+            # Fall through to console mode as backup
     
     # Console mode (development) - print code to console and save to file
     # NOTE: On some Windows setups the default console encoding can't render emoji,
