@@ -1,7 +1,7 @@
 (() => {
   const globalObject = typeof window !== 'undefined' ? window : {};
   const defaults = {
-  API_BASE: 'http://127.0.0.1:8000',
+  API_BASE: '',
   ABOUT_LABEL: 'წესები და პირობები',
   };
 
@@ -33,13 +33,6 @@
 
   globalObject.APP_CONFIG = Object.freeze(merged);
 
-  if (typeof globalObject.APP_CONFIG.API_BASE !== 'string' || !globalObject.APP_CONFIG.API_BASE) {
-    globalObject.APP_CONFIG = Object.freeze({
-      ...globalObject.APP_CONFIG,
-      API_BASE: defaults.API_BASE,
-    });
-  }
-
   // Global toast function
   function getToastContainer() {
     let container = document.getElementById('toast-container');
@@ -70,5 +63,3 @@
     }, 3000);
   };
 })();
-
-
