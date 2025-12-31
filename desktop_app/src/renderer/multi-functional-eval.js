@@ -1,4 +1,4 @@
-// მრავალბინიანი პროექტის შეფასება - JavaScript
+// მრავალფუნქციური პროექტის შეფასება - JavaScript
 
 // ==========================================
 // Global State
@@ -50,7 +50,7 @@ const evalState = {
 // DOM Ready
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Multi-apartment evaluation page loaded');
+    console.log('Multi-functional evaluation page loaded');
     
     // Fullscreen
     if (window.electronAPI) {
@@ -130,7 +130,7 @@ function updateUserDisplay() {
 async function loadEvalSettings() {
     try {
         // Public endpoint - არ აბრუნებს პაროლს
-        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-apartment/settings`);
+        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-functional/settings`);
         if (response.ok) {
             const settings = await response.json();
             evalState.settings = settings;
@@ -307,7 +307,7 @@ async function verifyGatePassword() {
     
     try {
         // API-ით პაროლის შემოწმება
-        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-apartment/gate/verify`, {
+        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-functional/gate/verify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password: password })
@@ -411,7 +411,7 @@ async function loadRandomProject() {
             Object.assign(headers, window.apiClient.getAuthHeaders());
         }
         
-        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-apartment/projects/random`, {
+        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-functional/projects/random`, {
             headers: headers
         });
         if (response.ok) {
@@ -438,9 +438,9 @@ function displayProject(project) {
     const nameEl = document.getElementById('project-name');
     const codeEl = document.getElementById('project-code');
     
-    // პროექტის სახელი - მრავალბინიანი
+    // პროექტის სახელი - მრავალფუნქციური
     if (nameEl) {
-        nameEl.textContent = 'მრავალბინიანი საცხოვრებელი სახლი';
+        nameEl.textContent = 'მრავალფუნქციური შენობა';
     }
     if (codeEl) codeEl.textContent = project.code || '---';
     
@@ -748,7 +748,7 @@ function generateRecordingFilename() {
     const userPart = user?.personal_number || user?.id || 'unknown';
     const projectPart = evalState.project?.code || 'project';
     
-    return `eval_${userPart}_${projectPart}_${dateStr}_${timeStr}_multi_apartment.webm`;
+    return `eval_${userPart}_${projectPart}_${dateStr}_${timeStr}_multi_functional.webm`;
 }
 
 // ჩაწერის ინდიკატორის განახლება
@@ -988,7 +988,7 @@ async function saveResults(results) {
             durationSeconds: evalState.settings.durationMinutes * 60 - evalState.remainingSeconds,
         };
         
-        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-apartment/evaluations`, {
+        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-functional/evaluations`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

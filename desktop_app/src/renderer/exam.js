@@ -158,6 +158,10 @@ function setupEventListeners() {
             // Lockdown-ის გამორთვა
             disableExamLockdown();
             
+            // localStorage-ში მომხმარებლის exam_permission განახლება
+            // (backend-ზე უკვე გაითიშა finish endpoint-ით)
+            updateLocalUserPermission(false);
+            
             if (window.electronAPI) {
                 window.electronAPI.exitFullscreen();
             }
@@ -925,7 +929,7 @@ function generateRecordingFilename() {
     lastName = lastName.replace(/[\\/:*?"<>|]/g, '_');
     code = code.replace(/[\\/:*?"<>|]/g, '_');
     
-    return `${firstName}_${lastName}_${code}_${dateStr}_${timeStr}.webm`;
+    return `${firstName}_${lastName}_${code}_${dateStr}_${timeStr}_exam.webm`;
 }
 
 // ჩაწერის ინდიკატორის განახლება
@@ -1532,6 +1536,21 @@ function displayRegulationPdf(regulationId) {
             title="${escapeHtml(regulation.title || 'დადგენილება')}"
         ></iframe>
     `;
+}
+
+// Update local user permission in localStorage
+function updateLocalUserPermission(permission) {
+    try {
+        const userStr = localStorage.getItem('current_user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            user.exam_permission = permission;
+            localStorage.setItem('current_user', JSON.stringify(user));
+            console.log('✅ Local user exam_permission updated to:', permission);
+        }
+    } catch (e) {
+        console.error('Error updating local user permission:', e);
+    }
 }
 
 // HTML escape helper

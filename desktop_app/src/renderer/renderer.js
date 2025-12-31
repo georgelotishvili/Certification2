@@ -115,11 +115,74 @@ function initializeApp() {
             const user = window.apiClient.getCurrentUser();
             if (user) {
                 updateUIForLoggedInUser(user);
+                // დავიწყოთ პერიოდული შემოწმება
+                startPermissionPolling();
             } else {
                 updateUIForLoggedOutUser();
             }
         } else {
             setTimeout(initializeAuth, RETRY_INTERVAL);
+        }
+    }
+    
+    // პერიოდული შემოწმება - ადმინის ცვლილებები დაუყოვნებლივ აისახება
+    let permissionPollingInterval = null;
+    const POLLING_INTERVAL = 5000; // 5 წამი
+    
+    function startPermissionPolling() {
+        // გავაჩეროთ თუ უკვე მუშაობს
+        if (permissionPollingInterval) {
+            clearInterval(permissionPollingInterval);
+        }
+        
+        permissionPollingInterval = setInterval(async () => {
+            await refreshUserPermission();
+        }, POLLING_INTERVAL);
+    }
+    
+    function stopPermissionPolling() {
+        if (permissionPollingInterval) {
+            clearInterval(permissionPollingInterval);
+            permissionPollingInterval = null;
+        }
+    }
+    
+    async function refreshUserPermission() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            if (!token) return;
+            
+            // მომხმარებლის ინფოს მიღება API-დან
+            const response = await fetch(`${window.API_CONFIG.baseURL}/users/me`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+            
+            if (!response.ok) return;
+            
+            const freshUser = await response.json();
+            
+            // შევადაროთ localStorage-ში შენახულ მომხმარებელს
+            const localUserStr = localStorage.getItem('current_user');
+            if (localUserStr) {
+                const localUser = JSON.parse(localUserStr);
+                
+                // თუ exam_permission შეიცვალა, განვაახლოთ
+                if (localUser.exam_permission !== freshUser.exam_permission) {
+                    console.log('🔄 exam_permission changed:', localUser.exam_permission, '→', freshUser.exam_permission);
+                    
+                    // განვაახლოთ localStorage
+                    localUser.exam_permission = freshUser.exam_permission;
+                    localStorage.setItem('current_user', JSON.stringify(localUser));
+                    
+                    // განვაახლოთ UI
+                    updateUIForLoggedInUser(localUser);
+                }
+            }
+        } catch (e) {
+            // ჩუმად გავაგრძელოთ - შეიძლება ქსელი არ მუშაობს
+            console.warn('Permission refresh failed:', e.message);
         }
     }
 
@@ -171,6 +234,20 @@ function initializeApp() {
                 examCard2.classList.remove('active');
                 examCard2.style.opacity = '0.5';
                 examCard2.style.cursor = 'not-allowed';
+            }
+        }
+        
+        // მრავალფუნქციური (exam-card-3) - შემოწმება exam_permission-ის
+        const examCard3 = document.getElementById('exam-card-3');
+        if (examCard3) {
+            if (user.exam_permission) {
+                examCard3.classList.add('active');
+                examCard3.style.opacity = '1';
+                examCard3.style.cursor = 'pointer';
+            } else {
+                examCard3.classList.remove('active');
+                examCard3.style.opacity = '0.5';
+                examCard3.style.cursor = 'not-allowed';
             }
         }
         
@@ -234,6 +311,9 @@ function initializeApp() {
 
     // Logout function
     function handleLogout() {
+        // გავაჩეროთ პერიოდული შემოწმება
+        stopPermissionPolling();
+        
         if (window.apiClient) {
             window.apiClient.logout();
         }
@@ -276,35 +356,70 @@ function initializeApp() {
     
     // Add click handlers to exam cards
     examCards.forEach((card, index) => {
-        card.addEventListener('click', () => {
+        card.addEventListener('click', async () => {
             // Only work if user is logged in (card has 'active' class)
             if (!card.classList.contains('active')) return;
             
+            // ჯერ API-დან შევამოწმოთ permission (არა localStorage-დან!)
+            const hasPermission = await checkExamPermissionFromAPI();
+            
+            if (!hasPermission) {
+                alert('თქვენ არ გაქვთ გამოცდის გავლის უფლება');
+                return;
+            }
+            
             // პირველი ბარათი - თეორიული გამოცდა
             if (index === 0) {
-                // შემოწმება exam_permission-ის
-                const user = window.apiClient ? window.apiClient.getCurrentUser() : null;
-                if (user && user.exam_permission) {
-                    window.location.href = 'exam.html';
-                } else {
-                    alert('თქვენ არ გაქვთ გამოცდის გავლის უფლება');
-                }
+                window.location.href = 'exam.html';
             } 
             // მეორე ბარათი - მრავალბინიანი პროექტის შეფასება
             else if (index === 1) {
-                const user = window.apiClient ? window.apiClient.getCurrentUser() : null;
-                if (user && user.exam_permission) {
-                    window.location.href = 'multi-apartment-eval.html';
-                } else {
-                    alert('თქვენ არ გაქვთ გამოცდის გავლის უფლება');
-                }
+                window.location.href = 'multi-apartment-eval.html';
             }
-            // მესამე ბარათი - მრავალფუნქციური (ჯერ არ არის იმპლემენტირებული)
-            else {
-                alert('ამ ელემენტის ფუნქციონალი ჯერ არ შექმნილა');
+            // მესამე ბარათი - მრავალფუნქციური პროექტის შეფასება
+            else if (index === 2) {
+                window.location.href = 'multi-functional-eval.html';
             }
         });
     });
+    
+    // API-დან exam_permission-ის შემოწმება (real-time)
+    async function checkExamPermissionFromAPI() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            if (!token) return false;
+            
+            const response = await fetch(`${window.API_CONFIG.baseURL}/users/me`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+            
+            if (!response.ok) return false;
+            
+            const user = await response.json();
+            
+            // განვაახლოთ localStorage-იც
+            const localUserStr = localStorage.getItem('current_user');
+            if (localUserStr) {
+                const localUser = JSON.parse(localUserStr);
+                localUser.exam_permission = user.exam_permission;
+                localStorage.setItem('current_user', JSON.stringify(localUser));
+                
+                // განვაახლოთ UI თუ შეიცვალა
+                if (!user.exam_permission) {
+                    updateUIForLoggedInUser(localUser);
+                }
+            }
+            
+            return user.exam_permission === true;
+        } catch (e) {
+            console.error('Error checking permission from API:', e);
+            // თუ API არ მუშაობს, localStorage-ს ვენდობით
+            const user = window.apiClient ? window.apiClient.getCurrentUser() : null;
+            return user && user.exam_permission;
+        }
+    }
 
     // Close modal with close button
     if (modalCloseBtn) {

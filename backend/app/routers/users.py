@@ -812,3 +812,82 @@ def get_user_photo(
         media_type=content_type,
         filename=user.photo_filename or path.name,
     )
+
+
+@router.get("/me", response_model=UserOut)
+def get_current_user_info(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get current authenticated user's info.
+    Returns fresh data from database (not cached).
+    """
+    user = _require_auth(db, authorization)
+    
+    # Refresh from database to get latest values
+    db.refresh(user)
+    
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    is_founder = (user.email or "").lower() == founder_email
+    is_admin_user = is_founder or bool(user.is_admin)
+    
+    # მთავარ ადმინს ყოველთვის exam_permission = true
+    # სხვა ადმინებს exam_permission = true
+    # არა-ადმინებს exam_permission = user.exam_permission (რაც ბაზაშია)
+    if is_founder:
+        exam_perm = True
+    elif is_admin_user:
+        exam_perm = True
+    else:
+        exam_perm = bool(user.exam_permission)
+    
+    return UserOut(
+        id=user.id,
+        personal_id=user.personal_id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        phone=user.phone,
+        email=user.email,
+        code=user.code,
+        is_admin=is_admin_user,
+        is_founder=is_founder,
+        exam_permission=exam_perm,
+        created_at=user.created_at,
+    )
+
+
+@router.post("/me/revoke-exam-permission", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_own_exam_permission(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """
+    Revoke exam_permission for the currently authenticated user.
+    
+    This endpoint is called by the desktop app after completing an exam
+    or project evaluation. It disables the user's ability to take exams
+    until an admin re-enables the permission.
+    
+    Note: Admins and founder users are exempt - their permission is not revoked.
+    """
+    user = _require_auth(db, authorization)
+    
+    # Check if user is admin or founder - don't revoke for them
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    is_founder = (user.email or "").lower() == founder_email
+    is_admin = is_founder or bool(user.is_admin)
+    
+    if is_admin:
+        # Admins and founder keep their permission
+        return
+    
+    # Revoke permission for regular users
+    if user.exam_permission:
+        user.exam_permission = False
+        db.add(user)
+        db.commit()
+    
+    return
