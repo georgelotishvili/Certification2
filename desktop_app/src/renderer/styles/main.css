@@ -844,3 +844,133 @@ button.sign-in {
     font-weight: 300;
 }
 
+/* ===================== UPDATE BANNER ===================== */
+.update-banner {
+    position: fixed;
+    top: 36px; /* Below title bar */
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    border-bottom: 2px solid #1d4ed8;
+    box-shadow: 0 4px 16px rgba(30, 64, 175, 0.4);
+    animation: slideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.update-banner-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 12px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.update-icon {
+    font-size: 20px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.update-banner.downloaded .update-icon {
+    animation: none;
+}
+
+.update-message {
+    font-size: 14px;
+    font-weight: 500;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.update-progress {
+    width: 200px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.update-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #10b981, #34d399);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.update-btn {
+    padding: 8px 20px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'DejaVu Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+    -webkit-app-region: no-drag;
+}
+
+.update-btn:hover {
+    background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+}
+
+.update-btn:active {
+    transform: translateY(0);
+}
+
+.update-close-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    line-height: 1;
+    -webkit-app-region: no-drag;
+}
+
+.update-close-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* Update banner color variants */
+.update-banner.success {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    border-bottom-color: #047857;
+}
+
+.update-banner.error {
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+    border-bottom-color: #b91c1c;
+}
+

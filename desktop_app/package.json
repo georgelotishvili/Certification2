@@ -5,7 +5,8 @@
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "build:publish": "electron-builder --publish always"
   },
   "keywords": [
     "exam",
@@ -22,6 +23,10 @@
   "build": {
     "appId": "com.gipc.certification-exam",
     "productName": "საგამოცდო აპლიკაცია",
+    "publish": {
+      "provider": "generic",
+      "url": "https://gipc.org.ge/updates/"
+    },
     "win": {
       "target": [
         "nsis"
@@ -32,6 +37,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
   }
 }
-

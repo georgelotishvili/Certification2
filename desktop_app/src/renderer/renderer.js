@@ -522,11 +522,101 @@ function initializeApp() {
 }
 
 // ====================================
+// AUTO-UPDATE FUNCTIONALITY
+// ====================================
+
+function initializeAutoUpdater() {
+    if (!window.electronAPI) return;
+    
+    const updateBanner = document.getElementById('update-banner');
+    const updateMessage = document.getElementById('update-message');
+    const updateProgress = document.getElementById('update-progress');
+    const updateProgressBar = document.getElementById('update-progress-bar');
+    const updateInstallBtn = document.getElementById('update-install-btn');
+    const updateCloseBtn = document.getElementById('update-close-btn');
+    
+    if (!updateBanner) return;
+    
+    // Show banner helper
+    function showBanner(message, showProgress = false, showInstallBtn = false, bannerClass = '') {
+        updateMessage.textContent = message;
+        updateProgress.style.display = showProgress ? 'block' : 'none';
+        updateInstallBtn.style.display = showInstallBtn ? 'inline-block' : 'none';
+        updateBanner.className = 'update-banner ' + bannerClass;
+        updateBanner.style.display = 'block';
+    }
+    
+    // Hide banner
+    function hideBanner() {
+        updateBanner.style.display = 'none';
+    }
+    
+    // Close button
+    if (updateCloseBtn) {
+        updateCloseBtn.addEventListener('click', hideBanner);
+    }
+    
+    // Install button
+    if (updateInstallBtn) {
+        updateInstallBtn.addEventListener('click', () => {
+            window.electronAPI.installUpdate();
+        });
+    }
+    
+    // Update events
+    window.electronAPI.onUpdateChecking(() => {
+        // Don't show banner for checking - too intrusive
+        console.log('🔍 Checking for updates...');
+    });
+    
+    window.electronAPI.onUpdateAvailable((info) => {
+        showBanner(`ახალი ვერსია ${info.version} ხელმისაწვდომია. მიმდინარეობს ჩამოტვირთვა...`, true);
+    });
+    
+    window.electronAPI.onUpdateNotAvailable((info) => {
+        console.log('ℹ️ No updates available. Current version:', info.version);
+        // Don't show banner - no need to notify user
+    });
+    
+    window.electronAPI.onUpdateDownloadProgress((info) => {
+        const percent = Math.round(info.percent);
+        updateProgressBar.style.width = percent + '%';
+        updateMessage.textContent = `მიმდინარეობს განახლების ჩამოტვირთვა... ${percent}%`;
+    });
+    
+    window.electronAPI.onUpdateDownloaded((info) => {
+        showBanner(`ვერსია ${info.version} მზადაა დასაინსტალირებლად!`, false, true, 'downloaded success');
+    });
+    
+    window.electronAPI.onUpdateError((info) => {
+        console.error('Update error:', info.message);
+        // Only show error if it's not a network error (user might be offline)
+        if (!info.message.includes('net::') && !info.message.includes('ENOTFOUND')) {
+            showBanner('განახლების შეცდომა: ' + info.message, false, false, 'error');
+            // Auto-hide after 5 seconds
+            setTimeout(hideBanner, 5000);
+        }
+    });
+    
+    // Update version in footer
+    window.electronAPI.getAppVersion().then(version => {
+        const versionSpan = document.querySelector('.footer-text:last-child');
+        if (versionSpan && versionSpan.textContent.includes('Version')) {
+            versionSpan.textContent = `Version ${version}`;
+        }
+    });
+}
+
+// ====================================
 // DOM READY HANDLER
 // ====================================
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeApp);
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeApp();
+        initializeAutoUpdater();
+    });
 } else {
     initializeApp();
+    initializeAutoUpdater();
 }

@@ -1,6 +1,12 @@
 const { app, BrowserWindow, ipcMain, nativeImage, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
+
+// Configure auto-updater logging
+autoUpdater.logger = require('electron').app;
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
 
 // Auto-reload in development
 if (process.env.NODE_ENV !== 'production') {
@@ -192,6 +198,83 @@ ipcMain.handle('get-recordings-path', () => {
   return path.join(__dirname, '..', '..', 'recordings');
 });
 
+// ===================== AUTO-UPDATER =====================
+
+// Check for updates
+ipcMain.on('check-for-updates', () => {
+  autoUpdater.checkForUpdates();
+});
+
+// Install update and restart
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
+// Get current app version
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+// Auto-updater events
+autoUpdater.on('checking-for-update', () => {
+  console.log('🔍 Checking for updates...');
+  if (mainWindow) {
+    mainWindow.webContents.send('update-checking');
+  }
+});
+
+autoUpdater.on('update-available', (info) => {
+  console.log('✅ Update available:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-available', {
+      version: info.version,
+      releaseDate: info.releaseDate
+    });
+  }
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  console.log('ℹ️ No update available. Current version:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-not-available', {
+      version: info.version
+    });
+  }
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  console.log(`📥 Download progress: ${Math.round(progressObj.percent)}%`);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-download-progress', {
+      percent: progressObj.percent,
+      bytesPerSecond: progressObj.bytesPerSecond,
+      transferred: progressObj.transferred,
+      total: progressObj.total
+    });
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('✅ Update downloaded:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-downloaded', {
+      version: info.version,
+      releaseDate: info.releaseDate
+    });
+  }
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('❌ Update error:', err);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-error', {
+      message: err.message
+    });
+  }
+});
+
+// ===================== APP READY =====================
+
 app.whenReady().then(() => {
   // Set app user model ID for Windows (helps with taskbar icon)
   if (process.platform === 'win32') {
@@ -199,6 +282,13 @@ app.whenReady().then(() => {
   }
   
   createWindow();
+
+  // Check for updates after window is ready (production only)
+  if (process.env.NODE_ENV !== 'development') {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates();
+    }, 3000); // Wait 3 seconds after app start
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -17,6 +17,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Screen Recording APIs
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   saveRecording: (buffer, filename) => ipcRenderer.invoke('save-recording', { buffer, filename }),
-  getRecordingsPath: () => ipcRenderer.invoke('get-recordings-path')
+  getRecordingsPath: () => ipcRenderer.invoke('get-recordings-path'),
+  
+  // Auto-Update APIs
+  checkForUpdates: () => ipcRenderer.send('check-for-updates'),
+  installUpdate: () => ipcRenderer.send('install-update'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  
+  // Update event listeners
+  onUpdateChecking: (callback) => ipcRenderer.on('update-checking', callback),
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (event, info) => callback(info)),
+  onUpdateNotAvailable: (callback) => ipcRenderer.on('update-not-available', (event, info) => callback(info)),
+  onUpdateDownloadProgress: (callback) => ipcRenderer.on('update-download-progress', (event, info) => callback(info)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (event, info) => callback(info)),
+  onUpdateError: (callback) => ipcRenderer.on('update-error', (event, info) => callback(info))
 });
 
