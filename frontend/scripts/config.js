@@ -1,8 +1,12 @@
 (() => {
   const globalObject = typeof window !== 'undefined' ? window : {};
+  
+  // Use current origin if no API_BASE specified
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  
   const defaults = {
-  API_BASE: '',
-  ABOUT_LABEL: 'წესები და პირობები',
+    API_BASE: currentOrigin,
+    ABOUT_LABEL: 'წესები და პირობები',
   };
 
   const metaOverrides = {};
@@ -18,7 +22,7 @@
 
   const metaApiBase = document.querySelector('meta[name="api-base"]');
   if (metaApiBase?.content) {
-    metaOverrides.API_BASE = metaApiBase.content.trim();
+    metaOverrides.API_BASE = metaApiBase.content.trim() || currentOrigin;
   }
 
   const existing = (globalObject.APP_CONFIG && typeof globalObject.APP_CONFIG === 'object')
@@ -30,6 +34,11 @@
     ...existing,
     ...metaOverrides,
   };
+
+  // Ensure API_BASE is never empty
+  if (!merged.API_BASE) {
+    merged.API_BASE = currentOrigin;
+  }
 
   globalObject.APP_CONFIG = Object.freeze(merged);
 
