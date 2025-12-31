@@ -537,24 +537,56 @@ def delete_project_pdf(
 # Public endpoints
 @router.get("/public/multi-apartment/projects/random", response_model=PublicMultiApartmentProjectResponse)
 def get_random_project(
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    """Get a random multi-apartment project."""
+    """
+    Get a random multi-apartment project for evaluation.
+    
+    Logic:
+    - Random project is selected from projects NOT yet completed by this user
+    - Once all projects are completed, the cycle restarts
+    - If no auth provided, falls back to pure random selection
+    """
     # Load all projects (with answers eagerly loaded)
-    projects = db.scalars(
+    all_projects = db.scalars(
         select(MultiApartmentProject).options(selectinload(MultiApartmentProject.answers))
     ).all()
 
-    if not projects:
+    if not all_projects:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No projects configured"
         )
 
-    # Prefer projects that actually have answers; if none have answers,
-    # fall back to any existing project so that at least the PDF/code are shown.
-    projects_with_answers = [p for p in projects if p.answers]
-    project = random.choice(projects_with_answers or projects)
+    # Prefer projects that actually have answers
+    projects_with_answers = [p for p in all_projects if p.answers]
+    available_projects = projects_with_answers or all_projects
+    
+    # Try to get user for personalized selection
+    user = _get_user_from_token(db, authorization)
+    
+    if user:
+        # Get all project IDs this user has already completed
+        completed_project_ids = set(
+            db.scalars(
+                select(MultiApartmentEvaluation.project_id)
+                .where(MultiApartmentEvaluation.user_id == user.id)
+            ).all()
+        )
+        
+        # Filter out completed projects
+        not_completed = [p for p in available_projects if p.id not in completed_project_ids]
+        
+        if not_completed:
+            # Random from not-yet-completed projects
+            project = random.choice(not_completed)
+        else:
+            # All projects completed - restart cycle (random from all)
+            project = random.choice(available_projects)
+    else:
+        # No auth - pure random
+        project = random.choice(available_projects)
 
     answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
     pdf_url = _safe_public_pdf_url(project)

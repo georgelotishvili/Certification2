@@ -397,7 +397,15 @@ async function startEvaluation() {
 // ==========================================
 async function loadRandomProject() {
     try {
-        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-apartment/projects/random`);
+        // Get auth headers for personalized project selection
+        const headers = {};
+        if (window.apiClient && window.apiClient.getAuthHeaders) {
+            Object.assign(headers, window.apiClient.getAuthHeaders());
+        }
+        
+        const response = await fetch(`${window.API_CONFIG.baseURL}/public/multi-apartment/projects/random`, {
+            headers: headers
+        });
         if (response.ok) {
             const project = await response.json();
             evalState.project = project;
@@ -433,10 +441,13 @@ function displayProject(project) {
     const pdfViewer = document.querySelector('.project-pdf-viewer');
     if (pdfViewer) {
         if (project.pdfUrl) {
-            // API-დან მოწოდებული URL
+            // API-დან მოწოდებული URL (relative) + base URL
             // #navpanes=1 - ბუკმარკების პანელის ჩვენება
             // #view=FitH - გვერდის სიგანეზე მორგება
-            const pdfUrlWithParams = `${project.pdfUrl}#navpanes=1&view=FitH`;
+            const fullPdfUrl = `${window.API_CONFIG.baseURL}${project.pdfUrl}`;
+            const pdfUrlWithParams = `${fullPdfUrl}#navpanes=1&view=FitH`;
+            
+            console.log('PDF URL:', pdfUrlWithParams);
             
             pdfViewer.innerHTML = `
                 <iframe 
@@ -544,15 +555,7 @@ function updateTimerDisplay() {
     
     timerEl.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     
-    // ფერის შეცვლა დროის მიხედვით
-    const totalMinutes = evalState.remainingSeconds / 60;
-    if (totalMinutes <= 1) {
-        timerEl.style.color = '#ef4444'; // წითელი - 1 წუთზე ნაკლები
-    } else if (totalMinutes <= 5) {
-        timerEl.style.color = '#eab308'; // ყვითელი - 5 წუთზე ნაკლები
-    } else {
-        timerEl.style.color = ''; // default
-    }
+    // ფერი იგივეა რაც გამოცდაზე - თეთრი (CSS-დან)
 }
 
 // ==========================================
