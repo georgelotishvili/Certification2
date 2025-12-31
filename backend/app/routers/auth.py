@@ -197,9 +197,43 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     email_mode = getattr(settings, "email_mode", "console")
     
     if email_mode == "smtp":
-        # TODO: Implement real SMTP sending when needed
-        # For now, fall through to console mode
-        pass
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            
+            smtp_host = getattr(settings, "smtp_host", "smtp.gmail.com")
+            smtp_port = getattr(settings, "smtp_port", 587)
+            smtp_user = getattr(settings, "smtp_user", "")
+            smtp_password = getattr(settings, "smtp_password", "")
+            
+            if smtp_user and smtp_password:
+                msg = MIMEMultipart()
+                msg['From'] = smtp_user
+                msg['To'] = email_norm
+                msg['Subject'] = "GIPC - ახალი პაროლი"
+                
+                body = f"""გამარჯობა!
+
+თქვენი ახალი პაროლია: {new_password}
+
+გთხოვთ შეხვიდეთ ამ პაროლით და შეცვალოთ.
+
+პატივისცემით,
+საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)
+https://gipc.org.ge
+"""
+                
+                msg.attach(MIMEText(body, 'plain', 'utf-8'))
+                
+                server = smtplib.SMTP(smtp_host, smtp_port)
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
+                server.quit()
+                print(f"Password email sent to {email_norm}")
+        except Exception as e:
+            print(f"Failed to send password email: {e}")
     
     # Console mode (development) - write to verification_codes.txt
     try:
