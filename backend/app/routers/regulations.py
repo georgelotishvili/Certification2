@@ -166,7 +166,7 @@ def admin_upload_regulation_file(
 
     # Update regulation
     regulation.filename = original_filename
-    regulation.file_path = str(file_path)
+    regulation.file_path = str(file_path).replace("\\", "/")
     regulation.updated_at = datetime.utcnow()
 
     db.add(regulation)

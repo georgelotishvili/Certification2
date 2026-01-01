@@ -433,7 +433,7 @@ async def upload_pdf(
         content = await file.read()
         f.write(content)
     
-    project.pdf_path = relative_storage_path(pdf_path)
+    project.pdf_path = relative_storage_path(pdf_path).replace("\\", "/")
     project.pdf_filename = filename
     db.add(project)
     db.commit()
