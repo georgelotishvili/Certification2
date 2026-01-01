@@ -11,12 +11,10 @@
   
   // Use IIFE to avoid global scope pollution
   const API_CONFIG = {
-    // Backend URL - შეიცვალეთ production-ისთვის
-    // Local development
-    baseURL: 'http://localhost:8000',
-    
-    // Production (uncomment when ready and change URL)
-    // baseURL: 'https://gipc.org.ge',
+    // Backend URL
+    // Local development: 'http://localhost:8000'
+    // Production:
+    baseURL: 'https://gipc.org.ge',
     
     endpoints: {
       auth: {
