@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as FPath, Response, Query, UploadFile, File
 from fastapi.responses import FileResponse
 import uuid
-from sqlalchemy import func, select, or_
+from sqlalchemy import func, select, or_, delete
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
@@ -327,33 +327,23 @@ def update_exam_blocks(
             if existing_options:
                 for option in list(existing_options.values()):
                     if option.id not in processed_option_ids:
-                        has_answers = db.scalar(
-                            select(func.count()).select_from(Answer).where(Answer.option_id == option.id)
-                        )
-                        if has_answers:
-                            raise HTTPException(
-                                status_code=status.HTTP_409_CONFLICT,
-                                detail="ვერ წაშლით პასუხს, რადგან უკვე არსებობს შედეგები",
-                            )
+                        # Cascade delete associated answers first
+                        db.execute(delete(Answer).where(Answer.option_id == option.id))
                         db.delete(option)
 
         for question in list(existing_questions.values()):
             if question.id not in processed_question_ids:
-                if question.answers:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="ვერ წაშლით შეკითხვას, რადგან უკვე არსებობს შედეგები",
-                    )
+                # Cascade delete associated answers first
+                for option in question.options:
+                    db.execute(delete(Answer).where(Answer.option_id == option.id))
                 db.delete(question)
 
     for block in existing_blocks:
         if block.id not in processed_block_ids:
-            has_answers = any(question.answers for question in block.questions)
-            if has_answers:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="ვერ წაშლით ბლოკს, რადგან უკვე არსებობს შედეგები",
-                )
+            # Cascade delete associated answers first
+            for question in block.questions:
+                for option in question.options:
+                    db.execute(delete(Answer).where(Answer.option_id == option.id))
             db.delete(block)
 
     db.commit()
