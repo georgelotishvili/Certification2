@@ -635,8 +635,8 @@ def get_public_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
 
 
-@router.post("/public/multi-functional/evaluations", status_code=status.HTTP_201_CREATED)
-def submit_evaluation(
+@router.post("/public/multi-functional/submissions", status_code=status.HTTP_201_CREATED)
+def submit_simple_evaluation(
     payload: MultiFunctionalEvaluationSubmitRequest,
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
