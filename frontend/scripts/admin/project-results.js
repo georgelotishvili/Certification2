@@ -14,6 +14,7 @@
       openOverlay,
       closeOverlay,
       escapeHtml,
+      isFounderActor = () => false,
       deliverPdf = async () => false,
       preparePdfSaveHandle = async () => ({ handle: null, aborted: false }),
     } = context;
@@ -180,7 +181,11 @@
         </div>
         <div class="attempt-actions">
           <button type="button" class="secondary-btn" data-action="view">შედეგის ნახვა</button>
-          <button type="button" class="danger-btn" data-action="delete" title="წაშლა">×</button>
+          ${
+            isFounderActor()
+              ? '<button type="button" class="attempt-delete" data-action="delete" aria-label="შედეგის წაშლა" title="წაშლა">×</button>'
+              : ''
+          }
         </div>
       `;
 
@@ -197,7 +202,7 @@
     }
     
     async function handleDelete(evaluationId) {
-      if (!evaluationId) return;
+      if (!evaluationId || !isFounderActor()) return;
       
       const confirmed = window.confirm('ნამდვილად გსურთ შედეგის წაშლა? ეს ქმედება შეუქცევადია.');
       if (!confirmed) return;
