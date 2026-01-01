@@ -526,7 +526,7 @@
 
     async function render() {
       if (!DOM.usersGrid) return;
-      DOM.usersGrid.innerHTML = '<div class="block-tile">იტვირთება...</div>';
+      DOM.usersGrid.innerHTML = '';
       try {
         const data = await fetchUsers();
         cachedItems = Array.isArray(data?.items) ? data.items : [];
