@@ -113,6 +113,25 @@ document.addEventListener('DOMContentLoaded', () => {
     resultMediaPlayer: document.getElementById('resultMediaPlayer'),
     resultMediaDownload: document.getElementById('resultMediaDownload'),
     resultMediaInfo: document.getElementById('resultMediaInfo'),
+    // Project results (multi-apartment/multi-functional)
+    projectResultsOverlay: document.getElementById('projectResultsOverlay'),
+    projectResultsList: document.getElementById('projectResultsList'),
+    projectResultsFullName: document.getElementById('projectResultsFullName'),
+    projectResultsType: document.getElementById('projectResultsType'),
+    projectResultsClose: document.getElementById('projectResultsClose'),
+    projectDetailOverlay: document.getElementById('projectDetailOverlay'),
+    projectDetailProjectName: document.getElementById('projectDetailProjectName'),
+    projectDetailStatus: document.getElementById('projectDetailStatus'),
+    projectDetailCandidate: document.getElementById('projectDetailCandidate'),
+    projectDetailProjectCode: document.getElementById('projectDetailProjectCode'),
+    projectDetailStartedAt: document.getElementById('projectDetailStartedAt'),
+    projectDetailFinishedAt: document.getElementById('projectDetailFinishedAt'),
+    projectDetailDuration: document.getElementById('projectDetailDuration'),
+    projectDetailScore: document.getElementById('projectDetailScore'),
+    projectDetailSummary: document.getElementById('projectDetailSummary'),
+    projectAnswerList: document.getElementById('projectAnswerList'),
+    projectDetailDownload: document.getElementById('projectDetailDownload'),
+    projectDetailClose: document.getElementById('projectDetailClose'),
     userEditOverlay: document.getElementById('userEditOverlay'),
     userEditForm: document.getElementById('userEditForm'),
     userEditClose: document.getElementById('userEditClose'),
@@ -353,6 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const examSettings = createModule(modules.createExamSettingsModule, { init: noop });
     const blocksModule = createModule(modules.createBlocksModule, { init: noop, render: noop, reload: noop });
     const resultsModule = createModule(modules.createResultsModule, { init: noop, open: noop, close: noop });
+    const projectResultsModule = createModuleWithContext(modules.createProjectResultsModule, { ...moduleContextBase },
+      { init: noop, open: noop, openMultiApartment: noop, openMultiFunctional: noop, close: noop });
     const statementsModule = createModuleWithContext(modules.createStatementsModule, { ...moduleContextBase }, 
       { init: noop, open: noop, close: noop, downloadStatementPdf: noop, markStatementsSeen: noop });
     
@@ -368,6 +389,8 @@ document.addEventListener('DOMContentLoaded', () => {
       onShowResults: resultsModule.open,
       onShowStatements: statementsModule.open,
       onShowCertificate: certificateModule.open,
+      onShowMultiApartmentResults: projectResultsModule.openMultiApartment,
+      onShowMultiFunctionalResults: projectResultsModule.openMultiFunctional,
     }, { init: noop, render: noop, updateUserCardColor: noop });
 
     const multiApartmentModule = createModule(modules.createMultiApartmentModule, { init: noop, render: noop });
@@ -384,6 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
     examSettings.init();
     blocksModule.init();
     resultsModule.init();
+    projectResultsModule.init();
     statementsModule.init();
     certificateModule.init();
     usersModule.init();

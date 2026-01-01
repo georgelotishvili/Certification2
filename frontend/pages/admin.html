@@ -455,6 +455,66 @@
       </div>
     </div>
 
+    <!-- პროექტის შეფასების შედეგები (მრავალბინიანი/მრავალფუნქციური) -->
+    <div id="projectResultsOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="projectResultsTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="projectResultsTitle">პროექტის შეფასებები</h2>
+            <div class="results-modal-meta">
+              <span id="projectResultsFullName" class="candidate-name"></span>
+              <span id="projectResultsType" class="meta-item"></span>
+            </div>
+          </div>
+          <button type="button" class="modal-close" id="projectResultsClose" aria-label="დახურვა">×</button>
+        </div>
+        <div class="results-modal-body">
+          <div id="projectResultsList" class="results-list" role="list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- პროექტის შედეგის დეტალები -->
+    <div id="projectDetailOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal results-modal--wide" role="dialog" aria-modal="true" aria-labelledby="projectDetailTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="projectDetailTitle">შედეგის დეტალები</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="projectDetailProjectName"></span>
+              <span class="meta-item" id="projectDetailStatus"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="primary-btn" id="projectDetailDownload">შედეგების ჩამოტვირთვა</button>
+            <button type="button" class="modal-close" id="projectDetailClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body results-detail-body">
+          <section class="result-section">
+            <h3>ძირითადი ინფორმაცია</h3>
+            <div class="result-info-grid">
+              <div><span class="label">კანდიდატი</span><span id="projectDetailCandidate"></span></div>
+              <div><span class="label">პროექტი</span><span id="projectDetailProjectCode"></span></div>
+              <div><span class="label">დაწყება</span><span id="projectDetailStartedAt"></span></div>
+              <div><span class="label">დასრულება</span><span id="projectDetailFinishedAt"></span></div>
+              <div><span class="label">ხანგრძლივობა</span><span id="projectDetailDuration"></span></div>
+              <div><span class="label">საერთო ქულა</span><span id="projectDetailScore"></span></div>
+            </div>
+          </section>
+
+          <section class="result-section">
+            <div class="section-head">
+              <h3>პასუხების დეტალები</h3>
+              <div class="section-head-meta" id="projectDetailSummary"></div>
+            </div>
+            <div id="projectAnswerList" class="result-question-list"></div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
     <footer>
       <div class="footer-bottom">
         <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია</p>

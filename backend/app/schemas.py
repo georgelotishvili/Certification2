@@ -572,6 +572,32 @@ class MultiApartmentEvaluationListResponse(CamelModel):
     total: int
 
 
+class MultiApartmentAnswerDetail(CamelModel):
+    """დეტალური ინფორმაცია პასუხის შესახებ"""
+    id: int
+    text: str
+    isCorrect: bool
+    isSelected: bool
+
+
+class MultiApartmentEvaluationDetailResponse(CamelModel):
+    """დეტალური შედეგი ერთი შეფასებისთვის"""
+    id: int
+    userId: int
+    projectId: int
+    projectCode: str
+    projectName: str
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    startedAt: datetime
+    finishedAt: datetime
+    durationSeconds: int
+    createdAt: datetime
+    answers: List[MultiApartmentAnswerDetail]
+
+
 class GuideVideoOut(BaseModel):
     id: int
     title: str
@@ -675,6 +701,66 @@ class MultiFunctionalGateVerifyRequest(BaseModel):
 
 class MultiFunctionalGateVerifyResponse(BaseModel):
     valid: bool
+
+
+class MultiFunctionalEvaluationSubmitFullRequest(CamelModel):
+    """სრული შეფასების მოთხოვნა - მრავალბინიანის მსგავსი"""
+    projectCode: str
+    projectName: str
+    selectedAnswerIds: List[int]
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    durationSeconds: int
+
+
+class MultiFunctionalEvaluationResponse(CamelModel):
+    id: int
+    userId: int
+    projectId: int
+    projectCode: str
+    projectName: str
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    selectedAnswerIds: List[int]
+    startedAt: datetime
+    finishedAt: datetime
+    durationSeconds: int
+    createdAt: datetime
+
+
+class MultiFunctionalEvaluationListResponse(CamelModel):
+    items: List[MultiFunctionalEvaluationResponse]
+    total: int
+
+
+class MultiFunctionalAnswerDetail(CamelModel):
+    """დეტალური ინფორმაცია პასუხის შესახებ"""
+    id: int
+    text: str
+    isCorrect: bool
+    isSelected: bool
+
+
+class MultiFunctionalEvaluationDetailResponse(CamelModel):
+    """დეტალური შედეგი ერთი შეფასებისთვის"""
+    id: int
+    userId: int
+    projectId: int
+    projectCode: str
+    projectName: str
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    startedAt: datetime
+    finishedAt: datetime
+    durationSeconds: int
+    createdAt: datetime
+    answers: List[MultiFunctionalAnswerDetail]
 
 
 # Email verification

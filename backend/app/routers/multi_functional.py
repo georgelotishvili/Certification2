@@ -10,7 +10,7 @@ from sqlalchemy import select, func, exists
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import MultiFunctionalProject, MultiFunctionalAnswer, MultiFunctionalSubmission, MultiFunctionalSettings, User, UserSession
+from ..models import MultiFunctionalProject, MultiFunctionalAnswer, MultiFunctionalSubmission, MultiFunctionalSettings, MultiFunctionalEvaluation, User, UserSession
 from ..schemas import (
     MultiFunctionalProjectsResponse,
     MultiFunctionalProjectsUpdateRequest,
@@ -18,6 +18,11 @@ from ..schemas import (
     MultiFunctionalAnswerPayload,
     PublicMultiFunctionalProjectResponse,
     MultiFunctionalEvaluationSubmitRequest,
+    MultiFunctionalEvaluationSubmitFullRequest,
+    MultiFunctionalEvaluationResponse,
+    MultiFunctionalEvaluationListResponse,
+    MultiFunctionalEvaluationDetailResponse,
+    MultiFunctionalAnswerDetail,
     MultiFunctionalSettingsResponse,
     MultiFunctionalPublicSettingsResponse,
     MultiFunctionalSettingsUpdateRequest,
@@ -679,3 +684,154 @@ def submit_evaluation(
     
     db.commit()
     return {"message": "Evaluation submitted successfully"}
+
+
+@router.post("/public/multi-functional/evaluations", status_code=status.HTTP_201_CREATED, response_model=MultiFunctionalEvaluationResponse)
+def submit_full_evaluation(
+    payload: MultiFunctionalEvaluationSubmitFullRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """სრული შეფასების შენახვა - მრავალბინიანის მსგავსი"""
+    import json
+    
+    # Get user
+    user = _require_auth(db, authorization)
+    
+    # Get project
+    project = db.scalar(
+        select(MultiFunctionalProject).where(MultiFunctionalProject.code == payload.projectCode.strip())
+    )
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    
+    now = datetime.utcnow()
+    
+    # Create evaluation record
+    evaluation = MultiFunctionalEvaluation(
+        user_id=user.id,
+        project_id=project.id,
+        project_code=payload.projectCode,
+        project_name=payload.projectName,
+        percentage=payload.percentage,
+        correct_count=payload.correctCount,
+        wrong_count=payload.wrongCount,
+        total_correct_answers=payload.totalCorrectAnswers,
+        selected_answer_ids=json.dumps(payload.selectedAnswerIds),
+        finished_at=now,
+        duration_seconds=payload.durationSeconds,
+    )
+    
+    db.add(evaluation)
+    db.commit()
+    db.refresh(evaluation)
+    
+    return MultiFunctionalEvaluationResponse(
+        id=evaluation.id,
+        userId=evaluation.user_id,
+        projectId=evaluation.project_id,
+        projectCode=evaluation.project_code,
+        projectName=evaluation.project_name,
+        percentage=evaluation.percentage,
+        correctCount=evaluation.correct_count,
+        wrongCount=evaluation.wrong_count,
+        totalCorrectAnswers=evaluation.total_correct_answers,
+        selectedAnswerIds=json.loads(evaluation.selected_answer_ids),
+        startedAt=evaluation.started_at,
+        finishedAt=evaluation.finished_at,
+        durationSeconds=evaluation.duration_seconds,
+        createdAt=evaluation.created_at,
+    )
+
+
+@router.get("/admin/multi-functional/evaluations/{user_id}", response_model=MultiFunctionalEvaluationListResponse)
+def get_user_evaluations(
+    user_id: int = FPath(...),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """მომხმარებლის შეფასებების სია"""
+    import json
+    
+    _require_admin(db, authorization)
+    
+    evaluations = db.scalars(
+        select(MultiFunctionalEvaluation)
+        .where(MultiFunctionalEvaluation.user_id == user_id)
+        .order_by(MultiFunctionalEvaluation.created_at.desc())
+    ).all()
+    
+    items = [
+        MultiFunctionalEvaluationResponse(
+            id=e.id,
+            userId=e.user_id,
+            projectId=e.project_id,
+            projectCode=e.project_code,
+            projectName=e.project_name,
+            percentage=e.percentage,
+            correctCount=e.correct_count,
+            wrongCount=e.wrong_count,
+            totalCorrectAnswers=e.total_correct_answers,
+            selectedAnswerIds=json.loads(e.selected_answer_ids) if e.selected_answer_ids else [],
+            startedAt=e.started_at,
+            finishedAt=e.finished_at,
+            durationSeconds=e.duration_seconds,
+            createdAt=e.created_at,
+        )
+        for e in evaluations
+    ]
+    
+    return MultiFunctionalEvaluationListResponse(items=items, total=len(items))
+
+
+@router.get("/admin/multi-functional/evaluations/detail/{evaluation_id}", response_model=MultiFunctionalEvaluationDetailResponse)
+def get_evaluation_detail(
+    evaluation_id: int = FPath(...),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """დეტალური შედეგი ერთი შეფასებისთვის - პასუხების ტექსტით"""
+    import json
+    
+    _require_admin(db, authorization)
+    
+    evaluation = db.get(MultiFunctionalEvaluation, evaluation_id)
+    if not evaluation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found")
+    
+    # Get project with answers
+    project = db.scalar(
+        select(MultiFunctionalProject)
+        .where(MultiFunctionalProject.id == evaluation.project_id)
+        .options(selectinload(MultiFunctionalProject.answers))
+    )
+    
+    selected_ids = set(json.loads(evaluation.selected_answer_ids) if evaluation.selected_answer_ids else [])
+    
+    # Build answer details
+    answer_details = []
+    if project and project.answers:
+        for answer in sorted(project.answers, key=lambda a: (a.order_index, a.id)):
+            answer_details.append(MultiFunctionalAnswerDetail(
+                id=answer.id,
+                text=answer.text,
+                isCorrect=answer.is_correct,
+                isSelected=answer.id in selected_ids,
+            ))
+    
+    return MultiFunctionalEvaluationDetailResponse(
+        id=evaluation.id,
+        userId=evaluation.user_id,
+        projectId=evaluation.project_id,
+        projectCode=evaluation.project_code,
+        projectName=evaluation.project_name,
+        percentage=evaluation.percentage,
+        correctCount=evaluation.correct_count,
+        wrongCount=evaluation.wrong_count,
+        totalCorrectAnswers=evaluation.total_correct_answers,
+        startedAt=evaluation.started_at,
+        finishedAt=evaluation.finished_at,
+        durationSeconds=evaluation.duration_seconds,
+        createdAt=evaluation.created_at,
+        answers=answer_details,
+    )

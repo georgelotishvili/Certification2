@@ -14,7 +14,7 @@
       openOverlay = () => {},
       closeOverlay = () => {},
     } = context;
-    const { onShowResults, onShowStatements, onShowCertificate } = context;
+    const { onShowResults, onShowStatements, onShowCertificate, onShowMultiApartmentResults, onShowMultiFunctionalResults } = context;
     const navLinks = DOM.navLinks || [];
 
     let cachedItems = [];
@@ -238,10 +238,18 @@
       }));
       editBtns?.forEach((btn) => btn.addEventListener('click', () => openEditModal(user)));
       multiApartmentBtns?.forEach((btn) => btn.addEventListener('click', () => {
-        showMultiApartmentResults(user);
+        if (typeof onShowMultiApartmentResults === 'function') {
+          onShowMultiApartmentResults(user);
+        } else {
+          showMultiApartmentResults(user);
+        }
       }));
       multiFunctionalBtns?.forEach((btn) => btn.addEventListener('click', () => {
-        alert('მრავალფუნქციურის შეფასების შედეგები — მალე დაემატება');
+        if (typeof onShowMultiFunctionalResults === 'function') {
+          onShowMultiFunctionalResults(user);
+        } else {
+          alert('მრავალფუნქციურის შეფასების შედეგები — მალე დაემატება');
+        }
       }));
 
       // Photo upload

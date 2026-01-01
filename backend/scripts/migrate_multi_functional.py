@@ -79,6 +79,31 @@ def run() -> None:
                     )
                 """)
             
+            # Create multi_functional_evaluations table
+            if "multi_functional_evaluations" not in tables:
+                statements.append("""
+                    CREATE TABLE multi_functional_evaluations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        project_id INTEGER NOT NULL,
+                        project_code VARCHAR(50) NOT NULL,
+                        project_name VARCHAR(255) NOT NULL,
+                        percentage FLOAT DEFAULT 0.0,
+                        correct_count INTEGER DEFAULT 0,
+                        wrong_count INTEGER DEFAULT 0,
+                        total_correct_answers INTEGER DEFAULT 0,
+                        selected_answer_ids TEXT DEFAULT '[]',
+                        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        finished_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        duration_seconds INTEGER DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (project_id) REFERENCES multi_functional_projects(id) ON DELETE CASCADE
+                    )
+                """)
+                statements.append("CREATE INDEX idx_multi_functional_evaluations_user ON multi_functional_evaluations(user_id)")
+                statements.append("CREATE INDEX idx_multi_functional_evaluations_project ON multi_functional_evaluations(project_id)")
+            
             for sql in statements:
                 connection.execute(text(sql))
             

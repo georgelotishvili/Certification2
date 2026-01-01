@@ -20,6 +20,8 @@ from ..schemas import (
     MultiApartmentEvaluationSubmitRequest,
     MultiApartmentEvaluationResponse,
     MultiApartmentEvaluationListResponse,
+    MultiApartmentEvaluationDetailResponse,
+    MultiApartmentAnswerDetail,
     MultiApartmentSettingsResponse,
     MultiApartmentPublicSettingsResponse,
     MultiApartmentSettingsUpdateRequest,
@@ -760,4 +762,57 @@ def get_user_evaluations(
     ]
     
     return MultiApartmentEvaluationListResponse(items=items, total=len(items))
+
+
+@router.get("/admin/multi-apartment/evaluations/detail/{evaluation_id}", response_model=MultiApartmentEvaluationDetailResponse)
+def get_evaluation_detail(
+    evaluation_id: int = FPath(...),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """დეტალური შედეგი ერთი შეფასებისთვის - პასუხების ტექსტით"""
+    import json
+    
+    _require_admin(db, authorization)
+    
+    evaluation = db.get(MultiApartmentEvaluation, evaluation_id)
+    if not evaluation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found")
+    
+    # Get project with answers
+    project = db.scalar(
+        select(MultiApartmentProject)
+        .where(MultiApartmentProject.id == evaluation.project_id)
+        .options(selectinload(MultiApartmentProject.answers))
+    )
+    
+    selected_ids = set(json.loads(evaluation.selected_answer_ids) if evaluation.selected_answer_ids else [])
+    
+    # Build answer details
+    answer_details = []
+    if project and project.answers:
+        for answer in sorted(project.answers, key=lambda a: (a.order_index, a.id)):
+            answer_details.append(MultiApartmentAnswerDetail(
+                id=answer.id,
+                text=answer.text,
+                isCorrect=answer.is_correct,
+                isSelected=answer.id in selected_ids,
+            ))
+    
+    return MultiApartmentEvaluationDetailResponse(
+        id=evaluation.id,
+        userId=evaluation.user_id,
+        projectId=evaluation.project_id,
+        projectCode=evaluation.project_code,
+        projectName=evaluation.project_name,
+        percentage=evaluation.percentage,
+        correctCount=evaluation.correct_count,
+        wrongCount=evaluation.wrong_count,
+        totalCorrectAnswers=evaluation.total_correct_answers,
+        startedAt=evaluation.started_at,
+        finishedAt=evaluation.finished_at,
+        durationSeconds=evaluation.duration_seconds,
+        createdAt=evaluation.created_at,
+        answers=answer_details,
+    )
 
