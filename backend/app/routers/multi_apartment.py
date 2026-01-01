@@ -816,3 +816,21 @@ def get_evaluation_detail(
         answers=answer_details,
     )
 
+
+@router.delete("/admin/multi-apartment/evaluations/{evaluation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_evaluation(
+    evaluation_id: int = FPath(...),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """შეფასების წაშლა - სრულად იშლება ყველაფერი"""
+    _require_admin(db, authorization)
+    
+    evaluation = db.get(MultiApartmentEvaluation, evaluation_id)
+    if not evaluation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found")
+    
+    db.delete(evaluation)
+    db.commit()
+    return None
+

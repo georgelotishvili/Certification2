@@ -180,6 +180,7 @@
         </div>
         <div class="attempt-actions">
           <button type="button" class="secondary-btn" data-action="view">შედეგის ნახვა</button>
+          <button type="button" class="danger-btn" data-action="delete" title="წაშლა">×</button>
         </div>
       `;
 
@@ -187,7 +188,48 @@
       if (viewBtn) {
         viewBtn.addEventListener('click', () => handleView(item.id));
       }
+      
+      const deleteBtn = card.querySelector('[data-action="delete"]');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => handleDelete(item.id));
+      }
       return card;
+    }
+    
+    async function handleDelete(evaluationId) {
+      if (!evaluationId) return;
+      
+      const confirmed = window.confirm('ნამდვილად გსურთ შედეგის წაშლა? ეს ქმედება შეუქცევადია.');
+      if (!confirmed) return;
+      
+      try {
+        const endpoint = state.projectType === 'multi-apartment'
+          ? `${API_BASE}/admin/multi-apartment/evaluations/${evaluationId}`
+          : `${API_BASE}/admin/multi-functional/evaluations/${evaluationId}`;
+        
+        const response = await fetch(endpoint, {
+          method: 'DELETE',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        
+        if (!response.ok && response.status !== 204) {
+          throw new Error('Delete failed');
+        }
+        
+        // Remove from local state
+        state.results = state.results.filter(r => r.id !== evaluationId);
+        renderResultsList();
+        
+        // Close detail if viewing this evaluation
+        if (state.detail?.id === evaluationId) {
+          closeDetail();
+        }
+        
+        showToast('შედეგი წაიშალა');
+      } catch (error) {
+        console.error('Delete error:', error);
+        showToast('შედეგის წაშლა ვერ მოხერხდა', 'error');
+      }
     }
 
     async function loadResults(user, type) {
