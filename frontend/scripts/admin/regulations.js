@@ -70,7 +70,6 @@
 
         const atTop = index === 0;
         const atBottom = index === state.items.length - 1;
-        const createdText = reg.created_at ? formatDateTime(reg.created_at) : '';
         const hasFile = !!reg.filename;
 
         card.innerHTML = `
@@ -90,8 +89,6 @@
               </div>
             </div>
             <div class="guide-actions regulation-actions">
-              ${createdText ? `<span class="guide-meta">${escapeHtml(createdText)}</span>` : ''}
-              ${hasFile ? `<button class="primary-btn regulation-download" type="button">ჩამოტვირთვა</button>` : ''}
               <button class="head-delete" type="button" aria-label="დადგენილების წაშლა" title="წაშლა">×</button>
             </div>
           </div>
@@ -299,32 +296,6 @@
       }
     }
 
-    async function downloadRegulation(regulationId) {
-      const reg = state.items.find((r) => String(r.id) === String(regulationId));
-      if (!reg || !reg.filename) return;
-
-      try {
-        const response = await fetch(`${API_BASE}/admin/regulations/${encodeURIComponent(regulationId)}/download`, {
-          headers: { ...getAdminHeaders(), ...getActorHeaders() },
-        });
-        if (!response.ok) {
-          await handleAdminErrorResponse(response, 'ფაილის ჩამოტვირთვა ვერ მოხერხდა', showToast);
-          return;
-        }
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = reg.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } catch {
-        showToast('ფაილის ჩამოტვირთვა ვერ მოხერხდა', 'error');
-      }
-    }
-
     function handleGridClick(event) {
       const target = event.target;
       if (!target || !DOM.grid) return;
@@ -353,11 +324,6 @@
 
       if (target.classList.contains('head-delete')) {
         void deleteRegulation(regulationId);
-        return;
-      }
-
-      if (target.classList.contains('regulation-download')) {
-        void downloadRegulation(regulationId);
         return;
       }
 

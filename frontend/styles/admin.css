@@ -2591,17 +2591,17 @@ body.modal-open {
 }
 
 .regulation-fields .regulation-title-input {
-  flex: 0 1 320px;
-  min-width: 150px;
-  max-width: 320px;
+  flex: 1 1 200px;
+  min-width: 120px;
+  max-width: 300px;
 }
 
 .regulation-file-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
-  flex-shrink: 0;
+  flex: 1 1 auto;
 }
 
 .regulation-change-file,
@@ -2617,6 +2617,7 @@ body.modal-open {
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .regulation-change-file:hover,
@@ -2628,24 +2629,18 @@ body.modal-open {
 
 .regulation-filename {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .regulation-actions {
   display: flex;
-  flex-direction: row;
   align-items: center;
-  gap: 10px;
   flex-shrink: 0;
-}
-
-.regulation-actions .regulation-download {
-  height: 36px;
-  padding: 0 16px;
 }
 
 @media (max-width: 768px) {
@@ -2666,11 +2661,7 @@ body.modal-open {
   
   .regulation-filename {
     max-width: 100%;
-  }
-  
-  .regulation-actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    flex-basis: 100%;
   }
 }
 
