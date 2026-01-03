@@ -693,17 +693,18 @@ main {
   width: 100%;
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
-  gap: clamp(6px, 1vw, 10px);
-  padding: clamp(8px, 1vw, 12px);
-  min-height: 56px;
+  gap: 10px 16px;
+  padding: 10px 14px;
+  min-height: 66px;
   background: var(--surface-muted);
 }
 .multi-apartment-head {
-  /* inherits flex layout */
+  /* inherits flex */
 }
 .multi-functional-head {
-  /* inherits flex layout */
+  /* inherits flex */
 }
 .guide-head {
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -774,21 +775,21 @@ main {
 .i-btn:disabled { opacity: .5; cursor: not-allowed; }
 .i-btn:not(:disabled):hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 6px 16px rgba(47, 91, 168, 0.16); }
 
-.head-label { font-weight: 800; color: var(--text-strong); white-space: nowrap; font-size: clamp(12px, 1.3vw, 14px); }
+.head-label { font-weight: 800; color: var(--text-strong); white-space: nowrap; }
 
 .head-number {
-  height: 32px; padding: 0 8px; border: 2px solid var(--border-soft); width: min(80px, 20vw); min-width: 50px; background: var(--surface-elevated); color: var(--text-strong);
+  height: 32px; padding: 0 8px; border: 2px solid var(--border-soft); width: 80px; background: var(--surface-elevated); color: var(--text-strong);
 }
 
-.head-qty-label { font-weight: 800; color: var(--text-strong); white-space: nowrap; font-size: clamp(12px, 1.3vw, 14px); }
-.head-qty { height: 32px; padding: 0 8px; border: 2px solid var(--border-soft); width: min(80px, 20vw); min-width: 50px; background: var(--surface-elevated); color: var(--text-strong); }
+.head-qty-label { font-weight: 800; color: var(--text-strong); white-space: nowrap; }
+.head-qty { height: 32px; padding: 0 8px; border: 2px solid var(--border-soft); width: 80px; background: var(--surface-elevated); color: var(--text-strong); }
 .head-file-group {
   display: flex;
   align-items: center;
   gap: 0;
   min-width: 0;
-  flex: 1 1 180px;
-  max-width: min(500px, 100%);
+  flex: 1;
+  max-width: 500px;
   position: relative;
 }
 .head-file-choose {
@@ -864,7 +865,7 @@ main {
 }
 
 .head-name {
-  height: 32px; padding: 0 10px; border: 2px solid var(--border-soft); width: 100%; max-width: min(420px, 100%); min-width: 0; flex: 1 1 120px; background: var(--surface-elevated); color: var(--text-strong);
+  height: 32px; padding: 0 10px; border: 2px solid var(--border-soft); max-width: 420px; flex: 1; min-width: 120px; background: var(--surface-elevated); color: var(--text-strong);
 }
 
 .guide-title {
