@@ -1101,6 +1101,11 @@ body.modal-open {
 #userCertificateOverlay {
   padding: clamp(8px, 2vw, 24px);
   overflow-y: auto;
+  align-items: flex-start;
+}
+
+#userCertificateOverlay .certificate-modal {
+  margin: auto;
 }
 
 .results-modal {
