@@ -2787,3 +2787,43 @@ body.modal-open {
   }
 }
 
+/* Multi-apartment & Multi-functional responsive */
+@media (max-width: 900px) {
+  .multi-apartment-head .head-file-group,
+  .multi-functional-head .head-file-group {
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 700px) {
+  .multi-apartment-head .head-left,
+  .multi-functional-head .head-left {
+    flex-wrap: wrap;
+  }
+  
+  .multi-apartment-head .head-file-group,
+  .multi-functional-head .head-file-group {
+    width: 100%;
+    max-width: 100%;
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 500px) {
+  .multi-apartment-head,
+  .multi-functional-head {
+    gap: 8px;
+  }
+  
+  .multi-apartment-head .head-left,
+  .multi-functional-head .head-left {
+    gap: 6px;
+  }
+  
+  .multi-apartment-head .head-right,
+  .multi-functional-head .head-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
