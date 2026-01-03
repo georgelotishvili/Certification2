@@ -698,14 +698,26 @@ def submit_full_evaluation(
     # Get user
     user = _require_auth(db, authorization)
     
-    # Get project
+    # Get project with answers
     project = db.scalar(
-        select(MultiFunctionalProject).where(MultiFunctionalProject.code == payload.projectCode.strip())
+        select(MultiFunctionalProject)
+        .where(MultiFunctionalProject.code == payload.projectCode.strip())
+        .options(selectinload(MultiFunctionalProject.answers))
     )
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     
     now = datetime.utcnow()
+    
+    # Calculate results server-side (don't trust frontend values)
+    answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
+    correct_answer_ids = {a.id for a in answers if a.is_correct}
+    selected_ids_set = set(payload.selectedAnswerIds)
+    
+    correct_count = len(selected_ids_set & correct_answer_ids)
+    wrong_count = len(selected_ids_set - correct_answer_ids)
+    total_correct = len(correct_answer_ids)
+    percentage = round((correct_count / total_correct) * 100, 2) if total_correct > 0 else 0
     
     # Create evaluation record
     evaluation = MultiFunctionalEvaluation(
@@ -713,10 +725,10 @@ def submit_full_evaluation(
         project_id=project.id,
         project_code=payload.projectCode,
         project_name=payload.projectName,
-        percentage=payload.percentage,
-        correct_count=payload.correctCount,
-        wrong_count=payload.wrongCount,
-        total_correct_answers=payload.totalCorrectAnswers,
+        percentage=percentage,
+        correct_count=correct_count,
+        wrong_count=wrong_count,
+        total_correct_answers=total_correct,
         selected_answer_ids=json.dumps(payload.selectedAnswerIds),
         finished_at=now,
         duration_seconds=payload.durationSeconds,
