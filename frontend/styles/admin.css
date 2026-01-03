@@ -2754,14 +2754,14 @@ body.modal-open {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px 16px;
   flex-wrap: wrap;
 }
 
 .head-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   flex: 1 1 auto;
   min-width: 0;
@@ -2770,20 +2770,16 @@ body.modal-open {
 .head-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 
-@media (max-width: 768px) {
-  .exam-block-head,
-  .multi-apartment-head,
-  .multi-functional-head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .head-left {
-    justify-content: flex-start;
+@media (max-width: 600px) {
+  .head-left,
+  .head-right {
+    width: 100%;
+    justify-content: center;
   }
   
   .head-right {
