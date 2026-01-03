@@ -1100,7 +1100,12 @@ body.modal-open {
 
 #userCertificateOverlay {
   padding: clamp(8px, 2vw, 24px);
-  overflow: hidden;
+  overflow-y: auto;
+  align-items: flex-start;
+}
+
+#userCertificateOverlay .certificate-modal {
+  margin: auto;
 }
 
 .results-modal {
@@ -1861,24 +1866,20 @@ body.modal-open {
 }
 
 .certificate-modal {
+  width: min(95vw, 1100px);
+  max-width: min(95vw, 1100px);
   background: transparent;
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
+  gap: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
   align-items: flex-end;
-  max-width: 95vw;
-  max-height: calc(100vh - clamp(16px, 4vw, 48px));
 }
 
 #certificateCard {
-  flex-shrink: 1;
-  min-height: 0;
-}
-
-#certificateCard .certificate-background {
-  max-width: min(95vw, 1100px);
-  max-height: calc(100vh - 100px);
-  width: auto;
-  height: auto;
+  width: 100%;
 }
 
 .certificate-modal-head {
@@ -1889,7 +1890,6 @@ body.modal-open {
   gap: clamp(6px, 1.5vw, 10px);
   padding: 0;
   margin-bottom: 5px;
-  width: 100%;
 }
 
 .certificate-modal-actions {
