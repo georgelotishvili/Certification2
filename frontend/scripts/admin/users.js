@@ -82,19 +82,22 @@
       
       return `
         <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : ''}" data-id="${safeId}">
-        <div class="block-head" style="grid-template-columns:auto 1fr auto auto auto auto;">
-            <div class="block-order"></div>
-            <div style="font-size:16px;font-weight:700;color:${nameColor};">${safeFullName}</div>
-            <label title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}" style="display:inline-flex;gap:4px;align-items:center;padding:4px 8px;border-radius:6px;border:2px solid #e5e7eb;background:#fff;user-select:none;">
-              <input type="checkbox" class="chk-admin" ${checked} ${disabled} style="width:16px;height:16px;accent-color:#9500FF;" />
-              <span style="font-size:12px;color:#0f172a;font-weight:600;">ადმინი</span>
-            </label>
-            <label title="გამოცდა" style="display:inline-flex;gap:4px;align-items:center;padding:4px 8px;border-radius:6px;border:2px solid #e5e7eb;background:#fff;user-select:none;">
-              <input type="checkbox" class="chk-exam" ${examChecked} ${examDisabled} style="width:16px;height:16px;accent-color:#9500FF;" />
-              <span style="font-size:12px;color:#0f172a;font-weight:600;">გამოცდა</span>
-            </label>
-            <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''} style="${founderRow ? 'display:none;' : ''}">×</button>
-            <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+          <div class="block-head user-block-head">
+            <div class="user-name" style="font-size:16px;font-weight:700;color:${nameColor};">${safeFullName}</div>
+            <div class="user-controls">
+              <label class="user-checkbox-label" title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}">
+                <input type="checkbox" class="chk-admin" ${checked} ${disabled} />
+                <span>ადმინი</span>
+              </label>
+              <label class="user-checkbox-label" title="გამოცდა">
+                <input type="checkbox" class="chk-exam" ${examChecked} ${examDisabled} />
+                <span>გამოცდა</span>
+              </label>
+            </div>
+            <div class="user-actions">
+              <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''} style="${founderRow ? 'display:none;' : ''}">×</button>
+              <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+            </div>
           </div>
           <div class="block-questions" aria-hidden="true">
             <div class="questions-list">
@@ -593,7 +596,7 @@
       const card = DOM.usersGrid?.querySelector(`.block-card[data-id="${userId}"]`);
       if (!card) return;
       
-      const nameElement = card.querySelector('.block-head > div:nth-child(2)');
+      const nameElement = card.querySelector('.user-name');
       if (!nameElement) return;
       
       // Determine color based on certificate level
