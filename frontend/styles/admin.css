@@ -2580,3 +2580,97 @@ body.modal-open {
   background: #f0f4ff;
 }
 
+/* Regulations section */
+.regulation-fields {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.regulation-fields .regulation-title-input {
+  flex: 0 1 320px;
+  min-width: 150px;
+  max-width: 320px;
+}
+
+.regulation-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.regulation-change-file,
+.regulation-upload-btn {
+  height: 36px;
+  padding: 0 14px;
+  border: 2px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--surface-elevated);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.regulation-change-file:hover,
+.regulation-upload-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.regulation-filename {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.regulation-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.regulation-actions .regulation-download {
+  height: 36px;
+  padding: 0 16px;
+}
+
+@media (max-width: 768px) {
+  .regulation-fields {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .regulation-fields .regulation-title-input {
+    flex: 1;
+    max-width: 100%;
+  }
+  
+  .regulation-file-row {
+    flex-wrap: wrap;
+  }
+  
+  .regulation-filename {
+    max-width: 100%;
+  }
+  
+  .regulation-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
