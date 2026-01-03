@@ -107,8 +107,8 @@ header {
   .nav-bar {
     position: fixed;
     top: 90px;
-    left: clamp(8px, 2vw, 20px);
-    right: clamp(8px, 2vw, 20px);
+    left: 10px;
+    right: 10px;
     height: 40px;
     background: var(--surface-elevated);
     border: 2px solid var(--border-strong);
@@ -117,30 +117,23 @@ header {
     align-items: center;
     justify-content: center;
     z-index: 99;
-    overflow-x: auto;
   }
 
     .nav {
-      width: 100%;
-      max-width: 700px;
-      min-width: 0;
-      height: auto;
-      padding: 0 clamp(8px, 2vw, 16px);
-      justify-content: center;
+      width: 620px;
+      height: 20px;
+      justify-content: space-between;
       align-items: center;
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px 8px;
     }
 
       .nav a { 
         color: var(--text-muted);
         font-weight: 500;
-        padding: clamp(4px, 1vw, 6px) clamp(6px, 1.5vw, 12px);
+        padding: 6px 12px;
         transition: all 200ms ease;
         border-radius: 4px;
         white-space: nowrap;
-        font-size: clamp(12px, 1.4vw, 14px);
       }
 
       .nav a.active,
