@@ -242,9 +242,9 @@
             <input class="head-name" type="text" placeholder="ბლოკის სახელი" value="${escapeHtml(block.name || '')}" aria-label="ბლოკის სახელი" />
             <span class="head-qty-label">რაოდენობა</span>
             <input class="head-qty" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(typeof block.qty === 'number' ? block.qty : '')}" aria-label="რაოდენობა" />
+            <span class="head-count" title="კითხვების რაოდენობა">${escapeHtml(questions.length)}</span>
             <button class="head-delete" type="button" aria-label="ბლოკის წაშლა" title="წაშლა">×</button>
             <button class="head-toggle" type="button" aria-expanded="false">▾</button>
-            <span class="head-count" title="კითხვების რაოდენობა">${escapeHtml(questions.length)}</span>
           </div>
           <div class="block-questions" aria-hidden="true">
             <div class="questions-list">
@@ -258,8 +258,8 @@
                     <textarea class="q-text" placeholder="კითხვა" rows="3" aria-label="კითხვა">${escapeHtml(question.text || '')}</textarea>
                     <div class="q-actions">
                       <div class="q-actions-row">
-                        <button class="q-delete" type="button" aria-label="კითხვის წაშლა" title="წაშლა">×</button>
                         <button class="q-toggle" type="button" aria-expanded="false">▾</button>
+                        <button class="q-delete" type="button" aria-label="კითხვის წაშლა" title="წაშლა">×</button>
                       </div>
                       <span class="q-code" aria-label="კითხვა კოდი">${escapeHtml(question.code)}</span>
                     </div>

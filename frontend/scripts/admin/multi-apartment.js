@@ -156,9 +156,9 @@
               <button type="button" class="head-file-clear" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის წაშლა" title="PDF წაშლა">×</button>
             </div>
             <span class="q-code" aria-label="პროექტის კოდი">${escapeHtml(project.code || '')}</span>
+            <span class="head-count" title="პასუხების რაოდენობა">${escapeHtml(Array.isArray(project.answers) ? project.answers.length : 0)}</span>
             <button class="head-delete" type="button" aria-label="პროექტის წაშლა" title="წაშლა">×</button>
             <button class="head-toggle" type="button" aria-expanded="false">▾</button>
-            <span class="head-count" title="პასუხების რაოდენობა">${escapeHtml(Array.isArray(project.answers) ? project.answers.length : 0)}</span>
           </div>
           <div class="block-questions" aria-hidden="true">
             <div class="answers-list">
