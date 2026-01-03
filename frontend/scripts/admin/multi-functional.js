@@ -143,22 +143,26 @@
         const atBottom = index === state.data.length - 1;
         card.innerHTML = `
           <div class="block-head multi-functional-head">
-            <div class="block-order">
-              <button class="i-btn up" ${atTop ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
-              <button class="i-btn down" ${atBottom ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
+            <div class="head-left">
+              <div class="block-order">
+                <button class="i-btn up" ${atTop ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
+                <button class="i-btn down" ${atBottom ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
+              </div>
+              <span class="head-label">პროექტი</span>
+              <input class="head-number" type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(project.number ?? '')}" aria-label="პროექტის ნომერი" />
+              <div class="head-file-group">
+                <button type="button" class="head-file-choose" data-project-id="${escapeHtml(project.id)}">Choose File</button>
+                <input class="head-file-input" type="file" accept=".pdf" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის ატვირთვა" />
+                <span class="head-file-name">${escapeHtml(project.pdfFile || 'No file chosen')}</span>
+                <button type="button" class="head-file-clear" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის წაშლა" title="PDF წაშლა">×</button>
+              </div>
             </div>
-            <span class="head-label">პროექტი</span>
-            <input class="head-number" type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(project.number ?? '')}" aria-label="პროექტის ნომერი" />
-            <div class="head-file-group">
-              <button type="button" class="head-file-choose" data-project-id="${escapeHtml(project.id)}">Choose File</button>
-              <input class="head-file-input" type="file" accept=".pdf" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის ატვირთვა" />
-              <span class="head-file-name">${escapeHtml(project.pdfFile || 'No file chosen')}</span>
-              <button type="button" class="head-file-clear" data-project-id="${escapeHtml(project.id)}" aria-label="PDF ფაილის წაშლა" title="PDF წაშლა">×</button>
+            <div class="head-right">
+              <span class="q-code" aria-label="პროექტის კოდი">${escapeHtml(project.code || '')}</span>
+              <span class="head-count" title="პასუხების რაოდენობა">${escapeHtml(Array.isArray(project.answers) ? project.answers.length : 0)}</span>
+              <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+              <button class="head-delete" type="button" aria-label="პროექტის წაშლა" title="წაშლა">×</button>
             </div>
-            <span class="q-code" aria-label="პროექტის კოდი">${escapeHtml(project.code || '')}</span>
-            <span class="head-count" title="პასუხების რაოდენობა">${escapeHtml(Array.isArray(project.answers) ? project.answers.length : 0)}</span>
-            <button class="head-toggle" type="button" aria-expanded="false">▾</button>
-            <button class="head-delete" type="button" aria-label="პროექტის წაშლა" title="წაშლა">×</button>
           </div>
           <div class="block-questions" aria-hidden="true">
             <div class="answers-list">
