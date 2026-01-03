@@ -435,6 +435,48 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.drawerAuthBanner) DOM.drawerAuthBanner.textContent = text;
     }
 
+    async function refreshUserFromServer() {
+      if (!isLoggedIn()) return;
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+      
+      try {
+        const response = await fetch(`${API_BASE}/users/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Cache-Control': 'no-cache',
+          },
+        });
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            setLoggedIn(false);
+            try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+            updateAuthUI();
+            updateBanner();
+            updateAdminLinkVisibility();
+          }
+          return;
+        }
+        
+        const userData = await response.json();
+        const normalizedUser = {
+          id: userData.id,
+          firstName: userData.first_name,
+          lastName: userData.last_name,
+          code: userData.code,
+          isAdmin: !!userData.is_admin,
+          email: userData.email,
+        };
+        
+        saveCurrentUser(normalizedUser);
+        updateBanner();
+        updateAdminLinkVisibility();
+      } catch (error) {
+        console.error('Failed to refresh user data:', error);
+      }
+    }
+
     function updateAuthUI() {
       const logged = isLoggedIn();
       if (DOM.loginBtn) DOM.loginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
@@ -777,6 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ensureProfileConsistency();
       updateBanner();
       updateAdminLinkVisibility();
+      refreshUserFromServer();
     }
 
     return {
