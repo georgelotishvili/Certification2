@@ -1098,8 +1098,9 @@ body.modal-open {
   opacity: 1;
 }
 
-#userCertificateOverlay .certificate-modal {
-  transform: translateY(-10px);
+#userCertificateOverlay {
+  padding: clamp(8px, 2vw, 24px);
+  overflow-y: auto;
 }
 
 .results-modal {
@@ -1861,7 +1862,7 @@ body.modal-open {
 
 .certificate-modal {
   width: auto;
-  max-width: none;
+  max-width: min(95vw, 1150px);
   background: transparent;
   display: flex;
   flex-direction: column;
@@ -1872,21 +1873,29 @@ body.modal-open {
   align-items: center;
 }
 
+#certificateCard {
+  width: 100%;
+  max-width: min(95vw, 1100px);
+}
+
 .certificate-modal-head {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 12px 0 12px 0;
+  flex-wrap: wrap;
+  gap: clamp(6px, 1.5vw, 12px);
+  padding: clamp(8px, 1.5vw, 12px) 0;
   margin-bottom: 0;
   width: 100%;
   max-width: 100%;
 }
 
 .certificate-modal-actions {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: clamp(6px, 1.5vw, 10px);
 }
 
 .certificate-modal-actions .modal-close {
@@ -1896,12 +1905,13 @@ body.modal-open {
 }
 
 .certificate-action-btn {
-  min-width: 120px;
-  height: 38px;
+  min-width: clamp(80px, 12vw, 120px);
+  height: clamp(32px, 4vw, 38px);
+  font-size: clamp(12px, 1.5vw, 14px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 18px;
+  padding: 0 clamp(10px, 1.5vw, 18px);
   box-sizing: border-box;
 }
 
@@ -2824,6 +2834,28 @@ body.modal-open {
   .multi-functional-head .head-right {
     width: 100%;
     justify-content: space-between;
+  }
+}
+
+/* Certificate modal responsive */
+@media (max-width: 700px) {
+  .certificate-modal-head {
+    justify-content: center;
+  }
+  
+  .certificate-modal-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .certificate-action-btn {
+    flex: 1;
+    min-width: 0;
+    max-width: 150px;
+  }
+  
+  .certificate-modal-actions .modal-close {
+    flex: 0 0 auto;
   }
 }
 
