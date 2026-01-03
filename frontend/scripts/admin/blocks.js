@@ -243,8 +243,8 @@
             <span class="head-qty-label">რაოდენობა</span>
             <input class="head-qty" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(typeof block.qty === 'number' ? block.qty : '')}" aria-label="რაოდენობა" />
             <span class="head-count" title="კითხვების რაოდენობა">${escapeHtml(questions.length)}</span>
-            <button class="head-delete" type="button" aria-label="ბლოკის წაშლა" title="წაშლა">×</button>
             <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+            <button class="head-delete" type="button" aria-label="ბლოკის წაშლა" title="წაშლა">×</button>
           </div>
           <div class="block-questions" aria-hidden="true">
             <div class="questions-list">
