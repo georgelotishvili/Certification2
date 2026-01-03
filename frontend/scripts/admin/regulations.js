@@ -83,8 +83,8 @@
               <input class="guide-title-input regulation-title-input" type="text" placeholder="დადგენილების სახელი" value="${escapeHtml(reg.title || '')}" aria-label="დადგენილების სახელი" />
               <div class="regulation-file-row">
                 ${hasFile 
-                  ? `<span class="regulation-filename">${escapeHtml(reg.filename)}</span>
-                     <button class="regulation-change-file" type="button">შეცვლა</button>`
+                  ? `<button class="regulation-change-file" type="button">შეცვლა</button>
+                     <span class="regulation-filename">${escapeHtml(reg.filename)}</span>`
                   : `<button class="regulation-upload-btn" type="button">ფაილის ატვირთვა</button>`
                 }
               </div>
