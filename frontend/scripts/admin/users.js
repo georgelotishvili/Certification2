@@ -95,8 +95,8 @@
               </label>
             </div>
             <div class="user-actions">
-              <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''} style="${founderRow ? 'display:none;' : ''}">×</button>
               <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+              <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''} style="${founderRow ? 'display:none;' : ''}">×</button>
             </div>
           </div>
           <div class="block-questions" aria-hidden="true">
