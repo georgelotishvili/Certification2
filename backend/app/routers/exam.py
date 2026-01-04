@@ -197,9 +197,9 @@ def get_block_questions(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No questions in block")
         choose_n = min(block.qty, len(all_questions))
         selected = random.sample(all_questions, k=choose_n)
-        # preserve admin order among selected
-        selected_sorted = sorted(selected, key=lambda q: q.order_index)
-        selected_map[key] = [q.id for q in selected_sorted]
+        # shuffle for maximum randomness (both selection and order)
+        random.shuffle(selected)
+        selected_map[key] = [q.id for q in selected]
         session.selected_map = json.dumps(selected_map)
         db.add(session)
         db.commit()
@@ -209,9 +209,11 @@ def get_block_questions(
     q_stmt2 = (
         select(Question)
         .where(Question.id.in_(selected_ids))
-        .order_by(Question.order_index)
     )
-    questions = db.scalars(q_stmt2).all()
+    questions_unsorted = db.scalars(q_stmt2).all()
+    # Preserve the shuffled order from selected_ids
+    id_to_question = {q.id: q for q in questions_unsorted}
+    questions = [id_to_question[qid] for qid in selected_ids if qid in id_to_question]
 
     # Eager load options without correctness flag
     out_questions: List[QuestionOut] = []
