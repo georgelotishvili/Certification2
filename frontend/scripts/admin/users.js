@@ -102,7 +102,7 @@
           <div class="block-questions" aria-hidden="true">
             <div class="questions-list">
               <div class="question-card open">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:12px;">
+                <div class="user-details-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:12px;">
                   <div>
                     <div style="font-weight:700;color:#065f46;margin-bottom:8px;">ფოტო</div>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">

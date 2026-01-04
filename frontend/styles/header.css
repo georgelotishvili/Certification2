@@ -208,6 +208,7 @@ header {
   right: -300px;
   width: 280px;
   height: 100vh;
+  overflow-y: auto;
   background: #ffffff;
   color: #0f172a;
   border-left: 1px solid #e2e8f0;
@@ -324,7 +325,7 @@ header {
 }
 
 .drawer-login {
-  margin-top: auto;
+  margin-top: 24px;
   background: #ffffff;
   color: #000000;
   border: 1px solid rgba(0, 0, 0, 0.2);

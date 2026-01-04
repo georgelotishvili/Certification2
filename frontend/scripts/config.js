@@ -9,6 +9,11 @@
     ABOUT_LABEL: 'წესები და პირობები',
   };
 
+  // Local development: redirect API calls to backend port
+  if (currentOrigin === 'http://127.0.0.1:3000' || currentOrigin === 'http://localhost:3000') {
+    defaults.API_BASE = currentOrigin.replace(':3000', ':8000');
+  }
+
   const metaOverrides = {};
   try {
     const metaConfig = document.querySelector('meta[name="app-config"]');

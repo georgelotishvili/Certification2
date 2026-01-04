@@ -253,6 +253,7 @@ header {
   transition: right .3s cubic-bezier(0.4, 0, 0.2, 1);
   border-left: 2px solid var(--border-strong);
   z-index: 300;
+  overflow-y: auto;
 }
 
   .drawer-close {
@@ -342,7 +343,7 @@ header {
   }
 
   .drawer-login {
-    margin-top: auto;
+    margin-top: 24px;
     height: 44px;
     background: var(--surface-elevated);
     color: var(--accent);
@@ -700,12 +701,7 @@ main {
   min-height: 66px;
   background: var(--surface-muted);
 }
-.multi-apartment-head {
-  /* inherits flex */
-}
-.multi-functional-head {
-  /* inherits flex */
-}
+/* .multi-apartment-head and .multi-functional-head inherit from .section-head */
 .guide-head {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
@@ -1875,7 +1871,7 @@ body.modal-open {
   height: auto;
   max-height: none;
   overflow: visible;
-  align-items: flex-end;
+  align-items: stretch;
 }
 
 #certificateCard {
@@ -1888,7 +1884,7 @@ body.modal-open {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: clamp(6px, 1.5vw, 10px);
-  padding: 0;
+  padding: 0 clamp(18px, 3vw, 40px);
   margin-bottom: 5px;
 }
 
@@ -1948,7 +1944,7 @@ body.modal-open {
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   margin: 0;
 }
@@ -2525,7 +2521,7 @@ body.modal-open {
 
 /* Certificate card responsive styles using clamp() */
 .certificate-card {
-  padding: clamp(22px, 4vw, 48px) clamp(18px, 3vw, 40px);
+  padding: 0 clamp(18px, 3vw, 40px);
 }
 
 .certificate-card__title {
@@ -2756,6 +2752,15 @@ body.modal-open {
   
   .user-actions {
     justify-content: flex-end;
+  }
+  
+  /* User details grid - single column on mobile */
+  .user-details-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .user-action-buttons {
+    grid-template-columns: 1fr !important;
   }
 }
 
