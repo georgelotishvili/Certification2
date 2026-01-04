@@ -246,6 +246,7 @@
               <span class="head-qty-label">რაოდენობა</span>
               <input class="head-qty" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(typeof block.qty === 'number' ? block.qty : '')}" aria-label="რაოდენობა" />
               <span class="head-count" title="კითხვების რაოდენობა">${escapeHtml(questions.length)}</span>
+              <button class="head-import" type="button" aria-label="კითხვების იმპორტი" title="იმპორტი">⬆</button>
               <button class="head-toggle" type="button" aria-expanded="false">▾</button>
               <button class="head-delete" type="button" aria-label="ბლოკის წაშლა" title="წაშლა">×</button>
             </div>
@@ -288,10 +289,16 @@
                 </div>
               `).join('')}
             </div>
-            <button class="block-tile add-tile q-add-tile" type="button" aria-label="კითხვის დამატება">
-              <span class="add-icon" aria-hidden="true">+</span>
-              <span class="add-text">კითხვის დამატება</span>
-            </button>
+            <div class="block-actions-row">
+              <button class="block-tile add-tile q-add-tile" type="button" aria-label="კითხვის დამატება">
+                <span class="add-icon" aria-hidden="true">+</span>
+                <span class="add-text">კითხვის დამატება</span>
+              </button>
+              <button class="block-tile add-tile q-import-tile" type="button" aria-label="კითხვების იმპორტი">
+                <span class="add-icon" aria-hidden="true">⬆</span>
+                <span class="add-text">ტექსტიდან იმპორტი</span>
+              </button>
+            </div>
           </div>
         `;
         DOM.blocksGrid.appendChild(card);
@@ -367,6 +374,11 @@
         return;
       }
 
+      if (target.classList.contains('head-import')) {
+        openImportModal(blockId);
+        return;
+      }
+
       const toggleBtn = target.closest?.('.head-toggle');
       if (toggleBtn) {
         const isOpen = card.classList.contains('open');
@@ -389,6 +401,11 @@
         render();
         const updatedCard = DOM.blocksGrid?.querySelector?.(`.block-card[data-block-id="${blockId}"]`);
         if (updatedCard) setCardOpen(updatedCard, true);
+        return;
+      }
+
+      if (target.closest?.('.q-import-tile')) {
+        openImportModal(blockId);
         return;
       }
 
@@ -587,6 +604,186 @@
       }
     }
 
+    // ========== კითხვების იმპორტი ==========
+    
+    let importTargetBlockId = null;
+    
+    const importOverlay = document.getElementById('questionsImportOverlay');
+    const importTextarea = document.getElementById('questionsImportText');
+    const importPreview = document.getElementById('questionsImportPreview');
+    const importCount = document.getElementById('questionsImportCount');
+    const importBlockName = document.getElementById('questionsImportBlockName');
+    const importSubmitBtn = document.getElementById('questionsImportSubmit');
+    const importCancelBtn = document.getElementById('questionsImportCancel');
+    const importCloseBtn = document.getElementById('questionsImportClose');
+    
+    function parseQuestionsFromText(text) {
+      const questions = [];
+      // Split by "კითხვა:" to get each question block
+      const parts = text.split(/კითხვა\s*:/i).filter(p => p.trim());
+      
+      for (const part of parts) {
+        const lines = part.trim().split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length < 2) continue;
+        
+        // First line is the question text
+        const questionText = lines[0];
+        
+        // Rest are answers
+        const answers = [];
+        let correctIndex = null;
+        
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          // Check if it's an answer line
+          if (line.startsWith('---')) {
+            let answerText = line.replace(/^---\*?\s*/, '');
+            const isCorrect = line.startsWith('---*');
+            
+            answers.push({
+              id: generateId(),
+              text: answerText
+            });
+            
+            if (isCorrect) {
+              correctIndex = answers.length - 1;
+            }
+          }
+        }
+        
+        // Only add if we have question text and at least one answer
+        if (questionText && answers.length > 0) {
+          // Pad to 4 answers if needed
+          while (answers.length < 4) {
+            answers.push({ id: generateId(), text: '' });
+          }
+          
+          // If no correct answer marked, default to first
+          if (correctIndex === null) correctIndex = 0;
+          
+          questions.push({
+            id: generateId(),
+            code: generateQuestionCode(),
+            text: questionText,
+            answers: answers.slice(0, 4),
+            correctAnswerId: answers[correctIndex]?.id || answers[0].id,
+            enabled: true
+          });
+        }
+      }
+      
+      return questions;
+    }
+    
+    function renderImportPreview(questions) {
+      if (!importPreview) return;
+      
+      if (questions.length === 0) {
+        importPreview.innerHTML = '<div class="import-preview-empty">ჩასვით ტექსტი და დაინახავთ კითხვების პრევიუს</div>';
+        if (importCount) importCount.textContent = '0 კითხვა';
+        if (importSubmitBtn) importSubmitBtn.disabled = true;
+        return;
+      }
+      
+      const previewHtml = questions.slice(0, 5).map((q, i) => {
+        const correctAnswer = q.answers.find(a => a.id === q.correctAnswerId);
+        return `
+          <div class="import-preview-item">
+            <div class="import-preview-question">${i + 1}. ${escapeHtml(q.text)}</div>
+            <div class="import-preview-answers">
+              ${q.answers.map(a => `
+                <span class="import-preview-answer ${a.id === q.correctAnswerId ? 'correct' : ''}">${escapeHtml(a.text || '(ცარიელი)')}</span>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      const moreText = questions.length > 5 ? `<div class="import-preview-more">... და კიდევ ${questions.length - 5} კითხვა</div>` : '';
+      
+      importPreview.innerHTML = previewHtml + moreText;
+      if (importCount) importCount.textContent = `${questions.length} კითხვა`;
+      if (importSubmitBtn) importSubmitBtn.disabled = false;
+    }
+    
+    function openImportModal(blockId) {
+      importTargetBlockId = blockId;
+      const block = state.data.find(b => b.id === blockId);
+      
+      if (importBlockName && block) {
+        importBlockName.textContent = block.name || `ბლოკი ${block.number}`;
+      }
+      
+      if (importTextarea) importTextarea.value = '';
+      renderImportPreview([]);
+      
+      if (importOverlay) {
+        importOverlay.setAttribute('aria-hidden', 'false');
+        importOverlay.classList.add('open');
+      }
+    }
+    
+    function closeImportModal() {
+      importTargetBlockId = null;
+      if (importOverlay) {
+        importOverlay.setAttribute('aria-hidden', 'true');
+        importOverlay.classList.remove('open');
+      }
+    }
+    
+    function handleImportSubmit() {
+      if (!importTargetBlockId || !importTextarea) return;
+      
+      const questions = parseQuestionsFromText(importTextarea.value);
+      if (questions.length === 0) {
+        showToast('კითხვები ვერ მოიძებნა', 'error');
+        return;
+      }
+      
+      const blockIndex = state.data.findIndex(b => b.id === importTargetBlockId);
+      if (blockIndex === -1) {
+        showToast('ბლოკი ვერ მოიძებნა', 'error');
+        return;
+      }
+      
+      // Add questions to the block
+      const block = state.data[blockIndex];
+      block.questions = Array.isArray(block.questions) ? block.questions : [];
+      block.questions.push(...questions);
+      
+      save({ notify: true });
+      render();
+      closeImportModal();
+      
+      showToast(`${questions.length} კითხვა დაემატა`);
+    }
+    
+    // Event listeners for import modal
+    if (importTextarea) {
+      importTextarea.addEventListener('input', () => {
+        const questions = parseQuestionsFromText(importTextarea.value);
+        renderImportPreview(questions);
+      });
+    }
+    
+    if (importSubmitBtn) {
+      importSubmitBtn.addEventListener('click', handleImportSubmit);
+    }
+    
+    if (importCancelBtn) {
+      importCancelBtn.addEventListener('click', closeImportModal);
+    }
+    
+    if (importCloseBtn) {
+      importCloseBtn.addEventListener('click', closeImportModal);
+    }
+    
+    if (importOverlay) {
+      importOverlay.addEventListener('click', (e) => {
+        if (e.target === importOverlay) closeImportModal();
+      });
+    }
+
     function init() {
       void loadInitialBlocks();
       on(DOM.blocksGrid, 'click', handleGridClick);
@@ -598,6 +795,7 @@
       init,
       render: () => render(),
       reload: () => void loadInitialBlocks(),
+      openImportModal,
     };
   }
 

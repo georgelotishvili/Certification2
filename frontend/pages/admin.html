@@ -475,6 +475,47 @@
       </div>
     </div>
 
+    <!-- კითხვების იმპორტის მოდალი -->
+    <div id="questionsImportOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="questionsImportTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="questionsImportTitle">კითხვების იმპორტი</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="questionsImportBlockName"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="questionsImportClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div class="import-instructions">
+            <p><strong>ფორმატი:</strong> თითოეული კითხვა იწყება <code>კითხვა:</code> სიტყვით, პასუხები <code>---</code> პრეფიქსით, სწორი პასუხი <code>---*</code> პრეფიქსით.</p>
+          </div>
+          <textarea id="questionsImportText" class="import-textarea" placeholder="კითხვა: რა არის 2+2?
+--- 3
+--- 5
+---*4
+--- 6
+
+კითხვა: მეორე კითხვა?
+--- პასუხი 1
+---*პასუხი 2 (სწორი)
+--- პასუხი 3
+--- პასუხი 4"></textarea>
+          <div class="import-preview" id="questionsImportPreview">
+            <div class="import-preview-empty">ჩასვით ტექსტი და დაინახავთ კითხვების პრევიუს</div>
+          </div>
+          <div class="import-actions">
+            <span class="import-count" id="questionsImportCount">0 კითხვა</span>
+            <button type="button" class="secondary-btn" id="questionsImportCancel">გაუქმება</button>
+            <button type="button" class="primary-btn" id="questionsImportSubmit" disabled>იმპორტი</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- პროექტის შედეგის დეტალები -->
     <div id="projectDetailOverlay" class="results-overlay" aria-hidden="true">
       <div class="results-modal results-modal--wide" role="dialog" aria-modal="true" aria-labelledby="projectDetailTitle">
