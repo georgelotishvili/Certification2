@@ -160,6 +160,7 @@
             <div class="head-right">
               <span class="q-code" aria-label="პროექტის კოდი">${escapeHtml(project.code || '')}</span>
               <span class="head-count" title="პასუხების რაოდენობა">${escapeHtml(Array.isArray(project.answers) ? project.answers.length : 0)}</span>
+              <button class="i-btn head-import" type="button" aria-label="პასუხების იმპორტი" title="პასუხების იმპორტი">⬆</button>
               <button class="head-toggle" type="button" aria-expanded="false">▾</button>
               <button class="head-delete" type="button" aria-label="პროექტის წაშლა" title="წაშლა">×</button>
             </div>
@@ -407,6 +408,11 @@
       const projectIndex = state.data.findIndex((project) => project.id === projectId);
       if (projectIndex === -1) return;
       const project = state.data[projectIndex];
+
+      if (target.closest?.('.head-import')) {
+        openAnswersImportModal(projectId);
+        return;
+      }
 
       if (target.classList.contains('head-file-choose')) {
         const projectIdForFile = target.dataset.projectId;
@@ -764,6 +770,144 @@
       } catch (err) {
         showToast('PDF წაშლა ვერ მოხერხდა', 'error');
       }
+    }
+
+    // ===== პასუხების იმპორტის ლოგიკა =====
+    let importTargetProjectId = null;
+    const answersImportOverlay = document.getElementById('answersImportOverlay');
+    const answersImportTextarea = document.getElementById('answersImportText');
+    const answersImportPreview = document.getElementById('answersImportPreview');
+    const answersImportCount = document.getElementById('answersImportCount');
+    const answersImportProjectName = document.getElementById('answersImportProjectName');
+    const answersImportSubmitBtn = document.getElementById('answersImportSubmit');
+    const answersImportCancelBtn = document.getElementById('answersImportCancel');
+    const answersImportCloseBtn = document.getElementById('answersImportClose');
+
+    function parseAnswersFromText(text) {
+      const answers = [];
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+      
+      for (const line of lines) {
+        if (line.startsWith('---')) {
+          const isCorrect = line.startsWith('---*');
+          const answerText = line.replace(/^---\*?\s*/, '').trim();
+          if (answerText) {
+            answers.push({
+              id: generateId(),
+              text: answerText,
+              isCorrect: isCorrect
+            });
+          }
+        }
+      }
+      return answers;
+    }
+
+    function renderAnswersImportPreview(answers) {
+      if (!answersImportPreview) return;
+      
+      if (answers.length === 0) {
+        answersImportPreview.innerHTML = '<div class="import-preview-empty">ჩასვით ტექსტი და დაინახავთ პასუხების პრევიუს</div>';
+        if (answersImportCount) answersImportCount.textContent = '0 პასუხი';
+        if (answersImportSubmitBtn) answersImportSubmitBtn.disabled = true;
+        return;
+      }
+      
+      const previewHtml = answers.slice(0, 10).map((a, i) => `
+        <div class="import-preview-item">
+          <span class="import-preview-answer ${a.isCorrect ? 'correct' : ''}">${i + 1}. ${escapeHtml(a.text)}</span>
+        </div>
+      `).join('');
+      
+      const moreText = answers.length > 10 ? `<div class="import-preview-more">... და კიდევ ${answers.length - 10} პასუხი</div>` : '';
+      
+      answersImportPreview.innerHTML = previewHtml + moreText;
+      if (answersImportCount) answersImportCount.textContent = `${answers.length} პასუხი`;
+      if (answersImportSubmitBtn) answersImportSubmitBtn.disabled = false;
+    }
+
+    function openAnswersImportModal(projectId) {
+      importTargetProjectId = projectId;
+      const project = state.data.find(p => p.id === projectId);
+      
+      if (answersImportProjectName && project) {
+        answersImportProjectName.textContent = `პროექტი ${project.number || ''}`;
+      }
+      
+      if (answersImportTextarea) answersImportTextarea.value = '';
+      renderAnswersImportPreview([]);
+      
+      if (answersImportOverlay) {
+        answersImportOverlay.setAttribute('aria-hidden', 'false');
+        answersImportOverlay.classList.add('open');
+      }
+    }
+
+    function closeAnswersImportModal() {
+      importTargetProjectId = null;
+      if (answersImportOverlay) {
+        answersImportOverlay.setAttribute('aria-hidden', 'true');
+        answersImportOverlay.classList.remove('open');
+      }
+    }
+
+    function handleAnswersImportSubmit() {
+      if (!importTargetProjectId || !answersImportTextarea) return;
+      
+      const parsedAnswers = parseAnswersFromText(answersImportTextarea.value);
+      if (parsedAnswers.length === 0) {
+        showToast('პასუხები ვერ მოიძებნა', 'error');
+        return;
+      }
+      
+      const projectIndex = state.data.findIndex(p => p.id === importTargetProjectId);
+      if (projectIndex === -1) {
+        showToast('პროექტი ვერ მოიძებნა', 'error');
+        return;
+      }
+      
+      const project = state.data[projectIndex];
+      if (!Array.isArray(project.answers)) project.answers = [];
+      if (!Array.isArray(project.correctAnswerIds)) project.correctAnswerIds = [];
+      
+      for (const a of parsedAnswers) {
+        project.answers.push({ id: a.id, text: a.text });
+        if (a.isCorrect) {
+          project.correctAnswerIds.push(a.id);
+        }
+      }
+      
+      save({ notify: true });
+      render();
+      closeAnswersImportModal();
+      
+      showToast(`${parsedAnswers.length} პასუხი დაემატა`);
+      
+      // გავხსნათ პროექტის ქარდი
+      const card = DOM_ELEMENTS.grid?.querySelector?.(`.block-card[data-project-id="${importTargetProjectId}"]`);
+      if (card) setCardOpen(card, true);
+    }
+
+    // Event listeners for answers import modal
+    if (answersImportTextarea) {
+      answersImportTextarea.addEventListener('input', () => {
+        const answers = parseAnswersFromText(answersImportTextarea.value);
+        renderAnswersImportPreview(answers);
+      });
+    }
+    if (answersImportSubmitBtn) {
+      answersImportSubmitBtn.addEventListener('click', handleAnswersImportSubmit);
+    }
+    if (answersImportCancelBtn) {
+      answersImportCancelBtn.addEventListener('click', closeAnswersImportModal);
+    }
+    if (answersImportCloseBtn) {
+      answersImportCloseBtn.addEventListener('click', closeAnswersImportModal);
+    }
+    if (answersImportOverlay) {
+      answersImportOverlay.addEventListener('click', (e) => {
+        if (e.target === answersImportOverlay) closeAnswersImportModal();
+      });
     }
 
     function init() {

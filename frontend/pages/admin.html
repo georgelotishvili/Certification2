@@ -516,6 +516,76 @@
       </div>
     </div>
 
+    <!-- პასუხების იმპორტის მოდალი (მრავალბინიანი) -->
+    <div id="answersImportOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="answersImportTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="answersImportTitle">პასუხების იმპორტი</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="answersImportProjectName"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="answersImportClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div class="import-instructions">
+            <p><strong>ფორმატი:</strong> პასუხები <code>---</code> პრეფიქსით, სწორი პასუხი <code>---*</code> პრეფიქსით.</p>
+          </div>
+          <textarea id="answersImportText" class="import-textarea" placeholder="--- არასწორი პასუხი 1
+---*სწორი პასუხი 1
+--- არასწორი პასუხი 2
+---*სწორი პასუხი 2
+--- არასწორი პასუხი 3"></textarea>
+          <div class="import-preview" id="answersImportPreview">
+            <div class="import-preview-empty">ჩასვით ტექსტი და დაინახავთ პასუხების პრევიუს</div>
+          </div>
+          <div class="import-actions">
+            <span class="import-count" id="answersImportCount">0 პასუხი</span>
+            <button type="button" class="secondary-btn" id="answersImportCancel">გაუქმება</button>
+            <button type="button" class="primary-btn" id="answersImportSubmit" disabled>იმპორტი</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- პასუხების იმპორტის მოდალი (მრავალფუნქციური) -->
+    <div id="mfAnswersImportOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="mfAnswersImportTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="mfAnswersImportTitle">პასუხების იმპორტი</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="mfAnswersImportProjectName"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="modal-close" id="mfAnswersImportClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div class="import-instructions">
+            <p><strong>ფორმატი:</strong> პასუხები <code>---</code> პრეფიქსით, სწორი პასუხი <code>---*</code> პრეფიქსით.</p>
+          </div>
+          <textarea id="mfAnswersImportText" class="import-textarea" placeholder="--- არასწორი პასუხი 1
+---*სწორი პასუხი 1
+--- არასწორი პასუხი 2
+---*სწორი პასუხი 2
+--- არასწორი პასუხი 3"></textarea>
+          <div class="import-preview" id="mfAnswersImportPreview">
+            <div class="import-preview-empty">ჩასვით ტექსტი და დაინახავთ პასუხების პრევიუს</div>
+          </div>
+          <div class="import-actions">
+            <span class="import-count" id="mfAnswersImportCount">0 პასუხი</span>
+            <button type="button" class="secondary-btn" id="mfAnswersImportCancel">გაუქმება</button>
+            <button type="button" class="primary-btn" id="mfAnswersImportSubmit" disabled>იმპორტი</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- პროექტის შედეგის დეტალები -->
     <div id="projectDetailOverlay" class="results-overlay" aria-hidden="true">
       <div class="results-modal results-modal--wide" role="dialog" aria-modal="true" aria-labelledby="projectDetailTitle">
