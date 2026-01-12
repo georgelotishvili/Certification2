@@ -213,6 +213,13 @@
       });
     }
 
+    function closeAllOpenBlocks(except) {
+      const opened = DOM.blocksGrid?.querySelectorAll?.('.block-card.open') || [];
+      opened.forEach((card) => {
+        if (!except || card !== except) setCardOpen(card, false);
+      });
+    }
+
     function render() {
       if (!DOM.blocksGrid) return;
       const previouslyOpenBlocks = Array.from(DOM.blocksGrid.querySelectorAll('.block-card.open'))
@@ -382,14 +389,10 @@
       const toggleBtn = target.closest?.('.head-toggle');
       if (toggleBtn) {
         const isOpen = card.classList.contains('open');
-        if (!isOpen) closeAllOpenQuestions();
-        setCardOpen(card, !isOpen);
-        return;
-      }
-
-      const head = target.closest?.('.block-head');
-      if (head && !target.closest('button') && target.tagName !== 'INPUT') {
-        const isOpen = card.classList.contains('open');
+        if (!isOpen) {
+          closeAllOpenBlocks(card);
+          closeAllOpenQuestions();
+        }
         setCardOpen(card, !isOpen);
         return;
       }
@@ -486,25 +489,8 @@
           setQuestionOpen(questionCard, !isOpen);
           return;
         }
-
-        const questionHead = target.closest?.('.q-head');
-        if (questionHead && !target.closest('button') && target.tagName !== 'TEXTAREA' && target.tagName !== 'INPUT') {
-          const isOpen = questionCard.classList.contains('open');
-          if (!isOpen) {
-            closeAllOpenQuestions(questionCard);
-            setQuestionOpen(questionCard, true);
-          }
-          return;
-        }
       }
 
-      const inQuestions = !!target.closest?.('.block-questions');
-      const onInteractive = !!target.closest?.('button, input, select, textarea, a, label');
-      if (!inQuestions && !onInteractive) {
-        const isOpen = card.classList.contains('open');
-        if (!isOpen) closeAllOpenQuestions();
-        setCardOpen(card, !isOpen);
-      }
     }
 
     function handleGridKeydown(event) {
