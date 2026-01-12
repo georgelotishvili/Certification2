@@ -11,7 +11,10 @@
       getActorHeaders,
     } = context;
 
-    const state = { data: [], examId: 1, saveTimer: null, pendingNotify: false };
+    const state = { data: [], examId: 1, saveTimer: null, pendingNotify: false, searchTerm: '' };
+
+    // Search input element
+    const searchInput = document.getElementById('examBlocksSearch');
 
     const generateId = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const createDefaultAnswers = () => Array.from({ length: 4 }, () => ({ id: generateId(), text: '' }));
@@ -166,6 +169,28 @@
       DOM.questionsCount.textContent = String(questionsCount);
     }
 
+    function getFilteredData() {
+      const term = state.searchTerm.toLowerCase().trim();
+      if (!term) return state.data;
+
+      return state.data.filter((block) => {
+        // Check block name
+        if ((block.name || '').toLowerCase().includes(term)) return true;
+
+        // Check questions
+        const questions = Array.isArray(block.questions) ? block.questions : [];
+        return questions.some((question) => {
+          // Check question text
+          if ((question.text || '').toLowerCase().includes(term)) return true;
+          // Check question code
+          if ((question.code || '').toLowerCase().includes(term)) return true;
+          // Check answers
+          const answers = Array.isArray(question.answers) ? question.answers : [];
+          return answers.some((answer) => (answer.text || '').toLowerCase().includes(term));
+        });
+      });
+    }
+
     function setCardOpen(card, open) {
       if (!card) return;
       card.classList.toggle('open', !!open);
@@ -231,13 +256,15 @@
 
       DOM.blocksGrid.innerHTML = '';
 
-      state.data.forEach((block, index) => {
+      const filteredData = getFilteredData();
+
+      filteredData.forEach((block, index) => {
         const card = document.createElement('div');
         card.className = 'block-tile block-card';
         card.dataset.blockId = block.id;
         const questions = Array.isArray(block.questions) ? block.questions : [];
         const atTop = index === 0;
-        const atBottom = index === state.data.length - 1;
+        const atBottom = index === filteredData.length - 1;
         card.innerHTML = `
           <div class="block-head exam-block-head">
             <div class="head-left">
@@ -770,11 +797,20 @@
       });
     }
 
+    function handleSearch() {
+      state.searchTerm = searchInput?.value || '';
+      render();
+    }
+
     function init() {
       void loadInitialBlocks();
       on(DOM.blocksGrid, 'click', handleGridClick);
       on(DOM.blocksGrid, 'keydown', handleGridKeydown);
       on(DOM.blocksGrid, 'focusout', handleGridFocusout);
+      // Search functionality
+      if (searchInput) {
+        searchInput.addEventListener('input', handleSearch);
+      }
     }
 
     return {
