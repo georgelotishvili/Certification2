@@ -128,6 +128,93 @@
     return 'http://127.0.0.1:8000';
   }
 
+  // Site Documents - dynamic loading from API
+  let cachedDocuments = null;
+
+  async function fetchSiteDocuments() {
+    if (cachedDocuments) return cachedDocuments;
+    try {
+      const API_BASE = getApiBase();
+      const response = await fetch(`${API_BASE}/documents`, { cache: 'no-cache' });
+      if (!response.ok) return [];
+      const data = await response.json();
+      cachedDocuments = data.items || [];
+      return cachedDocuments;
+    } catch (err) {
+      console.error('Failed to fetch site documents:', err);
+      return [];
+    }
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  async function populateInfoDropdowns() {
+    try {
+      const documents = await fetchSiteDocuments();
+      
+      // Desktop dropdown
+      const desktopContainer = document.querySelector('.about-dropdown .dropdown-dynamic');
+      if (desktopContainer) {
+        if (documents.length === 0) {
+          desktopContainer.innerHTML = '';
+        } else {
+          desktopContainer.innerHTML = documents.map(doc => 
+            `<button type="button" class="dropdown-item" data-doc-id="${escapeHtml(String(doc.id))}">${escapeHtml(doc.title)}</button>`
+          ).join('');
+        }
+      }
+      
+      // Mobile drawer submenu
+      const mobileContainer = document.querySelector('.drawer-about-submenu .drawer-submenu-dynamic');
+      if (mobileContainer) {
+        if (documents.length === 0) {
+          mobileContainer.innerHTML = '';
+        } else {
+          mobileContainer.innerHTML = documents.map(doc => 
+            `<button type="button" class="drawer-submenu-item" data-doc-id="${escapeHtml(String(doc.id))}">${escapeHtml(doc.title)}</button>`
+          ).join('');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to populate info dropdowns:', err);
+    }
+  }
+
+  async function openDocumentById(docId) {
+    try {
+      const els = getSiteInfoElements();
+      if (!els) return;
+
+      if (els.body) els.body.innerHTML = '<p style="opacity:.7">იტვირთება...</p>';
+      els.modal.classList.add('show');
+      els.modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('modal-open');
+      if (els.closeBtn && typeof els.closeBtn.focus === 'function') {
+        setTimeout(() => { try { els.closeBtn.focus(); } catch {} }, 0);
+      }
+
+      const API_BASE = getApiBase();
+      const response = await fetch(`${API_BASE}/documents/${docId}`, { cache: 'no-cache' });
+      if (!response.ok) throw new Error('Document not found');
+      const doc = await response.json();
+      
+      if (els.title) els.title.textContent = doc.title || 'დოკუმენტი';
+      if (els.body) els.body.innerHTML = doc.content || '<p>შიგთავსი არ არის.</p>';
+    } catch (err) {
+      console.error('Failed to load document:', err);
+      const els = getSiteInfoElements();
+      if (els?.body) els.body.innerHTML = '<p style="color:#b91c1c">დოკუმენტი ვერ ჩაიტვირთა.</p>';
+    }
+  }
+
   /**
    * Extract embed URL from various video platforms
    */
@@ -272,6 +359,12 @@
         setTimeout(() => { try { els.closeBtn.focus(); } catch {} }, 0);
       }
 
+      // Special handling for team - load from API
+      if (type === 'team') {
+        await loadTeamIntoModal(els.body);
+        return;
+      }
+
       const res = await fetch(getSiteInfoPath(type), { cache: 'no-cache' });
       if (!res.ok) throw new Error('load failed');
       const html = await res.text();
@@ -284,6 +377,74 @@
     } catch {
       const els = getSiteInfoElements();
       if (els?.body) els.body.innerHTML = '<p style="color:#b91c1c">ვერ ჩაიტვირთა შიგთავსი. სცადეთ მოგვიანებით.</p>';
+    }
+  }
+
+  async function loadTeamIntoModal(container) {
+    if (!container) return;
+    try {
+      const API_BASE = getApiBase();
+      container.innerHTML = '<p style="opacity:.7">გუნდი იტვირთება...</p>';
+      const response = await fetch(`${API_BASE}/team`, { cache: 'no-cache' });
+      if (!response.ok) {
+        container.innerHTML = '<p style="color:#b91c1c">გუნდის ჩატვირთვა ვერ მოხერხდა. სცადეთ მოგვიანებით.</p>';
+        return;
+      }
+      const data = await response.json();
+      const members = data.items || [];
+      
+      if (!members.length) {
+        container.innerHTML = '<p style="opacity:.8">გუნდის წევრები ჯერ არ არის დამატებული.</p>';
+        return;
+      }
+
+      const categoryNames = {
+        1: 'მმართველი გუნდი',
+        2: 'სასერტიფიკაციო კომიტეტი და ექსპერტთა საბჭო',
+        3: 'ადმინისტრაცია',
+      };
+
+      const escapeHtml = (str) => {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
+
+      let html = '';
+      [1, 2, 3].forEach((category) => {
+        const categoryMembers = members.filter(m => m.category === category);
+        if (categoryMembers.length === 0) return;
+
+        html += `<h3>${escapeHtml(categoryNames[category])}:</h3>`;
+        html += '<ol class="team-list-public">';
+        categoryMembers.forEach((member) => {
+          const position = escapeHtml(member.position || '');
+          const firstName = escapeHtml(member.first_name || '');
+          const lastName = escapeHtml(member.last_name || '');
+          const email = escapeHtml(member.email || '');
+          const phone = escapeHtml(member.phone || '');
+
+          let contacts = '';
+          if (email || phone) {
+            contacts = '<span class="team-contacts">';
+            if (email) contacts += `<span class="team-email">${email}</span>`;
+            if (phone) contacts += `<span class="team-phone">${phone}</span>`;
+            contacts += '</span>';
+          }
+
+          html += `<li><strong>${position}:</strong> ${firstName} ${lastName}${contacts}</li>`;
+        });
+        html += '</ol>';
+      });
+
+      container.innerHTML = html || '<p style="opacity:.8">გუნდის წევრები ჯერ არ არის დამატებული.</p>';
+    } catch (error) {
+      console.error('Failed to load team', error);
+      container.innerHTML = '<p style="color:#b91c1c">გუნდის ჩატვირთვა ვერ მოხერხდა.</p>';
     }
   }
 
@@ -401,55 +562,20 @@
     document.addEventListener('click', (event) => {
       const el = event.target;
       if (!el) return;
-      // About / Terms open in modal (desktop + mobile)
-      if (closest(el, '.dropdown-item.about-us, .drawer-submenu-item.about-us')) {
+      
+      // Dynamic document items (with data-doc-id)
+      const dynamicItem = closest(el, '[data-doc-id]');
+      if (dynamicItem && closest(dynamicItem, '.about-dropdown, .drawer-about-submenu')) {
         event.preventDefault();
         closeAboutDropdown();
         closeDrawerAboutSubmenu();
         if (DOM.body.classList.contains('menu-open')) closeMenu();
-        openSiteInfo('about');
+        const docId = dynamicItem.getAttribute('data-doc-id');
+        if (docId) openDocumentById(docId);
         return;
       }
-      if (closest(el, '.dropdown-item.terms, .drawer-submenu-item.terms')) {
-        event.preventDefault();
-        closeAboutDropdown();
-        closeDrawerAboutSubmenu();
-        if (DOM.body.classList.contains('menu-open')) closeMenu();
-        openSiteInfo('terms');
-        return;
-      }
-      if (closest(el, '.dropdown-item.process, .drawer-submenu-item.process')) {
-        event.preventDefault();
-        closeAboutDropdown();
-        closeDrawerAboutSubmenu();
-        if (DOM.body.classList.contains('menu-open')) closeMenu();
-        openSiteInfo('process');
-        return;
-      }
-      if (closest(el, '.dropdown-item.contract, .drawer-submenu-item.contract')) {
-        event.preventDefault();
-        closeAboutDropdown();
-        closeDrawerAboutSubmenu();
-        if (DOM.body.classList.contains('menu-open')) closeMenu();
-        openSiteInfo('contract');
-        return;
-      }
-      if (closest(el, '.dropdown-item.certification-contract, .drawer-submenu-item.certification-contract')) {
-        event.preventDefault();
-        closeAboutDropdown();
-        closeDrawerAboutSubmenu();
-        if (DOM.body.classList.contains('menu-open')) closeMenu();
-        openSiteInfo('certification-contract');
-        return;
-      }
-      if (closest(el, '.dropdown-item.legal-base, .drawer-submenu-item.legal-base')) {
-        event.preventDefault();
-        closeAboutDropdown();
-        closeDrawerAboutSubmenu();
-        if (DOM.body.classList.contains('menu-open')) closeMenu();
-        openSiteInfo('legal-base');
-        return;
-      }
+      
+      // Fixed items: team
       if (closest(el, '.dropdown-item.team, .drawer-submenu-item.team')) {
         event.preventDefault();
         closeAboutDropdown();
@@ -458,6 +584,7 @@
         openSiteInfo('team');
         return;
       }
+      // Fixed items: guide
       if (closest(el, '.dropdown-item.guide, .drawer-submenu-item.guide')) {
         event.preventDefault();
         closeAboutDropdown();
@@ -466,7 +593,7 @@
         openSiteInfo('guide');
         return;
       }
-      // About panel items (desktop + mobile)
+      // About panel items (desktop + mobile) - catch-all for any other items
       if (closest(el, '.about-dropdown .dropdown-item, .drawer-about-submenu .drawer-submenu-item')) {
         event.preventDefault();
         closeAboutDropdown();
@@ -569,6 +696,9 @@
 
       // Bind behaviors
       bindHeader();
+      
+      // Populate dynamic documents in info dropdown
+      populateInfoDropdowns();
       
       // Initialize statements module after header is loaded
       initStatementsModule();

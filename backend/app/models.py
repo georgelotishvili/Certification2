@@ -534,3 +534,30 @@ class Regulation(Base):
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TeamMember(Base):
+    """გუნდის წევრები - მთავარ გვერდზე ჩვენი გუნდის სექციაში"""
+    __tablename__ = "team_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    category: Mapped[int] = mapped_column(Integer, default=1, index=True)  # 1=მმართველი, 2=კომიტეტი, 3=ადმინისტრაცია
+    position: Mapped[str] = mapped_column(String(255), default="")  # თანამდებობა
+    first_name: Mapped[str] = mapped_column(String(100), default="")
+    last_name: Mapped[str] = mapped_column(String(100), default="")
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SiteDocument(Base):
+    """საიტის დოკუმენტები - ინფორმაცია მენიუში გამოჩნდება"""
+    __tablename__ = "site_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")  # სათაური მენიუში
+    content: Mapped[str] = mapped_column(Text, default="")  # HTML კონტენტი
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

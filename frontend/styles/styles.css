@@ -1139,3 +1139,45 @@ body.registry-open {
   object-fit: cover;
   border-radius: 50%;
 }
+
+/* Team list public styles */
+.team-list-public {
+  margin: 0 0 20px 20px;
+  padding: 0;
+  list-style: decimal;
+}
+
+.team-list-public li {
+  padding: 8px 0;
+  border-bottom: 1px solid #eef2fb;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.team-list-public li:last-child {
+  border-bottom: none;
+}
+
+.team-contacts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 10px;
+  font-size: 12px;
+}
+
+.team-email,
+.team-phone {
+  background: #e3ebff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #2f5ba8;
+}
+
+@media (max-width: 640px) {
+  .team-contacts {
+    display: flex;
+    margin-left: 0;
+    margin-top: 6px;
+  }
+}

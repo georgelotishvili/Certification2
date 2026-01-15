@@ -19,6 +19,8 @@
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js" defer></script>
+    <script src="../scripts/admin/team.js" defer></script>
+    <script src="../scripts/admin/documents.js" defer></script>
     <link rel="stylesheet" href="../styles/admin.css" />
   </head>
   <body>
@@ -44,9 +46,16 @@
           <a href="#" data-target="exam">გამოცდა</a>
           <a href="#" data-target="multiApartment">მრავალბინიანი</a>
           <a href="#" data-target="multiFunctional">მრავალფუნქციური</a>
-          <a href="#" data-target="guide">გზამკვლევი</a>
-          <a href="#" data-target="regulations">რეგულაციები</a>
-          <a href="#" data-target="app">APP</a>
+          <div class="drawer-item drawer-other">
+            <a href="#" class="drawer-other-trigger">სხვადასხვა</a>
+            <div class="drawer-other-submenu drawer-submenu" hidden>
+              <a href="#" class="drawer-submenu-item" data-target="guide">გზამკვლევი</a>
+              <a href="#" class="drawer-submenu-item" data-target="regulations">რეგულაციები</a>
+              <a href="#" class="drawer-submenu-item" data-target="documents">დოკუმენტები</a>
+              <a href="#" class="drawer-submenu-item" data-target="team">გუნდი</a>
+              <a href="#" class="drawer-submenu-item" data-target="app">APP</a>
+            </div>
+          </div>
         </nav>
         <button class="drawer-login">მთავარი გვერდი</button>
       </aside>
@@ -58,9 +67,16 @@
         <a href="#" data-target="exam">გამოცდა</a>
         <a href="#" data-target="multiApartment">მრავალბინიანი</a>
         <a href="#" data-target="multiFunctional">მრავალფუნქციური</a>
-        <a href="#" data-target="guide">გზამკვლევი</a>
-        <a href="#" data-target="regulations">რეგულაციები</a>
-        <a href="#" data-target="app">APP</a>
+        <div class="nav-item nav-other">
+          <a href="#" class="other-trigger">სხვადასხვა</a>
+          <div class="dropdown other-dropdown" role="menu">
+            <a href="#" class="dropdown-item" data-target="guide">გზამკვლევი</a>
+            <a href="#" class="dropdown-item" data-target="regulations">რეგულაციები</a>
+            <a href="#" class="dropdown-item" data-target="documents">დოკუმენტები</a>
+            <a href="#" class="dropdown-item" data-target="team">გუნდი</a>
+            <a href="#" class="dropdown-item" data-target="app">APP</a>
+          </div>
+        </div>
       </nav>
     </div>
 
@@ -222,6 +238,92 @@
           </div>
           <div class="exam-blocks-grid" id="regulationsGrid">
             <!-- რეგულაციების სია და დამატების ტაილი -->
+          </div>
+        </div>
+      </section>
+      <section id="documents-section" class="exam-settings" style="display:none;">
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="დოკუმენტები">
+            <h2 class="exam-blocks-title">საიტის დოკუმენტები (ინფორმაცია)</h2>
+          </div>
+          <!-- დოკუმენტის დამატების ფორმა -->
+          <div class="document-add-form">
+            <div class="document-form-row">
+              <label class="document-label">სათაური:</label>
+              <input type="text" id="documentTitle" class="document-input" placeholder="დოკუმენტის სათაური" />
+            </div>
+            <div class="document-form-row">
+              <label class="document-label">შიგთავსი:</label>
+              <div id="documentContent" class="document-editor" contenteditable="true" placeholder="ჩააკოპირეთ ტექსტი Word-იდან..."></div>
+            </div>
+            <div class="document-form-actions">
+              <button type="button" id="documentAddBtn" class="primary-btn">დამატება</button>
+              <button type="button" id="documentCancelEdit" class="secondary-btn" style="display:none;">გაუქმება</button>
+            </div>
+          </div>
+          <!-- დოკუმენტების სია -->
+          <div class="documents-list" id="documentsList">
+            <!-- დოკუმენტები იტვირთება JS-ით -->
+          </div>
+        </div>
+      </section>
+      <section id="team-section" class="exam-settings" style="display:none;">
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="გუნდი">
+            <h2 class="exam-blocks-title">ჩვენი გუნდი</h2>
+          </div>
+          <div class="team-categories-grid">
+            <!-- მმართველი გუნდი -->
+            <div class="team-category-card" data-category="1">
+              <div class="team-category-header">
+                <h3 class="team-category-title">მმართველი გუნდი</h3>
+              </div>
+              <div class="team-members-list" id="teamCategory1">
+                <!-- წევრები იტვირთება JS-ით -->
+              </div>
+              <div class="team-add-form" data-category="1">
+                <input type="text" class="team-input team-position" placeholder="თანამდებობა" />
+                <input type="text" class="team-input team-firstname" placeholder="სახელი" />
+                <input type="text" class="team-input team-lastname" placeholder="გვარი" />
+                <input type="email" class="team-input team-email" placeholder="ელფოსტა" />
+                <input type="tel" class="team-input team-phone" placeholder="ტელეფონი" />
+                <button type="button" class="team-add-btn primary-btn">დამატება</button>
+              </div>
+            </div>
+            <!-- სასერტიფიკაციო კომიტეტი და ექსპერტთა საბჭო -->
+            <div class="team-category-card" data-category="2">
+              <div class="team-category-header">
+                <h3 class="team-category-title">სასერტიფიკაციო კომიტეტი და ექსპერტთა საბჭო</h3>
+              </div>
+              <div class="team-members-list" id="teamCategory2">
+                <!-- წევრები იტვირთება JS-ით -->
+              </div>
+              <div class="team-add-form" data-category="2">
+                <input type="text" class="team-input team-position" placeholder="თანამდებობა" />
+                <input type="text" class="team-input team-firstname" placeholder="სახელი" />
+                <input type="text" class="team-input team-lastname" placeholder="გვარი" />
+                <input type="email" class="team-input team-email" placeholder="ელფოსტა" />
+                <input type="tel" class="team-input team-phone" placeholder="ტელეფონი" />
+                <button type="button" class="team-add-btn primary-btn">დამატება</button>
+              </div>
+            </div>
+            <!-- ადმინისტრაცია -->
+            <div class="team-category-card" data-category="3">
+              <div class="team-category-header">
+                <h3 class="team-category-title">ადმინისტრაცია</h3>
+              </div>
+              <div class="team-members-list" id="teamCategory3">
+                <!-- წევრები იტვირთება JS-ით -->
+              </div>
+              <div class="team-add-form" data-category="3">
+                <input type="text" class="team-input team-position" placeholder="თანამდებობა" />
+                <input type="text" class="team-input team-firstname" placeholder="სახელი" />
+                <input type="text" class="team-input team-lastname" placeholder="გვარი" />
+                <input type="email" class="team-input team-email" placeholder="ელფოსტა" />
+                <input type="tel" class="team-input team-phone" placeholder="ტელეფონი" />
+                <button type="button" class="team-add-btn primary-btn">დამატება</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>

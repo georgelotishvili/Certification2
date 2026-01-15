@@ -19,8 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
     drawerClose: document.querySelector('.drawer-close'),
     loginBtn: document.querySelector('.login-btn'),
     drawerLoginBtn: document.querySelector('.drawer-login'),
-    drawerLinks: Array.from(document.querySelectorAll('.drawer-nav a')),
-    navLinks: Array.from(document.querySelectorAll('.nav a, .drawer-nav a')),
+    drawerLinks: Array.from(document.querySelectorAll('.drawer-nav a:not(.drawer-other-trigger)')),
+    navLinks: Array.from(document.querySelectorAll('.nav a:not(.other-trigger), .drawer-nav a:not(.drawer-other-trigger)')),
     sections: {
       exam: document.getElementById('exam-settings'),
       registrations: document.getElementById('registrations-section'),
@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
       multiFunctional: document.getElementById('multi-functional-section'),
       guide: document.getElementById('guide-section'),
       regulations: document.getElementById('regulations-section'),
+      documents: document.getElementById('documents-section'),
+      team: document.getElementById('team-section'),
       app: document.getElementById('app-section'),
     },
     durationInput: document.getElementById('examDuration'),
@@ -153,6 +155,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'მრავალბინიანი': 'multiApartment',
     'მრავალფუნქციური': 'multiFunctional',
     'გზამკვლევი': 'guide',
+    'დოკუმენტები': 'documents',
+    'გუნდი': 'team',
     'APP': 'app',
   };
 
@@ -292,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return redirectToHome();
   }
 
-  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, appFiles }) {
+  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, team, appFiles }) {
     const setMenu = (open) => {
       DOM.body?.classList.toggle('menu-open', open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -306,12 +310,47 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.drawerLinks.forEach((link) => on(link, 'click', closeMenu));
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') closeMenu();
+      if (event.key === 'Escape') {
+        closeMenu();
+        closeOtherDropdown();
+        closeDrawerOtherSubmenu();
+      }
     });
 
     const goHome = () => { window.location.href = 'index.html'; };
     on(DOM.loginBtn, 'click', goHome);
     on(DOM.drawerLoginBtn, 'click', goHome);
+
+    // "სხვადასხვა" dropdown handling
+    const otherTrigger = document.querySelector('.other-trigger');
+    const otherDropdown = document.querySelector('.other-dropdown');
+    const drawerOtherTrigger = document.querySelector('.drawer-other-trigger');
+    const drawerOtherSubmenu = document.querySelector('.drawer-other-submenu');
+
+    function closeOtherDropdown() {
+      otherDropdown?.classList.remove('show');
+    }
+    function toggleOtherDropdown(e) {
+      e?.preventDefault();
+      e?.stopPropagation();
+      otherDropdown?.classList.toggle('show');
+    }
+    function closeDrawerOtherSubmenu() {
+      if (drawerOtherSubmenu) drawerOtherSubmenu.hidden = true;
+    }
+    function toggleDrawerOtherSubmenu(e) {
+      e?.preventDefault();
+      e?.stopPropagation();
+      if (drawerOtherSubmenu) drawerOtherSubmenu.hidden = !drawerOtherSubmenu.hidden;
+    }
+
+    on(otherTrigger, 'click', toggleOtherDropdown);
+    on(drawerOtherTrigger, 'click', toggleDrawerOtherSubmenu);
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.nav-other')) closeOtherDropdown();
+    });
 
     DOM.navLinks.forEach((link) => {
       on(link, 'click', (event) => {
@@ -319,6 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!targetSection) return;
         event.preventDefault();
         closeMenu();
+        closeOtherDropdown();
+        closeDrawerOtherSubmenu();
         showSection(targetSection);
         const moduleMap = {
           registrations: users,
@@ -326,6 +367,8 @@ document.addEventListener('DOMContentLoaded', () => {
           multiFunctional,
           guide,
           regulations,
+          documents,
+          team,
           app: appFiles,
         };
         moduleMap[targetSection]?.render?.();
@@ -398,11 +441,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const guideModule = createModule(modules.createGuideModule, { init: noop, render: noop, reload: noop });
     const regulationsModule = createModule(modules.createRegulationsModule, { init: noop, render: noop, reload: noop });
     const appFilesModule = createModule(modules.createAppFilesModule, { init: noop, render: noop, reload: noop });
+    const teamModule = createModule(modules.createTeamModule, { init: noop, render: noop });
+    const documentsModule = createModule(modules.createDocumentsModule, { init: noop, render: noop });
 
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;
 
-    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, appFiles: appFilesModule });
+    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, team: teamModule, appFiles: appFilesModule });
 
     examSettings.init();
     blocksModule.init();
@@ -415,6 +460,8 @@ document.addEventListener('DOMContentLoaded', () => {
     multiFunctionalModule.init();
     guideModule.init();
     regulationsModule.init();
+    teamModule.init();
+    documentsModule.init();
     appFilesModule.init();
 
     usersModule.refreshUnseenSummary?.();
