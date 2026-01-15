@@ -766,17 +766,51 @@ body.modal-open {
   font-size: 14px;
 }
 
-/* Word-like concise typography */
-.site-info-body { font-size: 16px !important; line-height: 1.8; color: #0f172a; }
+/* Word-like concise typography - override Word inline styles */
+.site-info-body { font-family: 'DejaVu Sans', sans-serif !important; font-size: 16px !important; line-height: 1.8; color: #0f172a; }
+.site-info-body * { font-family: inherit !important; font-size: inherit !important; }
 .site-info-body p,
 .site-info-body li,
 .site-info-body td,
-.site-info-body th { font-size: 16px !important; }
-.site-info-body h2 { margin: 16px 0 8px; font-size: 18px !important; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
-.site-info-body h3 { margin: 14px 0 8px; font-size: 16px !important; font-weight: 600; color: #1f2937; }
-.site-info-body p { margin: 0 0 12px; }
-.site-info-body ul, .site-info-body ol { margin: 8px 0 12px 22px; }
-.site-info-body li { margin-bottom: 6px; }
+.site-info-body th,
+.site-info-body span,
+.site-info-body div { font-size: 16px !important; }
+
+/* სათაურები - მოზრდილი და bold */
+.site-info-body h1 { margin: 20px 0 12px; font-size: 22px !important; font-weight: 700 !important; color: #1e3a5f; }
+.site-info-body h2 { margin: 18px 0 10px; font-size: 20px !important; font-weight: 700 !important; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; color: #1e3a5f; }
+.site-info-body h3 { margin: 16px 0 8px; font-size: 18px !important; font-weight: 700 !important; color: #1f2937; }
+.site-info-body h4 { margin: 14px 0 6px; font-size: 17px !important; font-weight: 600 !important; color: #1f2937; }
+
+/* Bold ელემენტები - Word-ის ყველა ვარიანტი */
+.site-info-body b,
+.site-info-body b *,
+.site-info-body strong,
+.site-info-body strong *,
+.site-info-body [style*="font-weight:bold"],
+.site-info-body [style*="font-weight: bold"],
+.site-info-body [style*="font-weight:700"],
+.site-info-body [style*="font-weight: 700"] { font-weight: 700 !important; }
+
+/* ჩვეულებრივი ტექსტი */
+.site-info-body p { margin: 0 0 12px; font-size: 16px !important; }
+
+/* ბულეტიანი სიები */
+.site-info-body ul { 
+  margin: 12px 0 16px 20px; 
+  padding-left: 0;
+  list-style-type: disc;
+}
+.site-info-body ol { 
+  margin: 12px 0 16px 20px; 
+  padding-left: 0;
+  list-style-type: decimal; 
+}
+.site-info-body li { 
+  margin-bottom: 8px; 
+  font-size: 16px !important; 
+  line-height: 1.6;
+}
 
 
 @media (max-width: 730px) {

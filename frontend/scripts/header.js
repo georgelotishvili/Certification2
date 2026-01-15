@@ -188,6 +188,67 @@
     }
   }
 
+  // Word inline სტილების გასუფთავება და ბულეტების კონვერტაცია
+  function sanitizeWordStyles(container) {
+    if (!container) return;
+    try {
+      // ყველა ელემენტის სტილების გასუფთავება
+      const allElements = container.querySelectorAll('*');
+      allElements.forEach(el => {
+        if (el.style) {
+          el.style.fontSize = '';
+          el.style.fontFamily = '';
+          el.style.marginLeft = '';
+          el.style.textIndent = '';
+          if (el.style.cssText) {
+            el.style.cssText = el.style.cssText.replace(/mso-[^;]+;?/gi, '');
+          }
+        }
+        el.removeAttribute('class');
+      });
+
+      // ბულეტიანი აბზაცების კონვერტაცია <ul>/<li>-ში
+      const bulletChars = '·•\\-–—§■□►▪▸●○⁃◦◘◙';
+      const bulletRegex = new RegExp('^[\\s\\u00A0]*[' + bulletChars + '][\\s\\u00A0]*');
+      const paragraphs = Array.from(container.querySelectorAll('p'));
+      
+      let currentUl = null;
+      let lastWasBullet = false;
+      
+      paragraphs.forEach(p => {
+        const text = p.textContent || '';
+        const isBullet = bulletRegex.test(text);
+        
+        if (isBullet) {
+          const li = document.createElement('li');
+          // წავშალოთ ბულეტის სიმბოლო ტექსტიდან
+          const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
+          li.innerHTML = p.innerHTML.replace(cleanBulletRegex, '').trim();
+          
+          if (!currentUl) {
+            currentUl = document.createElement('ul');
+            p.parentNode.insertBefore(currentUl, p);
+          }
+          
+          currentUl.appendChild(li);
+          p.remove();
+          lastWasBullet = true;
+        } else {
+          if (lastWasBullet) {
+            currentUl = null;
+          }
+          lastWasBullet = false;
+        }
+      });
+
+      // უკვე არსებული <li> ელემენტებიდანაც წავშალოთ ბულეტის სიმბოლოები
+      container.querySelectorAll('li').forEach(li => {
+        const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
+        li.innerHTML = li.innerHTML.replace(cleanBulletRegex, '').trim();
+      });
+    } catch (e) { console.error('sanitizeWordStyles error:', e); }
+  }
+
   async function openDocumentById(docId) {
     try {
       const els = getSiteInfoElements();
@@ -207,7 +268,10 @@
       const doc = await response.json();
       
       if (els.title) els.title.textContent = doc.title || 'დოკუმენტი';
-      if (els.body) els.body.innerHTML = doc.content || '<p>შიგთავსი არ არის.</p>';
+      if (els.body) {
+        els.body.innerHTML = doc.content || '<p>შიგთავსი არ არის.</p>';
+        sanitizeWordStyles(els.body);
+      }
     } catch (err) {
       console.error('Failed to load document:', err);
       const els = getSiteInfoElements();

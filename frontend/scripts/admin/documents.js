@@ -265,6 +265,113 @@
       }
     }
 
+    // Word HTML-ის გასუფთავება paste-ის დროს
+    function cleanWordHtml(html) {
+      // შევქმნათ დროებითი container
+      const temp = document.createElement('div');
+      temp.innerHTML = html;
+
+      // ჯერ წავშალოთ Word-ის კომენტარები
+      let rawHtml = temp.innerHTML;
+      rawHtml = rawHtml.replace(/<!--\[if[\s\S]*?endif\]-->/gi, '');
+      rawHtml = rawHtml.replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '');
+      temp.innerHTML = rawHtml;
+
+      // ყველა ელემენტიდან წავშალოთ Word-ის სტილები, მაგრამ შევინარჩუნოთ bold
+      const allElements = temp.querySelectorAll('*');
+      allElements.forEach(el => {
+        // შევინარჩუნოთ bold status
+        const isBoldByStyle = el.style && (
+          el.style.fontWeight === 'bold' ||
+          el.style.fontWeight === '700' ||
+          el.style.fontWeight === '600'
+        );
+        const isBoldByTag = el.tagName === 'B' || el.tagName === 'STRONG';
+        
+        // წავშალოთ ყველა inline style და class
+        el.removeAttribute('style');
+        el.removeAttribute('class');
+        
+        // თუ bold იყო style-ით და არ არის უკვე b/strong თეგში
+        if (isBoldByStyle && !isBoldByTag) {
+          const wrapper = document.createElement('b');
+          while (el.firstChild) {
+            wrapper.appendChild(el.firstChild);
+          }
+          el.appendChild(wrapper);
+        }
+      });
+
+      // წავშალოთ ცარიელი span-ები
+      temp.querySelectorAll('span').forEach(span => {
+        const parent = span.parentNode;
+        if (parent) {
+          while (span.firstChild) {
+            parent.insertBefore(span.firstChild, span);
+          }
+          parent.removeChild(span);
+        }
+      });
+
+      // ახლა ვიპოვოთ ბულეტიანი აბზაცები (პარაგრაფები რომლებიც იწყება ბულეტით)
+      const bulletChars = '·•\\-–—§■□►▪▸●○⁃◦◘◙';
+      const bulletRegex = new RegExp('^[\\s\\u00A0]*[' + bulletChars + '][\\s\\u00A0]*');
+      const paragraphs = Array.from(temp.querySelectorAll('p'));
+      
+      let currentUl = null;
+      let lastWasBullet = false;
+      
+      paragraphs.forEach(p => {
+        const text = p.textContent || '';
+        const isBullet = bulletRegex.test(text);
+        
+        if (isBullet) {
+          // ეს ბულეტიანი აბზაცია
+          const li = document.createElement('li');
+          
+          // წავშალოთ ბულეტის სიმბოლო HTML-იდან
+          const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
+          li.innerHTML = p.innerHTML.replace(cleanBulletRegex, '').trim();
+          
+          if (!currentUl) {
+            currentUl = document.createElement('ul');
+            p.parentNode.insertBefore(currentUl, p);
+          }
+          
+          currentUl.appendChild(li);
+          p.remove();
+          lastWasBullet = true;
+        } else {
+          // ეს ჩვეულებრივი აბზაცია - სია დასრულდა
+          if (lastWasBullet) {
+            currentUl = null;
+          }
+          lastWasBullet = false;
+        }
+      });
+
+      let result = temp.innerHTML;
+      result = result.replace(/\s+/g, ' ').trim();
+
+      return result;
+    }
+
+    function handlePaste(event) {
+      // Word-იდან კოპირებისას HTML-ით ვიღებთ
+      const clipboardData = event.clipboardData || window.clipboardData;
+      const html = clipboardData.getData('text/html');
+      
+      if (html && html.includes('MsoNormal')) {
+        // ეს Word-იდანაა - გავასუფთავოთ
+        event.preventDefault();
+        const cleanedHtml = cleanWordHtml(html);
+        
+        // ჩავსვათ გასუფთავებული HTML
+        document.execCommand('insertHTML', false, cleanedHtml);
+      }
+      // თუ არ არის Word-იდან, ნორმალურად ჩაისვას
+    }
+
     function init() {
       if (els.addBtn) {
         els.addBtn.addEventListener('click', handleAddOrUpdate);
@@ -274,6 +381,10 @@
       }
       if (els.list) {
         els.list.addEventListener('click', handleListClick);
+      }
+      // Word paste handler
+      if (els.contentEditor) {
+        els.contentEditor.addEventListener('paste', handlePaste);
       }
     }
 
