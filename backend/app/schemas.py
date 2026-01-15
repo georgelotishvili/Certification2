@@ -844,13 +844,16 @@ class SiteDocumentOut(BaseModel):
     title: str
     content: str
     order_index: int
+    filename: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+    download_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
 
 class SiteDocumentCreate(BaseModel):
     title: str
-    content: str
+    content: str = ""
 
 
 class SiteDocumentUpdate(BaseModel):

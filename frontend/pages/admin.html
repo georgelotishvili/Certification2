@@ -20,6 +20,7 @@
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js" defer></script>
     <script src="../scripts/admin/team.js" defer></script>
+    <script src="../vendor/mammoth.browser.min.js" defer></script>
     <script src="../scripts/admin/documents.js" defer></script>
     <link rel="stylesheet" href="../styles/admin.css" />
   </head>
@@ -253,8 +254,16 @@
               <input type="text" id="documentTitle" class="document-input" placeholder="დოკუმენტის სათაური" />
             </div>
             <div class="document-form-row">
-              <label class="document-label">შიგთავსი:</label>
-              <div id="documentContent" class="document-editor" contenteditable="true" placeholder="ჩააკოპირეთ ტექსტი Word-იდან..."></div>
+              <label class="document-label">Word ფაილი (.docx):</label>
+              <div class="document-file-upload">
+                <input type="file" id="documentFile" accept=".docx" style="display:none;" />
+                <button type="button" id="documentFileChoose" class="file-choose-btn">ფაილის არჩევა</button>
+                <span id="documentFileName" class="file-name-display">ფაილი არჩეული არ არის</span>
+              </div>
+            </div>
+            <div class="document-form-row">
+              <label class="document-label">შიგთავსი (preview/რედაქტირება):</label>
+              <div id="documentContent" class="document-editor" contenteditable="true" placeholder="აირჩიეთ Word ფაილი ან ჩაწერეთ ტექსტი..."></div>
             </div>
             <div class="document-form-actions">
               <button type="button" id="documentAddBtn" class="primary-btn">დამატება</button>

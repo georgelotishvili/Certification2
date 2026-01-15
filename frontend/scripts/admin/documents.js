@@ -11,11 +11,15 @@
     const state = {
       documents: [],
       editingId: null,
+      selectedFile: null,
     };
 
     const els = {
       titleInput: document.getElementById('documentTitle'),
       contentEditor: document.getElementById('documentContent'),
+      fileInput: document.getElementById('documentFile'),
+      fileChooseBtn: document.getElementById('documentFileChoose'),
+      fileNameDisplay: document.getElementById('documentFileName'),
       addBtn: document.getElementById('documentAddBtn'),
       cancelBtn: document.getElementById('documentCancelEdit'),
       list: document.getElementById('documentsList'),
@@ -35,16 +39,22 @@
       }
     }
 
-    async function createDocument(title, content) {
+    async function createDocument(title, content, file) {
       try {
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('content', content);
+        if (file) {
+          formData.append('file', file);
+        }
+
         const response = await fetch(`${API_BASE}/admin/documents`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             ...getAdminHeaders(),
             ...getActorHeaders(),
           },
-          body: JSON.stringify({ title, content }),
+          body: formData,
         });
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
@@ -57,16 +67,22 @@
       }
     }
 
-    async function updateDocument(docId, title, content) {
+    async function updateDocument(docId, title, content, file) {
       try {
+        const formData = new FormData();
+        if (title !== null) formData.append('title', title);
+        if (content !== null) formData.append('content', content);
+        if (file) {
+          formData.append('file', file);
+        }
+
         const response = await fetch(`${API_BASE}/admin/documents/${docId}`, {
           method: 'PUT',
           headers: {
-            'Content-Type': 'application/json',
             ...getAdminHeaders(),
             ...getActorHeaders(),
           },
-          body: JSON.stringify({ title, content }),
+          body: formData,
         });
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
@@ -116,13 +132,32 @@
       }
     }
 
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
     function renderDocumentCard(doc, isFirst, isLast) {
       const safeId = escapeHtml(String(doc.id));
       const safeTitle = escapeHtml(doc.title || 'უსათაურო');
-      // Show preview of content (strip HTML, first 100 chars)
       const plainText = (doc.content || '').replace(/<[^>]*>/g, '').trim();
       const preview = plainText.length > 100 ? plainText.substring(0, 100) + '...' : plainText;
       const safePreview = escapeHtml(preview);
+
+      let fileInfo = '';
+      if (doc.filename) {
+        const sizeStr = formatFileSize(doc.file_size_bytes);
+        fileInfo = `
+          <div class="document-card-file">
+            <span class="file-icon">📄</span>
+            <span class="file-name">${escapeHtml(doc.filename)}</span>
+            ${sizeStr ? `<span class="file-size">(${sizeStr})</span>` : ''}
+            <a href="${API_BASE}${doc.download_url}" class="file-download-btn" download>⬇ ჩამოტვირთვა</a>
+          </div>
+        `;
+      }
 
       return `
         <div class="document-card" data-doc-id="${safeId}">
@@ -133,6 +168,7 @@
           <div class="document-card-info">
             <div class="document-card-title">${safeTitle}</div>
             <div class="document-card-preview">${safePreview || '<em>ცარიელი</em>'}</div>
+            ${fileInfo}
           </div>
           <div class="document-card-actions">
             <button class="doc-edit-btn" type="button" aria-label="რედაქტირება">✎</button>
@@ -163,18 +199,25 @@
     function clearForm() {
       if (els.titleInput) els.titleInput.value = '';
       if (els.contentEditor) els.contentEditor.innerHTML = '';
+      if (els.fileInput) els.fileInput.value = '';
+      if (els.fileNameDisplay) els.fileNameDisplay.textContent = 'ფაილი არჩეული არ არის';
       state.editingId = null;
+      state.selectedFile = null;
       if (els.addBtn) els.addBtn.textContent = 'დამატება';
       if (els.cancelBtn) els.cancelBtn.style.display = 'none';
     }
 
     function startEdit(doc) {
       state.editingId = doc.id;
+      state.selectedFile = null;
       if (els.titleInput) els.titleInput.value = doc.title || '';
       if (els.contentEditor) els.contentEditor.innerHTML = doc.content || '';
+      if (els.fileInput) els.fileInput.value = '';
+      if (els.fileNameDisplay) {
+        els.fileNameDisplay.textContent = doc.filename || 'ფაილი არჩეული არ არის';
+      }
       if (els.addBtn) els.addBtn.textContent = 'შენახვა';
       if (els.cancelBtn) els.cancelBtn.style.display = 'inline-block';
-      // Scroll to form
       els.titleInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       els.titleInput?.focus();
     }
@@ -192,10 +235,10 @@
 
       try {
         if (state.editingId) {
-          await updateDocument(state.editingId, title, content);
+          await updateDocument(state.editingId, title, content, state.selectedFile);
           showToast('დოკუმენტი განახლდა');
         } else {
-          await createDocument(title, content);
+          await createDocument(title, content, state.selectedFile);
           showToast('დოკუმენტი დაემატა');
         }
         clearForm();
@@ -208,13 +251,12 @@
     }
 
     async function handleDelete(docId) {
-      const confirmed = global.confirm('ნამდვილად გსურთ ამ დოკუმენტის წაშლა?');
+      const confirmed = global.confirm('ნამდვილად გსურთ ამ დოკუმენტის წაშლა?\nფაილი და კონტენტი სრულად წაიშლება!');
       if (!confirmed) return;
 
       try {
         await deleteDocument(docId);
         showToast('დოკუმენტი წაიშალა');
-        // If we were editing this document, clear the form
         if (state.editingId === docId) {
           clearForm();
         }
@@ -239,137 +281,85 @@
       const docId = parseInt(card.dataset.docId, 10);
       if (!docId) return;
 
-      // Delete button
       if (event.target.closest('.doc-delete-btn')) {
         handleDelete(docId);
         return;
       }
 
-      // Edit button
       if (event.target.closest('.doc-edit-btn')) {
         const doc = state.documents.find(d => d.id === docId);
         if (doc) startEdit(doc);
         return;
       }
 
-      // Up button
       if (event.target.closest('.doc-up')) {
         handleOrderChange(docId, 'up');
         return;
       }
 
-      // Down button
       if (event.target.closest('.doc-down')) {
         handleOrderChange(docId, 'down');
         return;
       }
     }
 
-    // Word HTML-ის გასუფთავება paste-ის დროს
-    function cleanWordHtml(html) {
-      // შევქმნათ დროებითი container
-      const temp = document.createElement('div');
-      temp.innerHTML = html;
-
-      // ჯერ წავშალოთ Word-ის კომენტარები
-      let rawHtml = temp.innerHTML;
-      rawHtml = rawHtml.replace(/<!--\[if[\s\S]*?endif\]-->/gi, '');
-      rawHtml = rawHtml.replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '');
-      temp.innerHTML = rawHtml;
-
-      // ყველა ელემენტიდან წავშალოთ Word-ის სტილები, მაგრამ შევინარჩუნოთ bold
-      const allElements = temp.querySelectorAll('*');
-      allElements.forEach(el => {
-        // შევინარჩუნოთ bold status
-        const isBoldByStyle = el.style && (
-          el.style.fontWeight === 'bold' ||
-          el.style.fontWeight === '700' ||
-          el.style.fontWeight === '600'
-        );
-        const isBoldByTag = el.tagName === 'B' || el.tagName === 'STRONG';
-        
-        // წავშალოთ ყველა inline style და class
-        el.removeAttribute('style');
-        el.removeAttribute('class');
-        
-        // თუ bold იყო style-ით და არ არის უკვე b/strong თეგში
-        if (isBoldByStyle && !isBoldByTag) {
-          const wrapper = document.createElement('b');
-          while (el.firstChild) {
-            wrapper.appendChild(el.firstChild);
+    // Word ფაილის კონვერტაცია mammoth.js-ით
+    async function convertWordToHtml(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          try {
+            if (typeof mammoth === 'undefined') {
+              reject(new Error('mammoth.js არ არის ჩატვირთული'));
+              return;
+            }
+            const arrayBuffer = e.target.result;
+            const result = await mammoth.convertToHtml({ arrayBuffer });
+            resolve(result.value);
+          } catch (err) {
+            reject(err);
           }
-          el.appendChild(wrapper);
-        }
+        };
+        reader.onerror = () => reject(new Error('ფაილის წაკითხვა ვერ მოხერხდა'));
+        reader.readAsArrayBuffer(file);
       });
-
-      // წავშალოთ ცარიელი span-ები
-      temp.querySelectorAll('span').forEach(span => {
-        const parent = span.parentNode;
-        if (parent) {
-          while (span.firstChild) {
-            parent.insertBefore(span.firstChild, span);
-          }
-          parent.removeChild(span);
-        }
-      });
-
-      // ახლა ვიპოვოთ ბულეტიანი აბზაცები (პარაგრაფები რომლებიც იწყება ბულეტით)
-      const bulletChars = '·•\\-–—§■□►▪▸●○⁃◦◘◙';
-      const bulletRegex = new RegExp('^[\\s\\u00A0]*[' + bulletChars + '][\\s\\u00A0]*');
-      const paragraphs = Array.from(temp.querySelectorAll('p'));
-      
-      let currentUl = null;
-      let lastWasBullet = false;
-      
-      paragraphs.forEach(p => {
-        const text = p.textContent || '';
-        const isBullet = bulletRegex.test(text);
-        
-        if (isBullet) {
-          // ეს ბულეტიანი აბზაცია
-          const li = document.createElement('li');
-          
-          // წავშალოთ ბულეტის სიმბოლო HTML-იდან
-          const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
-          li.innerHTML = p.innerHTML.replace(cleanBulletRegex, '').trim();
-          
-          if (!currentUl) {
-            currentUl = document.createElement('ul');
-            p.parentNode.insertBefore(currentUl, p);
-          }
-          
-          currentUl.appendChild(li);
-          p.remove();
-          lastWasBullet = true;
-        } else {
-          // ეს ჩვეულებრივი აბზაცია - სია დასრულდა
-          if (lastWasBullet) {
-            currentUl = null;
-          }
-          lastWasBullet = false;
-        }
-      });
-
-      let result = temp.innerHTML;
-      result = result.replace(/\s+/g, ' ').trim();
-
-      return result;
     }
 
-    function handlePaste(event) {
-      // Word-იდან კოპირებისას HTML-ით ვიღებთ
-      const clipboardData = event.clipboardData || window.clipboardData;
-      const html = clipboardData.getData('text/html');
-      
-      if (html && html.includes('MsoNormal')) {
-        // ეს Word-იდანაა - გავასუფთავოთ
-        event.preventDefault();
-        const cleanedHtml = cleanWordHtml(html);
-        
-        // ჩავსვათ გასუფთავებული HTML
-        document.execCommand('insertHTML', false, cleanedHtml);
+    async function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) {
+        state.selectedFile = null;
+        if (els.fileNameDisplay) els.fileNameDisplay.textContent = 'ფაილი არჩეული არ არის';
+        return;
       }
-      // თუ არ არის Word-იდან, ნორმალურად ჩაისვას
+
+      if (!file.name.toLowerCase().endsWith('.docx')) {
+        showToast('მხოლოდ .docx ფაილებია დაშვებული', 'error');
+        els.fileInput.value = '';
+        state.selectedFile = null;
+        return;
+      }
+
+      state.selectedFile = file;
+      if (els.fileNameDisplay) els.fileNameDisplay.textContent = file.name;
+
+      // კონვერტაცია HTML-ად
+      try {
+        if (els.contentEditor) {
+          els.contentEditor.innerHTML = '<p style="opacity:0.5">იტვირთება...</p>';
+        }
+        const html = await convertWordToHtml(file);
+        if (els.contentEditor) {
+          els.contentEditor.innerHTML = html;
+        }
+        showToast('ფაილი წარმატებით დამუშავდა');
+      } catch (err) {
+        console.error('Word conversion error:', err);
+        showToast('ფაილის კონვერტაცია ვერ მოხერხდა', 'error');
+        if (els.contentEditor) {
+          els.contentEditor.innerHTML = '';
+        }
+      }
     }
 
     function init() {
@@ -382,9 +372,13 @@
       if (els.list) {
         els.list.addEventListener('click', handleListClick);
       }
-      // Word paste handler
-      if (els.contentEditor) {
-        els.contentEditor.addEventListener('paste', handlePaste);
+      if (els.fileInput) {
+        els.fileInput.addEventListener('change', handleFileSelect);
+      }
+      if (els.fileChooseBtn && els.fileInput) {
+        els.fileChooseBtn.addEventListener('click', () => {
+          els.fileInput.click();
+        });
       }
     }
 

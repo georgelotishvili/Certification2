@@ -559,5 +559,9 @@ class SiteDocument(Base):
     title: Mapped[str] = mapped_column(String(255), default="")  # სათაური მენიუში
     content: Mapped[str] = mapped_column(Text, default="")  # HTML კონტენტი
     order_index: Mapped[int] = mapped_column(Integer, default=0)
+    # Word ფაილის მეტადატა
+    file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

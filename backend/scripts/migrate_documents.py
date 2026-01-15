@@ -34,6 +34,9 @@ def run() -> None:
                         title VARCHAR(255) NOT NULL DEFAULT '',
                         content TEXT NOT NULL DEFAULT '',
                         order_index INTEGER NOT NULL DEFAULT 0,
+                        file_path VARCHAR(1024),
+                        filename VARCHAR(255),
+                        file_size_bytes INTEGER,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
@@ -42,6 +45,22 @@ def run() -> None:
                 statements.append(
                     "CREATE INDEX idx_site_documents_order ON site_documents(order_index, id)"
                 )
+            else:
+                # ცხრილი არსებობს - შევამოწმოთ ახალი ველები
+                columns = {col["name"] for col in inspector.get_columns("site_documents")}
+                
+                if "file_path" not in columns:
+                    statements.append(
+                        "ALTER TABLE site_documents ADD COLUMN file_path VARCHAR(1024)"
+                    )
+                if "filename" not in columns:
+                    statements.append(
+                        "ALTER TABLE site_documents ADD COLUMN filename VARCHAR(255)"
+                    )
+                if "file_size_bytes" not in columns:
+                    statements.append(
+                        "ALTER TABLE site_documents ADD COLUMN file_size_bytes INTEGER"
+                    )
 
             for sql in statements:
                 connection.execute(text(sql))
