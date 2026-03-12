@@ -181,6 +181,30 @@ class AnswerResponse(BaseModel):
     correct: bool
 
 
+class AllQuestionsBlockOut(BaseModel):
+    block_id: int
+    block_title: str
+    qty: int
+    questions: List[QuestionOut]
+
+
+class AllQuestionsResponse(BaseModel):
+    blocks: List[AllQuestionsBlockOut]
+
+
+class BatchAnswerItem(BaseModel):
+    question_id: int
+    option_id: int
+
+
+class BatchAnswersRequest(BaseModel):
+    answers: List[BatchAnswerItem]
+
+
+class BatchAnswersResponse(BaseModel):
+    saved: int
+
+
 class FinishResponse(BaseModel):
     total_questions: int
     answered: int

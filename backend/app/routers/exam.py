@@ -24,8 +24,13 @@ from ..config import get_settings
 from ..database import get_db
 from ..models import Answer, Block, Exam, ExamMedia, Option, Question, Session as ExamSession, User
 from ..schemas import (
+    AllQuestionsBlockOut,
+    AllQuestionsResponse,
     AnswerRequest,
     AnswerResponse,
+    BatchAnswerItem,
+    BatchAnswersRequest,
+    BatchAnswersResponse,
     ExamConfigResponse,
     MediaUploadResponse,
     ExamGateVerifyRequest,
@@ -238,6 +243,136 @@ def get_block_questions(
     )
 
 
+@router.get("/{session_id}/all-questions", response_model=AllQuestionsResponse)
+def get_all_questions(
+    session_id: int = Path(...),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """ყველა ბლოკის ყველა კითხვის ერთიანი ჩატვირთვა ოფლაინ რეჟიმისთვის."""
+    session = _get_session_or_401(session_id, db, authorization)
+    now = datetime.utcnow()
+    if not session.active or session.ends_at <= now:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
+
+    blocks_stmt = select(Block).where(
+        Block.exam_id == session.exam_id, Block.enabled == True  # noqa: E712
+    ).order_by(Block.order_index)
+    blocks = db.scalars(blocks_stmt).all()
+
+    if not blocks:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No blocks found")
+
+    selected_map: Dict[str, List[int]] = {}
+    if session.selected_map:
+        try:
+            selected_map = json.loads(session.selected_map)
+        except Exception:
+            selected_map = {}
+
+    map_changed = False
+    result_blocks: List[AllQuestionsBlockOut] = []
+
+    for block in blocks:
+        key = str(block.id)
+        if key not in selected_map:
+            q_stmt = (
+                select(Question)
+                .where(Question.block_id == block.id, Question.enabled == True)  # noqa: E712
+                .order_by(Question.order_index)
+            )
+            all_questions = db.scalars(q_stmt).all()
+            if not all_questions:
+                continue
+            choose_n = min(block.qty, len(all_questions))
+            selected = random.sample(all_questions, k=choose_n)
+            random.shuffle(selected)
+            selected_map[key] = [q.id for q in selected]
+            map_changed = True
+
+        selected_ids = selected_map[key]
+        q_stmt2 = select(Question).where(Question.id.in_(selected_ids))
+        questions_unsorted = db.scalars(q_stmt2).all()
+        id_to_question = {q.id: q for q in questions_unsorted}
+        questions = [id_to_question[qid] for qid in selected_ids if qid in id_to_question]
+
+        out_questions: List[QuestionOut] = []
+        for q in questions:
+            o_stmt = select(Option).where(Option.question_id == q.id)
+            opts = db.scalars(o_stmt).all()
+            out_questions.append(
+                QuestionOut(
+                    id=q.id,
+                    code=q.code,
+                    text=q.text,
+                    order_index=q.order_index,
+                    options=[OptionOut(id=o.id, text=o.text) for o in opts],
+                )
+            )
+
+        result_blocks.append(AllQuestionsBlockOut(
+            block_id=block.id,
+            block_title=block.title,
+            qty=block.qty,
+            questions=out_questions,
+        ))
+
+    if map_changed:
+        session.selected_map = json.dumps(selected_map)
+        db.add(session)
+        db.commit()
+
+    return AllQuestionsResponse(blocks=result_blocks)
+
+
+@router.post("/{session_id}/answers/batch", response_model=BatchAnswersResponse)
+def submit_answers_batch(
+    payload: BatchAnswersRequest,
+    session_id: int = Path(...),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """ყველა პასუხის ერთიანი გაგზავნა ოფლაინ რეჟიმისთვის."""
+    session = _get_session_or_401(session_id, db, authorization)
+
+    if not session.selected_map:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Questions not initialized")
+    selected_map: Dict[str, List[int]] = json.loads(session.selected_map)
+    allowed_qids = {qid for ids in selected_map.values() for qid in ids}
+
+    saved_count = 0
+    for item in payload.answers:
+        if item.question_id not in allowed_qids:
+            continue
+
+        opt = db.get(Option, item.option_id)
+        if not opt or opt.question_id != item.question_id:
+            continue
+
+        is_correct = bool(getattr(opt, "is_correct", False))
+
+        existing_stmt = select(Answer).where(
+            Answer.session_id == session.id,
+            Answer.question_id == item.question_id,
+        )
+        existing = db.scalars(existing_stmt).first()
+        if existing:
+            existing.option_id = item.option_id
+            existing.is_correct = is_correct
+        else:
+            ans = Answer(
+                session_id=session.id,
+                question_id=item.question_id,
+                option_id=item.option_id,
+                is_correct=is_correct,
+            )
+            db.add(ans)
+        saved_count += 1
+
+    db.commit()
+    return BatchAnswersResponse(saved=saved_count)
+
+
 def _parse_bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -280,15 +415,6 @@ def submit_answer(
     if payload.question_id not in allowed_qids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question not allowed in this session")
 
-    # Prevent multiple answers per question
-    existing_stmt = select(Answer).where(
-        Answer.session_id == session.id,
-        Answer.question_id == payload.question_id,
-    )
-    existing = db.scalars(existing_stmt).first()
-    if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Question already answered")
-
     # Validate option belongs to question
     opt = db.get(Option, payload.option_id)
     if not opt:
@@ -297,6 +423,19 @@ def submit_answer(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Option does not belong to question")
 
     is_correct = bool(getattr(opt, "is_correct", False))
+
+    # თუ უკვე არსებობს პასუხი ამ კითხვაზე - განვაახლოთ
+    existing_stmt = select(Answer).where(
+        Answer.session_id == session.id,
+        Answer.question_id == payload.question_id,
+    )
+    existing = db.scalars(existing_stmt).first()
+    if existing:
+        existing.option_id = payload.option_id
+        existing.is_correct = is_correct
+        db.commit()
+        return AnswerResponse(correct=is_correct)
+
     ans = Answer(
         session_id=session.id,
         question_id=payload.question_id,
