@@ -662,6 +662,22 @@ footer {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
+.statement-app-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+.statement-app-form-label {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.statement-app-form-download:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 @keyframes pulsePlaceholder {
   0% {

@@ -16,6 +16,94 @@ from ..routers.admin import _require_admin
 
 router = APIRouter()
 
+# ---- Application Form (განაცხადის ფორმა) ----
+
+_APPLICATION_FORM_DIR = "application_form"
+_APPLICATION_FORM_EXTENSIONS = {".pdf", ".doc", ".docx"}
+
+
+def _ensure_application_form_dir():
+    root = ensure_media_root()
+    d = root / _APPLICATION_FORM_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _get_application_form_path():
+    d = _ensure_application_form_dir()
+    for f in d.iterdir():
+        if f.is_file():
+            return f
+    return None
+
+
+@router.get("/application-form/info")
+def get_application_form_info():
+    path = _get_application_form_path()
+    if not path:
+        return {"available": False}
+    return {
+        "available": True,
+        "filename": path.name,
+        "url": "/application-form/download",
+    }
+
+
+@router.get("/application-form/download")
+def download_application_form():
+    path = _get_application_form_path()
+    if not path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    import mimetypes
+    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=mime, filename=path.name)
+
+
+@router.post("/admin/application-form", status_code=status.HTTP_201_CREATED)
+async def admin_upload_application_form(
+    file: UploadFile = File(...),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    import os
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _APPLICATION_FORM_EXTENSIONS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF or Word files allowed")
+
+    d = _ensure_application_form_dir()
+    for existing in d.iterdir():
+        if existing.is_file():
+            existing.unlink()
+
+    dest = d / os.path.basename(file.filename or f"form{ext}")
+    size = 0
+    with open(dest, "wb") as out:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+            size += len(chunk)
+
+    return {"filename": dest.name, "size_bytes": size}
+
+
+@router.delete("/admin/application-form", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_application_form(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    d = _ensure_application_form_dir()
+    for existing in d.iterdir():
+        if existing.is_file():
+            existing.unlink()
+    return
+
+
+# ---- App Files (საინსტალაციო) ----
+
 
 def _app_file_out(f: AppFile) -> AppFileOut:
     return AppFileOut(

@@ -1073,6 +1073,30 @@
       if (statementsDOM.statementFileInput) {
         on(statementsDOM.statementFileInput, 'change', updateFileDisplay);
       }
+
+      const appFormBtn = document.getElementById('appFormDownloadBtn');
+      if (appFormBtn) {
+        (async () => {
+          try {
+            const resp = await fetch(`${getApiBase()}/application-form/info`);
+            if (resp.ok) {
+              const info = await resp.json();
+              if (info.available) {
+                appFormBtn.disabled = false;
+                appFormBtn.addEventListener('click', () => {
+                  const a = document.createElement('a');
+                  a.href = `${getApiBase()}/application-form/download`;
+                  a.download = info.filename || 'form';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                });
+              }
+            }
+          } catch {}
+        })();
+      }
+
       document.addEventListener('auth:logout', reset);
       document.addEventListener('auth:login', setMetaFromUser);
       setMetaFromUser();

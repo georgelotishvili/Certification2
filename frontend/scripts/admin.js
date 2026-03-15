@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
       documents: document.getElementById('documents-section'),
       team: document.getElementById('team-section'),
       app: document.getElementById('app-section'),
+      applicationForm: document.getElementById('application-form-section'),
     },
     durationInput: document.getElementById('examDuration'),
     saveDurationBtn: document.getElementById('saveExamDuration'),
@@ -296,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return redirectToHome();
   }
 
-  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, team, appFiles }) {
+  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, team, appFiles, applicationForm }) {
     const setMenu = (open) => {
       DOM.body?.classList.toggle('menu-open', open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -370,6 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
           documents,
           team,
           app: appFiles,
+          applicationForm,
         };
         moduleMap[targetSection]?.render?.();
       });
@@ -441,13 +443,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const guideModule = createModule(modules.createGuideModule, { init: noop, render: noop, reload: noop });
     const regulationsModule = createModule(modules.createRegulationsModule, { init: noop, render: noop, reload: noop });
     const appFilesModule = createModule(modules.createAppFilesModule, { init: noop, render: noop, reload: noop });
+    const applicationFormModule = createModule(modules.createApplicationFormModule, { init: noop, render: noop, reload: noop });
     const teamModule = createModule(modules.createTeamModule, { init: noop, render: noop });
     const documentsModule = createModule(modules.createDocumentsModule, { init: noop, render: noop });
 
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;
 
-    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, team: teamModule, appFiles: appFilesModule });
+    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, team: teamModule, appFiles: appFilesModule, applicationForm: applicationFormModule });
 
     examSettings.init();
     blocksModule.init();
@@ -463,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     teamModule.init();
     documentsModule.init();
     appFilesModule.init();
+    applicationFormModule.init();
 
     usersModule.refreshUnseenSummary?.();
 
