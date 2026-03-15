@@ -156,9 +156,20 @@
           attachBtn.className = 'statement-attachment-download';
           attachBtn.textContent = 'ფაილის ჩამოტვირთვა';
           attachBtn.setAttribute('aria-label', 'ატვირთული ფაილის ჩამოტვირთვა');
-          attachBtn.addEventListener('click', () => {
-            const url = `${API_BASE}/admin/statements/${encodeURIComponent(item.id)}/file${actorEmail ? `?actor=${encodeURIComponent(actorEmail)}` : ''}`;
-            window.open(url, '_blank');
+          attachBtn.addEventListener('click', async () => {
+            try {
+              const url = `${API_BASE}/admin/statements/${encodeURIComponent(item.id)}/file`;
+              const resp = await fetch(url, { headers: { ...getAdminHeaders(), ...getActorHeaders() } });
+              if (!resp.ok) { showToast('ფაილის ჩამოტვირთვა ვერ მოხერხდა', 'error'); return; }
+              const blob = await resp.blob();
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = item.attachment_filename || 'file';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(link.href);
+            } catch { showToast('ფაილის ჩამოტვირთვა ვერ მოხერხდა', 'error'); }
           });
           actions.appendChild(attachBtn);
         }
