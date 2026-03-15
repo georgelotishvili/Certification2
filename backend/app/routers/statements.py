@@ -18,7 +18,7 @@ from ..services.media_storage import ensure_statement_dir, relative_storage_path
 router = APIRouter()
 
 
-ALLOWED_EXTS = {".zip", ".rar", ".pdf", ".jpg", ".jpeg"}
+ALLOWED_EXTS = {".zip", ".rar", ".pdf", ".jpg", ".jpeg", ".doc", ".docx"}
 MAX_BYTES = 100 * 1024 * 1024  # 100MB
 
 
