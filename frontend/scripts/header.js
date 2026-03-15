@@ -108,7 +108,6 @@
       case 'process':
       case 'guide':
       case 'legal-base':
-      case 'team':
         return `../partials/site-info/${type}.html`;
       case 'contract':
         return `../partials/site-info/exam-service-contract.html`;
@@ -410,7 +409,6 @@
         contract: 'საგამოცდო ხელშეკრულება',
         'certification-contract': 'სასერტიფიკაციო ხელშეკრულება',
         'legal-base': 'საკანონმდებლო ბაზა',
-        team: 'ჩვენი გუნდი',
         guide: 'გზამკვლევი',
       };
       if (els.title) els.title.textContent = titles[type] || 'ინფორმაცია';
@@ -421,12 +419,6 @@
       document.body.classList.add('modal-open');
       if (els.closeBtn && typeof els.closeBtn.focus === 'function') {
         setTimeout(() => { try { els.closeBtn.focus(); } catch {} }, 0);
-      }
-
-      // Special handling for team - load from API
-      if (type === 'team') {
-        await loadTeamIntoModal(els.body);
-        return;
       }
 
       const res = await fetch(getSiteInfoPath(type), { cache: 'no-cache' });
@@ -441,74 +433,6 @@
     } catch {
       const els = getSiteInfoElements();
       if (els?.body) els.body.innerHTML = '<p style="color:#b91c1c">ვერ ჩაიტვირთა შიგთავსი. სცადეთ მოგვიანებით.</p>';
-    }
-  }
-
-  async function loadTeamIntoModal(container) {
-    if (!container) return;
-    try {
-      const API_BASE = getApiBase();
-      container.innerHTML = '<p style="opacity:.7">გუნდი იტვირთება...</p>';
-      const response = await fetch(`${API_BASE}/team`, { cache: 'no-cache' });
-      if (!response.ok) {
-        container.innerHTML = '<p style="color:#b91c1c">გუნდის ჩატვირთვა ვერ მოხერხდა. სცადეთ მოგვიანებით.</p>';
-        return;
-      }
-      const data = await response.json();
-      const members = data.items || [];
-      
-      if (!members.length) {
-        container.innerHTML = '<p style="opacity:.8">გუნდის წევრები ჯერ არ არის დამატებული.</p>';
-        return;
-      }
-
-      const categoryNames = {
-        1: 'მმართველი გუნდი',
-        2: 'სასერტიფიკაციო კომიტეტი და ექსპერტთა საბჭო',
-        3: 'ადმინისტრაცია',
-      };
-
-      const escapeHtml = (str) => {
-        if (!str) return '';
-        return String(str)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#039;');
-      };
-
-      let html = '';
-      [1, 2, 3].forEach((category) => {
-        const categoryMembers = members.filter(m => m.category === category);
-        if (categoryMembers.length === 0) return;
-
-        html += `<h3>${escapeHtml(categoryNames[category])}:</h3>`;
-        html += '<ol class="team-list-public">';
-        categoryMembers.forEach((member) => {
-          const position = escapeHtml(member.position || '');
-          const firstName = escapeHtml(member.first_name || '');
-          const lastName = escapeHtml(member.last_name || '');
-          const email = escapeHtml(member.email || '');
-          const phone = escapeHtml(member.phone || '');
-
-          let contacts = '';
-          if (email || phone) {
-            contacts = '<span class="team-contacts">';
-            if (email) contacts += `<span class="team-email">${email}</span>`;
-            if (phone) contacts += `<span class="team-phone">${phone}</span>`;
-            contacts += '</span>';
-          }
-
-          html += `<li><strong>${position}:</strong> ${firstName} ${lastName}${contacts}</li>`;
-        });
-        html += '</ol>';
-      });
-
-      container.innerHTML = html || '<p style="opacity:.8">გუნდის წევრები ჯერ არ არის დამატებული.</p>';
-    } catch (error) {
-      console.error('Failed to load team', error);
-      container.innerHTML = '<p style="color:#b91c1c">გუნდის ჩატვირთვა ვერ მოხერხდა.</p>';
     }
   }
 
@@ -639,15 +563,6 @@
         return;
       }
       
-      // Fixed items: team
-      if (closest(el, '.dropdown-item.team, .drawer-submenu-item.team')) {
-        event.preventDefault();
-        closeAboutDropdown();
-        closeDrawerAboutSubmenu();
-        if (DOM.body.classList.contains('menu-open')) closeMenu();
-        openSiteInfo('team');
-        return;
-      }
       // Fixed items: guide
       if (closest(el, '.dropdown-item.guide, .drawer-submenu-item.guide')) {
         event.preventDefault();

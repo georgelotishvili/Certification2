@@ -28,7 +28,6 @@ try:
     from backend.scripts.migrate_multi_functional import run as run_multi_functional_migration
     from backend.scripts.migrate_guide_videos import run as run_guide_videos_migration
     from backend.scripts.migrate_user_sessions import run as run_user_sessions_migration
-    from backend.scripts.migrate_team import run as run_team_migration
     from backend.scripts.migrate_documents import run as run_documents_migration
 except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
     from scripts.migrate_results_cols import run as run_results_migration  # type: ignore
@@ -41,7 +40,6 @@ except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.
     from scripts.migrate_multi_functional import run as run_multi_functional_migration  # type: ignore
     from scripts.migrate_guide_videos import run as run_guide_videos_migration  # type: ignore
     from scripts.migrate_user_sessions import run as run_user_sessions_migration  # type: ignore
-    from scripts.migrate_team import run as run_team_migration  # type: ignore
     from scripts.migrate_documents import run as run_documents_migration  # type: ignore
 
 
@@ -61,7 +59,6 @@ def create_app() -> FastAPI:
         run_multi_functional_migration,
         run_guide_videos_migration,
         run_user_sessions_migration,
-        run_team_migration,
         run_documents_migration,
     ):
         try:
@@ -95,7 +92,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, team, documents
+    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
@@ -110,7 +107,6 @@ def create_app() -> FastAPI:
     app.include_router(guide.router, tags=["guide"])
     app.include_router(app_files.router, tags=["app-files"])
     app.include_router(regulations.router, tags=["regulations"])
-    app.include_router(team.router, tags=["team"])
     app.include_router(documents.router, tags=["documents"])
 
     return app

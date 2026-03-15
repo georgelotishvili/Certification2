@@ -29,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
       guide: document.getElementById('guide-section'),
       regulations: document.getElementById('regulations-section'),
       documents: document.getElementById('documents-section'),
-      team: document.getElementById('team-section'),
       app: document.getElementById('app-section'),
       applicationForm: document.getElementById('application-form-section'),
     },
@@ -157,7 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
     'მრავალფუნქციური': 'multiFunctional',
     'გზამკვლევი': 'guide',
     'დოკუმენტები': 'documents',
-    'გუნდი': 'team',
     'APP': 'app',
   };
 
@@ -297,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return redirectToHome();
   }
 
-  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, team, appFiles, applicationForm }) {
+  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, appFiles, applicationForm }) {
     const setMenu = (open) => {
       DOM.body?.classList.toggle('menu-open', open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -369,7 +367,6 @@ document.addEventListener('DOMContentLoaded', () => {
           guide,
           regulations,
           documents,
-          team,
           app: appFiles,
           applicationForm,
         };
@@ -444,13 +441,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const regulationsModule = createModule(modules.createRegulationsModule, { init: noop, render: noop, reload: noop });
     const appFilesModule = createModule(modules.createAppFilesModule, { init: noop, render: noop, reload: noop });
     const applicationFormModule = createModule(modules.createApplicationFormModule, { init: noop, render: noop, reload: noop });
-    const teamModule = createModule(modules.createTeamModule, { init: noop, render: noop });
     const documentsModule = createModule(modules.createDocumentsModule, { init: noop, render: noop });
 
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;
 
-    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, team: teamModule, appFiles: appFilesModule, applicationForm: applicationFormModule });
+    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, appFiles: appFilesModule, applicationForm: applicationFormModule });
 
     examSettings.init();
     blocksModule.init();
@@ -463,7 +459,6 @@ document.addEventListener('DOMContentLoaded', () => {
     multiFunctionalModule.init();
     guideModule.init();
     regulationsModule.init();
-    teamModule.init();
     documentsModule.init();
     appFilesModule.init();
     applicationFormModule.init();

@@ -830,37 +830,6 @@ class UserCreateWithVerification(BaseModel):
     verification_code: str
 
 
-# Team members
-class TeamMemberOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    category: int  # 1=მმართველი, 2=კომიტეტი, 3=ადმინისტრაცია
-    position: str
-    first_name: str
-    last_name: str
-    email: str | None = None
-    phone: str | None = None
-    order_index: int
-    created_at: datetime
-
-
-class TeamMemberCreate(BaseModel):
-    category: int = Field(..., ge=1, le=3)  # 1, 2, or 3
-    position: str
-    first_name: str
-    last_name: str
-    email: str | None = None
-    phone: str | None = None
-
-
-class TeamMembersListResponse(BaseModel):
-    items: List[TeamMemberOut]
-
-
-class TeamMemberOrderRequest(BaseModel):
-    direction: str  # "up" or "down"
-
-
 # Site documents
 class SiteDocumentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
