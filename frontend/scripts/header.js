@@ -991,8 +991,8 @@
           alert('ფაილი აღემატება 100MB-ს');
           return;
         }
-        if (!/\.(zip|rar|pdf|jpg|jpeg)$/i.test(file.name || '')) {
-          alert('დასაშვებია: ZIP, RAR, PDF, JPEG');
+        if (!/\.(zip|rar|pdf|jpg|jpeg|doc|docx)$/i.test(file.name || '')) {
+          alert('დასაშვებია: ZIP, RAR, PDF, JPEG, WORD');
           return;
         }
       }

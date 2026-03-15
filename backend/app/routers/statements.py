@@ -52,7 +52,7 @@ def _validate_attachment(upload: Optional[UploadFile]):
         return
     ext = os.path.splitext(upload.filename or "")[1].lower()
     if ext not in ALLOWED_EXTS:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file type not allowed (zip/rar/pdf/jpeg only)")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file type not allowed (zip/rar/pdf/jpeg/word only)")
     try:
         upload.file.seek(0, os.SEEK_END)
         size = upload.file.tell()
