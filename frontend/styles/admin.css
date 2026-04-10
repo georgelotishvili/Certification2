@@ -2062,6 +2062,11 @@ body.modal-open {
   color: #3a161d;
 }
 
+.certificate-card--municipal {
+  background: transparent;
+  color: #1a4d2e;
+}
+
 .certificate-card--inactive {
   filter: grayscale(0.35) saturate(0.6);
   background: transparent;
@@ -2080,6 +2085,10 @@ body.modal-open {
 
 .certificate-card--expert .certificate-card__org {
   color: rgba(58, 22, 29, 0.75);
+}
+
+.certificate-card--municipal .certificate-card__org {
+  color: rgba(26, 77, 46, 0.75);
 }
 
 .certificate-card--inactive .certificate-card__org {

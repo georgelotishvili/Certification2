@@ -61,6 +61,7 @@
     const CERTIFICATE_BACKGROUND_FILES = {
       architect: 'architect bac.svg',
       expert: 'expert bac.svg',
+      municipal: 'municip bac.svg',
     };
     const backgroundSvgCache = new Map();
     const domParser = typeof DOMParser !== 'undefined' ? new DOMParser() : null;
@@ -79,20 +80,23 @@
 
     function getBackgroundFileName(levelKey) {
       if (levelKey === 'expert') return CERTIFICATE_BACKGROUND_FILES.expert;
+      if (levelKey === 'municipal') return CERTIFICATE_BACKGROUND_FILES.municipal;
       return CERTIFICATE_BACKGROUND_FILES.architect;
     }
 
     async function loadBackgroundSvgString(levelKey) {
-      const normalized = levelKey === 'expert' ? 'expert' : 'architect';
-      if (backgroundSvgCache.has(normalized)) {
-        return backgroundSvgCache.get(normalized);
+      const normalized = levelKey === 'expert' ? 'expert' : (levelKey === 'municipal' ? 'municipal' : 'architect');
+      const svgVersion = '20260410';
+      const cacheKey = `${normalized}_${svgVersion}`;
+      if (backgroundSvgCache.has(cacheKey)) {
+        return backgroundSvgCache.get(cacheKey);
       }
       const fileName = getBackgroundFileName(normalized);
       try {
-        const response = await fetch(`../certificate/${fileName}`);
+        const response = await fetch(`../certificate/${fileName}?v=${svgVersion}`);
         if (!response.ok) return null;
         const text = await response.text();
-        backgroundSvgCache.set(normalized, text);
+        backgroundSvgCache.set(cacheKey, text);
         return text;
       } catch {
         return null;
@@ -139,16 +143,22 @@
     const FIELD_POSITIONS = {
       'owner-1': { left: 10.33, top: 34.3, width: 58.24, height: 3.53 },
       'owner-2': { left: 10.33, top: 34.3, width: 58.24, height: 3.40 },
+      'owner-3': { left: 10.33, top: 34.3, width: 58.24, height: 3.40 },
       'personal-number-1': { left: 12.33, top: 37.7, width: 10.42, height: 2.36 },
       'personal-number-2': { left: 12.33, top: 37.7, width: 10.42, height: 2.36 },
+      'personal-number-3': { left: 12.33, top: 37.7, width: 10.42, height: 2.36 },
       'identification-code-1': { left: 74.0, top: 88, width: 11.27, height: 2.52 },
       'identification-code-2': { left: 74.0, top: 88, width: 11.27, height: 2.52 },
+      'identification-code-3': { left: 74.0, top: 88, width: 11.27, height: 2.52 },
       'issue-date-1': { left: 11, top: 69, width: 7.57, height: 2.14 },
       'issue-date-2': { left: 11, top: 69, width: 7.57, height: 2.14 },
+      'issue-date-3': { left: 11, top: 69, width: 7.57, height: 2.14 },
       'validity-period-1': { left: 34.10, top: 73.16, width: 3.65, height: 2.02 },
       'validity-period-2': { left: 34.10, top: 73.16, width: 3.65, height: 2.02 },
+      'validity-period-3': { left: 34.10, top: 73.16, width: 3.65, height: 2.02 },
       'expiry-date-1': { left: 11, top: 77.20, width: 7.57, height: 2.14 },
       'expiry-date-2': { left: 11, top: 77.20, width: 7.57, height: 2.14 },
+      'expiry-date-3': { left: 11, top: 77.20, width: 7.57, height: 2.14 },
     };
 
     function getFieldPositionFromCss(fieldNode, levelKey) {
@@ -161,7 +171,7 @@
       }
       // Fallback: try to match by field name and level
       const fieldName = fieldNode.dataset?.field || '';
-      const suffix = levelKey === 'expert' ? '2' : '1';
+      const suffix = levelKey === 'expert' ? '2' : (levelKey === 'municipal' ? '3' : '1');
       const className = `${fieldName.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')}-${suffix}`;
       // Try common mappings
       const fieldMap = {
@@ -349,20 +359,27 @@
       ['architect', { key: 'architect', label: 'შენობა-ნაგებობის არქიტექტორი' }],
       ['architect_expert', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
       ['expert', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
+      ['municipal', { key: 'municipal', label: 'მუნიციპალიტეტის თანამშრომელი' }],
       ['არქიტექტორი', { key: 'architect', label: 'შენობა-ნაგებობის არქიტექტორი' }],
       ['არქიტექტორი ექსპერტი', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
       ['შენობა-ნაგებობის არქიტექტორი', { key: 'architect', label: 'შენობა-ნაგებობის არქიტექტორი' }],
       ['არქიტექტურული პროექტის ექსპერტი', { key: 'expert', label: 'არქიტექტურული პროექტის ექსპერტი' }],
+      ['მუნიციპალიტეტის თანამშრომელი', { key: 'municipal', label: 'მუნიციპალიტეტის თანამშრომელი' }],
     ]);
 
     function resolveLevelKey(raw) {
       if (!raw) return 'architect';
       if (typeof raw === 'object') {
-        return raw.key === 'expert' ? 'expert' : 'architect';
+        if (raw.key === 'expert') return 'expert';
+        if (raw.key === 'municipal') return 'municipal';
+        return 'architect';
       }
       const s = String(raw).trim().toLowerCase();
       if (s === 'expert' || s === 'architect_expert' || s === 'არქიტექტორი ექსპერტი' || s === 'არქიტექტურული პროექტის ექსპერტი') {
         return 'expert';
+      }
+      if (s === 'municipal' || s === 'მუნიციპალიტეტის თანამშრომელი') {
+        return 'municipal';
       }
       return 'architect';
     }
@@ -370,6 +387,7 @@
     const TIER_CLASSES = {
       architect: 'certificate-card--architect',
       expert: 'certificate-card--expert',
+      municipal: 'certificate-card--municipal',
     };
 
     let activeUserRef = null;
@@ -806,10 +824,10 @@
     async function loadCertificateTemplate(level) {
       if (!templateContainer) return;
       
-      const levelKey = level === 'expert' ? 'expert' : 'architect';
+      const levelKey = level === 'expert' ? 'expert' : (level === 'municipal' ? 'municipal' : 'architect');
       const templatePath = `../certificate/${levelKey}.html`;
       const cssPath = `../certificate/${levelKey}.css`;
-      const themeVersion = '20251113';
+      const themeVersion = '20260410';
       
       try {
         const response = await fetch(templatePath);

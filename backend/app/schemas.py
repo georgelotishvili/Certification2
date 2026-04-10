@@ -420,7 +420,7 @@ class CertificateOut(BaseModel):
     id: int
     user_id: int
     unique_code: str | None = None
-    level: str  # architect, expert
+    level: str  # architect, expert, municipal
     status: str  # active, suspended, expired
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
@@ -435,7 +435,7 @@ class CertificateOut(BaseModel):
 
 class CertificateCreate(BaseModel):
     unique_code: str | None = None
-    level: str = "architect"  # architect, expert
+    level: str = "architect"  # architect, expert, municipal
     status: str = "active"  # active, suspended, expired
     issue_date: datetime | None = None
     validity_term: int | None = None  # years

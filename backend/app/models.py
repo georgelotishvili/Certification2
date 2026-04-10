@@ -247,7 +247,7 @@ class Certificate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
     unique_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
-    level: Mapped[str] = mapped_column(String(32), default="architect")  # architect, expert
+    level: Mapped[str] = mapped_column(String(32), default="architect")  # architect, expert, municipal
     status: Mapped[str] = mapped_column(String(32), default="active")  # active, suspended, expired
     issue_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     validity_term: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # years

@@ -3,7 +3,7 @@
   width: 100%;
   height: 100%;
   aspect-ratio: 1123 / 793;
-  background-image: url('architect bac.svg?v=20260410');
+  background-image: url('municip bac.svg?v=20260410');
   background-size: 100% 100%;
   background-position: 0 0;
   background-repeat: no-repeat;
@@ -33,42 +33,42 @@
   margin: 0;
 }
 
-.owner-1 {
+.owner-3 {
   left: 10.33%;
   top: 33%;
   width: 58.24%;
   height: 3.4%;
 }
 
-.personal-number-1 {
+.personal-number-3 {
   left: 13.33%;
   top: 36.9%;
   width: 10.42%;
   height: 2.36%;
 }
 
-.identification-code-1 {
+.identification-code-3 {
   left: 74.58%;
   top: 87.2%;
   width: 11.27%;
   height: 2.52%;
 }
 
-.issue-date-1 {
+.issue-date-3 {
   left: 11.49%;
   top: 68.2%;
   width: 7.57%;
   height: 2.14%;
 }
 
-.validity-period-1 {
+.validity-period-3 {
   left: 34.10%;
   top: 72.4%;
   width: 3.65%;
   height: 2.02%;
 }
 
-.expiry-date-1 {
+.expiry-date-3 {
   left: 11.49%;
   top: 76.5%;
   width: 7.57%;
@@ -85,25 +85,24 @@
 
 @font-face {
   font-family: 'BPG Nino Mtavruli Bold';
-  /* Use local TTF available in assets */
   src: url('../assets/fonts/bpg_nino_mtavruli_bold.ttf') format('truetype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
-.owner-1 {
+.owner-3 {
   font-family: 'BPG Nino Mtavruli Bold', 'DejaVu Sans', sans-serif;
   font-size: 24pt;
   font-weight: 700;
-  color: #3944B7;
+  color: #228B22;
 }
 
-.certificate-background .owner-1 {
+.certificate-background .owner-3 {
   font-family: 'BPG Nino Mtavruli Bold', 'DejaVu Sans', sans-serif;
   font-size: 24pt;
   font-weight: 700;
-  color: #3944B7;
+  color: #228B22;
   line-height: 1;
   padding: 7px 4px 0 4px;
   box-sizing: border-box;
