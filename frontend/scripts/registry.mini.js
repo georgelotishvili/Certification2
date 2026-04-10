@@ -22,6 +22,7 @@
       search: document.getElementById('registrySearch'),
       filterArchitect: document.getElementById('registryFilterArchitect'),
       filterExpert: document.getElementById('registryFilterExpert'),
+      filterMunicipal: document.getElementById('registryFilterMunicipal'),
       sort: document.getElementById('registrySort'),
     };
 
@@ -97,6 +98,7 @@
       DOM.search?.addEventListener('input', applyFilters);
       DOM.filterArchitect?.addEventListener('change', applyFilters);
       DOM.filterExpert?.addEventListener('change', applyFilters);
+      DOM.filterMunicipal?.addEventListener('change', applyFilters);
       DOM.sort?.addEventListener('change', applyFilters);
     }
 
@@ -243,8 +245,14 @@
 
       const architectChecked = !!DOM.filterArchitect?.checked;
       const expertChecked = !!DOM.filterExpert?.checked;
-      if ((architectChecked && !expertChecked) || (!architectChecked && expertChecked)) {
-        next = next.filter((p) => p.qualification === (architectChecked ? 'architect' : 'expert'));
+      const municipalChecked = !!DOM.filterMunicipal?.checked;
+      const checkedCount = [architectChecked, expertChecked, municipalChecked].filter(Boolean).length;
+      if (checkedCount > 0 && checkedCount < 3) {
+        const allowedQualifications = [];
+        if (architectChecked) allowedQualifications.push('architect');
+        if (expertChecked) allowedQualifications.push('expert');
+        if (municipalChecked) allowedQualifications.push('municipal');
+        next = next.filter((p) => allowedQualifications.includes(p.qualification));
       }
 
       const sortKey = DOM.sort?.value || 'date_desc';

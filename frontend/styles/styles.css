@@ -940,14 +940,17 @@ body.registry-open {
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.14);
 }
 .registry-card[data-qualification="architect"][data-status="active"] {
-  --registry-card-border: linear-gradient(135deg, rgb(0, 6, 172), rgb(0, 81, 255));
+  --registry-card-border: linear-gradient(135deg, rgb(30, 64, 175), rgb(37, 99, 235));
 }
 .registry-card[data-qualification="expert"][data-status="active"] {
-  --registry-card-border: linear-gradient(135deg, rgb(174, 0, 0), rgb(255, 94, 0));
+  --registry-card-border: linear-gradient(135deg, rgb(153, 27, 27), rgb(185, 28, 28));
+}
+.registry-card[data-qualification="municipal"][data-status="active"] {
+  --registry-card-border: linear-gradient(135deg, rgb(0, 140, 45), rgb(0, 175, 60));
 }
 .registry-card[data-status="suspended"],
 .registry-card[data-status="expired"] {
-  --registry-card-border: linear-gradient(135deg, rgb(132, 132, 132), rgb(157, 157, 157));
+  --registry-card-border: linear-gradient(135deg, rgb(200, 205, 212), rgb(220, 225, 230));
   opacity: 0.9;
 }
 

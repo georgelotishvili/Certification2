@@ -73,11 +73,18 @@
       // Determine certificate level color
       const certificate = user.certificate || user.certificate_info || {};
       const certLevel = certificate.level || '';
+      const certStatus = certificate.status || '';
       let nameColor = '#0f172a'; // default
-      if (certLevel === 'architect' || certLevel === 'architect_expert') {
-        nameColor = '#2563eb'; // მკვეთრი ლურჯი
+      
+      // გაუქმებული ან ვადაგასული სერტიფიკატი - ნაცრისფერი
+      if (certStatus === 'suspended' || certStatus === 'expired') {
+        nameColor = '#6b7280'; // ნაცრისფერი
+      } else if (certLevel === 'architect' || certLevel === 'architect_expert') {
+        nameColor = '#1e40af'; // დაბალანსებული ლურჯი
       } else if (certLevel === 'expert') {
-        nameColor = '#dc2626'; // მკვეთრი წითელი
+        nameColor = '#991b1b'; // დაბალანსებული წითელი
+      } else if (certLevel === 'municipal') {
+        nameColor = '#065f46'; // დაბალანსებული მწვანე
       }
       
       return `
@@ -602,11 +609,18 @@
       // Determine color based on certificate level
       const certificate = certificateData || {};
       const certLevel = certificate.level || '';
+      const certStatus = certificate.status || '';
       let nameColor = '#0f172a'; // default
-      if (certLevel === 'architect' || certLevel === 'architect_expert') {
-        nameColor = '#2563eb'; // მკვეთრი ლურჯი
+      
+      // გაუქმებული ან ვადაგასული სერტიფიკატი - ნაცრისფერი
+      if (certStatus === 'suspended' || certStatus === 'expired') {
+        nameColor = '#6b7280'; // ნაცრისფერი
+      } else if (certLevel === 'architect' || certLevel === 'architect_expert') {
+        nameColor = '#1e40af'; // დაბალანსებული ლურჯი
       } else if (certLevel === 'expert') {
-        nameColor = '#dc2626'; // მკვეთრი წითელი
+        nameColor = '#991b1b'; // დაბალანსებული წითელი
+      } else if (certLevel === 'municipal') {
+        nameColor = '#065f46'; // დაბალანსებული მწვანე
       }
       
       nameElement.style.color = nameColor;

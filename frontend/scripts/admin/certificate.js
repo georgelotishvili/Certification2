@@ -86,14 +86,15 @@
 
     async function loadBackgroundSvgString(levelKey) {
       const normalized = levelKey === 'expert' ? 'expert' : (levelKey === 'municipal' ? 'municipal' : 'architect');
-      const svgVersion = '20260410';
+      const svgVersion = '20260410b';
       const cacheKey = `${normalized}_${svgVersion}`;
       if (backgroundSvgCache.has(cacheKey)) {
         return backgroundSvgCache.get(cacheKey);
       }
       const fileName = getBackgroundFileName(normalized);
       try {
-        const response = await fetch(`../certificate/${fileName}?v=${svgVersion}`);
+        const cacheBuster = `${svgVersion}_${Date.now()}`;
+        const response = await fetch(`../certificate/${fileName}?v=${cacheBuster}`);
         if (!response.ok) return null;
         const text = await response.text();
         backgroundSvgCache.set(cacheKey, text);
@@ -827,7 +828,7 @@
       const levelKey = level === 'expert' ? 'expert' : (level === 'municipal' ? 'municipal' : 'architect');
       const templatePath = `../certificate/${levelKey}.html`;
       const cssPath = `../certificate/${levelKey}.css`;
-      const themeVersion = '20260410';
+      const themeVersion = '20260410b';
       
       try {
         const response = await fetch(templatePath);
@@ -841,10 +842,9 @@
 
         // Apply corresponding theme stylesheet (last in head to win CSS cascade)
         const link = ensureThemeStyles();
-        const versionedCssPath = `${cssPath}?v=${themeVersion}`;
-        if (link.getAttribute('href') !== versionedCssPath) {
-          link.setAttribute('href', versionedCssPath);
-        }
+        const cacheBuster = `${themeVersion}_${Date.now()}`;
+        const versionedCssPath = `${cssPath}?v=${cacheBuster}`;
+        link.setAttribute('href', versionedCssPath);
 
         // Field nodes updated; scaling will be handled by caller
       } catch {}
