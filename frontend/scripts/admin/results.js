@@ -849,7 +849,7 @@
 
         const measureInfoBox = (rows, width) => {
           const padding = 12;
-          const labelWidth = 82;
+          const labelWidth = 145;
           const valueWidth = width - padding * 2 - labelWidth - 10;
           let height = padding + 18;
           rows.forEach(([label, value]) => {
@@ -862,7 +862,7 @@
 
         const drawInfoBox = (title, rows, x, y, width, height) => {
           const padding = 12;
-          const labelWidth = 82;
+          const labelWidth = 145;
           const valueWidth = width - padding * 2 - labelWidth - 10;
           const { r: fillR, g: fillG, b: fillB } = hexToRgb(PDF_COLORS.cardBackground);
           const { r: borderR, g: borderG, b: borderB } = hexToRgb(PDF_COLORS.cardBorder);
@@ -903,14 +903,13 @@
 
         const writeInfoColumns = (leftTitle, leftRows, rightTitle, rightRows) => {
           const gap = 14;
-          const columnWidth = (usableWidth - gap) / 2;
-          const leftHeight = measureInfoBox(leftRows, columnWidth);
-          const rightHeight = measureInfoBox(rightRows, columnWidth);
-          const boxHeight = Math.max(leftHeight, rightHeight);
-          ensureSpace(boxHeight + 8);
-          drawInfoBox(leftTitle, leftRows, margin, cursorY, columnWidth, boxHeight);
-          drawInfoBox(rightTitle, rightRows, margin + columnWidth + gap, cursorY, columnWidth, boxHeight);
-          cursorY += boxHeight + 18;
+          const leftHeight = measureInfoBox(leftRows, usableWidth);
+          const rightHeight = measureInfoBox(rightRows, usableWidth);
+          ensureSpace(leftHeight + rightHeight + gap + 18);
+          drawInfoBox(leftTitle, leftRows, margin, cursorY, usableWidth, leftHeight);
+          cursorY += leftHeight + gap;
+          drawInfoBox(rightTitle, rightRows, margin, cursorY, usableWidth, rightHeight);
+          cursorY += rightHeight + 18;
         };
 
         const writeResultTable = (title, rows) => {
@@ -957,7 +956,7 @@
 
           drawRow({}, true);
           rows.forEach((row) => drawRow(row));
-          cursorY += 12;
+          cursorY += 28;
         };
 
         const writeChapterHeader = (text) => {
@@ -986,7 +985,7 @@
         };
 
         const writeSubchapterHeader = (text) => {
-          writeTextBlock(`ქვეთავი: ${String(text || '—')}`, {
+          writeTextBlock(String(text || '—'), {
             x: margin + 10,
             width: usableWidth - 10,
             color: PDF_COLORS.text,
@@ -1030,8 +1029,7 @@
           const sectionSpacing = 5;
           const optionGap = 3;
           const contentWidth = usableWidth;
-          const blockLabel = answer.block_title || `ბლოკი ${answer.block_id || ''}`;
-          const headerLine = `კითხვა № ${index + 1} — კოდი ${answer.question_code || '—'} • ${blockLabel}`;
+          const headerLine = `კითხვა № ${index + 1} — კოდი ${answer.question_code || '—'}`;
           const headerLines = doc.splitTextToSize(headerLine, contentWidth);
           const questionLines = answer.question_text
             ? doc.splitTextToSize(`კითხვა: ${answer.question_text}`, contentWidth)
