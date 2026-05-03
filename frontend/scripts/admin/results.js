@@ -735,14 +735,6 @@
         const status = statusMeta(session.status);
         const durationBase = session.finished_at || session.ends_at;
 
-        doc.setFont(fontName, 'bold');
-        doc.setFontSize(18);
-        doc.text('გამოცდის შედეგი', margin, cursorY);
-        cursorY += lineHeight * 1.5;
-
-        doc.setFontSize(12);
-        doc.setFont(fontName, 'normal');
-
         const infoLines = [
           `კანდიდატი: ${(session.candidate_first_name || '')} ${(session.candidate_last_name || '')}`.trim(),
           `პირადი №: ${session.personal_id || '—'}`,
@@ -818,6 +810,34 @@
           });
         };
 
+        const fullStatText = (stats) => {
+          const total = statNumber(stats, 'total');
+          const answered = statNumber(stats, 'answered');
+          const correct = statNumber(stats, 'correct');
+          const incorrect = statNumber(stats, 'incorrect');
+          const unanswered = statNumber(stats, 'unanswered');
+          const percent = formatPercent(statNumber(stats, 'percent'));
+          return `სწორი პასუხები ${correct}/${total}. ${percent}% • პასუხგაცემული ${answered} • არასწორი პასუხები ${incorrect} • უპასუხო ${unanswered}`;
+        };
+
+        const writeResultBoardPdf = (title, rows, { overall = false } = {}) => {
+          writeSectionTitle(title, 1);
+          if (!rows.length) {
+            writeTextBlock('მონაცემი არ არის', { color: PDF_COLORS.muted, leading: 15, spacingAfter: 8 });
+            return;
+          }
+          rows.forEach((row) => {
+            const label = row.label ? `${row.label}: ` : '';
+            writeTextBlock(`${label}${fullStatText(row.stats || {})}`, {
+              font: overall ? 'bold' : 'normal',
+              color: overall ? PDF_COLORS.text : PDF_COLORS.muted,
+              leading: 15,
+              spacingAfter: 3,
+            });
+          });
+          cursorY += 4;
+        };
+
         const drawRule = () => {
           ensureSpace(12);
           const { r, g, b } = hexToRgb(PDF_COLORS.cardBorder);
@@ -866,6 +886,22 @@
             `სტატუსი: ${statusData.label} • პასუხის დრო: ${answer.answered_at ? formatDateTime(answer.answered_at) : '—'}`,
             contentWidth
           );
+          const selectedText = answer.selected_option_text || 'არ არის მონიშნული';
+          const correctText = answer.correct_option_text || '—';
+          const answerSummaryBlocks = [
+            {
+              lines: doc.splitTextToSize(`მონიშნული პასუხი: ${selectedText}`, contentWidth),
+              color: answer.selected_option_id == null
+                ? PDF_COLORS.muted
+                : answer.is_correct
+                  ? PDF_COLORS.success
+                  : PDF_COLORS.danger,
+            },
+            {
+              lines: doc.splitTextToSize(`სწორი პასუხი: ${correctText}`, contentWidth),
+              color: PDF_COLORS.success,
+            },
+          ];
           const optionBlocks = options.map((option, optionIndex) => {
             const markers = [];
             if (option.is_correct) markers.push('სწორი');
@@ -882,6 +918,10 @@
           let cardHeight = cardPadding * 2;
           cardHeight += headerLines.length * lineHeight;
           if (questionLines.length) cardHeight += sectionSpacing + questionLines.length * lineHeight;
+          cardHeight += sectionSpacing;
+          answerSummaryBlocks.forEach(({ lines }) => {
+            cardHeight += lines.length * lineHeight;
+          });
           if (optionBlocks.length) {
             cardHeight += sectionSpacing;
             optionBlocks.forEach(({ lines }) => {
@@ -895,6 +935,9 @@
           if (cardHeight > maxCardHeight) {
             writeTextBlock(headerLine, { font: 'bold', leading: 15, spacingAfter: 4 });
             questionLines.forEach((line) => writeTextBlock(line, { leading: 15 }));
+            answerSummaryBlocks.forEach(({ lines, color }) => {
+              lines.forEach((line) => writeTextBlock(line, { color, font: 'bold', leading: 15 }));
+            });
             optionBlocks.forEach(({ lines, color }) => {
               lines.forEach((line) => writeTextBlock(line, { color, leading: 15 }));
             });
@@ -926,6 +969,17 @@
               textY += lineHeight;
             });
           }
+          textY += sectionSpacing;
+          answerSummaryBlocks.forEach(({ lines, color }) => {
+            setTextColor(color);
+            doc.setFont(fontName, 'bold');
+            lines.forEach((line) => {
+              doc.text(line, textX, textY);
+              textY += lineHeight;
+            });
+          });
+          doc.setFont(fontName, 'normal');
+          resetTextColor();
           if (optionBlocks.length) {
             textY += sectionSpacing;
             optionBlocks.forEach(({ lines, color }, optionIdx) => {
@@ -979,15 +1033,27 @@
             ['ანგარიშის გენერირება', snapshot.generated_at ? formatDateTime(snapshot.generated_at) : formatDateTime(new Date().toISOString())],
           ]);
 
-          writeSectionTitle('შეფასება', 1);
+          writeSectionTitle('საერთო შედეგი', 1);
+          writeTextBlock(fullStatText(summary), {
+            font: 'bold',
+            size: 13,
+            leading: 17,
+            spacingAfter: 6,
+          });
           writeCoverRows([
             ['სულ კითხვები', statNumber(summary, 'total')],
             ['პასუხგაცემული', statNumber(summary, 'answered')],
             ['სწორი', statNumber(summary, 'correct')],
             ['არასწორი', statNumber(summary, 'incorrect')],
             ['უპასუხო', statNumber(summary, 'unanswered')],
-            ['პროცენტი', `${statNumber(summary, 'percent').toFixed(2)}%`],
+            ['პროცენტი', `${formatPercent(statNumber(summary, 'percent'))}%`],
           ]);
+
+          writeTextBlock('დოკუმენტი შეიცავს საგამოცდო შედეგების სრულ ჩანაწერს: საერთო შედეგს, თავებისა და ქვეთავების შედეგებს, ყველა კითხვას, სავარაუდო პასუხებს, მონიშნულ პასუხებს და სწორ პასუხებს.', {
+            color: PDF_COLORS.muted,
+            leading: 15,
+            spacingAfter: 6,
+          });
 
           if (snapshot?.auto_closed_no_submission) {
             writeTextBlock('შენიშვნა: სისტემამ გამოცდა ავტომატურად დახურა, რადგან შედეგები სერვერზე არ მოვიდა.', {
@@ -997,38 +1063,45 @@
             });
           }
 
+          const chapters = Array.isArray(snapshot?.chapters) ? snapshot.chapters : [];
+          const untaggedBlocks = Array.isArray(snapshot?.untagged_blocks) ? snapshot.untagged_blocks : [];
+
           doc.addPage();
           cursorY = margin;
-          writeSectionTitle('თავების და ქვეთავების შედეგები', 1);
-          const chapters = Array.isArray(snapshot?.chapters) ? snapshot.chapters : [];
+          writeSectionTitle('შეფასების სრული შედეგები', 1);
+          writeResultBoardPdf('საერთო შედეგი', [{ label: '', stats: summary }], { overall: true });
+          writeResultBoardPdf(
+            'თავების შედეგები',
+            chapters.map((chapter) => ({
+              label: chapter?.name || 'თავი',
+              stats: chapter?.stats || {},
+            }))
+          );
+          const subchapterRows = [];
           chapters.forEach((chapter) => {
-            writeTextBlock(chapter?.name || 'თავი', { font: 'bold', size: 13, leading: 16 });
-            writeStatLine(chapter?.stats || {});
             (chapter?.subchapters || []).forEach((subchapter) => {
-              writeTextBlock(`ქვეთავი: ${subchapter?.name || '—'}`, {
-                x: margin + 16,
-                width: usableWidth - 16,
-                font: 'bold',
-                size: 12,
-                leading: 15,
+              subchapterRows.push({
+                label: `${chapter?.name || 'თავი'} / ${subchapter?.name || 'ქვეთავი'}`,
+                stats: subchapter?.stats || {},
               });
-              writeStatLine(subchapter?.stats || {}, { x: margin + 16, width: usableWidth - 16 });
             });
-            cursorY += 4;
           });
-
-          const untaggedBlocks = Array.isArray(snapshot?.untagged_blocks) ? snapshot.untagged_blocks : [];
-          if (untaggedBlocks.length) {
-            writeTextBlock('მიუბმელი ბლოკები', { font: 'bold', size: 13, leading: 16 });
-            untaggedBlocks.forEach((block) => {
-              writeTextBlock(block?.title || `ბლოკი ${block?.id || ''}`, { x: margin + 16, width: usableWidth - 16, leading: 15 });
-              writeStatLine(block?.stats || {}, { x: margin + 16, width: usableWidth - 16 });
+          untaggedBlocks.forEach((block) => {
+            subchapterRows.push({
+              label: block?.title || `ბლოკი ${block?.id || ''}`,
+              stats: block?.stats || {},
             });
-          }
+          });
+          writeResultBoardPdf('ქვეთავების შედეგები', subchapterRows);
 
           doc.addPage();
           cursorY = margin;
           writeSectionTitle('კითხვების დეტალური შედეგები', 1);
+          writeTextBlock('სავარაუდო პასუხებში მწვანედ მონიშნულია სწორი პასუხი. თუ კანდიდატმა არასწორი პასუხი მონიშნა, ის წითლად არის ნაჩვენები.', {
+            color: PDF_COLORS.muted,
+            leading: 15,
+            spacingAfter: 8,
+          });
           let questionIndex = 0;
           chapters.forEach((chapter) => {
             writeSectionTitle(chapter?.name || 'თავი', 1);
@@ -1073,6 +1146,13 @@
           await deliverPdf(doc, filename, { showToast, handle: options.saveHandle || null });
           return;
         }
+
+        doc.setFont(fontName, 'bold');
+        doc.setFontSize(18);
+        doc.text('გამოცდის შედეგების ანგარიში', margin, cursorY);
+        cursorY += lineHeight * 1.5;
+        doc.setFontSize(12);
+        doc.setFont(fontName, 'normal');
 
         infoLines.forEach((line) => splitAndWrite(line));
         cursorY += lineHeight / 2;
