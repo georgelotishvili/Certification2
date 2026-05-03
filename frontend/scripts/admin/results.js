@@ -799,43 +799,26 @@
         };
 
         const writeStatLine = (stats, { x = margin, width = usableWidth } = {}) => {
-          writeTextBlock(statText(stats || {}), {
-            x,
-            width,
-            color: PDF_COLORS.muted,
-            font: 'bold',
-            size: 11,
-            leading: 14,
-            spacingAfter: 6,
-          });
-        };
-
-        const fullStatText = (stats) => {
           const total = statNumber(stats, 'total');
-          const answered = statNumber(stats, 'answered');
           const correct = statNumber(stats, 'correct');
           const incorrect = statNumber(stats, 'incorrect');
-          const unanswered = statNumber(stats, 'unanswered');
           const percent = formatPercent(statNumber(stats, 'percent'));
-          return `სწორი პასუხები ${correct}/${total}. ${percent}% • პასუხგაცემული ${answered} • არასწორი პასუხები ${incorrect} • უპასუხო ${unanswered}`;
-        };
-
-        const writeResultBoardPdf = (title, rows, { overall = false } = {}) => {
-          writeSectionTitle(title, 1);
-          if (!rows.length) {
-            writeTextBlock('მონაცემი არ არის', { color: PDF_COLORS.muted, leading: 15, spacingAfter: 8 });
-            return;
-          }
-          rows.forEach((row) => {
-            const label = row.label ? `${row.label}: ` : '';
-            writeTextBlock(`${label}${fullStatText(row.stats || {})}`, {
-              font: overall ? 'bold' : 'normal',
-              color: overall ? PDF_COLORS.text : PDF_COLORS.muted,
-              leading: 15,
-              spacingAfter: 3,
+          [
+            `კითხვების რაოდენობა ${total}`,
+            `სწორი პასუხი ${correct}`,
+            `არასწორი პასუხი ${incorrect}`,
+            `შედეგი ${percent}%`,
+          ].forEach((line, index, rows) => {
+            writeTextBlock(line, {
+              x,
+              width,
+              color: PDF_COLORS.muted,
+              font: 'normal',
+              size: 10,
+              leading: 13,
+              spacingAfter: index === rows.length - 1 ? 8 : 0,
             });
           });
-          cursorY += 4;
         };
 
         const drawRule = () => {
@@ -847,11 +830,184 @@
           cursorY += 12;
         };
 
-        const writeCoverRows = (rows) => {
+        const writeDocumentTitle = (title, subtitle = '') => {
+          doc.setFont(fontName, 'bold');
+          doc.setFontSize(20);
+          resetTextColor();
+          doc.text(title, margin, cursorY);
+          cursorY += 24;
+          if (subtitle) {
+            doc.setFont(fontName, 'normal');
+            doc.setFontSize(11);
+            setTextColor(PDF_COLORS.muted);
+            doc.text(subtitle, margin, cursorY);
+            cursorY += 18;
+            resetTextColor();
+          }
+          drawRule();
+        };
+
+        const measureInfoBox = (rows, width) => {
+          const padding = 12;
+          const labelWidth = 82;
+          const valueWidth = width - padding * 2 - labelWidth - 10;
+          let height = padding + 18;
           rows.forEach(([label, value]) => {
-            writeTextBlock(`${label}: ${value ?? '—'}`, { leading: 15 });
+            const labelLines = doc.splitTextToSize(String(label ?? '—'), labelWidth);
+            const valueLines = doc.splitTextToSize(String(value ?? '—'), valueWidth);
+            height += Math.max(labelLines.length, valueLines.length) * 14 + 6;
           });
-          cursorY += 8;
+          return height + padding;
+        };
+
+        const drawInfoBox = (title, rows, x, y, width, height) => {
+          const padding = 12;
+          const labelWidth = 82;
+          const valueWidth = width - padding * 2 - labelWidth - 10;
+          const { r: fillR, g: fillG, b: fillB } = hexToRgb(PDF_COLORS.cardBackground);
+          const { r: borderR, g: borderG, b: borderB } = hexToRgb(PDF_COLORS.cardBorder);
+          doc.setFillColor(fillR, fillG, fillB);
+          doc.setDrawColor(borderR, borderG, borderB);
+          doc.setLineWidth(0.5);
+          doc.rect(x, y, width, height, 'FD');
+
+          let rowY = y + padding + 12;
+          doc.setFont(fontName, 'bold');
+          doc.setFontSize(12);
+          resetTextColor();
+          doc.text(title, x + padding, rowY);
+          rowY += 18;
+
+          rows.forEach(([label, value]) => {
+            const labelLines = doc.splitTextToSize(String(label ?? '—'), labelWidth);
+            const valueLines = doc.splitTextToSize(String(value ?? '—'), valueWidth);
+            const rowHeight = Math.max(labelLines.length, valueLines.length) * 14 + 6;
+
+            doc.setFont(fontName, 'bold');
+            doc.setFontSize(9.5);
+            setTextColor(PDF_COLORS.muted);
+            labelLines.forEach((line, index) => {
+              doc.text(line, x + padding, rowY + index * 14);
+            });
+
+            doc.setFont(fontName, 'normal');
+            doc.setFontSize(10.5);
+            resetTextColor();
+            valueLines.forEach((line, index) => {
+              doc.text(line, x + padding + labelWidth + 10, rowY + index * 14);
+            });
+            rowY += rowHeight;
+          });
+          resetTextColor();
+        };
+
+        const writeInfoColumns = (leftTitle, leftRows, rightTitle, rightRows) => {
+          const gap = 14;
+          const columnWidth = (usableWidth - gap) / 2;
+          const leftHeight = measureInfoBox(leftRows, columnWidth);
+          const rightHeight = measureInfoBox(rightRows, columnWidth);
+          const boxHeight = Math.max(leftHeight, rightHeight);
+          ensureSpace(boxHeight + 8);
+          drawInfoBox(leftTitle, leftRows, margin, cursorY, columnWidth, boxHeight);
+          drawInfoBox(rightTitle, rightRows, margin + columnWidth + gap, cursorY, columnWidth, boxHeight);
+          cursorY += boxHeight + 18;
+        };
+
+        const writeResultTable = (title, rows) => {
+          writeSectionTitle(title, 2);
+          if (!rows.length) {
+            writeTextBlock('მონაცემი არ არის', { color: PDF_COLORS.muted, leading: 14, spacingAfter: 6 });
+            return;
+          }
+
+          const nameWidth = usableWidth - 156;
+          const scoreWidth = 86;
+          const percentWidth = 70;
+          const rowPadding = 7;
+          const drawRow = ({ label, stats }, isHeader = false) => {
+            const name = isHeader ? 'დასახელება' : String(label || '—');
+            const score = isHeader ? 'სწორი პასუხები' : `${statNumber(stats, 'correct')}/${statNumber(stats, 'total')}`;
+            const percent = isHeader ? 'პროცენტი' : `${formatPercent(statNumber(stats, 'percent'))}%`;
+            const nameLines = doc.splitTextToSize(name, nameWidth - rowPadding * 2);
+            const rowHeight = Math.max(22, nameLines.length * 13 + rowPadding * 2);
+            ensureSpace(rowHeight);
+
+            const { r: borderR, g: borderG, b: borderB } = hexToRgb(PDF_COLORS.cardBorder);
+            doc.setDrawColor(borderR, borderG, borderB);
+            doc.setLineWidth(0.35);
+            if (isHeader) {
+              const { r: fillR, g: fillG, b: fillB } = hexToRgb(PDF_COLORS.cardBackground);
+              doc.setFillColor(fillR, fillG, fillB);
+              doc.rect(margin, cursorY, usableWidth, rowHeight, 'FD');
+            } else {
+              doc.line(margin, cursorY + rowHeight, margin + usableWidth, cursorY + rowHeight);
+            }
+
+            doc.setFont(fontName, isHeader ? 'bold' : 'normal');
+            doc.setFontSize(isHeader ? 10.5 : 10);
+            setTextColor(isHeader ? PDF_COLORS.text : PDF_COLORS.muted);
+            nameLines.forEach((line, index) => {
+              doc.text(line, margin + rowPadding, cursorY + rowPadding + 10 + index * 13);
+            });
+            doc.text(score, margin + nameWidth + rowPadding, cursorY + rowPadding + 10);
+            doc.text(percent, margin + nameWidth + scoreWidth + rowPadding, cursorY + rowPadding + 10);
+            resetTextColor();
+            cursorY += rowHeight;
+          };
+
+          drawRow({}, true);
+          rows.forEach((row) => drawRow(row));
+          cursorY += 12;
+        };
+
+        const writeChapterHeader = (text) => {
+          const topGap = cursorY > margin + 24 ? 22 : 8;
+          const lines = doc.splitTextToSize(String(text || 'თავი'), usableWidth - 22);
+          const height = Math.max(44, lines.length * 16 + 22);
+          ensureSpace(topGap + height + 14);
+          cursorY += topGap;
+
+          const { r: fillR, g: fillG, b: fillB } = hexToRgb('#eef2f7');
+          const { r: borderR, g: borderG, b: borderB } = hexToRgb(PDF_COLORS.cardBorder);
+          doc.setFillColor(fillR, fillG, fillB);
+          doc.setDrawColor(borderR, borderG, borderB);
+          doc.setLineWidth(0.4);
+          doc.rect(margin, cursorY, usableWidth, height, 'FD');
+
+          doc.setFont(fontName, 'bold');
+          doc.setFontSize(13);
+          resetTextColor();
+          lines.forEach((line, index) => {
+            doc.text(line, margin + 12, cursorY + 27 + index * 16);
+          });
+          cursorY += height + 14;
+          doc.setFont(fontName, 'normal');
+          doc.setFontSize(12);
+        };
+
+        const writeSubchapterHeader = (text) => {
+          writeTextBlock(`ქვეთავი: ${String(text || '—')}`, {
+            x: margin + 10,
+            width: usableWidth - 10,
+            color: PDF_COLORS.text,
+            font: 'normal',
+            size: 11.5,
+            leading: 14,
+            spacingAfter: 4,
+          });
+        };
+
+        const writeBlockHeader = (block) => {
+          writeTextBlock(`დადგენილება: ${block?.title || block?.id || '—'}`, {
+            x: margin + 20,
+            width: usableWidth - 20,
+            color: PDF_COLORS.text,
+            font: 'normal',
+            size: 10.5,
+            leading: 13,
+            spacingAfter: 2,
+          });
+          writeStatLine(block?.stats || {}, { x: margin + 20, width: usableWidth - 20 });
         };
 
         const addPageNumbers = () => {
@@ -871,11 +1027,9 @@
           const answer = normalizeSnapshotAnswer(question, block);
           const statusData = answerStatusMeta(answer);
           const options = Array.isArray(answer.options) ? answer.options : [];
-          const cardPadding = 14;
-          const sectionSpacing = 7;
-          const optionGap = 5;
-          const cardWidth = usableWidth;
-          const contentWidth = cardWidth - cardPadding * 2;
+          const sectionSpacing = 5;
+          const optionGap = 3;
+          const contentWidth = usableWidth;
           const blockLabel = answer.block_title || `ბლოკი ${answer.block_id || ''}`;
           const headerLine = `კითხვა № ${index + 1} — კოდი ${answer.question_code || '—'} • ${blockLabel}`;
           const headerLines = doc.splitTextToSize(headerLine, contentWidth);
@@ -899,7 +1053,7 @@
             return { lines, color };
           });
 
-          let cardHeight = cardPadding * 2;
+          let cardHeight = 14;
           cardHeight += headerLines.length * lineHeight;
           if (questionLines.length) cardHeight += sectionSpacing + questionLines.length * lineHeight;
           if (optionBlocks.length) {
@@ -924,14 +1078,13 @@
           }
 
           ensureSpace(cardHeight);
-          doc.setFillColor(248, 250, 252);
           const { r: borderR, g: borderG, b: borderB } = hexToRgb(PDF_COLORS.cardBorder);
           doc.setDrawColor(borderR, borderG, borderB);
-          doc.setLineWidth(0.6);
-          doc.rect(margin, cursorY, cardWidth, cardHeight, 'FD');
+          doc.setLineWidth(0.45);
+          doc.line(margin, cursorY, pageWidth - margin, cursorY);
 
-          const textX = margin + cardPadding;
-          let textY = cursorY + cardPadding + lineHeight;
+          const textX = margin;
+          let textY = cursorY + 14;
           doc.setFont(fontName, 'bold');
           resetTextColor();
           headerLines.forEach((line) => {
@@ -965,7 +1118,7 @@
             textY += lineHeight;
           });
           resetTextColor();
-          cursorY += cardHeight + lineHeight / 2;
+          cursorY += cardHeight + 6;
         };
 
         const writeSnapshotPdf = (snapshot) => {
@@ -976,34 +1129,24 @@
           const candidateName = `${candidate.first_name || session.candidate_first_name || ''} ${candidate.last_name || session.candidate_last_name || ''}`.trim();
           const statusLabel = snapshot?.auto_closed ? 'ავტომატურად დახურული' : status.label;
 
-          doc.setFont(fontName, 'bold');
-          doc.setFontSize(20);
-          doc.text('გამოცდის შედეგების ანგარიში', margin, cursorY);
-          cursorY += 30;
-          drawRule();
-
-          writeSectionTitle('კანდიდატი', 1);
-          writeCoverRows([
-            ['სახელი და გვარი', candidateName || 'უცნობი'],
-            ['პირადი №', candidate.personal_id || session.personal_id || '—'],
-            ['კოდი', candidate.code || session.candidate_code || '—'],
-          ]);
-
-          writeSectionTitle('გამოცდა', 1);
-          writeCoverRows([
-            ['გამოცდა', snapshotExam.title || detail.exam_title || '—'],
-            ['სტატუსი', statusLabel],
-            ['დაწყება', formatDateTime(snapshotSession.started_at || session.started_at)],
-            ['დასრულება', formatDateTime(snapshotSession.finished_at || session.finished_at)],
-            ['ხანგრძლივობა', formatDuration(snapshotSession.started_at || session.started_at, snapshotSession.finished_at || session.finished_at || session.ends_at)],
-            ['ანგარიშის გენერირება', snapshot.generated_at ? formatDateTime(snapshot.generated_at) : formatDateTime(new Date().toISOString())],
-          ]);
-
-          writeTextBlock('შედეგები მოცემულია შემდეგ გვერდზე. დეტალურ ნაწილში ჩამოთვლილია ყველა კითხვა და სავარაუდო პასუხი.', {
-            color: PDF_COLORS.muted,
-            leading: 15,
-            spacingAfter: 6,
-          });
+          writeDocumentTitle('გამოცდის შედეგების ანგარიში', 'საგამოცდო შედეგების ოფიციალური ჩანაწერი');
+          writeInfoColumns(
+            'კანდიდატი',
+            [
+              ['სახელი და გვარი', candidateName || 'უცნობი'],
+              ['პირადი №', candidate.personal_id || session.personal_id || '—'],
+              ['კოდი', candidate.code || session.candidate_code || '—'],
+            ],
+            'გამოცდა',
+            [
+              ['გამოცდა', snapshotExam.title || detail.exam_title || '—'],
+              ['სტატუსი', statusLabel],
+              ['დაწყება', formatDateTime(snapshotSession.started_at || session.started_at)],
+              ['დასრულება', formatDateTime(snapshotSession.finished_at || session.finished_at)],
+              ['ხანგრძლივობა', formatDuration(snapshotSession.started_at || session.started_at, snapshotSession.finished_at || session.finished_at || session.ends_at)],
+              ['ანგარიში', snapshot.generated_at ? formatDateTime(snapshot.generated_at) : formatDateTime(new Date().toISOString())],
+            ]
+          );
 
           if (snapshot?.auto_closed_no_submission) {
             writeTextBlock('შენიშვნა: სისტემამ გამოცდა ავტომატურად დახურა, რადგან შედეგები სერვერზე არ მოვიდა.', {
@@ -1022,9 +1165,9 @@
 
           doc.addPage();
           cursorY = margin;
-          writeSectionTitle('შედეგები', 1);
-          writeResultBoardPdf('საერთო შედეგი', [{ label: '', stats: summary }], { overall: true });
-          writeResultBoardPdf(
+          writeDocumentTitle('შედეგები');
+          writeResultTable('საერთო შედეგი', [{ label: 'საერთო შედეგი', stats: summary }]);
+          writeResultTable(
             'თავების შედეგები',
             resultChapters.map((chapter) => ({
               label: chapter?.name || 'თავი',
@@ -1046,11 +1189,11 @@
               stats: block?.stats || {},
             });
           });
-          writeResultBoardPdf('ქვეთავების შედეგები', subchapterRows);
+          writeResultTable('ქვეთავების შედეგები', subchapterRows);
 
           doc.addPage();
           cursorY = margin;
-          writeSectionTitle('კითხვების დეტალური შედეგები', 1);
+          writeDocumentTitle('კითხვების დეტალური შედეგები');
           writeTextBlock('სავარაუდო პასუხებში მწვანედ მონიშნულია სწორი პასუხი. თუ კანდიდატმა არასწორი პასუხი მონიშნა, ის წითლად არის ნაჩვენები.', {
             color: PDF_COLORS.muted,
             leading: 15,
@@ -1062,18 +1205,12 @@
               (subchapter?.blocks || []).some(hasQuestions)
             ));
             if (!subchapters.length) return;
-            writeSectionTitle(chapter?.name || 'თავი', 1);
+            writeChapterHeader(chapter?.name || 'თავი');
             subchapters.forEach((subchapter) => {
               const blocks = (subchapter?.blocks || []).filter(hasQuestions);
-              writeSectionTitle(subchapter?.name || 'ქვეთავი', 2);
+              writeSubchapterHeader(subchapter?.name || 'ქვეთავი');
+              writeStatLine(subchapter?.stats || {}, { x: margin + 10, width: usableWidth - 10 });
               blocks.forEach((block) => {
-                writeTextBlock(block?.title || `ბლოკი ${block?.id || ''}`, {
-                  font: 'bold',
-                  size: 12,
-                  leading: 15,
-                  spacingAfter: 2,
-                });
-                writeStatLine(block?.stats || {});
                 block.questions.forEach((question) => {
                   writeQuestionCardPdf(question, block, questionIndex);
                   questionIndex += 1;
@@ -1083,10 +1220,9 @@
           });
           const detailedUntaggedBlocks = untaggedBlocks.filter(hasQuestions);
           if (detailedUntaggedBlocks.length) {
-            writeSectionTitle('მიუბმელი ბლოკები', 1);
+            writeChapterHeader('მიუბმელი ბლოკები');
             detailedUntaggedBlocks.forEach((block) => {
-              writeTextBlock(block?.title || `ბლოკი ${block?.id || ''}`, { font: 'bold', size: 12, leading: 15 });
-              writeStatLine(block?.stats || {});
+              writeBlockHeader(block);
               block.questions.forEach((question) => {
                 writeQuestionCardPdf(question, block, questionIndex);
                 questionIndex += 1;
