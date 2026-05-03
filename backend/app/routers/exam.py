@@ -18,7 +18,7 @@ from fastapi import (
     status,
 )
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
@@ -58,6 +58,19 @@ from ..services.media_storage import (
 router = APIRouter()
 
 MEDIA_TYPES = {"camera", "screen"}
+
+
+def _block_out(block: Block) -> dict:
+    return {
+        "id": block.id,
+        "title": block.title,
+        "qty": block.qty,
+        "order_index": block.order_index,
+        "chapter_id": block.chapter_id,
+        "subchapter_id": block.subchapter_id,
+        "chapter_name": block.chapter.name if block.chapter else None,
+        "subchapter_name": block.subchapter.name if block.subchapter else None,
+    }
 
 
 @router.post("/gate/verify", response_model=ExamGateVerifyResponse)
@@ -169,13 +182,18 @@ def get_exam_config(exam_id: int = Path(...), db: Session = Depends(get_db)):
     if not exam:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
 
-    blocks_stmt = select(Block).where(Block.exam_id == exam.id, Block.enabled == True).order_by(Block.order_index)  # noqa: E712
+    blocks_stmt = (
+        select(Block)
+        .options(selectinload(Block.chapter), selectinload(Block.subchapter))
+        .where(Block.exam_id == exam.id, Block.enabled == True)  # noqa: E712
+        .order_by(Block.order_index)
+    )
     blocks = db.scalars(blocks_stmt).all()
     return ExamConfigResponse(
         exam_id=exam.id,
         title=exam.title,
         duration_minutes=exam.duration_minutes,
-        blocks=blocks,
+        blocks=[_block_out(block) for block in blocks],
     )
 
 
@@ -251,6 +269,10 @@ def get_block_questions(
     return QuestionsResponse(
         block_id=block.id,
         block_title=block.title,
+        chapter_id=block.chapter_id,
+        subchapter_id=block.subchapter_id,
+        chapter_name=block.chapter.name if block.chapter else None,
+        subchapter_name=block.subchapter.name if block.subchapter else None,
         qty=block.qty,
         questions=out_questions,
     )
@@ -270,6 +292,9 @@ def get_all_questions(
 
     blocks_stmt = select(Block).where(
         Block.exam_id == session.exam_id, Block.enabled == True  # noqa: E712
+    ).options(
+        selectinload(Block.chapter),
+        selectinload(Block.subchapter),
     ).order_by(Block.order_index)
     blocks = db.scalars(blocks_stmt).all()
 
@@ -326,6 +351,10 @@ def get_all_questions(
         result_blocks.append(AllQuestionsBlockOut(
             block_id=block.id,
             block_title=block.title,
+            chapter_id=block.chapter_id,
+            subchapter_id=block.subchapter_id,
+            chapter_name=block.chapter.name if block.chapter else None,
+            subchapter_name=block.subchapter.name if block.subchapter else None,
             qty=block.qty,
             questions=out_questions,
         ))

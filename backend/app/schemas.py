@@ -24,6 +24,8 @@ class BlockOut(BaseModel):
     order_index: int
     chapter_id: Optional[int] = None
     subchapter_id: Optional[int] = None
+    chapter_name: Optional[str] = None
+    subchapter_name: Optional[str] = None
 
 
 class ExamConfigResponse(BaseModel):
@@ -216,6 +218,10 @@ class QuestionOut(BaseModel):
 class QuestionsResponse(BaseModel):
     block_id: int
     block_title: str
+    chapter_id: Optional[int] = None
+    subchapter_id: Optional[int] = None
+    chapter_name: Optional[str] = None
+    subchapter_name: Optional[str] = None
     qty: int
     questions: List[QuestionOut]
 
@@ -232,6 +238,10 @@ class AnswerResponse(BaseModel):
 class AllQuestionsBlockOut(BaseModel):
     block_id: int
     block_title: str
+    chapter_id: Optional[int] = None
+    subchapter_id: Optional[int] = None
+    chapter_name: Optional[str] = None
+    subchapter_name: Optional[str] = None
     qty: int
     questions: List[QuestionOut]
 
