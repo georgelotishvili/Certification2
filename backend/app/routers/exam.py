@@ -41,6 +41,12 @@ from ..schemas import (
     StartSessionRequest,
     StartSessionResponse,
 )
+from ..services.exam_lifecycle import (
+    auto_close_session_if_expired,
+    ensure_submission_window,
+    finalize_exam_session,
+    finish_response_from_session,
+)
 from ..services.media_storage import (
     relative_storage_path,
     resolve_storage_path,
@@ -341,6 +347,10 @@ def submit_answers_batch(
 ):
     """ყველა პასუხის ერთიანი გაგზავნა ოფლაინ რეჟიმისთვის."""
     session = _get_session_or_401(session_id, db, authorization)
+    if auto_close_session_if_expired(db, session):
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
+    ensure_submission_window(session)
 
     if not session.selected_map:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Questions not initialized")
@@ -461,49 +471,17 @@ def finish_exam(
     db: Session = Depends(get_db),
 ):
     session = _get_session_or_401(session_id, db, authorization)
-    now = datetime.utcnow()
-    if not session.active:
-        # idempotent
-        session.active = False
-    session.finished_at = now
+    existing_response = finish_response_from_session(session)
+    if not session.active and existing_response:
+        return existing_response
+    if auto_close_session_if_expired(db, session):
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
+    ensure_submission_window(session)
 
-    # Count
-    selected_map: Dict[str, List[int]] = json.loads(session.selected_map or "{}")
-    selected_qids = [qid for ids in selected_map.values() for qid in ids]
-    total_questions = len(selected_qids)
-
-    ans_stmt = select(Answer).where(Answer.session_id == session.id)
-    answers = db.scalars(ans_stmt).all()
-    answered = len(answers)
-    correct = sum(1 for a in answers if a.is_correct)
-    score_percent = float(correct) / total_questions * 100.0 if total_questions else 0.0
-
-    # Build per-block stats
-    block_stats: List[dict] = []
-    for key, ids in selected_map.items():
-        b_total = len(ids)
-        if b_total == 0:
-            block_stats.append({"block_id": int(key), "correct": 0, "total": 0, "percent": 0.0})
-            continue
-        ans_stmt_b = select(Answer).where(Answer.session_id == session.id, Answer.question_id.in_(ids))
-        answers_b = db.scalars(ans_stmt_b).all()
-        b_correct = sum(1 for a in answers_b if a.is_correct)
-        b_pct = round((b_correct / b_total) * 100.0, 2)
-        block_stats.append({"block_id": int(key), "correct": b_correct, "total": b_total, "percent": b_pct})
-
-    session.active = False
-    session.score_percent = round(score_percent, 2)
-    session.block_stats = json.dumps(block_stats)
-    db.add(session)
+    response = finalize_exam_session(db, session, finished_at=datetime.utcnow())
     _revoke_exam_permission_for_session_candidate(db, session)
     db.commit()
-
-    return {
-        "total_questions": total_questions,
-        "answered": answered,
-        "correct": correct,
-        "score_percent": session.score_percent,
-        "block_stats": block_stats,
-    }
+    return response
 
 

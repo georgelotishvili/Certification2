@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import EmailStr
@@ -340,6 +340,9 @@ class ResultDetailResponse(BaseModel):
     correct_answers: int
     block_stats: List[BlockStatDetail]
     answers: List[AnswerDetail]
+    snapshot: dict[str, Any] | None = None
+    legacy: bool = False
+    legacy_message: str | None = None
 
 
 class ResultMediaItem(BaseModel):

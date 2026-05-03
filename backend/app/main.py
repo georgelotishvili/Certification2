@@ -15,6 +15,7 @@ except ImportError:
 from .config import get_settings
 from .database import engine
 from .models import Base
+from .services.exam_lifecycle import register_expired_session_tasks
 from .services.media_storage import ensure_media_root
 try:
     # When running from project root (e.g. `python -m backend.app.main`)
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     ensure_media_root()
 
     app = FastAPI(title=settings.app_name)
+    register_expired_session_tasks(app)
     
     # Initialize rate limiter (if slowapi is available)
     if SLOWAPI_AVAILABLE:

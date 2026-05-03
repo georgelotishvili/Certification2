@@ -30,6 +30,7 @@
 
     const STATUS_MAP = {
       completed: { label: 'დასრულებულია', tag: 'success' },
+      auto_closed: { label: 'ავტომატურად დახურული', tag: 'error' },
       aborted: { label: 'შეწყვეტილია', tag: 'error' },
       in_progress: { label: 'მიმდინარე', tag: 'neutral' },
     };
@@ -117,6 +118,174 @@
       valueSpan.textContent = value;
       item.appendChild(valueSpan);
       return item;
+    }
+
+    function getSnapshot(detail) {
+      return detail?.snapshot && typeof detail.snapshot === 'object' ? detail.snapshot : null;
+    }
+
+    function statNumber(stats, key) {
+      return Number(stats?.[key] || 0);
+    }
+
+    function statText(stats) {
+      const total = statNumber(stats, 'total');
+      const correct = statNumber(stats, 'correct');
+      const incorrect = statNumber(stats, 'incorrect');
+      const percent = statNumber(stats, 'percent').toFixed(2);
+      return `სულ ${total} • სწორია ${correct} • არასწორია ${incorrect} • ${percent}%`;
+    }
+
+    function createStatLine(stats) {
+      const line = document.createElement('div');
+      line.className = 'result-stat-line';
+      line.textContent = statText(stats);
+      return line;
+    }
+
+    function normalizeSnapshotAnswer(question, block) {
+      const selected = question?.selected_option || null;
+      const correct = question?.correct_option || null;
+      return {
+        question_id: question?.question_id ?? question?.id,
+        question_code: question?.question_code ?? question?.code,
+        question_text: question?.question_text ?? question?.text,
+        block_id: block?.id,
+        block_title: block?.title,
+        selected_option_id: question?.selected_option_id ?? selected?.id ?? null,
+        selected_option_text: selected?.text || null,
+        correct_option_id: question?.correct_option_id ?? correct?.id ?? null,
+        correct_option_text: correct?.text || null,
+        is_correct: question?.is_correct,
+        answered_at: question?.answered_at || null,
+        options: (Array.isArray(question?.options) ? question.options : []).map((option) => ({
+          option_id: option.option_id ?? option.id,
+          option_text: option.option_text ?? option.text,
+          is_correct: !!option.is_correct,
+          is_selected: !!option.is_selected,
+        })),
+      };
+    }
+
+    function appendBlockQuestions(parent, block, counter) {
+      const blockWrap = document.createElement('div');
+      blockWrap.className = 'result-block-detail';
+      const title = document.createElement('div');
+      title.className = 'result-block-detail-title';
+      title.textContent = block?.title || `ბლოკი ${block?.id || ''}`;
+      blockWrap.appendChild(title);
+      blockWrap.appendChild(createStatLine(block?.stats || {}));
+
+      const questions = Array.isArray(block?.questions) ? block.questions : [];
+      questions.forEach((question) => {
+        const answer = normalizeSnapshotAnswer(question, block);
+        const card = buildQuestionCard(answer, counter.value);
+        counter.value += 1;
+        blockWrap.appendChild(card);
+      });
+      parent.appendChild(blockWrap);
+    }
+
+    function renderSnapshotQuestions(snapshot) {
+      if (!DOM.resultQuestionList) return;
+      DOM.resultQuestionList.innerHTML = '';
+      const counter = { value: 0 };
+      const chapters = Array.isArray(snapshot?.chapters) ? snapshot.chapters : [];
+
+      chapters.forEach((chapter) => {
+        const chapterWrap = document.createElement('section');
+        chapterWrap.className = 'result-hierarchy-section';
+        const chapterTitle = document.createElement('div');
+        chapterTitle.className = 'result-hierarchy-title';
+        chapterTitle.textContent = chapter?.name || 'თავი';
+        chapterWrap.appendChild(chapterTitle);
+        chapterWrap.appendChild(createStatLine(chapter?.stats || {}));
+
+        (chapter?.subchapters || []).forEach((subchapter) => {
+          const subWrap = document.createElement('div');
+          subWrap.className = 'result-subchapter-section';
+          const subTitle = document.createElement('div');
+          subTitle.className = 'result-subchapter-title';
+          subTitle.textContent = subchapter?.name || 'ქვეთავი';
+          subWrap.appendChild(subTitle);
+          subWrap.appendChild(createStatLine(subchapter?.stats || {}));
+          (subchapter?.blocks || []).forEach((block) => appendBlockQuestions(subWrap, block, counter));
+          chapterWrap.appendChild(subWrap);
+        });
+        DOM.resultQuestionList.appendChild(chapterWrap);
+      });
+
+      const untaggedBlocks = Array.isArray(snapshot?.untagged_blocks) ? snapshot.untagged_blocks : [];
+      if (untaggedBlocks.length) {
+        const untaggedWrap = document.createElement('section');
+        untaggedWrap.className = 'result-hierarchy-section';
+        const title = document.createElement('div');
+        title.className = 'result-hierarchy-title';
+        title.textContent = 'მიუბმელი ბლოკები';
+        untaggedWrap.appendChild(title);
+        untaggedBlocks.forEach((block) => appendBlockQuestions(untaggedWrap, block, counter));
+        DOM.resultQuestionList.appendChild(untaggedWrap);
+      }
+
+      if (counter.value === 0) {
+        DOM.resultQuestionList.innerHTML = '<div class="empty-state">კითხვები არ არის ხელმისაწვდომი</div>';
+      }
+    }
+
+    function renderSnapshotStats(snapshot) {
+      if (!DOM.resultBlockStats) return;
+      DOM.resultBlockStats.innerHTML = '';
+      const fragment = document.createDocumentFragment();
+      const chapters = Array.isArray(snapshot?.chapters) ? snapshot.chapters : [];
+
+      chapters.forEach((chapter) => {
+        const chapterCard = document.createElement('div');
+        chapterCard.className = 'result-chapter-stat';
+        const title = document.createElement('div');
+        title.className = 'result-chapter-stat-title';
+        title.textContent = chapter?.name || 'თავი';
+        chapterCard.appendChild(title);
+        chapterCard.appendChild(createStatLine(chapter?.stats || {}));
+
+        (chapter?.subchapters || []).forEach((subchapter) => {
+          const sub = document.createElement('div');
+          sub.className = 'result-subchapter-stat';
+          const subTitle = document.createElement('div');
+          subTitle.className = 'result-subchapter-stat-title';
+          subTitle.textContent = subchapter?.name || 'ქვეთავი';
+          sub.appendChild(subTitle);
+          sub.appendChild(createStatLine(subchapter?.stats || {}));
+          chapterCard.appendChild(sub);
+        });
+        fragment.appendChild(chapterCard);
+      });
+
+      const untaggedBlocks = Array.isArray(snapshot?.untagged_blocks) ? snapshot.untagged_blocks : [];
+      if (untaggedBlocks.length) {
+        const card = document.createElement('div');
+        card.className = 'result-chapter-stat';
+        const title = document.createElement('div');
+        title.className = 'result-chapter-stat-title';
+        title.textContent = 'მიუბმელი ბლოკები';
+        card.appendChild(title);
+        untaggedBlocks.forEach((block) => {
+          const sub = document.createElement('div');
+          sub.className = 'result-subchapter-stat';
+          const subTitle = document.createElement('div');
+          subTitle.className = 'result-subchapter-stat-title';
+          subTitle.textContent = block?.title || `ბლოკი ${block?.id || ''}`;
+          sub.appendChild(subTitle);
+          sub.appendChild(createStatLine(block?.stats || {}));
+          card.appendChild(sub);
+        });
+        fragment.appendChild(card);
+      }
+
+      if (!fragment.childNodes.length) {
+        DOM.resultBlockStats.innerHTML = '<div class="empty-state">სტატისტიკა არ არის ხელმისაწვდომი</div>';
+        return;
+      }
+      DOM.resultBlockStats.appendChild(fragment);
     }
 
     function buildQuestionCard(answer, index) {
@@ -283,6 +452,8 @@
     function renderDetail(detail) {
       if (!detail) return;
       const session = detail.session || {};
+      const snapshot = getSnapshot(detail);
+      const summary = snapshot?.summary || null;
       const status = statusMeta(session.status);
 
       if (DOM.resultDetailExamTitle) {
@@ -305,10 +476,18 @@
         DOM.resultDetailScore.textContent = `${score}%`;
       }
       if (DOM.resultDetailSummary) {
-        DOM.resultDetailSummary.textContent = `სულ: ${detail.total_questions} • პასუხი: ${detail.answered_questions} • სწორია: ${detail.correct_answers}`;
+        const total = summary ? statNumber(summary, 'total') : Number(detail.total_questions || 0);
+        const answered = summary ? statNumber(summary, 'answered') : Number(detail.answered_questions || 0);
+        const correct = summary ? statNumber(summary, 'correct') : Number(detail.correct_answers || 0);
+        const incorrect = summary ? statNumber(summary, 'incorrect') : Math.max(0, answered - correct);
+        const legacySuffix = detail.legacy_message ? ` • ${detail.legacy_message}` : '';
+        DOM.resultDetailSummary.textContent = `სულ: ${total} • პასუხი: ${answered} • სწორია: ${correct} • არასწორია: ${incorrect}${legacySuffix}`;
       }
 
       if (DOM.resultBlockStats) {
+        if (snapshot) {
+          renderSnapshotStats(snapshot);
+        } else {
         const fragment = document.createDocumentFragment();
         (detail.block_stats || []).forEach((stat) => {
           if (!stat) return;
@@ -330,15 +509,20 @@
         });
         DOM.resultBlockStats.innerHTML = '';
         DOM.resultBlockStats.appendChild(fragment);
+        }
       }
 
       if (DOM.resultQuestionList) {
-        DOM.resultQuestionList.innerHTML = '';
-        (detail.answers || []).forEach((answer, index) => {
-          if (!answer) return;
-          const card = buildQuestionCard(answer, index);
-          if (card) DOM.resultQuestionList.appendChild(card);
-        });
+        if (snapshot) {
+          renderSnapshotQuestions(snapshot);
+        } else {
+          DOM.resultQuestionList.innerHTML = '';
+          (detail.answers || []).forEach((answer, index) => {
+            if (!answer) return;
+            const card = buildQuestionCard(answer, index);
+            if (card) DOM.resultQuestionList.appendChild(card);
+          });
+        }
       }
     }
 
@@ -545,6 +729,310 @@
           resetTextColor();
         };
 
+        const writeTextBlock = (text, {
+          x = margin,
+          width = usableWidth,
+          color = PDF_COLORS.text,
+          font = 'normal',
+          size = 12,
+          leading = lineHeight,
+          spacingAfter = 0,
+        } = {}) => {
+          doc.setFont(fontName, font);
+          doc.setFontSize(size);
+          setTextColor(color);
+          const lines = doc.splitTextToSize(String(text ?? '—'), width);
+          lines.forEach((line) => {
+            ensureSpace(leading);
+            doc.text(line, x, cursorY);
+            cursorY += leading;
+          });
+          cursorY += spacingAfter;
+          resetTextColor();
+          doc.setFont(fontName, 'normal');
+          doc.setFontSize(12);
+        };
+
+        const writeSectionTitle = (text, level = 1) => {
+          const size = level === 1 ? 15 : level === 2 ? 13 : 12;
+          const spacing = level === 1 ? 8 : 4;
+          ensureSpace(lineHeight * 2);
+          writeTextBlock(text, {
+            font: 'bold',
+            size,
+            leading: lineHeight + (level === 1 ? 2 : 0),
+            spacingAfter: spacing,
+          });
+        };
+
+        const writeStatLine = (stats, { x = margin, width = usableWidth } = {}) => {
+          writeTextBlock(statText(stats || {}), {
+            x,
+            width,
+            color: PDF_COLORS.muted,
+            font: 'bold',
+            size: 11,
+            leading: 14,
+            spacingAfter: 6,
+          });
+        };
+
+        const drawRule = () => {
+          ensureSpace(12);
+          const { r, g, b } = hexToRgb(PDF_COLORS.cardBorder);
+          doc.setDrawColor(r, g, b);
+          doc.setLineWidth(0.5);
+          doc.line(margin, cursorY, pageWidth - margin, cursorY);
+          cursorY += 12;
+        };
+
+        const writeCoverRows = (rows) => {
+          rows.forEach(([label, value]) => {
+            writeTextBlock(`${label}: ${value ?? '—'}`, { leading: 15 });
+          });
+          cursorY += 8;
+        };
+
+        const addPageNumbers = () => {
+          const totalPages = doc.getNumberOfPages();
+          for (let page = 1; page <= totalPages; page += 1) {
+            doc.setPage(page);
+            doc.setFont(fontName, 'normal');
+            doc.setFontSize(9);
+            setTextColor(PDF_COLORS.muted);
+            doc.text(`გვერდი ${page} / ${totalPages}`, pageWidth - margin, pageHeight - 24, { align: 'right' });
+          }
+          resetTextColor();
+          doc.setPage(totalPages);
+        };
+
+        const writeQuestionCardPdf = (question, block, index) => {
+          const answer = normalizeSnapshotAnswer(question, block);
+          const statusData = answerStatusMeta(answer);
+          const options = Array.isArray(answer.options) ? answer.options : [];
+          const cardPadding = 14;
+          const sectionSpacing = 7;
+          const optionGap = 5;
+          const cardWidth = usableWidth;
+          const contentWidth = cardWidth - cardPadding * 2;
+          const blockLabel = answer.block_title || `ბლოკი ${answer.block_id || ''}`;
+          const headerLine = `კითხვა № ${index + 1} — კოდი ${answer.question_code || '—'} • ${blockLabel}`;
+          const headerLines = doc.splitTextToSize(headerLine, contentWidth);
+          const questionLines = answer.question_text
+            ? doc.splitTextToSize(`კითხვა: ${answer.question_text}`, contentWidth)
+            : [];
+          const footerLines = doc.splitTextToSize(
+            `სტატუსი: ${statusData.label} • პასუხის დრო: ${answer.answered_at ? formatDateTime(answer.answered_at) : '—'}`,
+            contentWidth
+          );
+          const optionBlocks = options.map((option, optionIndex) => {
+            const markers = [];
+            if (option.is_correct) markers.push('სწორი');
+            if (option.is_selected) markers.push('მონიშნული');
+            const suffix = markers.length ? ` (${markers.join(', ')})` : '';
+            const text = `${optionIndex + 1}. ${option.option_text || '—'}${suffix}`;
+            const lines = doc.splitTextToSize(text, contentWidth);
+            let color = PDF_COLORS.text;
+            if (option.is_correct) color = PDF_COLORS.success;
+            else if (option.is_selected) color = PDF_COLORS.danger;
+            return { lines, color };
+          });
+
+          let cardHeight = cardPadding * 2;
+          cardHeight += headerLines.length * lineHeight;
+          if (questionLines.length) cardHeight += sectionSpacing + questionLines.length * lineHeight;
+          if (optionBlocks.length) {
+            cardHeight += sectionSpacing;
+            optionBlocks.forEach(({ lines }) => {
+              cardHeight += lines.length * lineHeight;
+            });
+            cardHeight += optionGap * Math.max(optionBlocks.length - 1, 0);
+          }
+          cardHeight += sectionSpacing + footerLines.length * lineHeight;
+
+          const maxCardHeight = pageHeight - margin * 2;
+          if (cardHeight > maxCardHeight) {
+            writeTextBlock(headerLine, { font: 'bold', leading: 15, spacingAfter: 4 });
+            questionLines.forEach((line) => writeTextBlock(line, { leading: 15 }));
+            optionBlocks.forEach(({ lines, color }) => {
+              lines.forEach((line) => writeTextBlock(line, { color, leading: 15 }));
+            });
+            footerLines.forEach((line) => writeTextBlock(line, { color: PDF_COLORS.muted, leading: 14 }));
+            cursorY += 8;
+            return;
+          }
+
+          ensureSpace(cardHeight);
+          doc.setFillColor(248, 250, 252);
+          const { r: borderR, g: borderG, b: borderB } = hexToRgb(PDF_COLORS.cardBorder);
+          doc.setDrawColor(borderR, borderG, borderB);
+          doc.setLineWidth(0.6);
+          doc.rect(margin, cursorY, cardWidth, cardHeight, 'FD');
+
+          const textX = margin + cardPadding;
+          let textY = cursorY + cardPadding + lineHeight;
+          doc.setFont(fontName, 'bold');
+          resetTextColor();
+          headerLines.forEach((line) => {
+            doc.text(line, textX, textY);
+            textY += lineHeight;
+          });
+          doc.setFont(fontName, 'normal');
+          if (questionLines.length) {
+            textY += sectionSpacing;
+            questionLines.forEach((line) => {
+              doc.text(line, textX, textY);
+              textY += lineHeight;
+            });
+          }
+          if (optionBlocks.length) {
+            textY += sectionSpacing;
+            optionBlocks.forEach(({ lines, color }, optionIdx) => {
+              setTextColor(color);
+              lines.forEach((line) => {
+                doc.text(line, textX, textY);
+                textY += lineHeight;
+              });
+              if (optionIdx < optionBlocks.length - 1) textY += optionGap;
+            });
+            resetTextColor();
+          }
+          textY += sectionSpacing;
+          setTextColor(PDF_COLORS.muted);
+          footerLines.forEach((line) => {
+            doc.text(line, textX, textY);
+            textY += lineHeight;
+          });
+          resetTextColor();
+          cursorY += cardHeight + lineHeight / 2;
+        };
+
+        const writeSnapshotPdf = (snapshot) => {
+          const snapshotExam = snapshot?.exam || {};
+          const snapshotSession = snapshot?.session || {};
+          const candidate = snapshot?.candidate || {};
+          const summary = snapshot?.summary || {};
+          const candidateName = `${candidate.first_name || session.candidate_first_name || ''} ${candidate.last_name || session.candidate_last_name || ''}`.trim();
+          const statusLabel = snapshot?.auto_closed ? 'ავტომატურად დახურული' : status.label;
+
+          doc.setFont(fontName, 'bold');
+          doc.setFontSize(20);
+          doc.text('გამოცდის შედეგების ანგარიში', margin, cursorY);
+          cursorY += 30;
+          drawRule();
+
+          writeSectionTitle('კანდიდატი', 1);
+          writeCoverRows([
+            ['სახელი და გვარი', candidateName || 'უცნობი'],
+            ['პირადი №', candidate.personal_id || session.personal_id || '—'],
+            ['კოდი', candidate.code || session.candidate_code || '—'],
+          ]);
+
+          writeSectionTitle('გამოცდა', 1);
+          writeCoverRows([
+            ['გამოცდა', snapshotExam.title || detail.exam_title || '—'],
+            ['სტატუსი', statusLabel],
+            ['დაწყება', formatDateTime(snapshotSession.started_at || session.started_at)],
+            ['დასრულება', formatDateTime(snapshotSession.finished_at || session.finished_at)],
+            ['ხანგრძლივობა', formatDuration(snapshotSession.started_at || session.started_at, snapshotSession.finished_at || session.finished_at || session.ends_at)],
+            ['ანგარიშის გენერირება', snapshot.generated_at ? formatDateTime(snapshot.generated_at) : formatDateTime(new Date().toISOString())],
+          ]);
+
+          writeSectionTitle('შეფასება', 1);
+          writeCoverRows([
+            ['სულ კითხვები', statNumber(summary, 'total')],
+            ['პასუხგაცემული', statNumber(summary, 'answered')],
+            ['სწორი', statNumber(summary, 'correct')],
+            ['არასწორი', statNumber(summary, 'incorrect')],
+            ['უპასუხო', statNumber(summary, 'unanswered')],
+            ['პროცენტი', `${statNumber(summary, 'percent').toFixed(2)}%`],
+          ]);
+
+          if (snapshot?.auto_closed_no_submission) {
+            writeTextBlock('შენიშვნა: სისტემამ გამოცდა ავტომატურად დახურა, რადგან შედეგები სერვერზე არ მოვიდა.', {
+              color: PDF_COLORS.danger,
+              font: 'bold',
+              leading: 15,
+            });
+          }
+
+          doc.addPage();
+          cursorY = margin;
+          writeSectionTitle('თავების და ქვეთავების შედეგები', 1);
+          const chapters = Array.isArray(snapshot?.chapters) ? snapshot.chapters : [];
+          chapters.forEach((chapter) => {
+            writeTextBlock(chapter?.name || 'თავი', { font: 'bold', size: 13, leading: 16 });
+            writeStatLine(chapter?.stats || {});
+            (chapter?.subchapters || []).forEach((subchapter) => {
+              writeTextBlock(`ქვეთავი: ${subchapter?.name || '—'}`, {
+                x: margin + 16,
+                width: usableWidth - 16,
+                font: 'bold',
+                size: 12,
+                leading: 15,
+              });
+              writeStatLine(subchapter?.stats || {}, { x: margin + 16, width: usableWidth - 16 });
+            });
+            cursorY += 4;
+          });
+
+          const untaggedBlocks = Array.isArray(snapshot?.untagged_blocks) ? snapshot.untagged_blocks : [];
+          if (untaggedBlocks.length) {
+            writeTextBlock('მიუბმელი ბლოკები', { font: 'bold', size: 13, leading: 16 });
+            untaggedBlocks.forEach((block) => {
+              writeTextBlock(block?.title || `ბლოკი ${block?.id || ''}`, { x: margin + 16, width: usableWidth - 16, leading: 15 });
+              writeStatLine(block?.stats || {}, { x: margin + 16, width: usableWidth - 16 });
+            });
+          }
+
+          doc.addPage();
+          cursorY = margin;
+          writeSectionTitle('კითხვების დეტალური შედეგები', 1);
+          let questionIndex = 0;
+          chapters.forEach((chapter) => {
+            writeSectionTitle(chapter?.name || 'თავი', 1);
+            (chapter?.subchapters || []).forEach((subchapter) => {
+              writeSectionTitle(subchapter?.name || 'ქვეთავი', 2);
+              (subchapter?.blocks || []).forEach((block) => {
+                writeTextBlock(block?.title || `ბლოკი ${block?.id || ''}`, {
+                  font: 'bold',
+                  size: 12,
+                  leading: 15,
+                  spacingAfter: 2,
+                });
+                writeStatLine(block?.stats || {});
+                (block?.questions || []).forEach((question) => {
+                  writeQuestionCardPdf(question, block, questionIndex);
+                  questionIndex += 1;
+                });
+              });
+            });
+          });
+          if (untaggedBlocks.length) {
+            writeSectionTitle('მიუბმელი ბლოკები', 1);
+            untaggedBlocks.forEach((block) => {
+              writeTextBlock(block?.title || `ბლოკი ${block?.id || ''}`, { font: 'bold', size: 12, leading: 15 });
+              writeStatLine(block?.stats || {});
+              (block?.questions || []).forEach((question) => {
+                writeQuestionCardPdf(question, block, questionIndex);
+                questionIndex += 1;
+              });
+            });
+          }
+        };
+
+        const snapshot = getSnapshot(detail);
+        if (snapshot) {
+          writeSnapshotPdf(snapshot);
+          addPageNumbers();
+          const filename = options.filename || (() => {
+            const code = session.candidate_code ? session.candidate_code.replace(/\s+/g, '_') : 'result';
+            return `result_${code}_${session.session_id || ''}.pdf`;
+          })();
+          await deliverPdf(doc, filename, { showToast, handle: options.saveHandle || null });
+          return;
+        }
+
         infoLines.forEach((line) => splitAndWrite(line));
         cursorY += lineHeight / 2;
 
@@ -609,7 +1097,7 @@
               const text = `${optionIndex + 1}. ${option.option_text || '—'}${suffix}`;
               const lines = doc.splitTextToSize(text, contentWidth);
               let color = PDF_COLORS.text;
-              if (option.is_selected && option.is_correct) {
+              if (option.is_correct) {
                 color = PDF_COLORS.success;
               } else if (option.is_selected && !option.is_correct) {
                 color = PDF_COLORS.danger;
@@ -691,6 +1179,7 @@
           const code = session.candidate_code ? session.candidate_code.replace(/\s+/g, '_') : 'result';
           return `result_${code}_${session.session_id || ''}.pdf`;
         })();
+        addPageNumbers();
         await deliverPdf(doc, filename, { showToast, handle: options.saveHandle || null });
       } catch {
         showToast('PDF ფაილის შექმნა ვერ მოხერხდა', 'error');

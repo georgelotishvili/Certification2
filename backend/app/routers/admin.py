@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json as _json
 from datetime import datetime
 from pathlib import Path
 
@@ -38,6 +39,7 @@ from ..schemas import (
     AdminStatementOut,
     StatementSeenRequest,
 )
+from ..services.exam_lifecycle import auto_close_expired_sessions, auto_close_session_if_expired
 from ..services.media_storage import resolve_storage_path, ensure_media_root, delete_storage_file
 
 
@@ -410,6 +412,13 @@ def admin_stats(
 
 def _session_status(session: ExamSession) -> str:
     if session.finished_at:
+        if session.exam_snapshot:
+            try:
+                snapshot = _json.loads(session.exam_snapshot)
+                if isinstance(snapshot, dict) and snapshot.get("auto_closed"):
+                    return "auto_closed"
+            except Exception:
+                pass
         return "completed"
     if session.active:
         return "in_progress"
@@ -432,6 +441,103 @@ def _build_result_item(session: ExamSession, personal_id: str | None = None) -> 
     )
 
 
+def _load_session_snapshot(session: ExamSession) -> dict | None:
+    if not session.exam_snapshot:
+        return None
+    try:
+        snapshot = _json.loads(session.exam_snapshot)
+    except Exception:
+        return None
+    return snapshot if isinstance(snapshot, dict) else None
+
+
+def _snapshot_blocks(snapshot: dict) -> list[dict]:
+    blocks: list[dict] = []
+    for chapter in snapshot.get("chapters") or []:
+        if not isinstance(chapter, dict):
+            continue
+        for subchapter in chapter.get("subchapters") or []:
+            if not isinstance(subchapter, dict):
+                continue
+            for block in subchapter.get("blocks") or []:
+                if isinstance(block, dict):
+                    blocks.append(block)
+    for block in snapshot.get("untagged_blocks") or []:
+        if isinstance(block, dict):
+            blocks.append(block)
+    return blocks
+
+
+def _snapshot_option_payload(option: dict) -> AnswerOptionDetail:
+    return AnswerOptionDetail(
+        option_id=int(option.get("option_id") or option.get("id") or 0),
+        option_text=str(option.get("option_text") or option.get("text") or ""),
+        is_correct=bool(option.get("is_correct")),
+        is_selected=bool(option.get("is_selected")),
+    )
+
+
+def _snapshot_result_detail(
+    session: ExamSession,
+    snapshot: dict,
+    personal_id: str | None,
+) -> ResultDetailResponse:
+    summary = snapshot.get("summary") if isinstance(snapshot.get("summary"), dict) else {}
+    exam = snapshot.get("exam") if isinstance(snapshot.get("exam"), dict) else {}
+    block_stats: list[BlockStatDetail] = []
+    answers: list[AnswerDetail] = []
+
+    for block in _snapshot_blocks(snapshot):
+        block_id = int(block.get("id") or 0)
+        stats = block.get("stats") if isinstance(block.get("stats"), dict) else {}
+        block_stats.append(
+            BlockStatDetail(
+                block_id=block_id,
+                block_title=block.get("title"),
+                total=int(stats.get("total", 0) or 0),
+                correct=int(stats.get("correct", 0) or 0),
+                percent=float(stats.get("percent", 0.0) or 0.0),
+            )
+        )
+        for question in block.get("questions") or []:
+            if not isinstance(question, dict):
+                continue
+            selected_option = question.get("selected_option") if isinstance(question.get("selected_option"), dict) else None
+            correct_option = question.get("correct_option") if isinstance(question.get("correct_option"), dict) else None
+            answers.append(
+                AnswerDetail(
+                    question_id=int(question.get("question_id") or question.get("id") or 0),
+                    question_code=str(question.get("question_code") or question.get("code") or ""),
+                    question_text=str(question.get("question_text") or question.get("text") or ""),
+                    block_id=block_id or None,
+                    block_title=block.get("title"),
+                    selected_option_id=question.get("selected_option_id"),
+                    selected_option_text=selected_option.get("text") if selected_option else None,
+                    is_correct=question.get("is_correct"),
+                    answered_at=question.get("answered_at"),
+                    correct_option_id=question.get("correct_option_id"),
+                    correct_option_text=correct_option.get("text") if correct_option else None,
+                    options=[
+                        _snapshot_option_payload(option)
+                        for option in (question.get("options") or [])
+                        if isinstance(option, dict)
+                    ],
+                )
+            )
+
+    return ResultDetailResponse(
+        session=_build_result_item(session, personal_id),
+        exam_title=exam.get("title"),
+        total_questions=int(summary.get("total", 0) or 0),
+        answered_questions=int(summary.get("answered", 0) or 0),
+        correct_answers=int(summary.get("correct", 0) or 0),
+        block_stats=block_stats,
+        answers=answers,
+        snapshot=snapshot,
+        legacy=False,
+    )
+
+
 # Results list
 @router.get("/results", response_model=ResultListResponse)
 def results_list(
@@ -443,6 +549,7 @@ def results_list(
     db: Session = Depends(get_db),
 ):
     _require_admin(db, authorization)
+    auto_close_expired_sessions(db)
 
     candidate_code_norm = (candidate_code or "").strip().lower() or None
     personal_id_norm = (personal_id or "").strip().lower() or None
@@ -510,6 +617,9 @@ def result_detail(
     s = db.get(ExamSession, session_id)
     if not s:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if auto_close_session_if_expired(db, s):
+        db.commit()
+        db.refresh(s)
     personal_id_value: str | None = None
     if s.candidate_code:
         personal_id_value = db.scalar(
@@ -517,6 +627,10 @@ def result_detail(
             .where(func.lower(User.code) == func.lower(s.candidate_code))
             .limit(1)
         )
+
+    snapshot = _load_session_snapshot(s)
+    if snapshot:
+        return _snapshot_result_detail(s, snapshot, personal_id_value)
 
     exam_title: str | None = None
     if s.exam_id:
@@ -526,8 +640,6 @@ def result_detail(
 
     answers = db.scalars(select(Answer).where(Answer.session_id == s.id)).all()
     answer_by_question = {ans.question_id: ans for ans in answers}
-
-    import json as _json
 
     selected_map: dict[str, list[int]] = {}
     if s.selected_map:
@@ -726,6 +838,9 @@ def result_detail(
         correct_answers=correct_answers,
         block_stats=block_stats_payload,
         answers=answers_payload,
+        snapshot=None,
+        legacy=True,
+        legacy_message="ისტორიული მონაცემი — დეტალი snapshot-ით არ არის ხელმისაწვდომი",
     )
 
 
