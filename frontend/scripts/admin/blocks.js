@@ -38,32 +38,6 @@
       state.taxonomy = normalizeTaxonomy(chapters);
     }
 
-    async function createTaxonomyChapter(name) {
-      const response = await fetch(`${API_BASE}/taxonomy/chapters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
-        body: JSON.stringify({ name }),
-      });
-      if (!response.ok) {
-        await handleAdminErrorResponse(response, 'თავის დამატება ვერ მოხერხდა', showToast);
-        return null;
-      }
-      return await response.json();
-    }
-
-    async function createTaxonomySubchapter(chapterId, name) {
-      const response = await fetch(`${API_BASE}/taxonomy/subchapters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
-        body: JSON.stringify({ chapterId, name }),
-      });
-      if (!response.ok) {
-        await handleAdminErrorResponse(response, 'ქვეთავის დამატება ვერ მოხერხდა', showToast);
-        return null;
-      }
-      return await response.json();
-    }
-
     function normalizeTaxonomy(chapters) {
       return (Array.isArray(chapters) ? chapters : []).map((chapter) => ({
         id: Number(chapter?.id) || 0,
@@ -366,13 +340,11 @@
                 <select class="head-chapter" aria-label="თავი">
                   ${taxonomySelectOptions(state.taxonomy, block.chapterId, 'თავი')}
                 </select>
-                <button class="head-add-chapter taxonomy-add-btn" type="button" aria-label="თავის დამატება" title="თავის დამატება">+</button>
               </div>
               <div class="head-taxonomy-group">
                 <select class="head-subchapter" aria-label="ქვეთავი" ${Number(block.chapterId) ? '' : 'disabled'}>
-                  ${taxonomySelectOptions(subchapters, block.subchapterId, 'ქვეთავი')}
+                  ${taxonomySelectOptions(subchapters, block.subchapterId, Number(block.chapterId) ? 'ქვეთავი' : 'ჯერ აირჩიეთ თავი')}
                 </select>
-                <button class="head-add-subchapter taxonomy-add-btn" type="button" aria-label="ქვეთავის დამატება" title="ქვეთავის დამატება" ${Number(block.chapterId) ? '' : 'disabled'}>+</button>
               </div>
               <input class="head-name" type="text" placeholder="ბლოკის სახელი" value="${escapeHtml(block.name || '')}" aria-label="ბლოკის სახელი" />
             </div>
@@ -480,37 +452,6 @@
       if (blockIndex === -1) return;
       const block = state.data[blockIndex];
       block.questions = Array.isArray(block.questions) ? block.questions : [];
-
-      if (target.classList.contains('head-add-chapter')) {
-        const name = (global.prompt('ჩაწერეთ თავის სახელი') || '').trim();
-        if (!name) return;
-        const chapter = await createTaxonomyChapter(name);
-        if (!chapter) return;
-        await fetchTaxonomyFromServer();
-        block.chapterId = Number(chapter.id) || null;
-        block.subchapterId = null;
-        showToast('თავი დამატებულია');
-        render();
-        return;
-      }
-
-      if (target.classList.contains('head-add-subchapter')) {
-        const chapterId = Number(block.chapterId) || 0;
-        if (!chapterId) {
-          showToast('ჯერ აირჩიეთ თავი', 'error');
-          return;
-        }
-        const name = (global.prompt('ჩაწერეთ ქვეთავის სახელი') || '').trim();
-        if (!name) return;
-        const subchapter = await createTaxonomySubchapter(chapterId, name);
-        if (!subchapter) return;
-        await fetchTaxonomyFromServer();
-        block.subchapterId = Number(subchapter.id) || null;
-        showToast('ქვეთავი დამატებულია');
-        save();
-        render();
-        return;
-      }
 
       if (target.classList.contains('up')) {
         if (blockIndex > 0) {
@@ -968,12 +909,24 @@
       render();
     }
 
+    async function reloadTaxonomy() {
+      await fetchTaxonomyFromServer();
+      render();
+    }
+
     function init() {
       void loadInitialBlocks();
       on(DOM.blocksGrid, 'click', handleGridClick);
       on(DOM.blocksGrid, 'change', handleGridChange);
       on(DOM.blocksGrid, 'keydown', handleGridKeydown);
       on(DOM.blocksGrid, 'focusout', handleGridFocusout);
+      global.addEventListener('exam-taxonomy-updated', (event) => {
+        if (event.detail?.reloadBlocks) {
+          void loadInitialBlocks();
+          return;
+        }
+        void reloadTaxonomy();
+      });
       // Search functionality
       if (searchInput) {
         searchInput.addEventListener('input', handleSearch);
@@ -984,6 +937,7 @@
       init,
       render: () => render(),
       reload: () => void loadInitialBlocks(),
+      reloadTaxonomy: () => void reloadTaxonomy(),
       openImportModal,
     };
   }

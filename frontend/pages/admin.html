@@ -96,6 +96,42 @@
             <button id="saveAdminGatePassword" class="duration-save">შენახვა</button>
           </div>
           <div id="gatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
+          <div class="taxonomy-panel" aria-label="თავები და ქვეთავები">
+            <div class="taxonomy-control-group">
+              <label for="taxonomyChapterSelect" class="duration-label">თავი</label>
+              <div class="taxonomy-combo">
+                <input id="taxonomyChapterSelect" type="hidden" />
+                <button id="taxonomyChapterDropdown" class="taxonomy-select-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="taxonomyChapterLabel">თავი</span>
+                  <span class="taxonomy-caret" aria-hidden="true">▾</span>
+                </button>
+                <button id="openTaxonomyChapterCreator" class="taxonomy-plus" type="button" aria-label="თავის დამატება" title="თავის დამატება">+</button>
+                <div id="taxonomyChapterMenu" class="taxonomy-menu" role="listbox" hidden></div>
+              </div>
+              <div id="taxonomyChapterCreator" class="taxonomy-creator" hidden>
+                <input id="taxonomyChapterName" class="duration-input taxonomy-input" type="text" placeholder="ახალი თავი" />
+                <button id="saveTaxonomyChapter" class="duration-save" type="button">Save</button>
+                <button id="closeTaxonomyChapterCreator" class="taxonomy-close" type="button" aria-label="დახურვა" title="დახურვა">×</button>
+              </div>
+            </div>
+            <div class="taxonomy-control-group">
+              <label for="taxonomySubchapterSelect" class="duration-label">ქვეთავი</label>
+              <div class="taxonomy-combo">
+                <input id="taxonomySubchapterSelect" type="hidden" />
+                <button id="taxonomySubchapterDropdown" class="taxonomy-select-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="taxonomySubchapterLabel">ქვეთავი</span>
+                  <span class="taxonomy-caret" aria-hidden="true">▾</span>
+                </button>
+                <button id="openTaxonomySubchapterCreator" class="taxonomy-plus" type="button" aria-label="ქვეთავის დამატება" title="ქვეთავის დამატება">+</button>
+                <div id="taxonomySubchapterMenu" class="taxonomy-menu" role="listbox" hidden></div>
+              </div>
+              <div id="taxonomySubchapterCreator" class="taxonomy-creator" hidden>
+                <input id="taxonomySubchapterName" class="duration-input taxonomy-input" type="text" placeholder="ახალი ქვეთავი" />
+                <button id="saveTaxonomySubchapter" class="duration-save" type="button">Save</button>
+                <button id="closeTaxonomySubchapterCreator" class="taxonomy-close" type="button" aria-label="დახურვა" title="დახურვა">×</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="exam-content">

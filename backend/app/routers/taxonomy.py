@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import TaxonomyChapter, TaxonomySubchapter, User
+from ..models import Answer, Block, Option, Question, TaxonomyChapter, TaxonomySubchapter, User
 from ..schemas import (
     TaxonomyChapterCreate,
     TaxonomyChapterOut,
@@ -48,6 +48,17 @@ def _get_subchapter(db: Session, subchapter_id: int) -> TaxonomySubchapter:
     if not subchapter:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subchapter not found")
     return subchapter
+
+
+def _delete_blocks_deep(db: Session, block_ids: list[int]) -> None:
+    if not block_ids:
+        return
+    question_ids = db.scalars(select(Question.id).where(Question.block_id.in_(block_ids))).all()
+    if question_ids:
+        db.execute(delete(Answer).where(Answer.question_id.in_(question_ids)))
+        db.execute(delete(Option).where(Option.question_id.in_(question_ids)))
+        db.execute(delete(Question).where(Question.id.in_(question_ids)))
+    db.execute(delete(Block).where(Block.id.in_(block_ids)))
 
 
 @router.get("/chapters", response_model=list[TaxonomyChapterOut])
@@ -100,6 +111,14 @@ def delete_chapter(
     db: Session = Depends(get_db),
 ):
     chapter = _get_chapter(db, chapter_id)
+    subchapter_ids = db.scalars(
+        select(TaxonomySubchapter.id).where(TaxonomySubchapter.chapter_id == chapter_id)
+    ).all()
+    block_filter = Block.chapter_id == chapter_id
+    if subchapter_ids:
+        block_filter = or_(block_filter, Block.subchapter_id.in_(subchapter_ids))
+    block_ids = db.scalars(select(Block.id).where(block_filter)).all()
+    _delete_blocks_deep(db, block_ids)
     db.delete(chapter)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -164,6 +183,8 @@ def delete_subchapter(
     db: Session = Depends(get_db),
 ):
     subchapter = _get_subchapter(db, subchapter_id)
+    block_ids = db.scalars(select(Block.id).where(Block.subchapter_id == subchapter_id)).all()
+    _delete_blocks_deep(db, block_ids)
     db.delete(subchapter)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
