@@ -133,6 +133,11 @@
       return Number.isInteger(number) ? String(number) : number.toFixed(2);
     }
 
+    function formatExamTitle(title) {
+      const normalized = String(title || '').trim();
+      return !normalized || normalized === 'Default Exam' ? 'ტესტები' : normalized;
+    }
+
     function correctAnswerText(stats) {
       const total = statNumber(stats, 'total');
       const correct = statNumber(stats, 'correct');
@@ -145,7 +150,7 @@
       const correct = statNumber(stats, 'correct');
       const incorrect = statNumber(stats, 'incorrect');
       const percent = formatPercent(statNumber(stats, 'percent'));
-      return `სულ ${total} • სწორია ${correct} • არასწორია ${incorrect} • ${percent}%`;
+      return `კითხვების რაოდენობა ${total}, სწორი პასუხი ${correct}, არასწორი პასუხი ${incorrect}, შედეგი ${percent}%`;
     }
 
     function createStatLine(stats) {
@@ -222,15 +227,12 @@
     }
 
     function appendBlockQuestions(parent, block, counter) {
+      const questions = Array.isArray(block?.questions) ? block.questions : [];
+      if (!questions.length) return;
+
       const blockWrap = document.createElement('div');
       blockWrap.className = 'result-block-detail';
-      const title = document.createElement('div');
-      title.className = 'result-block-detail-title';
-      title.textContent = block?.title || `ბლოკი ${block?.id || ''}`;
-      blockWrap.appendChild(title);
-      blockWrap.appendChild(createStatLine(block?.stats || {}));
 
-      const questions = Array.isArray(block?.questions) ? block.questions : [];
       questions.forEach((question) => {
         const answer = normalizeSnapshotAnswer(question, block);
         const card = buildQuestionCard(answer, counter.value);
@@ -339,7 +341,6 @@
 
       const metaWrap = document.createElement('div');
       metaWrap.className = 'result-question-card-head-meta';
-      metaWrap.appendChild(createMetaItem('ბლოკი', answer.block_title || '—'));
       metaWrap.appendChild(createMetaItem('კოდი', answer.question_code || '—'));
       metaWrap.appendChild(createMetaItem('კითხვა №', String(index + 1)));
 
@@ -497,7 +498,7 @@
       const status = statusMeta(session.status);
 
       if (DOM.resultDetailExamTitle) {
-        DOM.resultDetailExamTitle.textContent = detail.exam_title || 'გამოცდა';
+        DOM.resultDetailExamTitle.textContent = formatExamTitle(detail.exam_title);
       }
       if (DOM.resultDetailStatus) {
         DOM.resultDetailStatus.innerHTML = `<span class="result-tag ${status.tag}">${status.label}</span>`;
@@ -516,12 +517,7 @@
         DOM.resultDetailScore.textContent = `${score}%`;
       }
       if (DOM.resultDetailSummary) {
-        const total = summary ? statNumber(summary, 'total') : Number(detail.total_questions || 0);
-        const answered = summary ? statNumber(summary, 'answered') : Number(detail.answered_questions || 0);
-        const correct = summary ? statNumber(summary, 'correct') : Number(detail.correct_answers || 0);
-        const incorrect = summary ? statNumber(summary, 'incorrect') : Math.max(0, answered - correct);
-        const legacySuffix = detail.legacy_message ? ` • ${detail.legacy_message}` : '';
-        DOM.resultDetailSummary.textContent = `სულ: ${total} • პასუხი: ${answered} • სწორია: ${correct} • არასწორია: ${incorrect}${legacySuffix}`;
+        DOM.resultDetailSummary.textContent = '';
       }
 
       if (DOM.resultBlockStats) {
@@ -1137,7 +1133,7 @@
             ],
             'გამოცდა',
             [
-              ['გამოცდა', snapshotExam.title || detail.exam_title || '—'],
+              ['გამოცდა', formatExamTitle(snapshotExam.title || detail.exam_title)],
               ['სტატუსი', statusLabel],
               ['დაწყება', formatDateTime(snapshotSession.started_at || session.started_at)],
               ['დასრულება', formatDateTime(snapshotSession.finished_at || session.finished_at)],
