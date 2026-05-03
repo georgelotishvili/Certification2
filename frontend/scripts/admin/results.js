@@ -128,11 +128,23 @@
       return Number(stats?.[key] || 0);
     }
 
+    function formatPercent(value) {
+      const number = Number(value) || 0;
+      return Number.isInteger(number) ? String(number) : number.toFixed(2);
+    }
+
+    function correctAnswerText(stats) {
+      const total = statNumber(stats, 'total');
+      const correct = statNumber(stats, 'correct');
+      const percent = statNumber(stats, 'percent');
+      return `სწორი პასუხები ${correct}/${total}. ${formatPercent(percent)}%`;
+    }
+
     function statText(stats) {
       const total = statNumber(stats, 'total');
       const correct = statNumber(stats, 'correct');
       const incorrect = statNumber(stats, 'incorrect');
-      const percent = statNumber(stats, 'percent').toFixed(2);
+      const percent = formatPercent(statNumber(stats, 'percent'));
       return `სულ ${total} • სწორია ${correct} • არასწორია ${incorrect} • ${percent}%`;
     }
 
@@ -141,6 +153,48 @@
       line.className = 'result-stat-line';
       line.textContent = statText(stats);
       return line;
+    }
+
+    function createResultBoard(titleText) {
+      const board = document.createElement('section');
+      board.className = 'admin-result-board';
+      const title = document.createElement('h4');
+      title.className = 'admin-result-board-title';
+      title.textContent = titleText;
+      const list = document.createElement('div');
+      list.className = 'admin-result-board-list';
+      board.append(title, list);
+      return { board, list };
+    }
+
+    function appendResultRow(list, label, stats) {
+      const row = document.createElement('div');
+      row.className = 'admin-result-board-row';
+
+      const name = document.createElement('span');
+      name.className = 'admin-result-board-name';
+      name.textContent = label;
+
+      const value = document.createElement('span');
+      value.className = 'admin-result-board-value';
+      value.textContent = correctAnswerText(stats || {});
+
+      row.append(name, value);
+      list.appendChild(row);
+    }
+
+    function appendOverallResultRow(list, stats) {
+      const row = document.createElement('div');
+      row.className = 'admin-result-board-row admin-result-board-row--single';
+      row.textContent = correctAnswerText(stats || {});
+      list.appendChild(row);
+    }
+
+    function appendEmptyResultRow(list, text) {
+      const row = document.createElement('div');
+      row.className = 'admin-result-board-row muted';
+      row.textContent = text;
+      list.appendChild(row);
     }
 
     function normalizeSnapshotAnswer(question, block) {
@@ -235,56 +289,39 @@
     function renderSnapshotStats(snapshot) {
       if (!DOM.resultBlockStats) return;
       DOM.resultBlockStats.innerHTML = '';
+      DOM.resultBlockStats.classList.add('result-summary-boards');
       const fragment = document.createDocumentFragment();
+      const overallBoard = createResultBoard('საერთო შედეგი');
+      appendOverallResultRow(overallBoard.list, snapshot?.summary || {});
+      fragment.appendChild(overallBoard.board);
+
+      const chapterBoard = createResultBoard('თავების შედეგები');
+      const subchapterBoard = createResultBoard('ქვეთავების შედეგები');
       const chapters = Array.isArray(snapshot?.chapters) ? snapshot.chapters : [];
 
       chapters.forEach((chapter) => {
-        const chapterCard = document.createElement('div');
-        chapterCard.className = 'result-chapter-stat';
-        const title = document.createElement('div');
-        title.className = 'result-chapter-stat-title';
-        title.textContent = chapter?.name || 'თავი';
-        chapterCard.appendChild(title);
-        chapterCard.appendChild(createStatLine(chapter?.stats || {}));
+        appendResultRow(chapterBoard.list, chapter?.name || 'თავი', chapter?.stats || {});
 
         (chapter?.subchapters || []).forEach((subchapter) => {
-          const sub = document.createElement('div');
-          sub.className = 'result-subchapter-stat';
-          const subTitle = document.createElement('div');
-          subTitle.className = 'result-subchapter-stat-title';
-          subTitle.textContent = subchapter?.name || 'ქვეთავი';
-          sub.appendChild(subTitle);
-          sub.appendChild(createStatLine(subchapter?.stats || {}));
-          chapterCard.appendChild(sub);
+          appendResultRow(subchapterBoard.list, subchapter?.name || 'ქვეთავი', subchapter?.stats || {});
         });
-        fragment.appendChild(chapterCard);
       });
 
       const untaggedBlocks = Array.isArray(snapshot?.untagged_blocks) ? snapshot.untagged_blocks : [];
       if (untaggedBlocks.length) {
-        const card = document.createElement('div');
-        card.className = 'result-chapter-stat';
-        const title = document.createElement('div');
-        title.className = 'result-chapter-stat-title';
-        title.textContent = 'მიუბმელი ბლოკები';
-        card.appendChild(title);
         untaggedBlocks.forEach((block) => {
-          const sub = document.createElement('div');
-          sub.className = 'result-subchapter-stat';
-          const subTitle = document.createElement('div');
-          subTitle.className = 'result-subchapter-stat-title';
-          subTitle.textContent = block?.title || `ბლოკი ${block?.id || ''}`;
-          sub.appendChild(subTitle);
-          sub.appendChild(createStatLine(block?.stats || {}));
-          card.appendChild(sub);
+          appendResultRow(subchapterBoard.list, block?.title || `ბლოკი ${block?.id || ''}`, block?.stats || {});
         });
-        fragment.appendChild(card);
       }
 
-      if (!fragment.childNodes.length) {
-        DOM.resultBlockStats.innerHTML = '<div class="empty-state">სტატისტიკა არ არის ხელმისაწვდომი</div>';
-        return;
+      if (!chapterBoard.list.childNodes.length) {
+        appendEmptyResultRow(chapterBoard.list, 'თავების შედეგები არ არის');
       }
+      if (!subchapterBoard.list.childNodes.length) {
+        appendEmptyResultRow(subchapterBoard.list, 'ქვეთავების შედეგები არ არის');
+      }
+
+      fragment.append(chapterBoard.board, subchapterBoard.board);
       DOM.resultBlockStats.appendChild(fragment);
     }
 
@@ -445,7 +482,10 @@
       if (DOM.resultDetailDuration) DOM.resultDetailDuration.textContent = '';
       if (DOM.resultDetailScore) DOM.resultDetailScore.textContent = '';
       if (DOM.resultDetailSummary) DOM.resultDetailSummary.textContent = '';
-      if (DOM.resultBlockStats) DOM.resultBlockStats.innerHTML = '';
+      if (DOM.resultBlockStats) {
+        DOM.resultBlockStats.classList.remove('result-summary-boards');
+        DOM.resultBlockStats.innerHTML = '';
+      }
       if (DOM.resultQuestionList) DOM.resultQuestionList.innerHTML = '';
     }
 
@@ -488,27 +528,28 @@
         if (snapshot) {
           renderSnapshotStats(snapshot);
         } else {
-        const fragment = document.createDocumentFragment();
-        (detail.block_stats || []).forEach((stat) => {
-          if (!stat) return;
-          const card = document.createElement('div');
-          card.className = 'block-card-stat';
-          const title = stat.block_title || `ბლოკი ${stat.block_id}`;
-          const safeTitle = escapeHtml(title);
-          const safeCorrect = escapeHtml(stat.correct ?? 0);
-          const safeTotal = escapeHtml(stat.total ?? 0);
-          const safePercent = escapeHtml(Number(stat.percent || 0).toFixed(2));
-          card.innerHTML = `
-            <div class="block-name">${safeTitle}</div>
-            <div class="block-progress">
-              <span>${safeCorrect}/${safeTotal}</span>
-              <span>${safePercent}%</span>
-            </div>
-          `;
-          fragment.appendChild(card);
-        });
-        DOM.resultBlockStats.innerHTML = '';
-        DOM.resultBlockStats.appendChild(fragment);
+          DOM.resultBlockStats.classList.remove('result-summary-boards');
+          const fragment = document.createDocumentFragment();
+          (detail.block_stats || []).forEach((stat) => {
+            if (!stat) return;
+            const card = document.createElement('div');
+            card.className = 'block-card-stat';
+            const title = stat.block_title || `ბლოკი ${stat.block_id}`;
+            const safeTitle = escapeHtml(title);
+            const safeCorrect = escapeHtml(stat.correct ?? 0);
+            const safeTotal = escapeHtml(stat.total ?? 0);
+            const safePercent = escapeHtml(Number(stat.percent || 0).toFixed(2));
+            card.innerHTML = `
+              <div class="block-name">${safeTitle}</div>
+              <div class="block-progress">
+                <span>${safeCorrect}/${safeTotal}</span>
+                <span>${safePercent}%</span>
+              </div>
+            `;
+            fragment.appendChild(card);
+          });
+          DOM.resultBlockStats.innerHTML = '';
+          DOM.resultBlockStats.appendChild(fragment);
         }
       }
 
