@@ -259,6 +259,8 @@ class FinishResponse(BaseModel):
     correct: int
     score_percent: float
     block_stats: List[dict]
+    chapter_stats: List[dict] = Field(default_factory=list)
+    subchapter_stats: List[dict] = Field(default_factory=list)
 
 
 class MediaUploadResponse(BaseModel):

@@ -315,12 +315,50 @@ def build_exam_snapshot(
 
 def finish_response_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     summary = snapshot.get("summary") or {}
+    chapter_stats: list[dict[str, Any]] = []
+    subchapter_stats: list[dict[str, Any]] = []
+    for chapter in snapshot.get("chapters") or []:
+        if not isinstance(chapter, dict):
+            continue
+        chapter_stat = chapter.get("stats") or {}
+        chapter_stats.append(
+            {
+                "chapter_id": chapter.get("id"),
+                "chapter_name": chapter.get("name") or "თავი",
+                "total": int(chapter_stat.get("total", 0) or 0),
+                "answered": int(chapter_stat.get("answered", 0) or 0),
+                "correct": int(chapter_stat.get("correct", 0) or 0),
+                "incorrect": int(chapter_stat.get("incorrect", 0) or 0),
+                "unanswered": int(chapter_stat.get("unanswered", 0) or 0),
+                "percent": float(chapter_stat.get("percent", 0.0) or 0.0),
+            }
+        )
+        for subchapter in chapter.get("subchapters") or []:
+            if not isinstance(subchapter, dict):
+                continue
+            subchapter_stat = subchapter.get("stats") or {}
+            subchapter_stats.append(
+                {
+                    "chapter_id": chapter.get("id"),
+                    "chapter_name": chapter.get("name") or "თავი",
+                    "subchapter_id": subchapter.get("id"),
+                    "subchapter_name": subchapter.get("name") or "ქვეთავი",
+                    "total": int(subchapter_stat.get("total", 0) or 0),
+                    "answered": int(subchapter_stat.get("answered", 0) or 0),
+                    "correct": int(subchapter_stat.get("correct", 0) or 0),
+                    "incorrect": int(subchapter_stat.get("incorrect", 0) or 0),
+                    "unanswered": int(subchapter_stat.get("unanswered", 0) or 0),
+                    "percent": float(subchapter_stat.get("percent", 0.0) or 0.0),
+                }
+            )
     return {
         "total_questions": int(summary.get("total", 0) or 0),
         "answered": int(summary.get("answered", 0) or 0),
         "correct": int(summary.get("correct", 0) or 0),
         "score_percent": float(summary.get("percent", 0.0) or 0.0),
         "block_stats": snapshot.get("block_stats") or [],
+        "chapter_stats": chapter_stats,
+        "subchapter_stats": subchapter_stats,
     }
 
 
