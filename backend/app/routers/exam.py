@@ -68,6 +68,12 @@ def start_session(payload: StartSessionRequest, db: Session = Depends(get_db)):
     exam = db.get(Exam, payload.exam_id)
     if not exam:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
+    candidate_code = (payload.candidate_code or "").strip()
+    candidate_user = (
+        db.scalar(select(User).where(User.code == candidate_code))
+        if candidate_code
+        else None
+    )
     now = datetime.now(timezone.utc)
     ends_at = now + timedelta(minutes=exam.duration_minutes)
     token = f"sess_{now.timestamp()}_{random.randint(1000,9999)}"
@@ -77,9 +83,10 @@ def start_session(payload: StartSessionRequest, db: Session = Depends(get_db)):
         started_at=now,
         ends_at=ends_at,
         active=True,
+        user_id=candidate_user.id if candidate_user else None,
         candidate_first_name=payload.candidate_first_name,
         candidate_last_name=payload.candidate_last_name,
-        candidate_code=payload.candidate_code,
+        candidate_code=candidate_code,
     )
     db.add(session)
     db.commit()

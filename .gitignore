@@ -28,21 +28,26 @@ backend/app.db
 
 # Sensitive files
 backend/verification_codes.txt
+rehost.ge server.txt
+
+# AI-to-AI communication file (local-only, not deployed)
+communication.md
+
+# Local reference documents
+განახლებული ტესტირების გზამკვლევი.pdf
 
 # User uploaded media files
 backend/app/media/
 backend/app/media/**/*
 
+# Desktop app (separate program, not part of the website)
+desktop_app/
+
 # Node.js
-desktop_app/node_modules/
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Exam screen recordings
-desktop_app/recordings/*.webm
-desktop_app/recordings/*.mp4
 
 # IDE
 .vscode/

@@ -28,6 +28,9 @@ try:
     from backend.scripts.migrate_multi_functional import run as run_multi_functional_migration
     from backend.scripts.migrate_guide_videos import run as run_guide_videos_migration
     from backend.scripts.migrate_user_sessions import run as run_user_sessions_migration
+    from backend.scripts.migrate_session_user_id import run as run_session_user_id_migration
+    from backend.scripts.migrate_fix_answers_fk import run as run_fix_answers_fk_migration
+    from backend.scripts.migrate_taxonomy import run as run_taxonomy_migration
     from backend.scripts.migrate_documents import run as run_documents_migration
 except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
     from scripts.migrate_results_cols import run as run_results_migration  # type: ignore
@@ -40,6 +43,9 @@ except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.
     from scripts.migrate_multi_functional import run as run_multi_functional_migration  # type: ignore
     from scripts.migrate_guide_videos import run as run_guide_videos_migration  # type: ignore
     from scripts.migrate_user_sessions import run as run_user_sessions_migration  # type: ignore
+    from scripts.migrate_session_user_id import run as run_session_user_id_migration  # type: ignore
+    from scripts.migrate_fix_answers_fk import run as run_fix_answers_fk_migration  # type: ignore
+    from scripts.migrate_taxonomy import run as run_taxonomy_migration  # type: ignore
     from scripts.migrate_documents import run as run_documents_migration  # type: ignore
 
 
@@ -59,6 +65,9 @@ def create_app() -> FastAPI:
         run_multi_functional_migration,
         run_guide_videos_migration,
         run_user_sessions_migration,
+        run_session_user_id_migration,
+        run_fix_answers_fk_migration,
+        run_taxonomy_migration,
         run_documents_migration,
     ):
         try:
@@ -92,11 +101,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents
+    from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents, taxonomy
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
+    app.include_router(taxonomy.router, prefix="/taxonomy", tags=["taxonomy"])
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])
     app.include_router(registry.router, prefix="/certified-persons", tags=["registry"])

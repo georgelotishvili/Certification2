@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
+from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -156,6 +156,8 @@ def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
                 number=block.order_index or block_index,
                 name=block.title,
                 qty=block.qty,
+                chapter_id=block.chapter_id,
+                subchapter_id=block.subchapter_id,
                 enabled=block.enabled,
                 questions=question_payloads,
             )
@@ -251,9 +253,42 @@ def update_exam_blocks(
         except (TypeError, ValueError):
             return None
 
+    chapter_by_id = {
+        chapter.id: chapter
+        for chapter in db.scalars(select(TaxonomyChapter)).all()
+    }
+    subchapter_by_id = {
+        subchapter.id: subchapter
+        for subchapter in db.scalars(select(TaxonomySubchapter)).all()
+    }
+    taxonomy_configured = bool(chapter_by_id)
+
+    def _resolve_block_taxonomy(block_payload: AdminBlockPayload) -> tuple[int | None, int | None]:
+        chapter_id = _parse_int(block_payload.chapter_id)
+        subchapter_id = _parse_int(block_payload.subchapter_id)
+        has_any_value = chapter_id is not None or subchapter_id is not None
+        if taxonomy_configured or has_any_value:
+            if chapter_id is None or subchapter_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Chapter and subchapter are required",
+                )
+            if chapter_id not in chapter_by_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
+            subchapter = subchapter_by_id.get(subchapter_id)
+            if not subchapter:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subchapter not found")
+            if subchapter.chapter_id != chapter_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Subchapter does not belong to chapter",
+                )
+        return chapter_id, subchapter_id
+
     for block_index, block_payload in enumerate(payload.blocks or [], start=1):
         questions_payload = block_payload.questions or []
         qty = max(0, min(block_payload.qty, len(questions_payload)))
+        chapter_id, subchapter_id = _resolve_block_taxonomy(block_payload)
 
         block_id_int = _parse_int(block_payload.id)
         if block_id_int is not None and str(block_id_int) in block_by_id:
@@ -267,6 +302,8 @@ def update_exam_blocks(
         block.title = (block_payload.name or "").strip() or f"ბლოკი {block_index_default}"
         block.qty = qty
         block.order_index = block_payload.number or block_index_default
+        block.chapter_id = chapter_id
+        block.subchapter_id = subchapter_id
         block.enabled = block_payload.enabled
 
         db.flush()

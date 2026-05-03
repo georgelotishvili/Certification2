@@ -22,6 +22,8 @@ class BlockOut(BaseModel):
     title: str
     qty: int
     order_index: int
+    chapter_id: Optional[int] = None
+    subchapter_id: Optional[int] = None
 
 
 class ExamConfigResponse(BaseModel):
@@ -43,6 +45,50 @@ class ExamSettingsUpdateRequest(CamelModel):
     title: Optional[str] = None
     duration_minutes: Optional[int] = None
     gate_password: Optional[str] = None
+
+
+class TaxonomySubchapterOut(CamelModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
+
+    id: int
+    chapter_id: int
+    name: str
+    order_index: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaxonomyChapterOut(CamelModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
+
+    id: int
+    name: str
+    order_index: int
+    created_at: datetime
+    updated_at: datetime
+    subchapters: List[TaxonomySubchapterOut] = Field(default_factory=list)
+
+
+class TaxonomyChapterCreate(CamelModel):
+    name: str
+    order_index: Optional[int] = None
+
+
+class TaxonomyChapterUpdate(CamelModel):
+    name: Optional[str] = None
+    order_index: Optional[int] = None
+
+
+class TaxonomySubchapterCreate(CamelModel):
+    chapter_id: int
+    name: str
+    order_index: Optional[int] = None
+
+
+class TaxonomySubchapterUpdate(CamelModel):
+    chapter_id: Optional[int] = None
+    name: Optional[str] = None
+    order_index: Optional[int] = None
 
 
 class MultiApartmentSettingsResponse(CamelModel):
@@ -97,6 +143,8 @@ class AdminBlockPayload(CamelModel):
     number: int
     name: str
     qty: int
+    chapter_id: Optional[int] = None
+    subchapter_id: Optional[int] = None
     enabled: bool = True
     questions: List[AdminQuestionPayload]
 

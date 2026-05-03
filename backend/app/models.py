@@ -42,17 +42,59 @@ class Exam(Base):
     sessions: Mapped[List[Session]] = relationship("Session", back_populates="exam", cascade="all, delete-orphan")
 
 
+class TaxonomyChapter(Base):
+    __tablename__ = "taxonomy_chapters"
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_taxonomy_chapters_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    subchapters: Mapped[List["TaxonomySubchapter"]] = relationship(
+        "TaxonomySubchapter",
+        back_populates="chapter",
+        cascade="all, delete-orphan",
+        order_by="TaxonomySubchapter.order_index",
+    )
+    blocks: Mapped[List["Block"]] = relationship("Block", back_populates="chapter")
+
+
+class TaxonomySubchapter(Base):
+    __tablename__ = "taxonomy_subchapters"
+    __table_args__ = (
+        UniqueConstraint("chapter_id", "name", name="uq_taxonomy_subchapters_chapter_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("taxonomy_chapters.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    chapter: Mapped[TaxonomyChapter] = relationship("TaxonomyChapter", back_populates="subchapters")
+    blocks: Mapped[List["Block"]] = relationship("Block", back_populates="subchapter")
+
+
 class Block(Base):
     __tablename__ = "blocks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"))
+    chapter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("taxonomy_chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    subchapter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("taxonomy_subchapters.id", ondelete="SET NULL"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255))
     qty: Mapped[int] = mapped_column(Integer, default=1)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     exam: Mapped[Exam] = relationship("Exam", back_populates="blocks")
+    chapter: Mapped[Optional[TaxonomyChapter]] = relationship("TaxonomyChapter", back_populates="blocks")
+    subchapter: Mapped[Optional[TaxonomySubchapter]] = relationship("TaxonomySubchapter", back_populates="blocks")
     questions: Mapped[List[Question]] = relationship("Question", back_populates="block", cascade="all, delete-orphan", order_by="Question.order_index")
 
 
@@ -112,16 +154,19 @@ class Session(Base):
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     selected_map: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     # Candidate metadata (optional, filled when using admin-started sessions)
     candidate_first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     candidate_last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     candidate_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     # Aggregated results
     block_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
+    exam_snapshot: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
     score_percent: Mapped[float] = mapped_column(Float, default=0.0)
 
     exam: Mapped[Exam] = relationship("Exam", back_populates="sessions")
     code: Mapped[ExamCode] = relationship("ExamCode", back_populates="sessions")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="exam_sessions")
     answers: Mapped[List[Answer]] = relationship("Answer", back_populates="session", cascade="all, delete-orphan")
     media_entries: Mapped[List["ExamMedia"]] = relationship(
         "ExamMedia",
@@ -179,6 +224,11 @@ class User(Base):
     )
     sessions: Mapped[List["UserSession"]] = relationship(
         "UserSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    exam_sessions: Mapped[List["Session"]] = relationship(
+        "Session",
         back_populates="user",
         cascade="all, delete-orphan",
     )

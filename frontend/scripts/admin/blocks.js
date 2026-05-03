@@ -11,7 +11,7 @@
       getActorHeaders,
     } = context;
 
-    const state = { data: [], examId: 1, saveTimer: null, pendingNotify: false, searchTerm: '' };
+    const state = { data: [], examId: 1, saveTimer: null, pendingNotify: false, searchTerm: '', taxonomy: [] };
 
     // Search input element
     const searchInput = document.getElementById('examBlocksSearch');
@@ -29,6 +29,80 @@
         throw new Error('handled');
       }
       return await response.json();
+    }
+
+    async function fetchTaxonomyFromServer() {
+      const response = await fetch(`${API_BASE}/taxonomy/chapters`);
+      if (!response.ok) throw new Error('taxonomy');
+      const chapters = await response.json();
+      state.taxonomy = normalizeTaxonomy(chapters);
+    }
+
+    async function createTaxonomyChapter(name) {
+      const response = await fetch(`${API_BASE}/taxonomy/chapters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+        body: JSON.stringify({ name }),
+      });
+      if (!response.ok) {
+        await handleAdminErrorResponse(response, 'თავის დამატება ვერ მოხერხდა', showToast);
+        return null;
+      }
+      return await response.json();
+    }
+
+    async function createTaxonomySubchapter(chapterId, name) {
+      const response = await fetch(`${API_BASE}/taxonomy/subchapters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+        body: JSON.stringify({ chapterId, name }),
+      });
+      if (!response.ok) {
+        await handleAdminErrorResponse(response, 'ქვეთავის დამატება ვერ მოხერხდა', showToast);
+        return null;
+      }
+      return await response.json();
+    }
+
+    function normalizeTaxonomy(chapters) {
+      return (Array.isArray(chapters) ? chapters : []).map((chapter) => ({
+        id: Number(chapter?.id) || 0,
+        name: String(chapter?.name || ''),
+        orderIndex: Number(chapter?.orderIndex ?? chapter?.order_index) || 0,
+        subchapters: (Array.isArray(chapter?.subchapters) ? chapter.subchapters : []).map((subchapter) => ({
+          id: Number(subchapter?.id) || 0,
+          chapterId: Number(subchapter?.chapterId ?? subchapter?.chapter_id) || 0,
+          name: String(subchapter?.name || ''),
+          orderIndex: Number(subchapter?.orderIndex ?? subchapter?.order_index) || 0,
+        })).filter((subchapter) => subchapter.id > 0),
+      })).filter((chapter) => chapter.id > 0);
+    }
+
+    function taxonomyConfigured() {
+      return state.taxonomy.length > 0;
+    }
+
+    function getSubchaptersForChapter(chapterId) {
+      const id = Number(chapterId) || 0;
+      const chapter = state.taxonomy.find((item) => item.id === id);
+      return chapter?.subchapters || [];
+    }
+
+    function taxonomySelectOptions(items, selectedId, emptyLabel) {
+      const selected = Number(selectedId) || 0;
+      const options = [`<option value="">${escapeHtml(emptyLabel)}</option>`];
+      items.forEach((item) => {
+        options.push(`<option value="${escapeHtml(item.id)}" ${item.id === selected ? 'selected' : ''}>${escapeHtml(item.name)}</option>`);
+      });
+      return options.join('');
+    }
+
+    function blockNeedsTaxonomy(block) {
+      return taxonomyConfigured() && (!Number(block?.chapterId) || !Number(block?.subchapterId));
+    }
+
+    function hasInvalidTaxonomyBlocks() {
+      return state.data.some((block) => blockNeedsTaxonomy(block));
     }
 
     function migrate(data) {
@@ -80,6 +154,8 @@
           number: Number(block.number) || blockIndex + 1,
           qty: Number(block.qty) || 0,
           name: String(block.name || block.title || `ბლოკი ${blockIndex + 1}`),
+          chapterId: Number(block.chapterId ?? block.chapter_id) || null,
+          subchapterId: Number(block.subchapterId ?? block.subchapter_id) || null,
           enabled: typeof block.enabled === 'boolean' ? block.enabled : true,
           questions: migratedQuestions,
         };
@@ -103,6 +179,11 @@
     }
 
     async function persistBlocks() {
+      if (hasInvalidTaxonomyBlocks()) {
+        showToast('აირჩიეთ თავი და ქვეთავი ყველა ბლოკისთვის', 'error');
+        state.pendingNotify = false;
+        return;
+      }
       const payload = {
         examId: state.examId || 1,
         blocks: state.data,
@@ -138,6 +219,7 @@
         DOM.blocksGrid.innerHTML = '<div class="blocks-loading">იტვირთება...</div>';
       }
       try {
+        await fetchTaxonomyFromServer();
         const payload = await fetchBlocksFromServer();
         state.examId = payload.examId || state.examId || 1;
         state.data = migrate(payload.blocks);
@@ -176,6 +258,10 @@
       return state.data.filter((block) => {
         // Check block name
         if ((block.name || '').toLowerCase().includes(term)) return true;
+        const chapter = state.taxonomy.find((item) => item.id === Number(block.chapterId));
+        if ((chapter?.name || '').toLowerCase().includes(term)) return true;
+        const subchapter = getSubchaptersForChapter(block.chapterId).find((item) => item.id === Number(block.subchapterId));
+        if ((subchapter?.name || '').toLowerCase().includes(term)) return true;
 
         // Check questions
         const questions = Array.isArray(block.questions) ? block.questions : [];
@@ -260,11 +346,13 @@
 
       filteredData.forEach((block, index) => {
         const card = document.createElement('div');
-        card.className = 'block-tile block-card';
+        card.className = `block-tile block-card${blockNeedsTaxonomy(block) ? ' taxonomy-missing' : ''}`;
         card.dataset.blockId = block.id;
         const questions = Array.isArray(block.questions) ? block.questions : [];
         const atTop = index === 0;
         const atBottom = index === filteredData.length - 1;
+        const subchapters = getSubchaptersForChapter(block.chapterId);
+        const qtyWarning = Number(block.qty) > questions.length;
         card.innerHTML = `
           <div class="block-head exam-block-head">
             <div class="head-left">
@@ -274,11 +362,23 @@
               </div>
               <span class="head-label">ბლოკი</span>
               <input class="head-number" type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(block.number ?? '')}" aria-label="ბლოკის ნომერი" />
+              <div class="head-taxonomy-group">
+                <select class="head-chapter" aria-label="თავი">
+                  ${taxonomySelectOptions(state.taxonomy, block.chapterId, 'თავი')}
+                </select>
+                <button class="head-add-chapter taxonomy-add-btn" type="button" aria-label="თავის დამატება" title="თავის დამატება">+</button>
+              </div>
+              <div class="head-taxonomy-group">
+                <select class="head-subchapter" aria-label="ქვეთავი" ${Number(block.chapterId) ? '' : 'disabled'}>
+                  ${taxonomySelectOptions(subchapters, block.subchapterId, 'ქვეთავი')}
+                </select>
+                <button class="head-add-subchapter taxonomy-add-btn" type="button" aria-label="ქვეთავის დამატება" title="ქვეთავის დამატება" ${Number(block.chapterId) ? '' : 'disabled'}>+</button>
+              </div>
               <input class="head-name" type="text" placeholder="ბლოკის სახელი" value="${escapeHtml(block.name || '')}" aria-label="ბლოკის სახელი" />
             </div>
             <div class="head-right">
               <span class="head-qty-label">რაოდენობა</span>
-              <input class="head-qty" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(typeof block.qty === 'number' ? block.qty : '')}" aria-label="რაოდენობა" />
+              <input class="head-qty${qtyWarning ? ' qty-warning' : ''}" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(typeof block.qty === 'number' ? block.qty : '')}" aria-label="რაოდენობა" title="${qtyWarning ? 'რაოდენობა მეტია კითხვების რაოდენობაზე' : ''}" />
               <span class="head-count" title="კითხვების რაოდენობა">${escapeHtml(questions.length)}</span>
               <button class="head-import" type="button" aria-label="კითხვების იმპორტი" title="იმპორტი">⬆</button>
               <button class="head-toggle" type="button" aria-expanded="false">▾</button>
@@ -357,14 +457,14 @@
 
     function addBlock() {
       const id = generateId();
-      state.data.push({ id, number: nextNumber(), name: '', qty: 0, questions: [] });
-      save();
+      state.data.push({ id, number: nextNumber(), name: '', qty: 0, chapterId: null, subchapterId: null, questions: [] });
+      if (!taxonomyConfigured()) save();
       render();
       const card = DOM.blocksGrid?.querySelector?.(`.block-card[data-block-id="${id}"]`);
       if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    function handleGridClick(event) {
+    async function handleGridClick(event) {
       const target = event.target;
       if (!target) return;
 
@@ -380,6 +480,37 @@
       if (blockIndex === -1) return;
       const block = state.data[blockIndex];
       block.questions = Array.isArray(block.questions) ? block.questions : [];
+
+      if (target.classList.contains('head-add-chapter')) {
+        const name = (global.prompt('ჩაწერეთ თავის სახელი') || '').trim();
+        if (!name) return;
+        const chapter = await createTaxonomyChapter(name);
+        if (!chapter) return;
+        await fetchTaxonomyFromServer();
+        block.chapterId = Number(chapter.id) || null;
+        block.subchapterId = null;
+        showToast('თავი დამატებულია');
+        render();
+        return;
+      }
+
+      if (target.classList.contains('head-add-subchapter')) {
+        const chapterId = Number(block.chapterId) || 0;
+        if (!chapterId) {
+          showToast('ჯერ აირჩიეთ თავი', 'error');
+          return;
+        }
+        const name = (global.prompt('ჩაწერეთ ქვეთავის სახელი') || '').trim();
+        if (!name) return;
+        const subchapter = await createTaxonomySubchapter(chapterId, name);
+        if (!subchapter) return;
+        await fetchTaxonomyFromServer();
+        block.subchapterId = Number(subchapter.id) || null;
+        showToast('ქვეთავი დამატებულია');
+        save();
+        render();
+        return;
+      }
 
       if (target.classList.contains('up')) {
         if (blockIndex > 0) {
@@ -520,6 +651,35 @@
 
     }
 
+    function handleGridChange(event) {
+      const target = event.target;
+      if (!target) return;
+      const card = target.closest?.('.block-card');
+      if (!card) return;
+      const blockId = card.dataset.blockId;
+      const blockIndex = state.data.findIndex((block) => block.id === blockId);
+      if (blockIndex === -1) return;
+      const block = state.data[blockIndex];
+
+      if (target.classList.contains('head-chapter')) {
+        const chapterId = parseInt(String(target.value || '').trim(), 10);
+        block.chapterId = (!Number.isNaN(chapterId) && chapterId > 0) ? chapterId : null;
+        const subchapters = getSubchaptersForChapter(block.chapterId);
+        if (!subchapters.some((item) => item.id === Number(block.subchapterId))) {
+          block.subchapterId = null;
+        }
+        if (block.subchapterId || !taxonomyConfigured()) save();
+        render();
+        return;
+      }
+
+      if (target.classList.contains('head-subchapter')) {
+        const subchapterId = parseInt(String(target.value || '').trim(), 10);
+        block.subchapterId = (!Number.isNaN(subchapterId) && subchapterId > 0) ? subchapterId : null;
+        save();
+      }
+    }
+
     function handleGridKeydown(event) {
       if (event.key !== 'Enter') return;
       const target = event.target;
@@ -550,6 +710,9 @@
       if (target.classList.contains('head-qty')) {
         const value = parseInt(String(target.value || '').trim(), 10);
         block.qty = (!Number.isNaN(value) && value >= 0) ? value : 0;
+        if (block.qty > block.questions.length) {
+          showToast('რაოდენობა მეტია კითხვების რაოდენობაზე და შენახვისას შემცირდება', 'error');
+        }
         save();
         updateStats();
       }
@@ -584,6 +747,9 @@
       if (target.classList.contains('head-qty')) {
         const value = parseInt(String(target.value || '').trim(), 10);
         block.qty = (!Number.isNaN(value) && value >= 0) ? value : 0;
+        if (block.qty > block.questions.length) {
+          showToast('რაოდენობა მეტია კითხვების რაოდენობაზე და შენახვისას შემცირდება', 'error');
+        }
         save();
         updateStats();
         return;
@@ -805,6 +971,7 @@
     function init() {
       void loadInitialBlocks();
       on(DOM.blocksGrid, 'click', handleGridClick);
+      on(DOM.blocksGrid, 'change', handleGridChange);
       on(DOM.blocksGrid, 'keydown', handleGridKeydown);
       on(DOM.blocksGrid, 'focusout', handleGridFocusout);
       // Search functionality
