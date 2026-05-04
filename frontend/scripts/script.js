@@ -137,10 +137,72 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   const footerFormModule = createFooterFormModule();
 
+  function createPasswordIcon(visible) {
+    if (visible) {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.89 1 12a18.45 18.45 0 0 1 5.06-6.94"></path>
+          <path d="M9.9 4.24A10.77 10.77 0 0 1 12 4c5 0 9.27 3.11 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+          <path d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
+          <path d="M1 1l22 22"></path>
+        </svg>`;
+    }
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg>`;
+  }
+
+  function setupPasswordToggles(root = document) {
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    const inputs = Array.from(scope.querySelectorAll('input[type="password"]'));
+    inputs.forEach((input) => {
+      if (input.dataset.passwordToggleReady === 'true') return;
+      input.dataset.passwordToggleReady = 'true';
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'password-field';
+      input.parentNode.insertBefore(wrapper, input);
+      wrapper.appendChild(input);
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'password-toggle';
+      button.setAttribute('aria-label', 'პაროლის ჩვენება');
+      button.setAttribute('aria-pressed', 'false');
+      button.innerHTML = createPasswordIcon(false);
+      wrapper.appendChild(button);
+
+      button.addEventListener('click', () => {
+        const visible = input.type === 'password';
+        input.type = visible ? 'text' : 'password';
+        button.setAttribute('aria-label', visible ? 'პაროლის დამალვა' : 'პაროლის ჩვენება');
+        button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        button.innerHTML = createPasswordIcon(visible);
+        input.focus();
+      });
+    });
+  }
+
+  function resetPasswordToggles(root = document) {
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    const inputs = Array.from(scope.querySelectorAll('input[data-password-toggle-ready="true"]'));
+    inputs.forEach((input) => {
+      input.type = 'password';
+      const button = input.closest('.password-field')?.querySelector('.password-toggle');
+      if (!button) return;
+      button.setAttribute('aria-label', 'პაროლის ჩვენება');
+      button.setAttribute('aria-pressed', 'false');
+      button.innerHTML = createPasswordIcon(false);
+    });
+  }
+
   // menu controls are handled by header.js
   fullscreenModule.init();
   authModule.init();
   footerFormModule.init();
+  setupPasswordToggles();
   // profile navigation uses native anchors + delegated gating
 
   // Bind header-dependent handlers after header is dynamically loaded
@@ -170,6 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Initialize auth so login modal works on personal page too
       authModule.init();
+      setupPasswordToggles();
 
       // Gating moved to delegated handler below
 
@@ -206,6 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.Utils.formatDateTime = utils.formatDateTime;
   window.Utils.parseUtcDate = parseUtcDate;
   window.Utils.validatePassword = utils.validatePassword;
+  window.Utils.setupPasswordToggles = setupPasswordToggles;
+  window.Utils.resetPasswordToggles = resetPasswordToggles;
 
   // Expose minimal auth helpers
   window.Auth = window.Auth || {};
@@ -525,6 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.loginForm?.reset?.();
       DOM.registerForm?.reset?.();
       DOM.forgotPasswordForm?.reset?.();
+      resetPasswordToggles(DOM.loginModal || document);
       resetForgotFlow();
       showOptions();
     }

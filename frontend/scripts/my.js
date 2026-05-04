@@ -397,6 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!profileEditDOM.overlay || profileEditState.submitting) return;
     profileEditDOM.overlay.classList.remove('open');
     profileEditDOM.overlay.setAttribute('aria-hidden', 'true');
+    try { window.Utils?.resetPasswordToggles?.(profileEditDOM.overlay); } catch {}
   }
 
   function setAuthBannerText(firstName, lastName, code) {

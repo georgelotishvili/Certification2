@@ -541,6 +541,51 @@ body.modal-open {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
+.password-field {
+  position: relative;
+  width: 100%;
+}
+
+.password-field input {
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color var(--transition-base), background var(--transition-base);
+  transform: translateY(-50%);
+}
+
+.password-toggle svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  color: #2563eb;
+  background: #eff6ff;
+  outline: none;
+}
+
 .submit {
   background: #2563eb;
   color: #ffffff;
