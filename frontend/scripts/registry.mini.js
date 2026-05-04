@@ -59,11 +59,6 @@
       return Number.isFinite(n) ? n.toFixed(2) : '0.00';
     };
 
-    const formatExamScore = (value) => {
-      const n = Number(value);
-      return Number.isFinite(n) ? `${Math.round(n)}%` : '0%';
-    };
-
     const toTimeValue = (value) => {
       if (!value) return 0;
       const parsed = Date.parse(value);
@@ -209,7 +204,6 @@
         qualification: (person?.qualification || '').trim().toLowerCase(),
         certificate_status: (person?.certificate_status || '').trim().toLowerCase(),
         rating: toNumber(person?.rating),
-        exam_score: toNumber(person?.exam_score),
         registration_date: person?.registration_date || person?.created_at || null,
       };
     }
@@ -260,8 +254,6 @@
         name_desc: (a, b) => collator.compare(b.full_name || '', a.full_name || ''),
         date_asc: (a, b) => toTimeValue(a.registration_date) - toTimeValue(b.registration_date),
         date_desc: (a, b) => toTimeValue(b.registration_date) - toTimeValue(a.registration_date),
-        score_asc: (a, b) => (a.exam_score ?? -Infinity) - (b.exam_score ?? -Infinity),
-        score_desc: (a, b) => (b.exam_score ?? -Infinity) - (a.exam_score ?? -Infinity),
         rating_asc: (a, b) => (a.rating ?? -Infinity) - (b.rating ?? -Infinity),
         rating_desc: (a, b) => (b.rating ?? -Infinity) - (a.rating ?? -Infinity),
       };
@@ -369,7 +361,6 @@
           </div>
           <div class="registry-meta">
             <span class="registry-rating" aria-label="რეიტინგი">⭐ ${formatRating(person.rating)}</span>
-            <span class="registry-score" aria-label="გამოცდის ქულა">${formatExamScore(person.exam_score)}</span>
           </div>
         </div>`;
 

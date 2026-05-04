@@ -241,6 +241,9 @@ main {
 .cert-section {
   margin-top: 16px;
 }
+.cert-section.is-hidden {
+  display: none;
+}
 .cert-card {
   background: var(--color-panel);
   border: 1px solid var(--color-border);
@@ -410,6 +413,9 @@ main {
 
 /* Expert upload section */
 .expert-section { margin-top: 16px; }
+.expert-section.is-hidden {
+  display: none;
+}
 .expert-card {
   background: var(--color-panel);
   border: 1px solid var(--color-border);
@@ -499,6 +505,26 @@ main {
   gap: 16px;
   align-items: start;
 }
+.my-grid.cert-hidden {
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "profile expert"
+    "reviews expert";
+}
+.my-grid.expert-hidden {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  grid-template-areas:
+    "profile"
+    "cert"
+    "reviews";
+}
+.my-grid.cert-hidden.expert-hidden {
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "profile"
+    "reviews";
+}
 .my-grid > .profile-section { grid-area: profile; align-self: start; }
 .my-grid > .cert-section { grid-area: cert; }
 .my-grid > .reviews-section { grid-area: reviews; }
@@ -521,6 +547,23 @@ main {
       "profile"
       "cert"
       "expert"
+      "reviews";
+  }
+  .my-grid.cert-hidden {
+    grid-template-areas:
+      "profile"
+      "expert"
+      "reviews";
+  }
+  .my-grid.expert-hidden {
+    grid-template-areas:
+      "profile"
+      "cert"
+      "reviews";
+  }
+  .my-grid.cert-hidden.expert-hidden {
+    grid-template-areas:
+      "profile"
       "reviews";
   }
   .my-grid .profile-card,

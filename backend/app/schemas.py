@@ -488,7 +488,6 @@ class CertificateOut(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
-    exam_score: int | None = None
     filename: str | None = None
     mime_type: str | None = None
     size_bytes: int | None = None
@@ -503,7 +502,6 @@ class CertificateCreate(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
-    exam_score: int | None = None
 
 
 class CertificateUpdate(CamelModel):
@@ -513,7 +511,6 @@ class CertificateUpdate(CamelModel):
     issue_date: Optional[datetime] = None
     validity_term: Optional[int] = None
     valid_until: Optional[datetime] = None
-    exam_score: Optional[int] = None
 
 
 class RegistryPersonOut(BaseModel):
@@ -526,7 +523,6 @@ class RegistryPersonOut(BaseModel):
     qualification: str
     certificate_status: str
     rating: float | None = None
-    exam_score: int | None = None
     registration_date: datetime
 
 

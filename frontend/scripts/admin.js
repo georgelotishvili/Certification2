@@ -107,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
     certificateFormValidityTerm: document.getElementById('certificateFormValidityTerm'),
     certificateFormValidUntil: document.getElementById('certificateFormValidUntil'),
     certificateFormValidUntilDisplay: document.getElementById('certificateFormValidUntilDisplay'),
-    certificateFormScore: document.getElementById('certificateFormScore'),
     certificateFormSubmit: document.getElementById('certificateFormSubmit'),
     certificateFormName: document.getElementById('certificateFormName'),
     certificateFormPhone: document.getElementById('certificateFormPhone'),

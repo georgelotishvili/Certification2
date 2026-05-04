@@ -71,18 +71,6 @@ def _gen_code(db: Session) -> str:
     return str(int(datetime.utcnow().timestamp() * 1000))[-10:]
 
 
-def _normalize_exam_score(value: int | None) -> int | None:
-    if value is None:
-        return None
-    try:
-        score = int(value)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="შეფასება უნდა იყოს რიცხვი")
-    if score < 0 or score > 100:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="შეფასება უნდა იყოს 0-100 შორის")
-    return score
-
-
 def _delete_certificate_files(cert: Certificate, user_id: int) -> None:
     """
     Delete all certificate-related files and directories.
@@ -580,7 +568,6 @@ def create_certificate(
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Certificate already exists")
     
-    score = _normalize_exam_score(payload.exam_score)
     cert = Certificate(
         user_id=user_id,
         unique_code=payload.unique_code or user.code,
@@ -589,7 +576,7 @@ def create_certificate(
         issue_date=payload.issue_date,
         validity_term=payload.validity_term,
         valid_until=payload.valid_until,
-        exam_score=score if score is not None else 0,
+        exam_score=None,
     )
     db.add(cert)
     db.commit()
@@ -628,8 +615,7 @@ def update_certificate(
         cert.validity_term = payload.validity_term
     if payload.valid_until is not None:
         cert.valid_until = payload.valid_until
-    if payload.exam_score is not None:
-        cert.exam_score = _normalize_exam_score(payload.exam_score)
+    cert.exam_score = None
     
     cert.updated_at = datetime.utcnow()
     db.commit()

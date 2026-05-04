@@ -18,7 +18,7 @@ def run() -> None:
         columns = {column["name"] for column in inspector.get_columns("certificates")}
         if "exam_score" in columns:
             return
-        connection.execute(text("ALTER TABLE certificates ADD COLUMN exam_score INTEGER DEFAULT 0"))
+        connection.execute(text("ALTER TABLE certificates ADD COLUMN exam_score INTEGER"))
         connection.commit()
 
 

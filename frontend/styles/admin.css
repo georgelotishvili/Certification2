@@ -2900,7 +2900,6 @@ body.modal-open {
 
 .certificate-form__field--qualification,
 .certificate-form__field--status,
-.certificate-form__field--score,
 .certificate-form__field--issue-date,
 .certificate-form__field--validity-term {
   min-width: 0;

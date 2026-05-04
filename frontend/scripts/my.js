@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     authBanner: document.querySelector('.auth-banner'),
     drawerAuthBanner: document.querySelector('.drawer-auth-banner'),
     pageTitle: document.getElementById('pageTitle'),
+    myGrid: document.querySelector('.my-grid'),
     burger: document.querySelector('.burger'),
     overlay: document.querySelector('.overlay'),
     drawer: document.querySelector('.drawer'),
@@ -45,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pfEmail: document.getElementById('myEmail'),
     pfCode: document.getElementById('myCode'),
     pfCreatedAt: document.getElementById('myCreatedAt'),
+    certSection: document.querySelector('.cert-section'),
     certCard: document.getElementById('certCard'),
     certCode: document.getElementById('myCertCode'),
     certLevel: document.getElementById('myCertLevel'),
@@ -52,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
     certIssueDate: document.getElementById('myCertIssueDate'),
     certValidityTerm: document.getElementById('myCertValidityTerm'),
     certValidUntil: document.getElementById('myCertValidUntil'),
-    certExamScore: document.getElementById('myCertExamScore'),
     certDownloadBtn: document.getElementById('certDownloadBtn'),
     reviewsCard: document.getElementById('reviewsCard'),
     reviewsAverage: document.getElementById('reviewsAverage'),
@@ -60,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     reviewCommentForm: document.getElementById('reviewCommentForm'),
     reviewCommentMessage: document.getElementById('reviewCommentMessage'),
     reviewsComments: document.getElementById('reviewsComments'),
+    expertSection: document.querySelector('.expert-section'),
     expertCard: document.getElementById('expertCard'),
     expertFunction: document.getElementById('expertFunction'),
     expertCadastral: document.getElementById('expertCadastral'),
@@ -601,14 +603,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Certificate
   let certData = null;
+
+  function setCertificatePanelVisible(visible) {
+    const section = DOM.certSection || DOM.certCard?.closest?.('.cert-section');
+    const grid = DOM.myGrid || section?.closest?.('.my-grid');
+    if (section) {
+      section.classList.toggle('is-hidden', !visible);
+      section.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+    if (grid) grid.classList.toggle('cert-hidden', !visible);
+  }
+
+  function isExpertCertificate(certificate) {
+    const rawLevel = certificate?.level;
+    const value = typeof rawLevel === 'object'
+      ? (rawLevel.key || rawLevel.value || rawLevel.label || '')
+      : rawLevel;
+    const level = String(value || '').trim().toLowerCase();
+    return level === 'expert'
+      || level === 'architect_expert'
+      || level === 'არქიტექტორი ექსპერტი'
+      || level === 'არქიტექტურული პროექტის ექსპერტი';
+  }
+
   async function loadCertificate() {
     const user = getCurrentUser();
     const card = DOM.certCard;
     const targetId = VIEW_USER_ID || (user && user.id);
-    if (!targetId || !card) return;
+    if (!targetId || !card) {
+      setCertificatePanelVisible(false);
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/users/${encodeURIComponent(targetId)}/certificate`, { headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() } });
       if (!res.ok) {
+        certData = null;
+        setCertificatePanelVisible(false);
         if (res.status === 404) {
           card.classList.add('is-empty');
           if (DOM.certDownloadBtn) DOM.certDownloadBtn.setAttribute('disabled', 'true');
@@ -621,6 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const data = await res.json();
       certData = data;
+      setCertificatePanelVisible(true);
       card.classList.remove('is-empty');
       try {
         card.dataset.status = String(data.status || '').toLowerCase();
@@ -651,12 +682,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.certIssueDate) DOM.certIssueDate.textContent = window.Utils?.formatDateTime?.(data.issue_date);
       if (DOM.certValidityTerm) DOM.certValidityTerm.textContent = (data.validity_term != null ? String(data.validity_term) : '—');
       if (DOM.certValidUntil) DOM.certValidUntil.textContent = window.Utils?.formatDateTime?.(data.valid_until);
-      if (DOM.certExamScore) DOM.certExamScore.textContent = (data.exam_score != null ? `${Math.round(Number(data.exam_score))}%` : '—');
       
       // Load header photo for certified person
       loadHeaderPhoto(targetId);
       document.dispatchEvent(new CustomEvent('certificate:loaded', { detail: { certData: data } }));
-    } catch {}
+    } catch {
+      certData = null;
+      setCertificatePanelVisible(false);
+    }
   }
   loadCertificate();
 
@@ -980,8 +1013,21 @@ document.addEventListener('DOMContentLoaded', () => {
       return !!(actor && (actor.isAdmin || isFounder));
     }
 
+    function setVisible(value) {
+      const visible = !!value;
+      const section = DOM.expertSection || DOM.expertCard?.closest?.('.expert-section');
+      const grid = DOM.myGrid || section?.closest?.('.my-grid');
+      if (section) {
+        section.classList.toggle('is-hidden', !visible);
+        section.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      }
+      if (grid) grid.classList.toggle('expert-hidden', !visible);
+      if (!visible && DOM.expertList) DOM.expertList.innerHTML = '';
+    }
+
     function setEnabled(value) {
       state.enabled = !!value;
+      setVisible(state.enabled);
       if (DOM.expertCard) DOM.expertCard.classList.toggle('disabled', !state.enabled);
       if (!state.enabled) return;
       loadList();
@@ -1350,8 +1396,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const actions = document.querySelector('.expert-actions');
         if (form) form.style.display = 'none';
         if (actions) actions.style.display = 'none';
-        if (DOM.expertCard) DOM.expertCard.classList.remove('disabled');
-        (async () => {
+        const loadPublicList = async () => {
           try {
             const res = await fetch(`${API_BASE}/expert-uploads/of/${encodeURIComponent(VIEW_USER_ID)}`, {
               headers: { 'Cache-Control': 'no-cache' },
@@ -1481,17 +1526,27 @@ document.addEventListener('DOMContentLoaded', () => {
             wrap.innerHTML = '';
             wrap.appendChild(frag);
           } catch {}
-        })();
+        };
+        const updatePublicVisibility = (certificate) => {
+          const visible = isExpertCertificate(certificate);
+          setVisible(visible);
+          if (DOM.expertCard) DOM.expertCard.classList.toggle('disabled', !visible);
+          if (visible) loadPublicList();
+        };
+        updatePublicVisibility(certData);
+        document.addEventListener('certificate:loaded', (ev) => {
+          updatePublicVisibility(ev?.detail?.certData || null);
+        });
         return;
       }
 
       // Owner view
       bindEvents();
-      // Enabled only if certificate level == expert
-      setEnabled(!VIEW_USER_ID && !!(certData && (String(certData.level || '').toLowerCase() === 'expert')));
+      // Enabled only if certificate level is expert
+      setEnabled(!VIEW_USER_ID && isExpertCertificate(certData));
       document.addEventListener('certificate:loaded', (ev) => {
         const cd = ev?.detail?.certData || null;
-        setEnabled(!VIEW_USER_ID && !!(cd && (String(cd.level || '').toLowerCase() === 'expert')));
+        setEnabled(!VIEW_USER_ID && isExpertCertificate(cd));
       });
       updateClearStates();
     }

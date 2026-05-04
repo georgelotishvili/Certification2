@@ -1119,10 +1119,6 @@ body.registry-open {
   align-items: center;
   gap: 3px;
 }
-.registry-score {
-  font-weight: 600;
-  color: #0f172a;
-}
 
 @media (max-width: 720px) {
   .registry-info {

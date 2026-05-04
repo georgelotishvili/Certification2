@@ -56,7 +56,6 @@ def list_certified_persons_registry(
                 qualification=certificate.level,
                 certificate_status=certificate.status,
                 rating=0.0,
-                exam_score=certificate.exam_score or 0,
                 registration_date=user.created_at,
             )
         )

@@ -24,7 +24,7 @@
     <script src="../scripts/header.js" defer></script>
     <link rel="stylesheet" href="../styles/styles.css?v=2" />
     <link rel="stylesheet" href="../styles/header.css?v=3" />
-    <link rel="stylesheet" href="../styles/my.css?v=2" />
+    <link rel="stylesheet" href="../styles/my.css?v=4" />
   </head>
   <body>
     <!-- Header will be loaded dynamically by header.js -->
@@ -82,7 +82,7 @@
           </div>
         </section>
 
-        <section class="cert-section" aria-labelledby="certTitle">
+        <section class="cert-section is-hidden" aria-labelledby="certTitle" aria-hidden="true">
           <div class="cert-card is-empty" id="certCard">
             <div class="cert-head">
               <h2 id="certTitle">სერტიფიკატი</h2>
@@ -95,7 +95,6 @@
               <div class="cert-row"><span class="cert-label">გაცემის თარიღი</span><span class="cert-value" id="myCertIssueDate">—</span></div>
               <div class="cert-row"><span class="cert-label">ვადა (წელი)</span><span class="cert-value" id="myCertValidityTerm">—</span></div>
               <div class="cert-row"><span class="cert-label">მოქმედების ბოლო თარიღი</span><span class="cert-value" id="myCertValidUntil">—</span></div>
-              <div class="cert-row"><span class="cert-label">საგამოცდო შეფასება</span><span class="cert-value" id="myCertExamScore">—</span></div>
             </div>
           </div>
         </section>
@@ -127,7 +126,7 @@
           </div>
         </section>
 
-        <section class="expert-section" aria-labelledby="expertTitle">
+        <section class="expert-section is-hidden" aria-labelledby="expertTitle" aria-hidden="true">
           <div class="expert-card disabled" id="expertCard">
             <div class="expert-head">
               <h2 id="expertTitle">პროექტები</h2>
@@ -212,8 +211,6 @@
               <option value="date_asc">ძველი რეგისტრაციები</option>
               <option value="name_asc">სახელი (ა-ჰ)</option>
               <option value="name_desc">სახელი (ჰ-ა)</option>
-              <option value="score_desc">ქულა მაღალი → დაბალი</option>
-              <option value="score_asc">ქულა დაბალი → მაღალი</option>
               <option value="rating_desc">რეიტინგი მაღალი → დაბალი</option>
               <option value="rating_asc">რეიტინგი დაბალი → მაღალი</option>
             </select>
@@ -306,9 +303,9 @@
 
 
     <script src="../vendor/jspdf.umd.min.js"></script>
-    <script src="../scripts/registry.mini.js?v=2" defer></script>
+    <script src="../scripts/registry.mini.js?v=3" defer></script>
     <script src="../scripts/script.js?v=6" defer></script>
-    <script src="../scripts/my.js?v=3" defer></script>
+    <script src="../scripts/my.js?v=6" defer></script>
   </body>
   </html>
 
