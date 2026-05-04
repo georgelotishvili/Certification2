@@ -9,10 +9,20 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Exam, ExamCode, Session as ExamSession, User, UserSession
-from ..schemas import AuthCodeRequest, AuthCodeResponse, LoginRequest, LoginResponse, UserOut, ForgotPasswordRequest, ForgotPasswordResponse
-from ..security import generate_session_token, verify_code, hash_code, generate_secure_password
+from ..schemas import (
+    AuthCodeRequest,
+    AuthCodeResponse,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
+    LoginRequest,
+    LoginResponse,
+    ResetPasswordRequest,
+    UserOut,
+)
+from ..security import generate_session_token, verify_code, hash_code, validate_password_strength
 from ..config import get_settings
-from ..rate_limiter import login_limiter
+from ..rate_limiter import login_limiter, verification_limiter, code_verify_limiter
+from ..services import email_verification
 
 
 router = APIRouter()
@@ -166,101 +176,63 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """
     Password recovery endpoint.
-    Generates a new password for the user and sends it to their email.
-    In development mode, writes to verification_codes.txt file.
+    Sends a one-time reset code to the user's email.
     """
+    verification_limiter.check(request)
+
     email_norm = (payload.email or "").strip().lower()
     if not email_norm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email required")
     
     user = db.scalar(select(User).where(User.email == email_norm))
-    if not user:
-        # Don't reveal if email exists or not (security best practice)
-        return ForgotPasswordResponse(
-            success=True,
-            message="თუ ელფოსტა რეგისტრირებულია, პაროლი გამოგეგზავნათ"
-        )
-    
-    # Generate new secure password
-    new_password = generate_secure_password()
-    
-    # Hash and update password
-    user.password_hash = hash_code(new_password)
-    db.add(user)
-    db.commit()
-    
-    # Send password via email/file (similar to email verification)
-    settings = get_settings()
-    email_mode = getattr(settings, "email_mode", "console")
-    
-    if email_mode == "smtp":
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            
-            smtp_host = getattr(settings, "smtp_host", "smtp.gmail.com")
-            smtp_port = getattr(settings, "smtp_port", 587)
-            smtp_user = getattr(settings, "smtp_user", "")
-            smtp_password = getattr(settings, "smtp_password", "")
-            
-            if smtp_user and smtp_password:
-                msg = MIMEMultipart()
-                msg['From'] = smtp_user
-                msg['To'] = email_norm
-                msg['Subject'] = "GIPC - ახალი პაროლი"
-                
-                body = f"""გამარჯობა!
-
-თქვენი ახალი პაროლია: {new_password}
-
-გთხოვთ შეხვიდეთ ამ პაროლით და შეცვალოთ.
-
-პატივისცემით,
-საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)
-https://gipc.org.ge
-"""
-                
-                msg.attach(MIMEText(body, 'plain', 'utf-8'))
-                
-                server = smtplib.SMTP(smtp_host, smtp_port)
-                server.starttls()
-                server.login(smtp_user, smtp_password)
-                server.send_message(msg)
-                server.quit()
-                print(f"Password email sent to {email_norm}")
-        except Exception as e:
-            print(f"Failed to send password email: {e}")
-    
-    # Console mode (development) - write to verification_codes.txt
-    try:
-        from pathlib import Path
-        log_file = Path(__file__).parent.parent.parent / "verification_codes.txt"
-        with open(log_file, "a", encoding="utf-8") as f:
-            from datetime import datetime
-            f.write(f"\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Email: {email_norm}\n")
-            f.write(f"Password: {new_password}\n")
-            f.write(f"Purpose: password_recovery\n")
-            f.write("-" * 30 + "\n")
-    except Exception:
-        pass
-    
-    # Also print to console for visibility
-    try:
-        print(f"\n{'='*50}")
-        print(f"PASSWORD RECOVERY for {email_norm}")
-        print(f"   New Password: {new_password}")
-        print(f"{'='*50}\n")
-    except Exception:
-        pass
+    if user:
+        email_verification.send_verification_code(email_norm, "password_reset")
     
     return ForgotPasswordResponse(
         success=True,
-        message="თუ ელფოსტა რეგისტრირებულია, პაროლი გამოგეგზავნათ"
+        message="თუ ელფოსტა რეგისტრირებულია, აღდგენის კოდი გამოგეგზავნათ"
+    )
+
+
+@router.post("/reset-password", response_model=ForgotPasswordResponse)
+def reset_password(request: Request, payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Reset a password after verifying the one-time email code."""
+    code_verify_limiter.check(request)
+
+    email_norm = (payload.email or "").strip().lower()
+    verification_code = (payload.verification_code or "").strip()
+    new_password = (payload.new_password or "").strip()
+    confirm_new_password = (payload.confirm_new_password or "").strip()
+
+    if not email_norm:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email required")
+    if not verification_code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ვერიფიკაციის კოდი საჭიროა")
+    if not new_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="გთხოვთ შეიყვანოთ ახალი პაროლი")
+
+    validate_password_strength(new_password)
+
+    if new_password != confirm_new_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="პაროლები არ ემთხვევა")
+
+    user = db.scalar(select(User).where(User.email == email_norm))
+    if not user or not email_verification.verify_code(email_norm, verification_code, "password_reset"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ვერიფიკაციის კოდი არასწორია ან ვადაგასულია",
+        )
+
+    user.password_hash = hash_code(new_password)
+    db.add(user)
+    db.commit()
+
+    return ForgotPasswordResponse(
+        success=True,
+        message="პაროლი წარმატებით შეიცვალა"
     )
 
 

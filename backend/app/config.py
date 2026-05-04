@@ -26,9 +26,20 @@ class Settings(BaseSettings):
     # Email verification settings
     email_mode: str = "console"  # "console" for dev, "smtp" for production
     smtp_host: Optional[str] = None
-    smtp_port: int = 587
+    smtp_port: Optional[int] = None
     smtp_user: Optional[str] = None
     smtp_password: Optional[str] = None
+    smtp_encryption: Optional[str] = None
+
+    # Laravel-style mail variables used by the deployed server notes.
+    mail_mailer: Optional[str] = None
+    mail_host: Optional[str] = None
+    mail_port: Optional[int] = None
+    mail_username: Optional[str] = None
+    mail_password: Optional[str] = None
+    mail_encryption: Optional[str] = None
+    mail_from_address: Optional[str] = None
+    mail_from_name: Optional[str] = None
 
     class Config:
         env_file = ".env"

@@ -496,7 +496,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function showOptions() { setView('options'); }
     function showLogin() { setView('login'); }
     function showRegister() { setView('register'); }
-    function showForgot() { setView('forgot'); }
+    function showForgot() {
+      setView('forgot');
+      resetForgotFlow();
+      const forgotEmailInput = DOM.forgotPasswordForm?.querySelector('input[name="email"]');
+      const loginEmail = DOM.loginForm?.querySelector('input[name="email"]')?.value?.trim();
+      const savedEmail = localStorage.getItem(KEYS.SAVED_EMAIL);
+      if (forgotEmailInput && !forgotEmailInput.value) {
+        forgotEmailInput.value = loginEmail || savedEmail || '';
+      }
+    }
 
     function openModal() {
       if (!DOM.loginModal) return;
@@ -516,6 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.loginForm?.reset?.();
       DOM.registerForm?.reset?.();
       DOM.forgotPasswordForm?.reset?.();
+      resetForgotFlow();
       showOptions();
     }
 
@@ -634,37 +644,92 @@ document.addEventListener('DOMContentLoaded', () => {
       })();
     }
 
+    let forgotPasswordEmail = '';
+
+    function showForgotStep(step) {
+      const step1 = document.getElementById('forgotStep1');
+      const step2 = document.getElementById('forgotStep2');
+      if (step1) step1.style.display = step === 1 ? 'block' : 'none';
+      if (step2) step2.style.display = step === 2 ? 'block' : 'none';
+    }
+
+    function resetForgotFlow() {
+      forgotPasswordEmail = '';
+      showForgotStep(1);
+    }
+
     function handleForgotSubmit(event) {
       event.preventDefault();
       if (!DOM.forgotPasswordForm) return;
       const formData = new FormData(DOM.forgotPasswordForm);
-      const email = utils.getTrimmed(formData, 'email');
-      if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
-      if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
-      
+
       (async () => {
         try {
-          const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+          if (!forgotPasswordEmail) {
+            const email = utils.getTrimmed(formData, 'email');
+            if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
+            if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
+
+            const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email }),
+            });
+
+            if (!response.ok) {
+              let detail = '';
+              try {
+                const json = await response.json();
+                detail = json?.detail || '';
+              } catch {}
+              alert(detail || 'კოდის გაგზავნა ვერ მოხერხდა');
+              return;
+            }
+
+            const result = await response.json();
+            forgotPasswordEmail = email;
+            localStorage.setItem(KEYS.SAVED_EMAIL, email);
+            showForgotStep(2);
+            alert(result.message || 'თუ ელფოსტა რეგისტრირებულია, აღდგენის კოდი გამოგეგზავნათ');
+            return;
+          }
+
+          const resetCode = utils.getTrimmed(formData, 'resetCode');
+          const newPassword = utils.getTrimmed(formData, 'newPassword');
+          const confirmNewPassword = utils.getTrimmed(formData, 'confirmNewPassword');
+
+          if (!resetCode || resetCode.length !== 4) return alert('გთხოვთ შეიყვანოთ 4-ნიშნა კოდი');
+          const passwordCheck = utils.validatePassword(newPassword);
+          if (!passwordCheck.valid) return alert(passwordCheck.message);
+          if (newPassword !== confirmNewPassword) return alert('პაროლები არ ემთხვევა');
+
+          const response = await fetch(`${API_BASE}/auth/reset-password`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
+            body: JSON.stringify({
+              email: forgotPasswordEmail,
+              verification_code: resetCode,
+              new_password: newPassword,
+              confirm_new_password: confirmNewPassword,
+            }),
           });
-          
+
           if (!response.ok) {
             let detail = '';
             try {
               const json = await response.json();
               detail = json?.detail || '';
             } catch {}
-            alert(detail || 'პაროლის აღდგენა ვერ მოხერხდა');
+            alert(detail || 'პაროლის შეცვლა ვერ მოხერხდა');
             return;
           }
-          
+
           const result = await response.json();
-          alert(result.message || 'თუ ელფოსტა რეგისტრირებულია, პაროლი გამოგეგზავნათ');
+          alert(result.message || 'პაროლი წარმატებით შეიცვალა');
           closeModal();
           DOM.forgotPasswordForm?.reset?.();
-          showOptions();
+          resetForgotFlow();
+          showLogin();
         } catch {
           alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
         }
@@ -806,6 +871,11 @@ document.addEventListener('DOMContentLoaded', () => {
       utils.on(DOM.forgotPasswordForm, 'submit', handleForgotSubmit);
       const backToLoginBtn = DOM.forgotPasswordForm?.querySelector('.back-to-login');
       utils.on(backToLoginBtn, 'click', showLogin);
+      const forgotBackBtn = document.getElementById('forgotBackBtn');
+      utils.on(forgotBackBtn, 'click', () => {
+        forgotPasswordEmail = '';
+        showForgotStep(1);
+      });
       utils.on(DOM.registerForm, 'submit', handleRegisterSubmit);
       
       // Registration verification flow

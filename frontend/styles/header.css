@@ -497,7 +497,8 @@ body.modal-open {
   text-align: left;
 }
 
-.register-step {
+.register-step,
+.forgot-step {
   text-align: left;
 }
 

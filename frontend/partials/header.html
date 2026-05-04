@@ -68,12 +68,30 @@
       </form>
 
       <form class="forgot-password-form" id="forgotPasswordForm" novalidate>
-        <div class="field">
-          <input type="email" name="email" placeholder="ელფოსტა" required />
+        <div class="forgot-step" id="forgotStep1">
+          <div class="field">
+            <input type="email" name="email" placeholder="ელფოსტა" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">კოდის გაგზავნა</button>
+            <button type="button" class="modal-btn back-to-login">უკან დაბრუნება</button>
+          </div>
         </div>
-        <div class="modal-buttons">
-          <button type="submit" class="modal-btn submit">პაროლის აღდგენა</button>
-          <button type="button" class="modal-btn back-to-login">უკან დაბრუნება</button>
+        <div class="forgot-step" id="forgotStep2" style="display:none;">
+          <p class="verification-info">4-ნიშნა კოდი გაგზავნილია თქვენს ელფოსტაზე</p>
+          <div class="field">
+            <input type="text" name="resetCode" inputmode="numeric" maxlength="4" placeholder="შეიყვანეთ კოდი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="newPassword" placeholder="ახალი პაროლი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="confirmNewPassword" placeholder="გაიმეორეთ ახალი პაროლი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">პაროლის შეცვლა</button>
+            <button type="button" class="modal-btn back-to-login" id="forgotBackBtn">უკან დაბრუნება</button>
+          </div>
         </div>
       </form>
     </div>

@@ -12,7 +12,7 @@ from typing import Dict, Optional
 from ..config import get_settings
 
 # In-memory storage for verification codes
-# Structure: {email: {"code": "1234", "expires_at": timestamp, "purpose": "register|update"}}
+# Structure: {email: {"code": "1234", "expires_at": timestamp, "purpose": "register|update|password_reset"}}
 _verification_codes: Dict[str, dict] = {}
 
 # In-memory storage for verification attempts (brute force protection)
@@ -48,13 +48,83 @@ def _cleanup_expired():
         _verification_attempts[email] = {"count": 0, "locked_until": None}
 
 
+def _is_smtp_mode(settings) -> bool:
+    email_mode = (getattr(settings, "email_mode", "") or "").strip().lower()
+    mail_mailer = (getattr(settings, "mail_mailer", "") or "").strip().lower()
+    return email_mode == "smtp" or mail_mailer == "smtp"
+
+
+def _get_smtp_config(settings) -> dict:
+    smtp_host = getattr(settings, "smtp_host", None) or getattr(settings, "mail_host", None)
+    smtp_port = getattr(settings, "smtp_port", None) or getattr(settings, "mail_port", None) or 587
+    smtp_user = getattr(settings, "smtp_user", None) or getattr(settings, "mail_username", None)
+    smtp_password = getattr(settings, "smtp_password", None) or getattr(settings, "mail_password", None)
+    smtp_encryption = (
+        getattr(settings, "smtp_encryption", None)
+        or getattr(settings, "mail_encryption", None)
+        or ("ssl" if int(smtp_port) == 465 else "tls")
+    )
+    from_address = getattr(settings, "mail_from_address", None) or smtp_user
+    from_name = getattr(settings, "mail_from_name", None) or "GIPC"
+
+    return {
+        "host": smtp_host,
+        "port": int(smtp_port),
+        "user": smtp_user,
+        "password": smtp_password,
+        "encryption": str(smtp_encryption or "").strip().lower(),
+        "from_address": from_address,
+        "from_name": from_name,
+    }
+
+
+def _send_smtp_message(to_email: str, subject: str, body: str) -> bool:
+    settings = get_settings()
+    config = _get_smtp_config(settings)
+    if not config["host"] or not config["user"] or not config["password"]:
+        return False
+
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        from email.utils import formataddr
+
+        msg = MIMEMultipart()
+        msg["From"] = formataddr((config["from_name"], config["from_address"] or config["user"]))
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+
+        server = None
+        try:
+            if config["encryption"] == "ssl" or config["port"] == 465:
+                server = smtplib.SMTP_SSL(config["host"], config["port"], timeout=20)
+            else:
+                server = smtplib.SMTP(config["host"], config["port"], timeout=20)
+                if config["encryption"] != "none":
+                    server.starttls()
+            server.login(config["user"], config["password"])
+            server.send_message(msg)
+        finally:
+            if server is not None:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
+        return True
+    except Exception as e:
+        print(f"Failed to send email via SMTP: {e}")
+        return False
+
+
 def send_verification_code(email: str, purpose: str = "register") -> str:
     """
     Generate and 'send' a verification code.
     
     Args:
         email: The email address to send the code to
-        purpose: Either 'register' or 'update'
+        purpose: Either 'register', 'update', or 'password_reset'
     
     Returns:
         The generated code (for testing/development)
@@ -70,27 +140,8 @@ def send_verification_code(email: str, purpose: str = "register") -> str:
         "purpose": purpose,
     }
     
-    settings = get_settings()
-    email_mode = getattr(settings, "email_mode", "console")
-    
-    if email_mode == "smtp":
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            
-            smtp_host = getattr(settings, "smtp_host", "smtp.gmail.com")
-            smtp_port = getattr(settings, "smtp_port", 587)
-            smtp_user = getattr(settings, "smtp_user", "")
-            smtp_password = getattr(settings, "smtp_password", "")
-            
-            if smtp_user and smtp_password:
-                msg = MIMEMultipart()
-                msg['From'] = smtp_user
-                msg['To'] = email_lower
-                msg['Subject'] = "GIPC - ვერიფიკაციის კოდი"
-                
-                body = f"""გამარჯობა!
+    subject = "GIPC - ვერიფიკაციის კოდი"
+    body = f"""გამარჯობა!
 
 თქვენი ვერიფიკაციის კოდია: {code}
 
@@ -100,23 +151,13 @@ def send_verification_code(email: str, purpose: str = "register") -> str:
 საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)
 https://gipc.org.ge
 """
-                
-                msg.attach(MIMEText(body, 'plain', 'utf-8'))
-                
-                if smtp_port == 465:
-                    server = smtplib.SMTP_SSL(smtp_host, smtp_port)
-                else:
-                    server = smtplib.SMTP(smtp_host, smtp_port)
-                    server.starttls()
-                server.login(smtp_user, smtp_password)
-                server.send_message(msg)
-                server.quit()
-                
-                print(f"Email sent successfully to {email_lower}")
-                return code  # Return early if SMTP succeeded
-        except Exception as e:
-            print(f"Failed to send email via SMTP: {e}")
-            # Fall through to console mode as backup
+
+    settings = get_settings()
+    if _is_smtp_mode(settings):
+        if _send_smtp_message(email_lower, subject, body):
+            print(f"Email sent successfully to {email_lower}")
+            return code  # Return early if SMTP succeeded
+        # Fall through to console mode as backup.
     
     # Console mode (development) - print code to console and save to file
     # NOTE: On some Windows setups the default console encoding can't render emoji,

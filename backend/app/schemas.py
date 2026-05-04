@@ -853,7 +853,7 @@ class MultiFunctionalEvaluationDetailResponse(CamelModel):
 # Email verification
 class SendVerificationCodeRequest(BaseModel):
     email: EmailStr
-    purpose: str = "register"  # "register" or "update"
+    purpose: str = "register"  # "register", "update", or "password_reset"
 
 
 class SendVerificationCodeResponse(BaseModel):
@@ -880,6 +880,13 @@ class ForgotPasswordRequest(BaseModel):
 class ForgotPasswordResponse(BaseModel):
     success: bool
     message: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    verification_code: str
+    new_password: str
+    confirm_new_password: str
 
 
 # Extended registration with verification
