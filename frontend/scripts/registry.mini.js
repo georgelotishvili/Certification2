@@ -24,6 +24,8 @@
       filterExpert: document.getElementById('registryFilterExpert'),
       filterMunicipal: document.getElementById('registryFilterMunicipal'),
       sort: document.getElementById('registrySort'),
+      clearSearch: null,
+      filterBadge: null,
     };
 
     const STATE = {
@@ -74,6 +76,7 @@
 
     function bindEvents() {
       if (!DOM.overlay) return;
+      enhanceControls();
 
       // Event delegation: works for dynamically inserted header
       document.addEventListener('click', (event) => {
@@ -102,6 +105,49 @@
       DOM.sort?.addEventListener('change', applyFilters);
     }
 
+    function createClearIcon() {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M18 6L6 18"></path>
+          <path d="M6 6l12 12"></path>
+        </svg>`;
+    }
+
+    function enhanceControls() {
+      if (DOM.search && DOM.search.dataset.clearReady !== 'true') {
+        DOM.search.dataset.clearReady = 'true';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'registry-search-wrap';
+        DOM.search.parentNode.insertBefore(wrapper, DOM.search);
+        wrapper.appendChild(DOM.search);
+
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'registry-search-clear';
+        clear.title = 'ძებნის გასუფთავება';
+        clear.setAttribute('aria-label', 'ძებნის გასუფთავება');
+        clear.hidden = true;
+        clear.innerHTML = createClearIcon();
+        clear.addEventListener('click', (event) => {
+          event.preventDefault();
+          DOM.search.value = '';
+          DOM.search.focus();
+          applyFilters();
+        });
+        wrapper.appendChild(clear);
+        DOM.clearSearch = clear;
+      }
+
+      const checkboxes = DOM.overlay.querySelector('.registry-checkboxes');
+      if (checkboxes && !DOM.filterBadge) {
+        const badge = document.createElement('span');
+        badge.className = 'registry-filter-count';
+        badge.hidden = true;
+        checkboxes.appendChild(badge);
+        DOM.filterBadge = badge;
+      }
+    }
+
     function setOpen(value) {
       STATE.open = !!value;
       DOM.overlay?.classList.toggle('is-open', STATE.open);
@@ -128,7 +174,7 @@
         return;
       }
       STATE.loading = true;
-      DOM.list.innerHTML = '<div class="registry-empty">იტვირთება...</div>';
+      renderSkeleton();
       try {
         const params = new URLSearchParams({ limit: '500' });
         const response = await fetch(`${apiBase}/certified-persons/registry?${params.toString()}`, {
@@ -233,6 +279,7 @@
       let next = STATE.items.slice();
 
       const query = normalizeText(DOM.search?.value);
+      if (DOM.clearSearch) DOM.clearSearch.hidden = !query;
       if (query) {
         next = next.filter((person) => {
           const parts = (person.full_name || '').split(/\s+/).filter(Boolean);
@@ -247,6 +294,7 @@
       const expertChecked = !!DOM.filterExpert?.checked;
       const municipalChecked = !!DOM.filterMunicipal?.checked;
       const checkedCount = [architectChecked, expertChecked, municipalChecked].filter(Boolean).length;
+      updateFilterBadge(checkedCount);
       if (checkedCount > 0 && checkedCount < 3) {
         const allowedQualifications = [];
         if (architectChecked) allowedQualifications.push('architect');
@@ -259,6 +307,31 @@
       next.sort(getSorter(sortKey));
 
       renderList(next);
+    }
+
+    function updateFilterBadge(count) {
+      if (!DOM.filterBadge) return;
+      DOM.filterBadge.hidden = !count;
+      DOM.filterBadge.textContent = count ? `${count} ფილტრი` : '';
+    }
+
+    function renderSkeleton() {
+      if (!DOM.list) return;
+      const fragment = document.createDocumentFragment();
+      for (let i = 0; i < 7; i += 1) {
+        const item = document.createElement('div');
+        item.className = 'registry-card registry-skeleton-card';
+        item.setAttribute('aria-hidden', 'true');
+        item.innerHTML = `
+          <div class="registry-skeleton-avatar"></div>
+          <div class="registry-skeleton-info">
+            <span></span>
+            <span></span>
+          </div>`;
+        fragment.appendChild(item);
+      }
+      DOM.list.innerHTML = '';
+      DOM.list.appendChild(fragment);
     }
 
     function renderList(items) {
@@ -289,8 +362,11 @@
         <div class="registry-avatar${hasPhoto ? ' has-photo' : ''}">
           ${avatarContent}
         </div>
-        <div class="registry-info">
-          <div class="registry-name">${escapeHtml(person.full_name || '—')}</div>
+          <div class="registry-info">
+          <div class="registry-title">
+            <div class="registry-name">${escapeHtml(person.full_name || '—')}</div>
+            <div class="registry-code">${escapeHtml(person.unique_code || '—')}</div>
+          </div>
           <div class="registry-meta">
             <span class="registry-rating" aria-label="რეიტინგი">⭐ ${formatRating(person.rating)}</span>
             <span class="registry-score" aria-label="გამოცდის ქულა">${formatExamScore(person.exam_score)}</span>

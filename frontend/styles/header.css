@@ -586,6 +586,109 @@ body.modal-open {
   outline: none;
 }
 
+.password-strength {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.password-strength-bars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.password-strength-bars span {
+  height: 3px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  transition: background var(--transition-base);
+}
+
+.password-strength[data-score="1"] .password-strength-bars span:nth-child(-n+1) {
+  background: #ef4444;
+}
+
+.password-strength[data-score="2"] .password-strength-bars span:nth-child(-n+2) {
+  background: #f59e0b;
+}
+
+.password-strength[data-score="3"] .password-strength-bars span:nth-child(-n+3) {
+  background: #2563eb;
+}
+
+.password-strength[data-score="4"] .password-strength-bars span {
+  background: #16a34a;
+}
+
+.password-strength-label {
+  min-height: 16px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.otp-countdown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto 0;
+  min-width: 74px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.otp-resend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto 0;
+  padding: 6px 10px;
+  border: 1px solid #2563eb;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #2563eb;
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base);
+}
+
+.otp-resend:hover,
+.otp-resend:focus-visible {
+  background: #eff6ff;
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+  outline: none;
+}
+
+.is-loading {
+  cursor: progress !important;
+  opacity: 0.86;
+  pointer-events: none;
+}
+
+.is-loading::before {
+  content: "";
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 8px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  vertical-align: -2px;
+  animation: uxSpin 0.72s linear infinite;
+}
+
+@keyframes uxSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .submit {
   background: #2563eb;
   color: #ffffff;

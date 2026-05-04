@@ -171,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
       button.className = 'password-toggle';
       button.setAttribute('aria-label', 'პაროლის ჩვენება');
       button.setAttribute('aria-pressed', 'false');
+      button.title = 'პაროლის ჩვენება';
       button.innerHTML = createPasswordIcon(false);
       wrapper.appendChild(button);
 
@@ -179,6 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         input.type = visible ? 'text' : 'password';
         button.setAttribute('aria-label', visible ? 'პაროლის დამალვა' : 'პაროლის ჩვენება');
         button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        button.title = visible ? 'პაროლის დამალვა' : 'პაროლის ჩვენება';
         button.innerHTML = createPasswordIcon(visible);
         input.focus();
       });
@@ -194,7 +196,161 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!button) return;
       button.setAttribute('aria-label', 'პაროლის ჩვენება');
       button.setAttribute('aria-pressed', 'false');
+      button.title = 'პაროლის ჩვენება';
       button.innerHTML = createPasswordIcon(false);
+    });
+  }
+
+  function notify(message, type = 'info') {
+    const text = String(message || '').trim();
+    if (!text) return;
+    if (typeof window.showToast === 'function') {
+      window.showToast(text, type);
+      return;
+    }
+    alert(text);
+  }
+
+  function setButtonLoading(button, loading, loadingText = 'იტვირთება...') {
+    if (!button) return;
+    if (loading) {
+      if (button.dataset.loadingActive === 'true') return;
+      button.dataset.loadingActive = 'true';
+      button.dataset.loadingText = button.textContent || '';
+      button.dataset.loadingDisabled = button.disabled ? 'true' : 'false';
+      button.textContent = loadingText;
+      button.disabled = true;
+      button.classList.add('is-loading');
+      return;
+    }
+    if (button.dataset.loadingActive !== 'true') return;
+    button.textContent = button.dataset.loadingText || button.textContent;
+    button.disabled = button.dataset.loadingDisabled === 'true';
+    button.classList.remove('is-loading');
+    delete button.dataset.loadingActive;
+    delete button.dataset.loadingText;
+    delete button.dataset.loadingDisabled;
+  }
+
+  function createCopyIcon() {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>`;
+  }
+
+  async function copyText(text) {
+    const value = String(text || '').trim();
+    if (!value) return false;
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch {}
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      textarea.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  function attachCopyButton(target, options = {}) {
+    const element = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!element || element.dataset.copyReady === 'true' || !element.parentNode) return null;
+    element.dataset.copyReady = 'true';
+
+    const wrapper = document.createElement('span');
+    wrapper.className = options.wrapperClass || 'copy-value-wrap';
+    element.parentNode.insertBefore(wrapper, element);
+    wrapper.appendChild(element);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = options.buttonClass || 'copy-btn';
+    button.title = options.title || 'კოდის კოპირება';
+    button.setAttribute('aria-label', options.title || 'კოდის კოპირება');
+    button.innerHTML = createCopyIcon();
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const value = String(options.value || element.textContent || '').trim();
+      if (!value || value === '—') {
+        notify('კოდი ჯერ არ არის ხელმისაწვდომი', 'error');
+        return;
+      }
+      const copied = await copyText(value);
+      notify(copied ? 'კოდი დაკოპირდა' : 'კოდის კოპირება ვერ მოხერხდა', copied ? 'success' : 'error');
+    });
+    wrapper.appendChild(button);
+    return button;
+  }
+
+  function getPasswordStrength(password) {
+    const value = String(password || '');
+    if (!value) return { score: 0, label: '' };
+    let score = 0;
+    if (value.length >= 8) score += 1;
+    if (value.length >= 12) score += 1;
+    if (/[A-ZА-Яა-ჰ]/.test(value) && /[a-zа-яა-ჰ]/.test(value)) score += 1;
+    if (/\d/.test(value)) score += 1;
+    if (/[^A-Za-zА-Яа-яა-ჰ0-9]/.test(value)) score += 1;
+    const capped = Math.min(score, 4);
+    const labels = ['', 'სუსტი', 'საშუალო', 'კარგი', 'ძლიერი'];
+    return { score: capped, label: labels[capped] || '' };
+  }
+
+  function shouldShowPasswordStrength(input) {
+    const name = String(input?.name || input?.id || '').toLowerCase();
+    if (!name) return false;
+    if (name.includes('confirm') || name.includes('current')) return false;
+    return name === 'password' || name.includes('newpassword') || name.includes('editnewpassword');
+  }
+
+  function setupPasswordStrength(root = document) {
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    const inputs = Array.from(scope.querySelectorAll('input[type="password"], input[data-password-toggle-ready="true"]'));
+    inputs.forEach((input) => {
+      if (!shouldShowPasswordStrength(input) || input.dataset.passwordStrengthReady === 'true') return;
+      input.dataset.passwordStrengthReady = 'true';
+
+      const meter = document.createElement('div');
+      meter.className = 'password-strength';
+      meter.setAttribute('aria-live', 'polite');
+      meter.innerHTML = `
+        <div class="password-strength-bars" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <span class="password-strength-label"></span>`;
+
+      const anchor = input.closest('.password-field') || input;
+      anchor.parentNode?.insertBefore(meter, anchor.nextSibling);
+
+      const update = () => {
+        const { score, label } = getPasswordStrength(input.value);
+        meter.dataset.score = String(score);
+        meter.querySelector('.password-strength-label').textContent = label ? `პაროლი: ${label}` : '';
+      };
+      input.addEventListener('input', update);
+      input.addEventListener('change', update);
+      update();
+    });
+  }
+
+  function resetPasswordStrength(root = document) {
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    Array.from(scope.querySelectorAll('input[data-password-strength-ready="true"]')).forEach((input) => {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
     });
   }
 
@@ -203,6 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
   authModule.init();
   footerFormModule.init();
   setupPasswordToggles();
+  setupPasswordStrength();
   // profile navigation uses native anchors + delegated gating
 
   // Bind header-dependent handlers after header is dynamically loaded
@@ -233,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Initialize auth so login modal works on personal page too
       authModule.init();
       setupPasswordToggles();
+      setupPasswordStrength();
 
       // Gating moved to delegated handler below
 
@@ -271,6 +429,12 @@ document.addEventListener('DOMContentLoaded', () => {
   window.Utils.validatePassword = utils.validatePassword;
   window.Utils.setupPasswordToggles = setupPasswordToggles;
   window.Utils.resetPasswordToggles = resetPasswordToggles;
+  window.Utils.setupPasswordStrength = setupPasswordStrength;
+  window.Utils.resetPasswordStrength = resetPasswordStrength;
+  window.Utils.notify = notify;
+  window.Utils.setButtonLoading = setButtonLoading;
+  window.Utils.copyText = copyText;
+  window.Utils.attachCopyButton = attachCopyButton;
 
   // Expose minimal auth helpers
   window.Auth = window.Auth || {};
@@ -591,7 +755,9 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.registerForm?.reset?.();
       DOM.forgotPasswordForm?.reset?.();
       resetPasswordToggles(DOM.loginModal || document);
+      resetPasswordStrength(DOM.loginModal || document);
       resetForgotFlow();
+      resetRegisterFlow();
       showOptions();
     }
 
@@ -623,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateBanner();
       updateAdminLinkVisibility();
       document.dispatchEvent(new CustomEvent('auth:logout'));
-      alert('გასვლა შესრულებულია');
+      notify('გასვლა შესრულებულია', 'success');
       closeModal();
     }
 
@@ -636,15 +802,15 @@ document.addEventListener('DOMContentLoaded', () => {
       return String(Date.now()).slice(-10);
     }
 
-    function handleLoginSubmit(event) {
+    async function handleLoginSubmit(event) {
       event.preventDefault();
       if (!DOM.loginForm) return;
       const formData = new FormData(DOM.loginForm);
       const email = utils.getTrimmed(formData, 'email');
       const password = utils.getTrimmed(formData, 'password');
-      if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
-      if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
-      if (!password) return alert('გთხოვთ შეიყვანოთ პაროლი');
+      if (!email) return notify('გთხოვთ შეიყვანოთ ელფოსტა', 'error');
+      if (!utils.isValidEmail(email)) return notify('ელფოსტა არასწორია', 'error');
+      if (!password) return notify('გთხოვთ შეიყვანოთ პაროლი', 'error');
       localStorage.setItem(KEYS.SAVED_EMAIL, email);
       const user = getCurrentUser();
       const loginEmailLower = email.toLowerCase();
@@ -652,65 +818,129 @@ document.addEventListener('DOMContentLoaded', () => {
         try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
       }
 
-      (async () => {
-        try {
-          const response = await fetch(`${API_BASE}/auth/login`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache',
-            },
-            body: JSON.stringify({
-              email: email,
-              password: password,
-            }),
-          });
-          if (response.ok) {
-            const data = await response.json();
-            // Store token if provided (for future authenticated requests)
-            if (data.token) {
-              try {
-                localStorage.setItem('auth_token', data.token);
-              } catch {}
-            }
-            // Normalize user data from response
-            const userData = data.user || data;
-            const normalizedUser = {
-              id: userData.id,
-              firstName: userData.first_name,
-              lastName: userData.last_name,
-              code: userData.code,
-              isAdmin: !!userData.is_admin,
-              email: userData.email,
-            };
-            saveCurrentUser(normalizedUser);
-            setLoggedIn(true);
-            updateAuthUI();
-            updateBanner();
-            updateAdminLinkVisibility();
-            document.dispatchEvent(new CustomEvent('auth:login', { detail: { user: normalizedUser } }));
-            closeModal();
-            DOM.loginForm?.reset?.();
-            showOptions();
-            return;
+      const submitButton = event.submitter || DOM.loginForm.querySelector('.submit');
+      setButtonLoading(submitButton, true, 'მოწმდება...');
+      try {
+        const response = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+          },
+          body: JSON.stringify({
+            email: email,
+            password: password,
+          }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          // Store token if provided (for future authenticated requests)
+          if (data.token) {
+            try {
+              localStorage.setItem('auth_token', data.token);
+            } catch {}
           }
-        } catch (error) {
-          console.error('Login error:', error);
+          // Normalize user data from response
+          const userData = data.user || data;
+          const normalizedUser = {
+            id: userData.id,
+            firstName: userData.first_name,
+            lastName: userData.last_name,
+            code: userData.code,
+            isAdmin: !!userData.is_admin,
+            email: userData.email,
+          };
+          saveCurrentUser(normalizedUser);
+          setLoggedIn(true);
+          updateAuthUI();
+          updateBanner();
+          updateAdminLinkVisibility();
+          document.dispatchEvent(new CustomEvent('auth:login', { detail: { user: normalizedUser } }));
+          closeModal();
+          DOM.loginForm?.reset?.();
+          showOptions();
+          notify('ავტორიზაცია შესრულებულია', 'success');
+          return;
         }
-        // Login failed - ensure UI shows logged out state
-        setLoggedIn(false);
-        updateAuthUI();
-        updateBanner();
-        updateAdminLinkVisibility();
-        alert('ელფოსტა/პაროლი ვერ გადამოწმდა. შეგიძლიათ გამოიყენოთ გვერდი შეზღუდული ფუნქციონალით ან გაიაროთ რეგისტრაცია.');
-        // Allow limited login flow even if profile not found
-        closeModal();
-        DOM.loginForm?.reset?.();
-        showOptions();
-      })();
+      } catch (error) {
+        console.error('Login error:', error);
+      } finally {
+        setButtonLoading(submitButton, false);
+      }
+      // Login failed - ensure UI shows logged out state
+      setLoggedIn(false);
+      updateAuthUI();
+      updateBanner();
+      updateAdminLinkVisibility();
+      notify('ელფოსტა/პაროლი ვერ გადამოწმდა. შეგიძლიათ გამოიყენოთ გვერდი შეზღუდული ფუნქციონალით ან გაიაროთ რეგისტრაცია.', 'error');
+      // Allow limited login flow even if profile not found
+      closeModal();
+      DOM.loginForm?.reset?.();
+      showOptions();
     }
 
     let forgotPasswordEmail = '';
+    const OTP_SECONDS = 300;
+    const otpTimers = { forgot: null, register: null };
+
+    function formatOtpTime(seconds) {
+      const safe = Math.max(0, Number(seconds) || 0);
+      const minutes = String(Math.floor(safe / 60)).padStart(2, '0');
+      const rest = String(safe % 60).padStart(2, '0');
+      return `${minutes}:${rest}`;
+    }
+
+    function getOtpInfoElement(type) {
+      const selector = type === 'register'
+        ? '#registerStep2 .verification-info'
+        : '#forgotStep2 .verification-info';
+      return document.querySelector(selector);
+    }
+
+    function stopOtpTimer(type) {
+      if (otpTimers[type]) {
+        clearInterval(otpTimers[type]);
+        otpTimers[type] = null;
+      }
+    }
+
+    function resetOtpInfo(type) {
+      stopOtpTimer(type);
+      const info = getOtpInfoElement(type);
+      if (!info) return;
+      info.innerHTML = '4-ნიშნა კოდი გაგზავნილია თქვენს ელფოსტაზე';
+    }
+
+    function startOtpTimer(type) {
+      stopOtpTimer(type);
+      const info = getOtpInfoElement(type);
+      if (!info) return;
+
+      let remaining = OTP_SECONDS;
+      const render = () => {
+        const finished = remaining <= 0;
+        info.innerHTML = `
+          <span>4-ნიშნა კოდი გაგზავნილია თქვენს ელფოსტაზე</span>
+          <span class="otp-countdown">${finished ? 'კოდის დრო ამოიწურა' : formatOtpTime(remaining)}</span>
+          <button type="button" class="otp-resend"${finished ? '' : ' hidden'}>ხელახლა გაგზავნა</button>`;
+        const resend = info.querySelector('.otp-resend');
+        resend?.addEventListener('click', (event) => {
+          event.preventDefault();
+          if (type === 'register') {
+            handleRegisterSendCode(event);
+          } else {
+            resendForgotCode(event);
+          }
+        });
+      };
+
+      render();
+      otpTimers[type] = setInterval(() => {
+        remaining -= 1;
+        render();
+        if (remaining <= 0) stopOtpTimer(type);
+      }, 1000);
+    }
 
     function showForgotStep(step) {
       const step1 = document.getElementById('forgotStep1');
@@ -722,84 +952,117 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetForgotFlow() {
       forgotPasswordEmail = '';
       showForgotStep(1);
+      resetOtpInfo('forgot');
     }
 
-    function handleForgotSubmit(event) {
+    async function requestForgotCode(email) {
+      const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        let detail = '';
+        try {
+          const json = await response.json();
+          detail = json?.detail || '';
+        } catch {}
+        throw new Error(detail || 'კოდის გაგზავნა ვერ მოხერხდა');
+      }
+
+      try {
+        return await response.json();
+      } catch {
+        return {};
+      }
+    }
+
+    async function resendForgotCode(event) {
+      const button = event?.currentTarget || null;
+      const email = forgotPasswordEmail || utils.getTrimmed(new FormData(DOM.forgotPasswordForm), 'email');
+      if (!email || !utils.isValidEmail(email)) {
+        notify('ელფოსტა არასწორია', 'error');
+        return;
+      }
+      setButtonLoading(button, true, 'იგზავნება...');
+      try {
+        const result = await requestForgotCode(email);
+        forgotPasswordEmail = email;
+        localStorage.setItem(KEYS.SAVED_EMAIL, email);
+        startOtpTimer('forgot');
+        notify(result.message || 'აღდგენის კოდი ხელახლა გაიგზავნა', 'success');
+      } catch (error) {
+        notify(error.message || 'კოდის გაგზავნა ვერ მოხერხდა', 'error');
+      } finally {
+        setButtonLoading(button, false);
+      }
+    }
+
+    async function handleForgotSubmit(event) {
       event.preventDefault();
       if (!DOM.forgotPasswordForm) return;
       const formData = new FormData(DOM.forgotPasswordForm);
+      const submitButton = event.submitter || DOM.forgotPasswordForm.querySelector(forgotPasswordEmail ? '#forgotStep2 .submit' : '#forgotStep1 .submit');
 
-      (async () => {
-        try {
-          if (!forgotPasswordEmail) {
-            const email = utils.getTrimmed(formData, 'email');
-            if (!email) return alert('გთხოვთ შეიყვანოთ ელფოსტა');
-            if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
+      try {
+        if (!forgotPasswordEmail) {
+          const email = utils.getTrimmed(formData, 'email');
+          if (!email) return notify('გთხოვთ შეიყვანოთ ელფოსტა', 'error');
+          if (!utils.isValidEmail(email)) return notify('ელფოსტა არასწორია', 'error');
 
-            const response = await fetch(`${API_BASE}/auth/forgot-password`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email }),
-            });
-
-            if (!response.ok) {
-              let detail = '';
-              try {
-                const json = await response.json();
-                detail = json?.detail || '';
-              } catch {}
-              alert(detail || 'კოდის გაგზავნა ვერ მოხერხდა');
-              return;
-            }
-
-            const result = await response.json();
-            forgotPasswordEmail = email;
-            localStorage.setItem(KEYS.SAVED_EMAIL, email);
-            showForgotStep(2);
-            alert(result.message || 'თუ ელფოსტა რეგისტრირებულია, აღდგენის კოდი გამოგეგზავნათ');
-            return;
-          }
-
-          const resetCode = utils.getTrimmed(formData, 'resetCode');
-          const newPassword = utils.getTrimmed(formData, 'newPassword');
-          const confirmNewPassword = utils.getTrimmed(formData, 'confirmNewPassword');
-
-          if (!resetCode || resetCode.length !== 4) return alert('გთხოვთ შეიყვანოთ 4-ნიშნა კოდი');
-          const passwordCheck = utils.validatePassword(newPassword);
-          if (!passwordCheck.valid) return alert(passwordCheck.message);
-          if (newPassword !== confirmNewPassword) return alert('პაროლები არ ემთხვევა');
-
-          const response = await fetch(`${API_BASE}/auth/reset-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: forgotPasswordEmail,
-              verification_code: resetCode,
-              new_password: newPassword,
-              confirm_new_password: confirmNewPassword,
-            }),
-          });
-
-          if (!response.ok) {
-            let detail = '';
-            try {
-              const json = await response.json();
-              detail = json?.detail || '';
-            } catch {}
-            alert(detail || 'პაროლის შეცვლა ვერ მოხერხდა');
-            return;
-          }
-
-          const result = await response.json();
-          alert(result.message || 'პაროლი წარმატებით შეიცვალა');
-          closeModal();
-          DOM.forgotPasswordForm?.reset?.();
-          resetForgotFlow();
-          showLogin();
-        } catch {
-          alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
+          setButtonLoading(submitButton, true, 'იგზავნება...');
+          const result = await requestForgotCode(email);
+          forgotPasswordEmail = email;
+          localStorage.setItem(KEYS.SAVED_EMAIL, email);
+          showForgotStep(2);
+          startOtpTimer('forgot');
+          notify(result.message || 'თუ ელფოსტა რეგისტრირებულია, აღდგენის კოდი გამოგეგზავნათ', 'success');
+          return;
         }
-      })();
+
+        const resetCode = utils.getTrimmed(formData, 'resetCode');
+        const newPassword = utils.getTrimmed(formData, 'newPassword');
+        const confirmNewPassword = utils.getTrimmed(formData, 'confirmNewPassword');
+
+        if (!resetCode || resetCode.length !== 4) return notify('გთხოვთ შეიყვანოთ 4-ნიშნა კოდი', 'error');
+        const passwordCheck = utils.validatePassword(newPassword);
+        if (!passwordCheck.valid) return notify(passwordCheck.message, 'error');
+        if (newPassword !== confirmNewPassword) return notify('პაროლები არ ემთხვევა', 'error');
+
+        setButtonLoading(submitButton, true, 'იცვლება...');
+        const response = await fetch(`${API_BASE}/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: forgotPasswordEmail,
+            verification_code: resetCode,
+            new_password: newPassword,
+            confirm_new_password: confirmNewPassword,
+          }),
+        });
+
+        if (!response.ok) {
+          let detail = '';
+          try {
+            const json = await response.json();
+            detail = json?.detail || '';
+          } catch {}
+          notify(detail || 'პაროლის შეცვლა ვერ მოხერხდა', 'error');
+          return;
+        }
+
+        const result = await response.json();
+        notify(result.message || 'პაროლი წარმატებით შეიცვალა', 'success');
+        closeModal();
+        DOM.forgotPasswordForm?.reset?.();
+        resetForgotFlow();
+        showLogin();
+      } catch (error) {
+        notify(error.message || 'ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
+      } finally {
+        setButtonLoading(submitButton, false);
+      }
     }
 
     // Registration state
@@ -812,7 +1075,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (step2) step2.style.display = step === 2 ? 'block' : 'none';
     }
 
-    async function handleRegisterSendCode() {
+    function resetRegisterFlow() {
+      registerData = null;
+      showRegisterStep(1);
+      resetOtpInfo('register');
+    }
+
+    async function handleRegisterSendCode(event) {
+      event?.preventDefault?.();
       if (!DOM.registerForm) return;
       const formData = new FormData(DOM.registerForm);
       const personalId = utils.getTrimmed(formData, 'personalId');
@@ -823,14 +1093,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const password = utils.getTrimmed(formData, 'password');
       const confirmPassword = utils.getTrimmed(formData, 'confirmPassword');
       
-      if (personalId.length !== 11 || !/^[0-9]{11}$/.test(personalId)) return alert('პირადი ნომერი უნდა იყოს 11 ციფრი');
-      if (!firstName || !lastName) return alert('გთხოვთ შეიყვანოთ სახელი და გვარი');
-      if (!/^[0-9]{9}$/.test(phone)) return alert('ტელეფონი უნდა იყოს 9 ციფრი (მაგ: 599123456)');
-      if (!utils.isValidEmail(email)) return alert('ელფოსტა არასწორია');
+      if (personalId.length !== 11 || !/^[0-9]{11}$/.test(personalId)) return notify('პირადი ნომერი უნდა იყოს 11 ციფრი', 'error');
+      if (!firstName || !lastName) return notify('გთხოვთ შეიყვანოთ სახელი და გვარი', 'error');
+      if (!/^[0-9]{9}$/.test(phone)) return notify('ტელეფონი უნდა იყოს 9 ციფრი (მაგ: 599123456)', 'error');
+      if (!utils.isValidEmail(email)) return notify('ელფოსტა არასწორია', 'error');
       const passwordCheck = utils.validatePassword(password);
-      if (!passwordCheck.valid) return alert(passwordCheck.message);
-      if (password !== confirmPassword) return alert('პაროლები არ ემთხვევა');
+      if (!passwordCheck.valid) return notify(passwordCheck.message, 'error');
+      if (password !== confirmPassword) return notify('პაროლები არ ემთხვევა', 'error');
 
+      const button = event?.currentTarget || document.getElementById('registerSendCodeBtn');
+      setButtonLoading(button, true, 'იგზავნება...');
       try {
         const response = await fetch(`${API_BASE}/users/send-verification-code`, {
           method: 'POST',
@@ -843,18 +1115,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await response.json();
             detail = json?.detail || '';
           } catch {}
-          alert(detail || 'კოდის გაგზავნა ვერ მოხერხდა');
+          notify(detail || 'კოდის გაგზავნა ვერ მოხერხდა', 'error');
           return;
         }
         // Save registration data and show step 2
         registerData = { personalId, firstName, lastName, phone, email, password };
         showRegisterStep(2);
+        startOtpTimer('register');
+        notify('ვერიფიკაციის კოდი გაიგზავნა ელფოსტაზე', 'success');
       } catch {
-        alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
+        notify('ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
+      } finally {
+        setButtonLoading(button, false);
       }
     }
 
-    function handleRegisterSubmit(event) {
+    async function handleRegisterSubmit(event) {
       event.preventDefault();
       if (!DOM.registerForm || !registerData) return;
       
@@ -862,67 +1138,69 @@ document.addEventListener('DOMContentLoaded', () => {
       const verificationCode = utils.getTrimmed(formData, 'verificationCode');
       
       if (!verificationCode || verificationCode.length !== 4) {
-        return alert('გთხოვთ შეიყვანოთ 4-ნიშნა კოდი');
+        return notify('გთხოვთ შეიყვანოთ 4-ნიშნა კოდი', 'error');
       }
 
-      (async () => {
-        try {
-          const response = await fetch(`${API_BASE}/users/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              personal_id: registerData.personalId,
-              first_name: registerData.firstName,
-              last_name: registerData.lastName,
-              phone: registerData.phone,
-              email: registerData.email,
-              password: registerData.password,
-              verification_code: verificationCode,
-            }),
-          });
-          if (!response.ok) {
-            let detail = '';
-            try {
-              const json = await response.json();
-              detail = json?.detail || '';
-            } catch {}
-            if (response.status === 409) {
-              alert(detail || 'ეს მონაცემები სისტემაში უკვე რეგისტრირებულია');
-              return;
-            }
-            alert(detail || 'რეგისტრაცია ვერ შესრულდა');
+      const submitButton = event.submitter || DOM.registerForm.querySelector('#registerStep2 .submit');
+      setButtonLoading(submitButton, true, 'რეგისტრირდება...');
+      try {
+        const response = await fetch(`${API_BASE}/users/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            personal_id: registerData.personalId,
+            first_name: registerData.firstName,
+            last_name: registerData.lastName,
+            phone: registerData.phone,
+            email: registerData.email,
+            password: registerData.password,
+            verification_code: verificationCode,
+          }),
+        });
+        if (!response.ok) {
+          let detail = '';
+          try {
+            const json = await response.json();
+            detail = json?.detail || '';
+          } catch {}
+          if (response.status === 409) {
+            notify(detail || 'ეს მონაცემები სისტემაში უკვე რეგისტრირებულია', 'error');
             return;
           }
-          const data = await response.json();
-          const normalizedUser = {
-            id: data.id,
-            firstName: data.first_name || registerData.firstName,
-            lastName: data.last_name || registerData.lastName,
-            code: data.code,
-            isAdmin: !!data.is_admin,
-            email: data.email,
-          };
-          saveCurrentUser(normalizedUser);
-          localStorage.setItem(KEYS.SAVED_EMAIL, registerData.email);
-          setLoggedIn(true);
-          updateAuthUI();
-          updateBanner();
-          updateAdminLinkVisibility();
-          document.dispatchEvent(new CustomEvent('auth:login', { detail: { user: normalizedUser } }));
-          alert('რეგისტრაცია მიღებულია!');
-          closeModal();
-          DOM.registerForm?.reset?.();
-          registerData = null;
-          showRegisterStep(1);
-          showOptions();
-        } catch {
-          alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
+          notify(detail || 'რეგისტრაცია ვერ შესრულდა', 'error');
+          return;
         }
-      })();
+        const data = await response.json();
+        const normalizedUser = {
+          id: data.id,
+          firstName: data.first_name || registerData.firstName,
+          lastName: data.last_name || registerData.lastName,
+          code: data.code,
+          isAdmin: !!data.is_admin,
+          email: data.email,
+        };
+        saveCurrentUser(normalizedUser);
+        localStorage.setItem(KEYS.SAVED_EMAIL, registerData.email);
+        setLoggedIn(true);
+        updateAuthUI();
+        updateBanner();
+        updateAdminLinkVisibility();
+        document.dispatchEvent(new CustomEvent('auth:login', { detail: { user: normalizedUser } }));
+        notify('რეგისტრაცია მიღებულია!', 'success');
+        closeModal();
+        DOM.registerForm?.reset?.();
+        resetRegisterFlow();
+        showOptions();
+      } catch {
+        notify('ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
+      } finally {
+        setButtonLoading(submitButton, false);
+      }
     }
 
     function handleRegisterBack() {
       showRegisterStep(1);
+      resetOtpInfo('register');
     }
 
     function init() {
@@ -936,11 +1214,13 @@ document.addEventListener('DOMContentLoaded', () => {
       utils.on(DOM.loginForm, 'submit', handleLoginSubmit);
       utils.on(DOM.forgotPasswordForm, 'submit', handleForgotSubmit);
       const backToLoginBtn = DOM.forgotPasswordForm?.querySelector('.back-to-login');
-      utils.on(backToLoginBtn, 'click', showLogin);
+      utils.on(backToLoginBtn, 'click', () => {
+        resetForgotFlow();
+        showLogin();
+      });
       const forgotBackBtn = document.getElementById('forgotBackBtn');
       utils.on(forgotBackBtn, 'click', () => {
-        forgotPasswordEmail = '';
-        showForgotStep(1);
+        resetForgotFlow();
       });
       utils.on(DOM.registerForm, 'submit', handleRegisterSubmit);
       

@@ -831,6 +831,51 @@ body.registry-open {
   color: #0f172a;
   transition: border-color var(--transition-base), background var(--transition-base), box-shadow var(--transition-base);
 }
+
+.registry-search-wrap {
+  position: relative;
+}
+
+.registry-search-wrap .registry-search {
+  padding-right: 38px;
+}
+
+.registry-search-clear {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+.registry-search-clear svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.registry-search-clear:hover,
+.registry-search-clear:focus-visible {
+  background: #eff6ff;
+  color: #2563eb;
+  outline: none;
+}
+
 .registry-search:focus-visible,
 .registry-sort select:focus-visible {
   outline: none;
@@ -862,6 +907,20 @@ body.registry-open {
   width: 14px;
   height: 14px;
 }
+
+.registry-filter-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 4px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
 .registry-sort {
   display: flex;
   flex-direction: column;
@@ -939,6 +998,64 @@ body.registry-open {
   transform: none;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.14);
 }
+
+.registry-skeleton-card {
+  cursor: default;
+  pointer-events: none;
+  box-shadow: none;
+  border-color: #e2e8f0;
+  background-image: linear-gradient(180deg, #ffffff, #f5f8fb);
+}
+
+.registry-skeleton-avatar,
+.registry-skeleton-info span {
+  position: relative;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.registry-skeleton-avatar::after,
+.registry-skeleton-info span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  animation: registrySkeleton 1.2s ease-in-out infinite;
+}
+
+.registry-skeleton-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.registry-skeleton-info {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+}
+
+.registry-skeleton-info span {
+  height: 12px;
+  border-radius: 4px;
+}
+
+.registry-skeleton-info span:first-child {
+  width: 42%;
+}
+
+.registry-skeleton-info span:last-child {
+  width: 24%;
+}
+
+@keyframes registrySkeleton {
+  to {
+    transform: translateX(100%);
+  }
+}
+
 .registry-card[data-qualification="architect"][data-status="active"] {
   --registry-card-border: linear-gradient(135deg, rgb(30, 64, 175), rgb(37, 99, 235));
 }
@@ -978,6 +1095,17 @@ body.registry-open {
   font-weight: 600;
   color: #0f172a;
   letter-spacing: 0.02em;
+}
+.registry-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.registry-code {
+  font-size: 11px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
 }
 .registry-meta {
   display: flex;

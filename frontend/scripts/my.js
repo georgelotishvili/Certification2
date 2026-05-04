@@ -86,9 +86,22 @@ document.addEventListener('DOMContentLoaded', () => {
     getTrimmed: (formData, name) => (formData.get(name) || '').toString().trim(),
   };
 
+  const notify = (message, type = 'info') => {
+    if (window.Utils?.notify) window.Utils.notify(message, type);
+    else alert(String(message || ''));
+  };
+
+  function attachCopyTargets() {
+    try {
+      window.Utils?.attachCopyButton?.(DOM.pfCode);
+      window.Utils?.attachCopyButton?.(DOM.certCode);
+    } catch {}
+  }
+
   function isLoggedIn() { try { return window.Auth?.isLoggedIn?.() === true; } catch { return false; } }
   function getCurrentUser() { try { return window.Auth?.getCurrentUser?.() || null; } catch { return null; } }
   const authModule = { isLoggedIn, getCurrentUser };
+  attachCopyTargets();
 
   function guard() {
     const user = getCurrentUser();
@@ -364,10 +377,11 @@ document.addEventListener('DOMContentLoaded', () => {
   async function sendEmailVerificationCode() {
     const newEmail = String(profileEditDOM.email?.value || '').trim().toLowerCase();
     if (!newEmail || !utils.isValidEmail(newEmail)) {
-      alert('გთხოვთ შეიყვანოთ სწორი ელფოსტა');
+      notify('გთხოვთ შეიყვანოთ სწორი ელფოსტა', 'error');
       return;
     }
 
+    window.Utils?.setButtonLoading?.(profileEditDOM.sendCodeBtn, true, 'იგზავნება...');
     try {
       const res = await fetch(`${API_BASE}/users/send-verification-code`, {
         method: 'POST',
@@ -380,24 +394,27 @@ document.addEventListener('DOMContentLoaded', () => {
           const json = await res.json();
           detail = json?.detail || '';
         } catch {}
-        alert(detail || 'კოდის გაგზავნა ვერ მოხერხდა');
+        notify(detail || 'კოდის გაგზავნა ვერ მოხერხდა', 'error');
         return;
       }
       profileEditState.emailVerificationSent = true;
       if (profileEditDOM.verificationInfoText) {
         profileEditDOM.verificationInfoText.textContent = `კოდი გაგზავნილია: ${newEmail}`;
       }
-      alert('ვერიფიკაციის კოდი გაგზავნილია ახალ ელფოსტაზე');
+      notify('ვერიფიკაციის კოდი გაგზავნილია ახალ ელფოსტაზე', 'success');
     } catch {
-      alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
+      notify('ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
+    } finally {
+      window.Utils?.setButtonLoading?.(profileEditDOM.sendCodeBtn, false);
     }
   }
 
-  function closeProfileEdit() {
-    if (!profileEditDOM.overlay || profileEditState.submitting) return;
+  function closeProfileEdit(options = {}) {
+    if (!profileEditDOM.overlay || (profileEditState.submitting && !options.force)) return;
     profileEditDOM.overlay.classList.remove('open');
     profileEditDOM.overlay.setAttribute('aria-hidden', 'true');
     try { window.Utils?.resetPasswordToggles?.(profileEditDOM.overlay); } catch {}
+    try { window.Utils?.resetPasswordStrength?.(profileEditDOM.overlay); } catch {}
   }
 
   function setAuthBannerText(firstName, lastName, code) {
@@ -443,19 +460,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirm_new_password = String(profileEditDOM.confirmPassword?.value || '');
 
     if (!first_name || !last_name) {
-      alert('გთხოვთ შეიყვანოთ სახელი და გვარი');
+      notify('გთხოვთ შეიყვანოთ სახელი და გვარი', 'error');
       return;
     }
     if (!phone) {
-      alert('გთხოვთ შეიყვანოთ ტელეფონი');
+      notify('გთხოვთ შეიყვანოთ ტელეფონი', 'error');
       return;
     }
     if (!email || !utils.isValidEmail(email)) {
-      alert('ელფოსტა არასწორია');
+      notify('ელფოსტა არასწორია', 'error');
       return;
     }
     if (personal_id.length !== 11 || !/^[0-9]{11}$/.test(personal_id)) {
-      alert('პირადი ნომერი უნდა იყოს 11 ციფრი');
+      notify('პირადი ნომერი უნდა იყოს 11 ციფრი', 'error');
       return;
     }
 
@@ -469,34 +486,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const email_verification_code = String(profileEditDOM.verificationCode?.value || '').trim();
     if (emailChanged) {
       if (!email_verification_code || email_verification_code.length !== 4) {
-        alert('გთხოვთ შეიყვანოთ 4-ნიშნა ვერიფიკაციის კოდი');
+        notify('გთხოვთ შეიყვანოთ 4-ნიშნა ვერიფიკაციის კოდი', 'error');
         return;
       }
     }
 
     if (wantsPasswordChange) {
       if (!new_password.trim()) {
-        alert('გთხოვთ შეიყვანოთ ახალი პაროლი');
+        notify('გთხოვთ შეიყვანოთ ახალი პაროლი', 'error');
         return;
       }
       const passwordCheck = window.Utils?.validatePassword?.(new_password);
       if (passwordCheck && !passwordCheck.valid) {
-        alert(passwordCheck.message);
+        notify(passwordCheck.message, 'error');
         return;
       }
       if (!confirm_new_password.trim()) {
-        alert('გთხოვთ გაიმეოროთ ახალი პაროლი');
+        notify('გთხოვთ გაიმეოროთ ახალი პაროლი', 'error');
         return;
       }
       if (new_password !== confirm_new_password) {
-        alert('პაროლები არ ემთხვევა');
+        notify('პაროლები არ ემთხვევა', 'error');
         return;
       }
     }
 
     // მიმდინარე პაროლი ყოველთვის საჭიროა ნებისმიერი ცვლილებისთვის
     if (!current_password.trim()) {
-      alert('გთხოვთ შეიყვანოთ მიმდინარე პაროლი');
+      notify('გთხოვთ შეიყვანოთ მიმდინარე პაროლი', 'error');
       return;
     }
 
@@ -517,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     profileEditState.submitting = true;
-    profileEditDOM.submit?.setAttribute?.('disabled', 'true');
+    window.Utils?.setButtonLoading?.(profileEditDOM.submit, true, 'ინახება...');
     try {
       const res = await fetch(`${API_BASE}/users/profile`, {
         method: 'PATCH',
@@ -533,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {
           try { detail = (await res.clone().text()).trim(); } catch {}
         }
-        alert(detail || 'შენახვა ვერ მოხერხდა');
+        notify(detail || 'შენახვა ვერ მოხერხდა', 'error');
         return;
       }
 
@@ -552,18 +569,19 @@ document.addEventListener('DOMContentLoaded', () => {
       // Keep auth state in sync (email/name changes)
       setLocalAuthUser(updated);
 
-      closeProfileEdit();
-      alert('მონაცემები განახლდა');
+      closeProfileEdit({ force: true });
+      attachCopyTargets();
+      notify('მონაცემები განახლდა', 'success');
       // Some parts of the page cache actor email in memory and in download links.
       // Reload only when email changed to keep everything consistent.
       if (emailChanged) {
         try { window.location.reload(); } catch {}
       }
     } catch {
-      alert('ქსელური პრობლემა - სცადეთ მოგვიანებით');
+      notify('ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
     } finally {
       profileEditState.submitting = false;
-      profileEditDOM.submit?.removeAttribute?.('disabled');
+      window.Utils?.setButtonLoading?.(profileEditDOM.submit, false);
     }
   }
 
@@ -1034,6 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sumDate.className = 'sum-date';
         sumDate.textContent = window.Utils?.formatDateTime?.(item.created_at);
         summary.appendChild(sumCode);
+        try { window.Utils?.attachCopyButton?.(sumCode); } catch {}
         summary.appendChild(sumDate);
         el.appendChild(summary);
 
@@ -1357,6 +1376,7 @@ document.addEventListener('DOMContentLoaded', () => {
               sumDate.className = 'sum-date';
               sumDate.textContent = window.Utils?.formatDateTime?.(item.created_at);
               summary.appendChild(sumCode);
+              try { window.Utils?.attachCopyButton?.(sumCode); } catch {}
               summary.appendChild(sumDate);
               el.appendChild(summary);
 
