@@ -79,6 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
     expertExpertiseChosen: document.getElementById('expertExpertiseChosen'),
     expertProjectChosen: document.getElementById('expertProjectChosen'),
     expertSubmitBtn: document.getElementById('expertSubmitBtn'),
+    expertSearchWrap: document.getElementById('expertSearchWrap'),
+    expertSearch: document.getElementById('expertSearch'),
     expertList: document.getElementById('expertList'),
   };
 
@@ -1005,6 +1007,9 @@ document.addEventListener('DOMContentLoaded', () => {
       draftId: null,
       currentDraft: null,
       list: [],
+      publicMode: false,
+      searchTerm: '',
+      searchBound: false,
     };
 
     function canActorAdminDelete() {
@@ -1022,7 +1027,10 @@ document.addEventListener('DOMContentLoaded', () => {
         section.setAttribute('aria-hidden', visible ? 'false' : 'true');
       }
       if (grid) grid.classList.toggle('expert-hidden', !visible);
-      if (!visible && DOM.expertList) DOM.expertList.innerHTML = '';
+      if (!visible) {
+        if (DOM.expertList) DOM.expertList.innerHTML = '';
+        if (DOM.expertSearchWrap) DOM.expertSearchWrap.hidden = true;
+      }
     }
 
     function setEnabled(value) {
@@ -1060,6 +1068,164 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    function normalizeSearchValue(value) {
+      return String(value == null ? '' : value).toLocaleLowerCase('ka-GE').trim();
+    }
+
+    function getItemSearchText(item) {
+      const created = window.Utils?.formatDateTime?.(item.created_at) || item.created_at || '';
+      return normalizeSearchValue([
+        item.unique_code,
+        item.cadastral_code,
+        item.building_function,
+        item.project_address,
+        item.expertise_filename,
+        item.project_filename,
+        created,
+      ].join(' '));
+    }
+
+    function getFilteredItems() {
+      const query = normalizeSearchValue(state.searchTerm);
+      if (!query) return state.list;
+      return state.list.filter((item) => getItemSearchText(item).includes(query));
+    }
+
+    function updateSearchVisibility() {
+      if (!DOM.expertSearchWrap) return;
+      const hasUsefulList = state.enabled && state.list.length > 0;
+      DOM.expertSearchWrap.hidden = !(hasUsefulList || !!normalizeSearchValue(state.searchTerm));
+    }
+
+    function renderEmptyList(message) {
+      const wrap = DOM.expertList;
+      if (!wrap) return;
+      const empty = document.createElement('div');
+      empty.className = 'expert-empty';
+      empty.textContent = message;
+      wrap.innerHTML = '';
+      wrap.appendChild(empty);
+    }
+
+    function bindSearch() {
+      if (!DOM.expertSearch || state.searchBound) return;
+      state.searchBound = true;
+      DOM.expertSearch.addEventListener('input', () => {
+        state.searchTerm = DOM.expertSearch.value || '';
+        renderList();
+      });
+    }
+
+    function buildUploadItem(item) {
+      const el = document.createElement('details');
+      el.className = 'expert-item';
+
+      const summary = document.createElement('summary');
+      summary.className = 'item-summary';
+      const sumCode = document.createElement('span');
+      sumCode.className = 'sum-code';
+      sumCode.textContent = item.unique_code;
+      const sumDate = document.createElement('span');
+      sumDate.className = 'sum-date';
+      sumDate.textContent = window.Utils?.formatDateTime?.(item.created_at);
+      summary.appendChild(sumCode);
+      try { window.Utils?.attachCopyButton?.(sumCode); } catch {}
+      summary.appendChild(sumDate);
+      el.appendChild(summary);
+
+      const content = document.createElement('div');
+      content.className = 'content';
+
+      const columns = document.createElement('div');
+      columns.className = 'detail-columns';
+
+      const metaCol = document.createElement('div');
+      metaCol.className = 'detail-col meta';
+      const metaItems = [
+        { label: 'საკადასტრო კოდი', value: item.cadastral_code || '—' },
+        { label: 'პროექტის სახელწოდება', value: item.building_function || '—' },
+        { label: 'პროექტის მისამართი', value: item.project_address || '—' },
+      ];
+      metaItems.forEach(({ label, value }) => {
+        const block = document.createElement('div');
+        block.className = 'detail-item';
+        const lbl = document.createElement('div');
+        lbl.className = 'detail-label';
+        lbl.textContent = label;
+        const val = document.createElement('div');
+        val.className = 'detail-value';
+        val.textContent = value || '—';
+        block.appendChild(lbl);
+        block.appendChild(val);
+        metaCol.appendChild(block);
+      });
+
+      const filesCol = document.createElement('div');
+      filesCol.className = 'detail-col files';
+      const buildDownloadUrl = (fileType) => {
+        if (state.publicMode) {
+          return `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=${fileType}`;
+        }
+        const actorPart = state.actorEmail ? `&actor=${encodeURIComponent(state.actorEmail)}` : '';
+        return `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=${fileType}${actorPart}`;
+      };
+      const addFileRow = (labelText, filename, fileType) => {
+        const block = document.createElement('div');
+        block.className = 'detail-item';
+        const lbl = document.createElement('div');
+        lbl.className = 'detail-label';
+        lbl.textContent = labelText;
+        block.appendChild(lbl);
+        const val = document.createElement('div');
+        val.className = 'detail-value';
+        if (filename) {
+          const a = document.createElement('a');
+          a.className = 'file-link';
+          a.textContent = filename;
+          a.href = buildDownloadUrl(fileType);
+          a.target = '_blank';
+          val.appendChild(a);
+        } else {
+          val.textContent = '—';
+        }
+        block.appendChild(val);
+        filesCol.appendChild(block);
+      };
+      addFileRow('ექსპერტიზა', item.expertise_filename, 'expertise');
+      addFileRow('პროექტი', item.project_filename, 'project');
+
+      columns.appendChild(metaCol);
+      columns.appendChild(filesCol);
+      content.appendChild(columns);
+      el.appendChild(content);
+
+      if (canActorAdminDelete()) {
+        const del = document.createElement('button');
+        del.className = 'item-delete';
+        del.type = 'button';
+        del.title = 'წაშლა';
+        del.setAttribute('aria-label', 'წაშლა');
+        del.textContent = '×';
+        del.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!confirm('წავშალო ელემენტი?')) return;
+          const res = await adminDeleteUpload(item.id);
+          if (!res.ok) {
+            let detail = '';
+            try { const j = await res.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res.clone().text()).trim(); } catch {} }
+            alert(detail || 'წაშლა ვერ შესრულდა');
+            return;
+          }
+          state.list = state.list.filter((entry) => String(entry.id) !== String(item.id));
+          renderList();
+        });
+        summary.appendChild(del);
+      }
+
+      return el;
+    }
+
     async function loadList() {
       if (!state.enabled || !DOM.expertList) return;
       try {
@@ -1081,124 +1247,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderList() {
       const wrap = DOM.expertList;
       if (!wrap) return;
+      updateSearchVisibility();
       if (!state.list.length) { wrap.innerHTML = ''; return; }
+      const items = getFilteredItems();
+      if (!items.length) {
+        renderEmptyList('პროექტი ვერ მოიძებნა');
+        return;
+      }
       const frag = document.createDocumentFragment();
-
-      state.list.forEach((item) => {
-        const el = document.createElement('details');
-        el.className = 'expert-item';
-
-        // Narrow summary row: unique code (left) + created at (right)
-        const summary = document.createElement('summary');
-        summary.className = 'item-summary';
-        const sumCode = document.createElement('span');
-        sumCode.className = 'sum-code';
-        sumCode.textContent = item.unique_code;
-        const sumDate = document.createElement('span');
-        sumDate.className = 'sum-date';
-        sumDate.textContent = window.Utils?.formatDateTime?.(item.created_at);
-        summary.appendChild(sumCode);
-        try { window.Utils?.attachCopyButton?.(sumCode); } catch {}
-        summary.appendChild(sumDate);
-        el.appendChild(summary);
-
-        // Expanded content: two columns (meta + files)
-        const content = document.createElement('div');
-        content.className = 'content';
-
-        const columns = document.createElement('div');
-        columns.className = 'detail-columns';
-
-        const metaCol = document.createElement('div');
-        metaCol.className = 'detail-col meta';
-        const metaItems = [
-          { label: 'საკადასტრო კოდი', value: item.cadastral_code || '—' },
-          { label: 'პროექტის სახელწოდება', value: item.building_function || '—' },
-          { label: 'პროექტის მისამართი', value: item.project_address || '—' },
-        ];
-        metaItems.forEach(({ label, value }) => {
-          const block = document.createElement('div');
-          block.className = 'detail-item';
-          const lbl = document.createElement('div');
-          lbl.className = 'detail-label';
-          lbl.textContent = label;
-          const val = document.createElement('div');
-          val.className = 'detail-value';
-          val.textContent = value || '—';
-          block.appendChild(lbl);
-          block.appendChild(val);
-          metaCol.appendChild(block);
-        });
-
-        const filesCol = document.createElement('div');
-        filesCol.className = 'detail-col files';
-        const addFileRow = (labelText, filename, href) => {
-          const block = document.createElement('div');
-          block.className = 'detail-item';
-          const lbl = document.createElement('div');
-          lbl.className = 'detail-label';
-          lbl.textContent = labelText;
-          block.appendChild(lbl);
-          const val = document.createElement('div');
-          val.className = 'detail-value';
-          if (filename && href) {
-            const a = document.createElement('a');
-            a.className = 'file-link';
-            a.textContent = filename;
-            a.href = href;
-            a.target = '_blank';
-            val.appendChild(a);
-          } else {
-            val.textContent = '—';
-          }
-          block.appendChild(val);
-          filesCol.appendChild(block);
-        };
-        addFileRow(
-          'ექსპერტიზა',
-          item.expertise_filename,
-          item.expertise_filename
-            ? `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=expertise${state.actorEmail ? `&actor=${encodeURIComponent(state.actorEmail)}` : ''}`
-            : null
-        );
-        addFileRow(
-          'პროექტი',
-          item.project_filename,
-          item.project_filename
-            ? `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=project${state.actorEmail ? `&actor=${encodeURIComponent(state.actorEmail)}` : ''}`
-            : null
-        );
-
-        columns.appendChild(metaCol);
-        columns.appendChild(filesCol);
-        content.appendChild(columns);
-        el.appendChild(content);
-
-        // Admin/founder-only delete button inside summary
-        if (canActorAdminDelete()) {
-          const del = document.createElement('button');
-          del.className = 'item-delete';
-          del.type = 'button';
-          del.title = 'წაშლა';
-          del.setAttribute('aria-label', 'წაშლა');
-          del.textContent = '×';
-          del.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation(); // don't toggle details
-            if (!confirm('წავშალო ელემენტი?')) return;
-            const res = await adminDeleteUpload(item.id);
-            if (!res.ok) {
-              let detail = '';
-              try { const j = await res.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res.clone().text()).trim(); } catch {} }
-              alert(detail || 'წაშლა ვერ შესრულდა');
-              return;
-            }
-            await loadList();
-          });
-          summary.appendChild(del);
-        }
-
-        frag.appendChild(el);
+      items.forEach((item) => {
+        frag.appendChild(buildUploadItem(item));
       });
       wrap.innerHTML = '';
       wrap.appendChild(frag);
@@ -1392,10 +1450,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
       // Public view: show submitted uploads list for that user, hide editing UI
       if (VIEW_USER_ID) {
+        state.publicMode = true;
         const form = document.getElementById('expertForm');
         const actions = document.querySelector('.expert-actions');
         if (form) form.style.display = 'none';
         if (actions) actions.style.display = 'none';
+        bindSearch();
         const loadPublicList = async () => {
           try {
             const res = await fetch(`${API_BASE}/expert-uploads/of/${encodeURIComponent(VIEW_USER_ID)}`, {
@@ -1403,132 +1463,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!res.ok) return;
             const items = await res.json();
-            const wrap = DOM.expertList;
-            if (!wrap) return;
-            if (!Array.isArray(items) || !items.length) { wrap.innerHTML = ''; return; }
-            const frag = document.createDocumentFragment();
-            items.forEach((item) => {
-              const el = document.createElement('details');
-              el.className = 'expert-item';
-
-              // Summary row: code + created_at
-              const summary = document.createElement('summary');
-              summary.className = 'item-summary';
-              const sumCode = document.createElement('span');
-              sumCode.className = 'sum-code';
-              sumCode.textContent = item.unique_code;
-              const sumDate = document.createElement('span');
-              sumDate.className = 'sum-date';
-              sumDate.textContent = window.Utils?.formatDateTime?.(item.created_at);
-              summary.appendChild(sumCode);
-              try { window.Utils?.attachCopyButton?.(sumCode); } catch {}
-              summary.appendChild(sumDate);
-              el.appendChild(summary);
-
-              // Expanded content: two columns (meta + files)
-              const content = document.createElement('div');
-              content.className = 'content';
-
-              const columns = document.createElement('div');
-              columns.className = 'detail-columns';
-
-              const metaCol = document.createElement('div');
-              metaCol.className = 'detail-col meta';
-              const metaItems = [
-                { label: 'საკადასტრო კოდი', value: item.cadastral_code || '—' },
-                { label: 'პროექტის სახელწოდება', value: item.building_function || '—' },
-                { label: 'პროექტის მისამართი', value: item.project_address || '—' },
-              ];
-              metaItems.forEach(({ label, value }) => {
-                const block = document.createElement('div');
-                block.className = 'detail-item';
-                const lbl = document.createElement('div');
-                lbl.className = 'detail-label';
-                lbl.textContent = label;
-                const val = document.createElement('div');
-                val.className = 'detail-value';
-                val.textContent = value || '—';
-                block.appendChild(lbl);
-                block.appendChild(val);
-                metaCol.appendChild(block);
-              });
-
-              const filesCol = document.createElement('div');
-              filesCol.className = 'detail-col files';
-              const addFileRow = (labelText, filename, href) => {
-                const block = document.createElement('div');
-                block.className = 'detail-item';
-                const lbl = document.createElement('div');
-                lbl.className = 'detail-label';
-                lbl.textContent = labelText;
-                const val = document.createElement('div');
-                val.className = 'detail-value';
-                if (filename && href) {
-                  const a = document.createElement('a');
-                  a.className = 'file-link';
-                  a.textContent = filename;
-                  a.href = href;
-                  a.target = '_blank';
-                  val.appendChild(a);
-                } else {
-                  val.textContent = '—';
-                }
-                block.appendChild(lbl);
-                block.appendChild(val);
-                filesCol.appendChild(block);
-              };
-              addFileRow(
-                'ექსპერტიზა',
-                item.expertise_filename,
-                item.expertise_filename
-                  ? `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=expertise`
-                  : null
-              );
-              addFileRow(
-                'პროექტი',
-                item.project_filename,
-                item.project_filename
-                  ? `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=project`
-                  : null
-              );
-
-              columns.appendChild(metaCol);
-              columns.appendChild(filesCol);
-              content.appendChild(columns);
-
-              el.appendChild(content);
-
-              // Admin/founder-only delete button inside summary (public view)
-              if (canActorAdminDelete()) {
-                const del = document.createElement('button');
-                del.className = 'item-delete';
-                del.type = 'button';
-                del.title = 'წაშლა';
-                del.setAttribute('aria-label', 'წაშლა');
-                del.textContent = '×';
-                del.addEventListener('click', async (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!confirm('წავშალო ელემენტი?')) return;
-                  const res2 = await adminDeleteUpload(item.id);
-                  if (!res2.ok) {
-                    let detail = '';
-                    try { const j = await res2.clone().json(); detail = j?.detail || ''; } catch { try { detail = (await res2.clone().text()).trim(); } catch {} }
-                    alert(detail || 'წაშლა ვერ შესრულდა'); return;
-                  }
-                  el.remove();
-                });
-                summary.appendChild(del);
-              }
-
-              frag.appendChild(el);
-            });
-            wrap.innerHTML = '';
-            wrap.appendChild(frag);
+            state.list = Array.isArray(items) ? items : [];
+            renderList();
           } catch {}
         };
         const updatePublicVisibility = (certificate) => {
           const visible = isExpertCertificate(certificate);
+          state.enabled = visible;
           setVisible(visible);
           if (DOM.expertCard) DOM.expertCard.classList.toggle('disabled', !visible);
           if (visible) loadPublicList();
@@ -1541,6 +1482,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Owner view
+      state.publicMode = false;
+      bindSearch();
       bindEvents();
       // Enabled only if certificate level is expert
       setEnabled(!VIEW_USER_ID && isExpertCertificate(certData));
