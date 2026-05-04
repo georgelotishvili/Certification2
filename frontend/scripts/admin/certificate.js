@@ -1053,6 +1053,7 @@
       if (form) form.classList.toggle('hidden', !formOpen);
 
       if (downloadBtn) {
+        downloadBtn.textContent = downloadBtnDefaultLabel;
         downloadBtn.disabled = !hasCertificate || formOpen || !!(activeData && activeData.isInactive);
       }
       if (emptyCreateBtn && !hasCertificate && !formOpen) {
