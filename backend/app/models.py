@@ -207,6 +207,9 @@ class User(Base):
     code: Mapped[str] = mapped_column(String(10), index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     exam_permission: Mapped[bool] = mapped_column(Boolean, default=False)
+    exam_stage: Mapped[str] = mapped_column(String(32), default="none")
+    exam_stage_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    exam_stage_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     # Profile photo
     photo_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)

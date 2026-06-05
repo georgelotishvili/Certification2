@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session as DbSession, selectinload
 
 from ..database import SessionLocal
 from ..models import Answer, Block, Exam, Option, Question, Session as ExamSession, User
+from .exam_stage import reset_exam_flow
 
 
 SUBMISSION_GRACE_MINUTES = 5
@@ -403,7 +404,7 @@ def finalize_exam_session(
         if code:
             user = db.scalar(select(User).where(User.code == code))
             if user and not user.is_admin and user.exam_permission:
-                user.exam_permission = False
+                reset_exam_flow(user)
                 db.add(user)
 
     db.add(session)

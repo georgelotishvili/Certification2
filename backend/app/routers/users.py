@@ -19,6 +19,7 @@ from ..config import get_settings
 from ..security import hash_code, verify_code, validate_password_strength, get_current_user
 from ..services.media_storage import resolve_storage_path, relative_storage_path, certificate_file_path, delete_storage_file, ensure_media_root
 from ..services import email_verification
+from ..services.exam_stage import exam_state_payload, expire_if_unused, reset_exam_flow
 from ..rate_limiter import verification_limiter, code_verify_limiter
 
 
@@ -513,8 +514,11 @@ def update_profile(
     elif is_admin_user:
         exam_perm = True
     else:
+        if expire_if_unused(db, user, commit=True):
+            db.refresh(user)
         exam_perm = bool(user.exam_permission)
 
+    exam_state = exam_state_payload(user, is_admin_user=is_admin_user)
     return UserOut(
         id=user.id,
         personal_id=user.personal_id,
@@ -525,7 +529,12 @@ def update_profile(
         code=user.code,
         is_admin=is_admin_user,
         is_founder=is_founder,
-        exam_permission=exam_perm,
+        exam_permission=bool(exam_state.get("exam_permission", exam_perm)),
+        exam_stage=exam_state.get("exam_stage"),
+        exam_stage_expires_at=exam_state.get("exam_stage_expires_at"),
+        exam_stage_started_at=exam_state.get("exam_stage_started_at"),
+        exam_stage_status=exam_state.get("exam_stage_status"),
+        exam_stage_remaining_seconds=exam_state.get("exam_stage_remaining_seconds"),
         created_at=user.created_at,
     )
 
@@ -827,7 +836,11 @@ def get_current_user_info(
     elif is_admin_user:
         exam_perm = True
     else:
+        if expire_if_unused(db, user, commit=True):
+            db.refresh(user)
         exam_perm = bool(user.exam_permission)
+
+    exam_state = exam_state_payload(user, is_admin_user=is_admin_user)
     
     return UserOut(
         id=user.id,
@@ -839,7 +852,12 @@ def get_current_user_info(
         code=user.code,
         is_admin=is_admin_user,
         is_founder=is_founder,
-        exam_permission=exam_perm,
+        exam_permission=bool(exam_state.get("exam_permission", exam_perm)),
+        exam_stage=exam_state.get("exam_stage"),
+        exam_stage_expires_at=exam_state.get("exam_stage_expires_at"),
+        exam_stage_started_at=exam_state.get("exam_stage_started_at"),
+        exam_stage_status=exam_state.get("exam_stage_status"),
+        exam_stage_remaining_seconds=exam_state.get("exam_stage_remaining_seconds"),
         created_at=user.created_at,
     )
 
@@ -870,10 +888,8 @@ def revoke_own_exam_permission(
         # Admins and founder keep their permission
         return
     
-    # Revoke permission for regular users
-    if user.exam_permission:
-        user.exam_permission = False
-        db.add(user)
-        db.commit()
+    reset_exam_flow(user)
+    db.add(user)
+    db.commit()
     
     return

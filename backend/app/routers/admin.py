@@ -40,6 +40,12 @@ from ..schemas import (
     StatementSeenRequest,
 )
 from ..services.exam_lifecycle import auto_close_expired_sessions, auto_close_session_if_expired
+from ..services.exam_stage import (
+    exam_state_payload,
+    expire_if_unused,
+    reset_exam_flow,
+    start_exam_flow,
+)
 from ..services.media_storage import resolve_storage_path, ensure_media_root, delete_storage_file
 
 
@@ -980,6 +986,7 @@ def admin_users(
             unseen_counts[int(user_id)] = int(count)
 
     items = []
+    stage_expired_changed = False
     for u in users:
         unseen_count = unseen_counts.get(u.id, 0)
         cert_data = None
@@ -1002,8 +1009,11 @@ def admin_users(
         elif is_admin_user:
             exam_perm = True  # ადმინებს exam_permission ყოველთვის true
         else:
+            if expire_if_unused(db, u):
+                stage_expired_changed = True
             exam_perm = bool(u.exam_permission)  # არა-ადმინებს რაც ბაზაშია
-        
+
+        exam_state = exam_state_payload(u, is_admin_user=is_admin_user)
         user_dict = {
             'id': u.id,
             'personal_id': u.personal_id,
@@ -1014,7 +1024,12 @@ def admin_users(
             'code': u.code,
             'is_admin': is_admin_user,
             'is_founder': is_founder_user,
-            'exam_permission': exam_perm,
+            'exam_permission': bool(exam_state.get("exam_permission", exam_perm)),
+            'exam_stage': exam_state.get("exam_stage"),
+            'exam_stage_expires_at': exam_state.get("exam_stage_expires_at"),
+            'exam_stage_started_at': exam_state.get("exam_stage_started_at"),
+            'exam_stage_status': exam_state.get("exam_stage_status"),
+            'exam_stage_remaining_seconds': exam_state.get("exam_stage_remaining_seconds"),
             'created_at': u.created_at,
             'has_unseen_statements': unseen_count > 0,
             'unseen_statement_count': unseen_count,
@@ -1024,6 +1039,8 @@ def admin_users(
             user_dict['certificate'] = cert_data
             user_dict['certificate_info'] = cert_data
         items.append(UserOut(**user_dict))
+    if stage_expired_changed:
+        db.commit()
     return UsersListResponse(items=items, total=len(items))
 
 
@@ -1049,8 +1066,11 @@ def admin_toggle_user(
     # როცა ადმინი გაეთიშება, exam_permission-იც გაითიშოს
     if payload.is_admin:
         u.exam_permission = True
+        u.exam_stage = "none"
+        u.exam_stage_expires_at = None
+        u.exam_stage_started_at = None
     else:
-        u.exam_permission = False
+        reset_exam_flow(u)
     db.add(u)
     db.commit()
     return
@@ -1074,7 +1094,10 @@ def admin_toggle_exam_permission(
     if (settings.founder_admin_email or "").lower() == u.email.lower():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder admin exam permission cannot be modified")
     
-    u.exam_permission = bool(payload.exam_permission)
+    if payload.exam_permission:
+        start_exam_flow(u)
+    else:
+        reset_exam_flow(u)
     db.add(u)
     db.commit()
     return

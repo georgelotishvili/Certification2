@@ -385,6 +385,11 @@ class UserOut(BaseModel):
     is_admin: bool
     is_founder: bool = False
     exam_permission: bool = False
+    exam_stage: str | None = None
+    exam_stage_expires_at: datetime | None = None
+    exam_stage_started_at: datetime | None = None
+    exam_stage_status: str | None = None
+    exam_stage_remaining_seconds: int | None = None
     created_at: datetime
     has_unseen_statements: bool | None = None
     unseen_statement_count: int | None = None

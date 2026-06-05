@@ -20,13 +20,20 @@ def run() -> None:
             statements: list[str] = []
             if "exam_permission" not in columns:
                 statements.append("ALTER TABLE users ADD COLUMN exam_permission INTEGER DEFAULT 0")
+            if "exam_stage" not in columns:
+                statements.append("ALTER TABLE users ADD COLUMN exam_stage VARCHAR(32) DEFAULT 'none'")
+            if "exam_stage_expires_at" not in columns:
+                statements.append("ALTER TABLE users ADD COLUMN exam_stage_expires_at DATETIME")
+            if "exam_stage_started_at" not in columns:
+                statements.append("ALTER TABLE users ADD COLUMN exam_stage_started_at DATETIME")
             for sql in statements:
                 connection.execute(text(sql))
             if statements:
+                connection.execute(text("UPDATE users SET exam_stage = 'none' WHERE exam_stage IS NULL OR exam_stage = ''"))
                 connection.commit()
-                print("Migration completed: added exam_permission column to users table")
+                print("Migration completed: ensured exam permission/stage columns on users table")
             else:
-                print("exam_permission column already exists, no migration needed")
+                print("exam permission/stage columns already exist, no migration needed")
     except Exception as e:
         print(f"Error during migration: {e}")
         import traceback

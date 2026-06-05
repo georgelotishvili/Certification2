@@ -36,6 +36,12 @@ from ..services.media_storage import (
     delete_storage_file,
 )
 from ..routers.admin import _require_admin
+from ..services.exam_stage import (
+    STAGE_PROJECT_2,
+    advance_after_stage_result,
+    is_admin_like,
+    require_stage,
+)
 
 router = APIRouter()
 
@@ -515,8 +521,10 @@ def get_random_project(
     Logic:
     - Random project is selected from projects NOT yet completed by this user
     - Once all projects are completed, the cycle restarts
-    - If no auth provided, falls back to pure random selection
     """
+    user = _require_auth(db, authorization)
+    require_stage(db, user, STAGE_PROJECT_2, mark_started=True)
+
     # Load all projects (with answers eagerly loaded)
     all_projects = db.scalars(
         select(MultiFunctionalProject).options(selectinload(MultiFunctionalProject.answers))
@@ -532,33 +540,27 @@ def get_random_project(
     projects_with_answers = [p for p in all_projects if p.answers]
     available_projects = projects_with_answers or all_projects
     
-    # Try to get user for personalized selection
-    user = _get_user_from_token(db, authorization)
-    
-    if user:
-        # Get all project IDs this user has already completed (from submissions)
-        completed_project_ids = set(
-            db.scalars(
-                select(MultiFunctionalSubmission.project_id)
-                .where(MultiFunctionalSubmission.user_id == user.id)
-            ).all()
-        )
-        
-        # Filter out completed projects
-        not_completed = [p for p in available_projects if p.id not in completed_project_ids]
-        
-        if not_completed:
-            # Random from not-yet-completed projects
-            project = random.choice(not_completed)
-        else:
-            # All projects completed - restart cycle (random from all)
-            project = random.choice(available_projects)
+    # Get all project IDs this user has already completed
+    completed_project_ids = set(
+        db.scalars(
+            select(MultiFunctionalEvaluation.project_id)
+            .where(MultiFunctionalEvaluation.user_id == user.id)
+        ).all()
+    )
+
+    # Filter out completed projects
+    not_completed = [p for p in available_projects if p.id not in completed_project_ids]
+
+    if not_completed:
+        # Random from not-yet-completed projects
+        project = random.choice(not_completed)
     else:
-        # No auth - pure random
+        # All projects completed - restart cycle (random from all)
         project = random.choice(available_projects)
 
     answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
     pdf_url = _safe_public_pdf_url(project)
+    db.commit()
 
     return PublicMultiFunctionalProjectResponse(
         id=project.id,
@@ -643,6 +645,9 @@ def submit_simple_evaluation(
 ):
     # Get user
     user = _require_auth(db, authorization)
+    require_stage(db, user, STAGE_PROJECT_2)
+    if not is_admin_like(user) and user.exam_stage_started_at is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Exam stage has not been started")
     
     # Get project
     project = db.scalar(
@@ -697,6 +702,9 @@ def submit_full_evaluation(
     
     # Get user
     user = _require_auth(db, authorization)
+    require_stage(db, user, STAGE_PROJECT_2)
+    if not is_admin_like(user) and user.exam_stage_started_at is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Exam stage has not been started")
     
     # Get project with answers
     project = db.scalar(
@@ -735,6 +743,7 @@ def submit_full_evaluation(
     )
     
     db.add(evaluation)
+    advance_after_stage_result(db, user, STAGE_PROJECT_2)
     db.commit()
     db.refresh(evaluation)
     

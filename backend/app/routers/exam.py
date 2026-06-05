@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import Answer, Block, Exam, ExamMedia, Option, Question, Session as ExamSession, User
+from ..models import Answer, Block, Exam, ExamMedia, Option, Question, Session as ExamSession, User, UserSession
 from ..schemas import (
     AllQuestionsBlockOut,
     AllQuestionsResponse,
@@ -47,6 +47,7 @@ from ..services.exam_lifecycle import (
     finalize_exam_session,
     finish_response_from_session,
 )
+from ..services.exam_stage import STAGE_THEORY, advance_after_stage_result, is_admin_like, require_stage, reset_exam_flow
 from ..services.media_storage import (
     relative_storage_path,
     resolve_storage_path,
@@ -58,6 +59,24 @@ from ..services.media_storage import (
 router = APIRouter()
 
 MEDIA_TYPES = {"camera", "screen"}
+
+
+def _get_user_from_auth(db: Session, authorization: Optional[str]) -> User:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    token = authorization.split(" ", 1)[1]
+    user_session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow(),
+        )
+    )
+    if not user_session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    user = db.get(User, user_session.user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
 
 
 def _block_out(block: Block) -> dict:
@@ -83,7 +102,11 @@ def verify_gate_password(payload: ExamGateVerifyRequest, db: Session = Depends(g
 
 
 @router.post("/session/start", response_model=StartSessionResponse)
-def start_session(payload: StartSessionRequest, db: Session = Depends(get_db)):
+def start_session(
+    payload: StartSessionRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
     exam = db.get(Exam, payload.exam_id)
     if not exam:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
@@ -93,6 +116,12 @@ def start_session(payload: StartSessionRequest, db: Session = Depends(get_db)):
         if candidate_code
         else None
     )
+    current_user = _get_user_from_auth(db, authorization)
+    if not candidate_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+    if candidate_user.id != current_user.id and not is_admin_like(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate mismatch")
+    changed_stage = require_stage(db, candidate_user, STAGE_THEORY, mark_started=True)
     now = datetime.now(timezone.utc)
     ends_at = now + timedelta(minutes=exam.duration_minutes)
     token = f"sess_{now.timestamp()}_{random.randint(1000,9999)}"
@@ -109,6 +138,8 @@ def start_session(payload: StartSessionRequest, db: Session = Depends(get_db)):
     )
     db.add(session)
     db.commit()
+    if changed_stage:
+        db.refresh(candidate_user)
     db.refresh(session)
     return StartSessionResponse(
         session_id=session.id,
@@ -141,7 +172,7 @@ def _revoke_exam_permission_for_session_candidate(db: Session, session: ExamSess
     if not user.exam_permission:
         return False
 
-    user.exam_permission = False
+    reset_exam_flow(user)
     db.add(user)
     return True
 
@@ -509,7 +540,13 @@ def finish_exam(
     ensure_submission_window(session)
 
     response = finalize_exam_session(db, session, finished_at=datetime.utcnow())
-    _revoke_exam_permission_for_session_candidate(db, session)
+    candidate_user = session.user
+    if not candidate_user and session.candidate_code:
+        candidate_user = db.scalar(select(User).where(User.code == session.candidate_code.strip()))
+    if candidate_user and (candidate_user.exam_stage or "") == STAGE_THEORY:
+        advance_after_stage_result(db, candidate_user, STAGE_THEORY)
+    else:
+        _revoke_exam_permission_for_session_candidate(db, session)
     db.commit()
     return response
 
