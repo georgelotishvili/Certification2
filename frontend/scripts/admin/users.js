@@ -16,12 +16,16 @@
     } = context;
     const { onShowResults, onShowStatements, onShowCertificate, onShowMultiApartmentResults, onShowMultiFunctionalResults } = context;
     const navLinks = DOM.navLinks || [];
+    const LIVE_REFRESH_MS = 5000;
 
     let cachedItems = [];
     let editActiveUser = null;
     let editInitialValues = null;
     let editInitialCode = '';
     let editSubmitting = false;
+    let liveRefreshTimer = null;
+    let liveRefreshInFlight = false;
+    const examPermissionSavingIds = new Set();
 
     const editOverlay = DOM.userEditOverlay;
     const editForm = DOM.userEditForm;
@@ -51,6 +55,71 @@
       });
       if (!response.ok) throw new Error('users failed');
       return await response.json();
+    }
+
+    function isRegistrationsVisible() {
+      const section = DOM.sections?.registrations;
+      if (!section) return true;
+      return section.style.display !== 'none';
+    }
+
+    function findUserCard(userId) {
+      const cards = Array.from(DOM.usersGrid?.querySelectorAll('.block-card') || []);
+      return cards.find((card) => String(card.dataset.id) === String(userId)) || null;
+    }
+
+    function mergeCachedUser(user) {
+      if (!user || user.id == null) return;
+      const index = cachedItems.findIndex((item) => String(item.id) === String(user.id));
+      if (index !== -1) {
+        cachedItems[index] = { ...cachedItems[index], ...user };
+      }
+    }
+
+    function applyLiveUserState(user) {
+      if (!user || user.id == null) return;
+      mergeCachedUser(user);
+
+      const card = findUserCard(user.id);
+      if (!card) return;
+
+      if (examPermissionSavingIds.has(String(user.id))) return;
+      const examCheckbox = card.querySelector('.chk-exam');
+      if (examCheckbox && !examCheckbox.disabled) {
+        examCheckbox.checked = !!user.exam_permission;
+      }
+
+      setCardUnseenState(card, user.has_unseen_statements);
+      card.dataset.unseenCount = String(user.unseen_statement_count || 0);
+    }
+
+    async function refreshLiveUserStates(options = {}) {
+      const force = !!options.force;
+      if (!DOM.usersGrid) return;
+      if (!force && document.hidden) return;
+      if (!force && !isRegistrationsVisible()) return;
+      if (liveRefreshInFlight) return;
+
+      liveRefreshInFlight = true;
+      try {
+        const data = await fetchUsers();
+        const items = Array.isArray(data?.items) ? data.items : [];
+        items.forEach(applyLiveUserState);
+        updateNavBadge(cachedItems.some((user) => user.has_unseen_statements));
+      } catch {
+        // Live refresh is best-effort; manual refresh/render still shows errors.
+      } finally {
+        liveRefreshInFlight = false;
+      }
+    }
+
+    function startLiveRefresh() {
+      if (liveRefreshTimer) return;
+      liveRefreshTimer = setInterval(() => refreshLiveUserStates(), LIVE_REFRESH_MS);
+      on(window, 'focus', () => refreshLiveUserStates({ force: true }));
+      on(document, 'visibilitychange', () => {
+        if (!document.hidden) refreshLiveUserStates({ force: true });
+      });
     }
 
     function userRowHTML(user) {
@@ -186,6 +255,8 @@
         examCheckbox.addEventListener('change', async (event) => {
           const id = card.dataset.id;
           const desired = !!event.target.checked;
+          examPermissionSavingIds.add(String(id));
+          event.target.disabled = true;
           try {
             const response = await fetch(`${API_BASE}/admin/users/${id}/exam-permission`, {
               method: 'PATCH',
@@ -193,9 +264,15 @@
               body: JSON.stringify({ exam_permission: desired }),
             });
             if (!response.ok) throw new Error('failed');
+            examPermissionSavingIds.delete(String(id));
+            event.target.disabled = false;
+            await refreshLiveUserStates({ force: true });
           } catch {
             event.target.checked = !desired;
             alert('ვერ შეინახა გამოცდის უფლება');
+          } finally {
+            examPermissionSavingIds.delete(String(id));
+            event.target.disabled = false;
           }
         });
       }
@@ -581,6 +658,7 @@
         render();
       });
       setupEditModal();
+      startLiveRefresh();
     }
 
     function updateUserUnseenStatus(userId, hasUnseen, count) {
@@ -747,6 +825,7 @@
       updateUserUnseenStatus,
       updateUserCardColor,
       refreshUnseenSummary,
+      refreshLiveUserStates,
     };
   }
 

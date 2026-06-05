@@ -31,6 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
     items: [],
     loading: false,
   };
+  const LIVE_REFRESH_MS = 5000;
+  let liveRefreshTimer = null;
+  let liveRefreshInFlight = false;
+  const examPermissionSavingIds = new Set();
 
   const access = {
     isFounderActor() {
@@ -85,6 +89,50 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) throw new Error('failed');
     },
   };
+
+  function findUserCard(id) {
+    const cards = Array.from(DOM.usersGrid?.querySelectorAll('.block-card') || []);
+    return cards.find((card) => String(card.dataset.id) === String(id)) || null;
+  }
+
+  function applyLiveUserState(user) {
+    if (!user || user.id == null) return;
+    mutateUser(user.id, user);
+    if (examPermissionSavingIds.has(String(user.id))) return;
+
+    const card = findUserCard(user.id);
+    const examCheckbox = card?.querySelector('.chk-exam');
+    if (examCheckbox && !examCheckbox.disabled) {
+      examCheckbox.checked = !!user.exam_permission;
+    }
+  }
+
+  async function refreshLiveUserStates(options = {}) {
+    const force = !!options.force;
+    if (!DOM.usersGrid) return;
+    if (!force && document.hidden) return;
+    if (state.loading || liveRefreshInFlight) return;
+
+    liveRefreshInFlight = true;
+    try {
+      const data = await api.fetchUsers();
+      const items = Array.isArray(data?.items) ? data.items : [];
+      items.forEach(applyLiveUserState);
+    } catch {
+      // Background refresh stays silent; manual render still reports failures.
+    } finally {
+      liveRefreshInFlight = false;
+    }
+  }
+
+  function startLiveRefresh() {
+    if (liveRefreshTimer) return;
+    liveRefreshTimer = setInterval(() => refreshLiveUserStates(), LIVE_REFRESH_MS);
+    utils.on(window, 'focus', () => refreshLiveUserStates({ force: true }));
+    utils.on(document, 'visibilitychange', () => {
+      if (!document.hidden) refreshLiveUserStates({ force: true });
+    });
+  }
 
   const render = {
     setGridContent(html) {
@@ -231,12 +279,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (examCheckbox && !examCheckbox.disabled) {
       examCheckbox.addEventListener('change', async (event) => {
         const want = !!event.target.checked;
+        examPermissionSavingIds.add(String(user.id));
+        event.target.disabled = true;
         try {
           await api.updateExamPermission(user.id, want);
-          mutateUser(user.id, { exam_permission: want });
+          examPermissionSavingIds.delete(String(user.id));
+          event.target.disabled = false;
+          await refreshLiveUserStates({ force: true });
         } catch {
           event.target.checked = !want;
           alert('ვერ შეინახა გამოცდის უფლება');
+        } finally {
+          examPermissionSavingIds.delete(String(user.id));
+          event.target.disabled = false;
         }
       });
     }
@@ -258,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function mutateUser(id, patch) {
-    const index = state.items.findIndex((user) => user.id === id);
+    const index = state.items.findIndex((user) => String(user.id) === String(id));
     if (index !== -1) {
       state.items[index] = { ...state.items[index], ...patch };
     }
@@ -328,6 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initDeleteAllButton();
   initFilters();
+  startLiveRefresh();
   renderUsers();
 });
 
