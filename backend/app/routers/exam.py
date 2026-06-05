@@ -122,14 +122,14 @@ def start_session(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate mismatch")
     changed_stage = require_stage(db, candidate_user, STAGE_THEORY, mark_started=True)
     now = datetime.now(timezone.utc)
-    ends_at = now + timedelta(minutes=exam.duration_minutes)
+    ends_at = now + timedelta(hours=1)
     token = f"sess_{now.timestamp()}_{random.randint(1000,9999)}"
     session = ExamSession(
         exam_id=exam.id,
         token=token,
         started_at=now,
         ends_at=ends_at,
-        active=True,
+        active=False,
         user_id=candidate_user.id if candidate_user else None,
         candidate_first_name=payload.candidate_first_name,
         candidate_last_name=payload.candidate_last_name,
@@ -161,6 +161,45 @@ def _get_session_or_401(
     if not session or session.token != token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
     return session
+
+
+@router.post("/{session_id}/begin", response_model=StartSessionResponse)
+def begin_session(
+    session_id: int = Path(...),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    session = _get_session_or_401(session_id, db, authorization)
+    if session.finished_at:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session already finished")
+
+    now = datetime.utcnow()
+    if not session.active and session.ends_at <= now:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session preparation expired")
+
+    exam = db.get(Exam, session.exam_id)
+    if not exam:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
+
+    if session.active:
+        if session.ends_at <= now:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
+    else:
+        session.started_at = now
+        session.ends_at = now + timedelta(minutes=exam.duration_minutes)
+        session.active = True
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+
+    return StartSessionResponse(
+        session_id=session.id,
+        token=session.token,
+        exam_id=exam.id,
+        duration_minutes=exam.duration_minutes,
+        ends_at=session.ends_at,
+    )
+
 
 @router.get("/{exam_id}/config", response_model=ExamConfigResponse)
 def get_exam_config(exam_id: int = Path(...), db: Session = Depends(get_db)):
@@ -273,7 +312,7 @@ def get_all_questions(
     """ყველა ბლოკის ყველა კითხვის ერთიანი ჩატვირთვა ოფლაინ რეჟიმისთვის."""
     session = _get_session_or_401(session_id, db, authorization)
     now = datetime.utcnow()
-    if not session.active or session.ends_at <= now:
+    if session.finished_at or session.ends_at <= now:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
 
     blocks_stmt = select(Block).where(
