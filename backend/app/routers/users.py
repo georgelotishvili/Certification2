@@ -19,7 +19,7 @@ from ..config import get_settings
 from ..security import hash_code, verify_code, validate_password_strength, get_current_user
 from ..services.media_storage import resolve_storage_path, relative_storage_path, certificate_file_path, delete_storage_file, ensure_media_root
 from ..services import email_verification
-from ..services.exam_stage import exam_state_payload, expire_if_unused, reset_exam_flow
+from ..services.exam_stage import exam_state_payload, expire_if_unused
 from ..rate_limiter import verification_limiter, code_verify_limiter
 
 
@@ -860,36 +860,3 @@ def get_current_user_info(
         exam_stage_remaining_seconds=exam_state.get("exam_stage_remaining_seconds"),
         created_at=user.created_at,
     )
-
-
-@router.post("/me/revoke-exam-permission", status_code=status.HTTP_204_NO_CONTENT)
-def revoke_own_exam_permission(
-    authorization: str | None = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db),
-):
-    """
-    Revoke exam_permission for the currently authenticated user.
-    
-    This endpoint is called by the desktop app after completing an exam
-    or project evaluation. It disables the user's ability to take exams
-    until an admin re-enables the permission.
-    
-    Note: Admins and founder users are exempt - their permission is not revoked.
-    """
-    user = _require_auth(db, authorization)
-    
-    # Check if user is admin or founder - don't revoke for them
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    is_founder = (user.email or "").lower() == founder_email
-    is_admin = is_founder or bool(user.is_admin)
-    
-    if is_admin:
-        # Admins and founder keep their permission
-        return
-    
-    reset_exam_flow(user)
-    db.add(user)
-    db.commit()
-    
-    return

@@ -20,7 +20,6 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from ..config import get_settings
 from ..database import get_db
 from ..models import Answer, Block, Exam, ExamMedia, Option, Question, Session as ExamSession, User, UserSession
 from ..schemas import (
@@ -47,7 +46,7 @@ from ..services.exam_lifecycle import (
     finalize_exam_session,
     finish_response_from_session,
 )
-from ..services.exam_stage import STAGE_THEORY, advance_after_stage_result, is_admin_like, require_stage, reset_exam_flow
+from ..services.exam_stage import STAGE_THEORY, advance_after_stage_result, is_admin_like, require_stage
 from ..services.media_storage import (
     relative_storage_path,
     resolve_storage_path,
@@ -150,34 +149,6 @@ def start_session(
     )
 
 
-def _revoke_exam_permission_for_session_candidate(db: Session, session: ExamSession) -> bool:
-    """
-    Disable exam permission for the user referenced by session candidate_code.
-    Returns True when a change occurs.
-    """
-    code = (session.candidate_code or "").strip()
-    if not code:
-        return False
-
-    user = db.scalar(select(User).where(User.code == code))
-    if not user:
-        return False
-
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    is_founder = (user.email or "").lower() == founder_email
-    if is_founder or user.is_admin:
-        return False
-
-    if not user.exam_permission:
-        return False
-
-    reset_exam_flow(user)
-    db.add(user)
-    return True
-
-
-
 def _get_session_or_401(
     session_id: int,
     db: Session,
@@ -190,22 +161,6 @@ def _get_session_or_401(
     if not session or session.token != token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
     return session
-
-
-@router.post("/{session_id}/consume-permission", status_code=status.HTTP_204_NO_CONTENT)
-def consume_exam_permission(
-    session_id: int = Path(...),
-    authorization: Optional[str] = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db),
-):
-    """
-    Allows an active exam session to mark its exam permission as used.
-    """
-    session = _get_session_or_401(session_id, db, authorization)
-    _revoke_exam_permission_for_session_candidate(db, session)
-    db.commit()
-    return
-
 
 @router.get("/{exam_id}/config", response_model=ExamConfigResponse)
 def get_exam_config(exam_id: int = Path(...), db: Session = Depends(get_db)):
@@ -545,8 +500,6 @@ def finish_exam(
         candidate_user = db.scalar(select(User).where(User.code == session.candidate_code.strip()))
     if candidate_user and (candidate_user.exam_stage or "") == STAGE_THEORY:
         advance_after_stage_result(db, candidate_user, STAGE_THEORY)
-    else:
-        _revoke_exam_permission_for_session_candidate(db, session)
     db.commit()
     return response
 
