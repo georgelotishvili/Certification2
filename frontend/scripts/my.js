@@ -84,6 +84,13 @@ document.addEventListener('DOMContentLoaded', () => {
     expertList: document.getElementById('expertList'),
   };
 
+  // A public profile shows only the approved personal-information fields.
+  if (VIEW_USER_ID) {
+    [DOM.pfPersonalId, DOM.pfPhone, DOM.pfCode].forEach((element) => {
+      element?.closest('.profile-row')?.remove();
+    });
+  }
+
   const utils = {
     on: (element, event, handler) => element && element.addEventListener(event, handler),
     isValidEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
@@ -97,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function attachCopyTargets() {
     try {
-      window.Utils?.attachCopyButton?.(DOM.pfCode);
+      if (!VIEW_USER_ID) window.Utils?.attachCopyButton?.(DOM.pfCode);
       window.Utils?.attachCopyButton?.(DOM.certCode);
     } catch {}
   }
@@ -223,10 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const data = await res.json();
           if (DOM.pfFirstName) DOM.pfFirstName.textContent = data.first_name || '—';
           if (DOM.pfLastName) DOM.pfLastName.textContent = data.last_name || '—';
-          if (DOM.pfPersonalId) DOM.pfPersonalId.textContent = data.personal_id || '—';
-          if (DOM.pfPhone) DOM.pfPhone.textContent = data.phone || '—';
           if (DOM.pfEmail) DOM.pfEmail.textContent = data.email || '—';
-          if (DOM.pfCode) DOM.pfCode.textContent = data.code || '—';
           if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = window.Utils?.formatDateTime?.(data.created_at);
           updatePageTitleFrom({ firstName: data.first_name || '', lastName: data.last_name || '' });
           return;
@@ -243,7 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (DOM.pfFirstName) DOM.pfFirstName.textContent = parts[0] || '—';
             if (DOM.pfLastName) DOM.pfLastName.textContent = parts.slice(1).join(' ') || '—';
             if (DOM.pfEmail) DOM.pfEmail.textContent = '—';
-            if (DOM.pfCode) DOM.pfCode.textContent = item.unique_code || '—';
             if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = window.Utils?.formatDateTime?.(item.registration_date);
             updatePageTitleFrom({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' });
           }

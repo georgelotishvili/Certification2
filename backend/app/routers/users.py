@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession
 from ..schemas import (
-    UserCreate, UserOut, UserProfileUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate,
+    UserCreate, UserOut, PublicUserOut, UserProfileUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate,
     SendVerificationCodeRequest, SendVerificationCodeResponse, VerifyCodeRequest, VerifyCodeResponse,
     UserCreateWithVerification,
 )
@@ -306,43 +306,30 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
     )
 
 
-@router.get("/{user_id}/public", response_model=UserOut)
+@router.get("/{user_id}/public", response_model=PublicUserOut)
 def public_profile(
     user_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Public profile lookup by user_id. Returns non-sensitive fields needed for profile view.
-    Access: any authenticated actor.
+    Public profile lookup by user_id. Returns only the fields approved for public display.
+    Access: public, but only for people included in the certified-person registry.
     """
-    user = db.scalar(select(User).where(User.id == user_id))
+    user = db.scalar(
+        select(User)
+        .join(Certificate, Certificate.user_id == User.id)
+        .where(
+            User.id == user_id,
+            Certificate.status.in_(("active", "suspended", "expired")),
+        )
+        .limit(1)
+    )
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    is_founder = (user.email or "").lower() == founder_email
-    is_admin_user = is_founder or bool(user.is_admin)
-    # მთავარ ადმინს ყოველთვის exam_permission = true
-    # სხვა ადმინებს exam_permission = true
-    # არა-ადმინებს exam_permission = user.exam_permission (რაც ბაზაშია)
-    if is_founder:
-        exam_perm = True
-    elif is_admin_user:
-        exam_perm = True  # ადმინებს exam_permission ყოველთვის true
-    else:
-        exam_perm = bool(user.exam_permission)  # არა-ადმინებს რაც ბაზაშია
-    return UserOut(
-        id=user.id,
-        personal_id=user.personal_id,
+    return PublicUserOut(
         first_name=user.first_name,
         last_name=user.last_name,
-        phone=user.phone,
         email=user.email,
-        code=user.code,
-        is_admin=is_admin_user,
-        is_founder=is_founder,
-        exam_permission=exam_perm,
         created_at=user.created_at,
     )
 

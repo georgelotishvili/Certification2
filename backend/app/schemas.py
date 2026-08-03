@@ -398,6 +398,17 @@ class UserOut(BaseModel):
     photo_filename: str | None = None
 
 
+class PublicUserOut(BaseModel):
+    """Fields that may be returned by the public profile endpoint."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    first_name: str
+    last_name: str
+    email: str
+    created_at: datetime
+
+
 class UserCreate(BaseModel):
     personal_id: str
     first_name: str
