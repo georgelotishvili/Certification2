@@ -3446,6 +3446,43 @@ body.modal-open {
   flex-wrap: wrap;
 }
 
+.user-exam-stage-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.user-exam-stage-label {
+  min-width: 0;
+  white-space: normal;
+}
+
+.user-exam-stage-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  line-height: 1.15;
+}
+
+.user-exam-stage-name { white-space: nowrap; }
+
+.user-exam-stage-status {
+  max-width: 100%;
+  color: var(--text-muted);
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.user-exam-stage-status[data-status="available"] { color: #166534; }
+.user-exam-stage-status[data-status="started"] { color: #1d4ed8; }
+.user-exam-stage-status[data-status="completed"] { color: #475569; }
+.user-exam-stage-status[data-status="expired"] { color: #b91c1c; }
+.user-exam-stage-status[data-status="pending"] { color: #7c3aed; }
+
 .user-checkbox-label {
   display: inline-flex;
   align-items: center;
@@ -3501,6 +3538,23 @@ body.modal-open {
   .user-controls {
     justify-content: center;
   }
+
+  .user-exam-stage-controls {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .user-exam-stage-label {
+    justify-content: center;
+    padding: 6px 4px;
+    gap: 4px;
+    text-align: center;
+  }
+
+  .user-exam-stage-label span { font-size: 12px; }
+
+  .user-exam-stage-label input[type="checkbox"] { flex-shrink: 0; }
   
   .user-actions {
     justify-content: flex-end;
@@ -3514,6 +3568,35 @@ body.modal-open {
   .user-action-buttons {
     grid-template-columns: 1fr !important;
   }
+}
+
+@media (max-width: 420px) {
+  .user-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .user-controls > .user-checkbox-label:not(.user-exam-stage-label) {
+    align-self: center;
+  }
+
+  .user-exam-stage-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .user-exam-stage-label {
+    justify-content: flex-start;
+    padding: 7px 10px;
+    text-align: left;
+  }
+
+  .user-exam-stage-copy {
+    align-items: center;
+    grid-template-columns: auto 1fr;
+    width: 100%;
+  }
+
+  .user-exam-stage-status { text-align: right; }
 }
 
 /* Block head left-right layout */

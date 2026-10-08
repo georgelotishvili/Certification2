@@ -189,10 +189,10 @@ class AccountRateLimitTests(unittest.TestCase):
                 "get_settings",
                 return_value=SimpleNamespace(founder_admin_email=""),
             ),
-            patch.object(auth, "expire_if_unused", return_value=False),
+            patch.object(auth, "expire_unused_stage_permissions", return_value=False),
             patch.object(
                 auth,
-                "exam_state_payload",
+                "exam_state_with_permissions",
                 return_value={
                     "exam_permission": False,
                     "exam_stage": "none",
@@ -200,6 +200,18 @@ class AccountRateLimitTests(unittest.TestCase):
                     "exam_stage_started_at": None,
                     "exam_stage_status": "none",
                     "exam_stage_remaining_seconds": None,
+                    "exam_stage_permissions": {
+                        stage: {
+                            "granted": False,
+                            "status": "none",
+                            "grant_id": None,
+                            "granted_at": None,
+                            "expires_at": None,
+                            "started_at": None,
+                            "remaining_seconds": None,
+                        }
+                        for stage in ("theory", "project_stage_1", "project_stage_2")
+                    },
                 },
             ),
         ):

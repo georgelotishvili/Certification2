@@ -167,7 +167,10 @@ class AdminUserPaginationTests(unittest.TestCase):
         self.assertEqual(result["global_unseen_users"], 1)
         self.assertEqual(len(result["items"]), 2)
         self.assertEqual(set(result["items"][0]), {
-            "id", "exam_permission", "has_unseen_statements", "unseen_statement_count",
+            "id", "exam_permission", "exam_stage", "exam_stage_expires_at",
+            "exam_stage_started_at", "exam_stage_status",
+            "exam_stage_remaining_seconds", "exam_stage_permissions",
+            "has_unseen_statements", "unseen_statement_count",
             "has_pending_statements", "pending_statement_count", "display_revision",
         })
         self.assertEqual(result["items"][0]["display_revision"],
@@ -203,7 +206,7 @@ class AdminUserPaginationTests(unittest.TestCase):
     def test_compact_poll_only_expiry_checks_current_page_not_whole_population(self):
         for number in range(1, 81):
             self.user(number)
-        with patch.object(admin, "expire_if_unused", return_value=False) as expire:
+        with patch.object(admin, "expire_unused_stage_permissions", return_value=False) as expire:
             self.list(live=True, size=10, page=2)
         self.assertEqual(expire.call_count, 10)
 

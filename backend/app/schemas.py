@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Any, List, Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import EmailStr
@@ -190,6 +191,10 @@ class StartSessionRequest(BaseModel):
     candidate_first_name: str
     candidate_last_name: str
     candidate_code: str
+    # New clients prepare offline data first and start the permission only when
+    # the candidate presses the visible Start button.  Omitted/false preserves
+    # the deployed desktop client's legacy start-on-prepare behaviour.
+    prepare_only: bool = False
 
 
 class StartSessionResponse(BaseModel):
@@ -198,6 +203,10 @@ class StartSessionResponse(BaseModel):
     exam_id: int
     duration_minutes: int
     ends_at: datetime
+    stage_grant_id: int | None = None
+    offline_submission_token: str | None = None
+    server_now: datetime | None = None
+    started_at: datetime | None = None
 
 
 class OptionOut(BaseModel):
@@ -261,6 +270,27 @@ class BatchAnswersRequest(BaseModel):
 
 class BatchAnswersResponse(BaseModel):
     saved: int
+
+
+class OfflineTheoryFinalRequest(BaseModel):
+    stage_grant_id: int | None = None
+    submission_id: UUID
+    finished_at: datetime
+    answers: List[BatchAnswerItem]
+
+
+class OfflineAttemptCancelRequest(BaseModel):
+    """An interrupted desktop may cancel only its exact issued capability."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    offline_submission_token: str | None = Field(default=None, min_length=1, max_length=128)
+    stage: Literal["theory", "project_stage_1", "project_stage_2"]
+    stage_grant_id: int | None = Field(default=None, gt=0)
+    session_id: int | None = Field(default=None, gt=0)
+    project_code: str | None = Field(default=None, min_length=1, max_length=128)
+    cancellation_id: UUID
+    start_request_id: UUID | None = None
 
 
 class FinishResponse(BaseModel):
@@ -373,6 +403,16 @@ class ResultMediaResponse(BaseModel):
 
 
 # Users (registration and admin listing)
+class ExamStagePermissionOut(BaseModel):
+    granted: bool = False
+    status: str = "none"
+    grant_id: int | None = None
+    granted_at: datetime | None = None
+    expires_at: datetime | None = None
+    started_at: datetime | None = None
+    remaining_seconds: int | None = None
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -390,6 +430,7 @@ class UserOut(BaseModel):
     exam_stage_started_at: datetime | None = None
     exam_stage_status: str | None = None
     exam_stage_remaining_seconds: int | None = None
+    exam_stage_permissions: dict[str, ExamStagePermissionOut] = Field(default_factory=dict)
     created_at: datetime
     has_unseen_statements: bool | None = None
     unseen_statement_count: int | None = None
@@ -540,6 +581,12 @@ class ToggleAdminRequest(BaseModel):
 
 class ToggleExamPermissionRequest(BaseModel):
     exam_permission: bool
+
+
+class ToggleExamStagePermissionRequest(BaseModel):
+    granted: bool
+    replace_started: bool = False
+    expected_grant_id: int | None = None
 
 
 class AdminUserUpdateRequest(CamelModel):
@@ -693,6 +740,7 @@ class PublicMultiApartmentProjectResponse(CamelModel):
     code: str
     pdfUrl: Optional[str] = None
     answers: List[MultiApartmentAnswerPayload]
+    stageGrantId: Optional[int] = None
 
 
 class MultiApartmentEvaluationSubmitRequest(CamelModel):
@@ -704,6 +752,10 @@ class MultiApartmentEvaluationSubmitRequest(CamelModel):
     wrongCount: int
     totalCorrectAnswers: int
     durationSeconds: int
+    stageGrantId: Optional[int] = None
+    offlineSubmissionToken: Optional[str] = None
+    submissionId: Optional[UUID] = None
+    finishedAt: Optional[datetime] = None
 
 
 class MultiApartmentEvaluationResponse(CamelModel):
@@ -721,6 +773,8 @@ class MultiApartmentEvaluationResponse(CamelModel):
     finishedAt: datetime
     durationSeconds: int
     createdAt: datetime
+    stageGrantId: Optional[int] = None
+    offlineSubmissionId: Optional[str] = None
 
 
 class MultiApartmentEvaluationListResponse(CamelModel):
@@ -819,6 +873,7 @@ class PublicMultiFunctionalProjectResponse(CamelModel):
     code: str
     pdfUrl: Optional[str] = None
     answers: List[MultiFunctionalAnswerPayload]
+    stageGrantId: Optional[int] = None
 
 
 class MultiFunctionalEvaluationSubmitRequest(CamelModel):
@@ -869,6 +924,10 @@ class MultiFunctionalEvaluationSubmitFullRequest(CamelModel):
     wrongCount: int
     totalCorrectAnswers: int
     durationSeconds: int
+    stageGrantId: Optional[int] = None
+    offlineSubmissionToken: Optional[str] = None
+    submissionId: Optional[UUID] = None
+    finishedAt: Optional[datetime] = None
 
 
 class MultiFunctionalEvaluationResponse(CamelModel):
@@ -886,6 +945,25 @@ class MultiFunctionalEvaluationResponse(CamelModel):
     finishedAt: datetime
     durationSeconds: int
     createdAt: datetime
+    stageGrantId: Optional[int] = None
+    offlineSubmissionId: Optional[str] = None
+
+
+class ExamStageStartRequest(CamelModel):
+    stageGrantId: Optional[int] = None
+    projectCode: Optional[str] = None
+    offline: bool = False
+    startRequestId: Optional[UUID] = None
+
+
+class ExamStageStartResponse(CamelModel):
+    stageGrantId: Optional[int] = None
+    stage: str
+    startedAt: datetime
+    durationMinutes: int
+    offlineSubmissionToken: Optional[str] = None
+    endsAt: Optional[datetime] = None
+    serverNow: Optional[datetime] = None
 
 
 class MultiFunctionalEvaluationListResponse(CamelModel):

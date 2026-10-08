@@ -1,0 +1,34 @@
+{
+  "passed": true,
+  "phase": "restart",
+  "cases": [
+    "Actual main.js and preload.js execute in a hidden window at the exact trusted local index.html URL",
+    "Real Windows safeStorage encryption is available (DPAPI; no injected protector)",
+    "A second Electron process decrypts the original DPAPI snapshots and restores exact pending attempt/session/grant/answers",
+    "Encrypted PDF remains readable over IPC after a full Electron process restart",
+    "Actual IPC rejects frozen-answer mutation and cross-user attempt access",
+    "A second local window with the real preload is denied privileged IPC by sender identity",
+    "Actual IPC rejects an unrelated or incomplete ACK and retains the durable outbox",
+    "Bound server-result fixture acknowledges the same frozen submission durably over IPC"
+  ],
+  "electron": "28.3.3",
+  "safeStorage": "Windows DPAPI available",
+  "visibleWindows": false,
+  "networkAttempts": 0,
+  "realMediaCapture": false,
+  "realAccounts": false,
+  "actualMain": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar\\src\\main\\main.js",
+  "actualPreload": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar\\src\\preload\\preload.js",
+  "trustedPage": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar\\src\\renderer\\index.html",
+  "sourceSha256": {
+    "src/main/main.js": "03e5fcdb0c6f46fb6fbf9f1e0dd0ee1078b8717e0b6f1bf46ddc8db8d01c84ac",
+    "src/main/offline-store.js": "c0d704d876413a14fbbb4ef2b5484ea406a09b953111e1ec9b7242e95da4414a",
+    "src/preload/preload.js": "9fd9f61ed8a41293ff8352a2f141b8d668a26da2d80393a33e46feae1234b868"
+  },
+  "userData": "C:\\Users\\george\\Desktop\\certification kode\\certification\\.deploy\\offline-exams-20261009\\electron-smoke-Q2Um2c\\userData",
+  "desktop": "C:\\Users\\george\\Desktop\\certification kode\\certification\\.deploy\\offline-exams-20261009\\electron-smoke-Q2Um2c\\Desktop",
+  "generatedAt": "2026-10-08T21:49:32.321Z",
+  "sourceRoot": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar",
+  "sourceAppVersion": "1.1.12",
+  "updaterDependency": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar\\node_modules\\electron-updater\\out\\main.js"
+}

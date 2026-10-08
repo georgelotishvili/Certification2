@@ -28,7 +28,10 @@ from ..services.bounded_upload import (
     save_upload_stream,
 )
 from ..services import email_verification
-from ..services.exam_stage import exam_state_payload, expire_if_unused
+from ..services.exam_stage_grants import (
+    exam_state_with_permissions,
+    expire_unused_stage_permissions,
+)
 from ..services.user_codes import (
     UserCodeConflict,
     UserCodeGenerationError,
@@ -279,6 +282,7 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
         exam_perm = True  # ადმინებს exam_permission ყოველთვის true
     else:
         exam_perm = bool(user.exam_permission)  # არა-ადმინებს რაც ბაზაშია
+    exam_state = exam_state_with_permissions(db, user, is_admin_user=is_admin_user)
     return UserOut(
         id=user.id,
         personal_id=user.personal_id,
@@ -289,7 +293,13 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
         code=user.code,
         is_admin=is_admin_user,
         is_founder=is_founder,
-        exam_permission=exam_perm,
+        exam_permission=bool(exam_state["exam_permission"]),
+        exam_stage=exam_state["exam_stage"],
+        exam_stage_expires_at=exam_state["exam_stage_expires_at"],
+        exam_stage_started_at=exam_state["exam_stage_started_at"],
+        exam_stage_status=exam_state["exam_stage_status"],
+        exam_stage_remaining_seconds=exam_state["exam_stage_remaining_seconds"],
+        exam_stage_permissions=exam_state["exam_stage_permissions"],
         created_at=user.created_at,
     )
 
@@ -411,6 +421,9 @@ def profile(
         exam_perm = True  # ადმინებს exam_permission ყოველთვის true
     else:
         exam_perm = bool(u.exam_permission)  # არა-ადმინებს რაც ბაზაშია
+    if not is_admin_user and expire_unused_stage_permissions(db, u, commit=True):
+        db.refresh(u)
+    exam_state = exam_state_with_permissions(db, u, is_admin_user=is_admin_user)
     return UserOut(
         id=u.id,
         personal_id=u.personal_id,
@@ -421,7 +434,13 @@ def profile(
         code=u.code,
         is_admin=is_admin_user,
         is_founder=is_founder,
-        exam_permission=exam_perm,
+        exam_permission=bool(exam_state["exam_permission"]),
+        exam_stage=exam_state["exam_stage"],
+        exam_stage_expires_at=exam_state["exam_stage_expires_at"],
+        exam_stage_started_at=exam_state["exam_stage_started_at"],
+        exam_stage_status=exam_state["exam_stage_status"],
+        exam_stage_remaining_seconds=exam_state["exam_stage_remaining_seconds"],
+        exam_stage_permissions=exam_state["exam_stage_permissions"],
         created_at=u.created_at,
     )
 
@@ -554,11 +573,11 @@ def update_profile(
     elif is_admin_user:
         exam_perm = True
     else:
-        if expire_if_unused(db, user, commit=True):
+        if expire_unused_stage_permissions(db, user, commit=True):
             db.refresh(user)
         exam_perm = bool(user.exam_permission)
 
-    exam_state = exam_state_payload(user, is_admin_user=is_admin_user)
+    exam_state = exam_state_with_permissions(db, user, is_admin_user=is_admin_user)
     return UserOut(
         id=user.id,
         personal_id=user.personal_id,
@@ -575,6 +594,7 @@ def update_profile(
         exam_stage_started_at=exam_state.get("exam_stage_started_at"),
         exam_stage_status=exam_state.get("exam_stage_status"),
         exam_stage_remaining_seconds=exam_state.get("exam_stage_remaining_seconds"),
+        exam_stage_permissions=exam_state.get("exam_stage_permissions", {}),
         created_at=user.created_at,
     )
 
@@ -906,11 +926,11 @@ def get_current_user_info(
     elif is_admin_user:
         exam_perm = True
     else:
-        if expire_if_unused(db, user, commit=True):
+        if expire_unused_stage_permissions(db, user, commit=True):
             db.refresh(user)
         exam_perm = bool(user.exam_permission)
 
-    exam_state = exam_state_payload(user, is_admin_user=is_admin_user)
+    exam_state = exam_state_with_permissions(db, user, is_admin_user=is_admin_user)
     
     return UserOut(
         id=user.id,
@@ -928,5 +948,6 @@ def get_current_user_info(
         exam_stage_started_at=exam_state.get("exam_stage_started_at"),
         exam_stage_status=exam_state.get("exam_stage_status"),
         exam_stage_remaining_seconds=exam_state.get("exam_stage_remaining_seconds"),
+        exam_stage_permissions=exam_state.get("exam_stage_permissions", {}),
         created_at=user.created_at,
     )

@@ -4,7 +4,7 @@ import random
 import string
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as FPath, UploadFile, File
+from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as FPath, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func, exists
 from sqlalchemy.orm import Session, selectinload
@@ -27,6 +27,8 @@ from ..schemas import (
     MultiApartmentSettingsUpdateRequest,
     MultiApartmentGateVerifyRequest,
     MultiApartmentGateVerifyResponse,
+    ExamStageStartRequest,
+    ExamStageStartResponse,
 )
 from ..services.media_storage import (
     InvalidPdfUpload,
@@ -40,14 +42,24 @@ from ..services.media_storage import (
     delete_storage_file,
 )
 from ..routers.admin import _require_admin
-from ..services.exam_stage import (
-    STAGE_PROJECT_1,
-    advance_after_stage_result,
-    is_admin_like,
-    require_stage,
+from ..services.exam_stage import STAGE_PROJECT_1, is_admin_like
+from ..services.exam_stage_grants import (
+    completion_grant,
+    consume_stage_permission,
+    lock_user_stage_transitions,
+    require_stage_permission,
 )
 
 router = APIRouter()
+
+from ..services.offline_attempts import (
+    naive_utc, project_final_context, record_receipt,
+    require_legacy_project_submission, start_project_attempt, utc_response,
+)
+from ..services.offline_grading import (
+    bind_evaluation_snapshot, grade_project_snapshot, guard_pending_project_delete,
+    project_report_answers, detach_evaluation_snapshot,
+)
 
 
 def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
@@ -256,6 +268,15 @@ async def update_projects(
         str(p.id): p
         for p in db.scalars(select(MultiApartmentProject)).all()
     }
+    retained_ids = set()
+    for item in payload.projects:
+        try:
+            retained_ids.add(str(int(item.id)))
+        except (TypeError, ValueError):
+            pass
+    for existing_id, existing_project in existing_projects.items():
+        if existing_id not in retained_ids:
+            guard_pending_project_delete(db, MultiApartmentProject, STAGE_PROJECT_1, existing_project.id)
     processed_ids = set()
     
     for order_idx, project_payload in enumerate(payload.projects or [], start=1):
@@ -412,6 +433,7 @@ def delete_project(
     project = db.get(MultiApartmentProject, project_id)
     if not project:
         return
+    guard_pending_project_delete(db, MultiApartmentProject, STAGE_PROJECT_1, project.id)
     
     # Delete all submissions for this project first
     db.query(MultiApartmentSubmission).filter(
@@ -574,6 +596,7 @@ def delete_project_pdf(
 # Public endpoints
 @router.get("/public/multi-apartment/projects/random", response_model=PublicMultiApartmentProjectResponse)
 def get_random_project(
+    prepare_only: bool = Query(False),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
@@ -585,7 +608,22 @@ def get_random_project(
     - Once all projects are completed, the cycle restarts
     """
     user = _require_auth(db, authorization)
-    require_stage(db, user, STAGE_PROJECT_1, mark_started=True)
+    stage_grant = require_stage_permission(
+        db, user, STAGE_PROJECT_1, mark_started=False
+    )
+    if stage_grant is not None and stage_grant.started_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This project attempt is already in progress",
+        )
+    if stage_grant is not None and not prepare_only:
+        stage_grant = require_stage_permission(
+            db,
+            user,
+            STAGE_PROJECT_1,
+            mark_started=True,
+            grant_id=stage_grant.id,
+        )
 
     # Load all projects (with answers eagerly loaded)
     all_projects = db.scalars(
@@ -633,6 +671,46 @@ def get_random_project(
             MultiApartmentAnswerPayload(id=str(a.id), text=a.text)
             for a in answers
         ],
+        stageGrantId=stage_grant.id if stage_grant else None,
+    )
+
+
+@router.post(
+    "/public/multi-apartment/start", response_model=ExamStageStartResponse
+)
+def start_multi_apartment_stage(
+    payload: ExamStageStartRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    user = _require_auth(db, authorization)
+    if payload.offline:
+        settings = _get_or_create_settings(db)
+        attempt = start_project_attempt(db, user, STAGE_PROJECT_1, payload,
+                                        MultiApartmentProject, settings.duration_minutes)
+        db.commit()
+        return ExamStageStartResponse(
+            stageGrantId=attempt.stage_grant_id, stage=STAGE_PROJECT_1,
+            startedAt=utc_response(attempt.started_at),
+            durationMinutes=int((attempt.ends_at - attempt.started_at).total_seconds() / 60),
+            offlineSubmissionToken=attempt.token, endsAt=utc_response(attempt.ends_at),
+            serverNow=utc_response(datetime.utcnow()),
+        )
+    grant = require_stage_permission(
+        db,
+        user,
+        STAGE_PROJECT_1,
+        mark_started=True,
+        grant_id=payload.stageGrantId,
+    )
+    settings = _get_or_create_settings(db)
+    db.commit()
+    started_at = grant.started_at if grant else datetime.utcnow()
+    return ExamStageStartResponse(
+        stageGrantId=grant.id if grant else None,
+        stage=STAGE_PROJECT_1,
+        startedAt=started_at,
+        durationMinutes=settings.duration_minutes,
     )
 
 
@@ -707,17 +785,75 @@ def submit_evaluation(
     import json
     
     # Get user
-    user = _require_auth(db, authorization)
-    require_stage(db, user, STAGE_PROJECT_1)
-    if not is_admin_like(user) and user.exam_stage_started_at is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Exam stage has not been started")
+    offline_attempt = None
+    offline_digest = None
+    if payload.offlineSubmissionToken:
+        offline_attempt, user, offline_digest, receipt = project_final_context(
+            db, STAGE_PROJECT_1, payload)
+        if receipt is not None:
+            return MultiApartmentEvaluationResponse.model_validate(receipt)
+    else:
+        user = _require_auth(db, authorization)
+        require_legacy_project_submission(db, payload.stageGrantId)
+    lock_user_stage_transitions(db, user)
+    if payload.stageGrantId is not None:
+        existing = db.scalar(
+            select(MultiApartmentEvaluation).where(
+                MultiApartmentEvaluation.stage_grant_id == payload.stageGrantId
+            )
+        )
+        if existing is not None and existing.user_id == user.id:
+            return MultiApartmentEvaluationResponse(
+                id=existing.id, userId=existing.user_id, projectId=existing.project_id,
+                projectCode=existing.project_code, projectName=existing.project_name,
+                percentage=existing.percentage, correctCount=existing.correct_count,
+                wrongCount=existing.wrong_count,
+                totalCorrectAnswers=existing.total_correct_answers,
+                selectedAnswerIds=json.loads(existing.selected_answer_ids or "[]"),
+                startedAt=existing.started_at, finishedAt=existing.finished_at,
+                durationSeconds=existing.duration_seconds, createdAt=existing.created_at,
+                stageGrantId=existing.stage_grant_id,
+            )
+    elif not is_admin_like(user):
+        legacy_existing = db.scalar(
+            select(MultiApartmentEvaluation)
+            .where(
+                MultiApartmentEvaluation.user_id == user.id,
+                MultiApartmentEvaluation.project_code == payload.projectCode.strip(),
+            )
+            .order_by(MultiApartmentEvaluation.id.desc())
+        )
+        if legacy_existing is not None and sorted(
+            json.loads(legacy_existing.selected_answer_ids or "[]")
+        ) == sorted(payload.selectedAnswerIds):
+            return MultiApartmentEvaluationResponse(
+                id=legacy_existing.id, userId=legacy_existing.user_id,
+                projectId=legacy_existing.project_id,
+                projectCode=legacy_existing.project_code,
+                projectName=legacy_existing.project_name,
+                percentage=legacy_existing.percentage,
+                correctCount=legacy_existing.correct_count,
+                wrongCount=legacy_existing.wrong_count,
+                totalCorrectAnswers=legacy_existing.total_correct_answers,
+                selectedAnswerIds=json.loads(legacy_existing.selected_answer_ids or "[]"),
+                startedAt=legacy_existing.started_at,
+                finishedAt=legacy_existing.finished_at,
+                durationSeconds=legacy_existing.duration_seconds,
+                createdAt=legacy_existing.created_at,
+                stageGrantId=legacy_existing.stage_grant_id,
+            )
+    stage_grant = completion_grant(
+        db, user, STAGE_PROJECT_1, payload.stageGrantId
+    )
+    if offline_attempt is None:
+        require_legacy_project_submission(db, stage_grant.id if stage_grant else None)
     
     # Get project with answers
-    project = db.scalar(
+    project = (db.get(MultiApartmentProject, offline_attempt.project_id) if offline_attempt else db.scalar(
         select(MultiApartmentProject)
         .where(MultiApartmentProject.code == payload.projectCode.strip())
         .options(selectinload(MultiApartmentProject.answers))
-    )
+    ))
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     
@@ -732,11 +868,15 @@ def submit_evaluation(
     wrong_count = len(selected_ids_set - correct_answer_ids)
     total_correct = len(correct_answer_ids)
     percentage = round((correct_count / total_correct) * 100, 2) if total_correct > 0 else 0
+    if offline_attempt is not None:
+        percentage, correct_count, wrong_count, total_correct = grade_project_snapshot(
+            db, offline_attempt, payload.selectedAnswerIds)
     
     # Create evaluation record
     evaluation = MultiApartmentEvaluation(
         user_id=user.id,
         project_id=project.id,
+        stage_grant_id=stage_grant.id if stage_grant else None,
         project_code=payload.projectCode,
         project_name=payload.projectName,
         percentage=percentage,
@@ -744,16 +884,23 @@ def submit_evaluation(
         wrong_count=wrong_count,
         total_correct_answers=total_correct,
         selected_answer_ids=json.dumps(payload.selectedAnswerIds),
-        finished_at=now,
-        duration_seconds=payload.durationSeconds,
+        started_at=offline_attempt.started_at if offline_attempt else (stage_grant.started_at if stage_grant else now),
+        finished_at=naive_utc(payload.finishedAt) if offline_attempt else now,
+        duration_seconds=int((naive_utc(payload.finishedAt) - offline_attempt.started_at).total_seconds()) if offline_attempt else payload.durationSeconds,
     )
     
     db.add(evaluation)
-    advance_after_stage_result(db, user, STAGE_PROJECT_1)
-    db.commit()
+    consume_stage_permission(
+        db,
+        user,
+        STAGE_PROJECT_1,
+        grant_id=stage_grant.id if stage_grant else None,
+        now=now,
+    )
+    db.flush()
     db.refresh(evaluation)
     
-    return MultiApartmentEvaluationResponse(
+    response = MultiApartmentEvaluationResponse(
         id=evaluation.id,
         userId=evaluation.user_id,
         projectId=evaluation.project_id,
@@ -768,7 +915,15 @@ def submit_evaluation(
         finishedAt=evaluation.finished_at,
         durationSeconds=evaluation.duration_seconds,
         createdAt=evaluation.created_at,
+        stageGrantId=evaluation.stage_grant_id,
     )
+    if offline_attempt is not None:
+        response.offlineSubmissionId = str(payload.submissionId)
+        bind_evaluation_snapshot(db, offline_attempt, evaluation.id)
+        record_receipt(db, offline_attempt, payload.submissionId, offline_digest,
+                       response.model_dump(mode="json"))
+    db.commit()
+    return response
 
 
 @router.get("/admin/multi-apartment/evaluations/{user_id}", response_model=MultiApartmentEvaluationListResponse)
@@ -803,6 +958,7 @@ def get_user_evaluations(
             finishedAt=e.finished_at,
             durationSeconds=e.duration_seconds,
             createdAt=e.created_at,
+            stageGrantId=e.stage_grant_id,
         )
         for e in evaluations
     ]
@@ -836,7 +992,12 @@ def get_evaluation_detail(
     
     # Build answer details
     answer_details = []
-    if project and project.answers:
+    frozen_answers = project_report_answers(db, STAGE_PROJECT_1, evaluation)
+    if frozen_answers is not None:
+        answer_details = [MultiApartmentAnswerDetail(
+            id=answer["id"], text=answer["text"], isCorrect=answer["is_correct"],
+            isSelected=answer["id"] in selected_ids) for answer in frozen_answers]
+    elif project and project.answers:
         for answer in sorted(project.answers, key=lambda a: (a.order_index, a.id)):
             answer_details.append(MultiApartmentAnswerDetail(
                 id=answer.id,
@@ -876,6 +1037,7 @@ def delete_evaluation(
     if not evaluation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found")
     
+    detach_evaluation_snapshot(db, STAGE_PROJECT_1, evaluation)
     db.delete(evaluation)
     db.commit()
     return None

@@ -1,0 +1,126 @@
+GIPC desktop offline examination candidate release 1.1.12
+Date: 2026-10-09 (Asia/Tbilisi)
+STATUS UPDATE 2026-10-09: Backend and desktop 1.1.12 now deployed with user authorization.
+Production receipts and current handoff: .deploy/offline-release-20261009-01/HANDOFF.txt.
+The implementation/testing notes below describe the original LOCAL-ONLY preparation.
+
+USER DECISION
+Recover the same started attempt automatically on the same computer. Keep its original
+deadline and durable answers; never give a fresh duration/grant. If time already expired,
+freeze the saved answers and queue the final. New attempts still need a new admin grant.
+
+IMPLEMENTED
+- Download/persist all necessary questions and PDFs before Start. Incomplete preparation
+  retries the same selected material. A stale prepared grant cannot block a new grant.
+- Before Begin/Start, read-only GET /exam/offline/capabilities must return
+  {"protocol":1,"grading_snapshots":true}. Old backend is rejected before spending access.
+- AES-256-GCM local envelopes; per-file key protected by Windows Electron safeStorage.
+  Versioned atomic fsync checkpoints with same-revision backup; no plaintext fallback.
+- Local per-answer checkpoints and periodic clock checkpoint. Wall/monotonic high-water
+  countdown, fixed server deadline, conservative request-delay accounting. Active recovery
+  needs neither account-token refresh nor a new server start. Missing local PDF blocks
+  editing without stopping the deadline; expired recovery does not need the PDFs.
+- Completion freezes a durable immutable final before unlock/network. Pending outbox
+  survives process restart and retries byte-identical data with an exact-attempt capability.
+  Server receipt UUID, stage/grant, session/project, candidate and grade fields are checked.
+  Duplicate requests return the same server receipt and do not create duplicate results.
+- Server-only immutable grading snapshots captured at successful Begin/Start. Subsequent
+  answer-key/text changes do not alter that attempt's score. Pending whole-project/session
+  deletion guarded. Explicit account deletion remains authority revocation.
+- Bounded recording chunks are fsynced to Desktop/GIPC_Recordings, then assembled;
+  source segments retained. Capture startup/stop bounded; late callbacks cannot restart a
+  finished exam. Disk/capture errors are visible. Unfinished recording metadata remains
+  visible in the home dashboard even after answer acknowledgment and app restart.
+- Duration-aware disk readiness estimate, trusted local top-frame IPC only, restricted
+  navigation/media origins, update installation blocked while work is unfinished.
+- Responsive recovery/outbox dashboard with usable controls and scrolling at 800x600.
+
+VERIFICATION
+- Backend: 282/282 unittest cases passed with explicit temporary GIPC_DATABASE_PATH and
+  MEDIA_ROOT; python -B used. Existing-schema create_all startup smoke preserved a sentinel
+  exam and created both additive tables idempotently.
+- Desktop: 128/128 node tests passed, including real encrypted/fsynced store integration,
+  lost responses, wrong receipts, partial disk commits, regrants, clock correction,
+  delayed capture/start, immutable finals, missing PDFs and old-backend release guard.
+- Website: 343/343 node tests passed.
+- Hidden Electron on real Windows safeStorage: 15 checks in separate processes; actual
+  main/preload IPC, DPAPI restart, cache, freeze/ACK and sender rejection.
+- Hidden real Chromium dashboard: 8 checks including actual pointer clicks, 1200x800 and
+  800x600 screenshots, retry/ACK and recording warning persistence.
+- Existing hidden Chromium login regression: 6 cases passed against packaged renderer.
+- All UI/media/network test fixtures synthetic. No real candidate login, capture, webcam,
+  external server write, live database mutation or visible exam launch used.
+- package-verification.json binds final EXE/archive hashes and compares every src file in
+  app.asar with local source. Use final packaged reports below, not earlier pre-guard runs.
+
+FINAL ARTIFACT / EVIDENCE
+desktop_app/dist/GIPC_exam_1.1.12.exe: 69,901,743 bytes
+SHA256: aecd5b23d88159fc1e3c8785ddad0d985b22bc145039e409c1f68614b39815e1
+package-verification.json: all29 src files match the final app.asar exactly.
+electron-smoke-xlTzoY/report.json: final packaged main/preload DPAPI15/15.
+dashboard-smoke-OoOiat/report.json: final packaged Chromium dashboard8/8.
+final-packaged-login/: packaged login6/6 and screenshots.
+The verified archive contains verifyServerSupport() in the coordinator and both prepared
+Begin/Start paths await it before issuing a start POST. Builds used --publish never.
+
+REPRODUCTION (repository root, PowerShell)
+node --test desktop_app/tests/*.test.js
+node --test frontend/tests/*.test.js
+Backend uses unittest discover -s backend/tests with an explicitly temporary
+GIPC_DATABASE_PATH and MEDIA_ROOT and backend/.venv/Scripts/python.exe -B.
+node .deploy/offline-exams-20261009/verify-package.cjs
+For packaged Electron checks set GIPC_OFFLINE_QA_SOURCE and GIPC_DASHBOARD_QA_SOURCE to
+the absolute desktop_app/dist/win-unpacked/resources/app.asar path, then run:
+node .deploy/offline-exams-20261009/run-electron-offline-check.cjs
+node .deploy/offline-exams-20261009/run-dashboard-check.cjs
+The wrappers isolate profiles/Desktop under this QA directory and prevent real capture,
+visible windows and external network. Reports include source hashes/version.
+
+FILES
+Desktop sources: src/main/main.js, src/main/offline-store.js, src/preload/preload.js;
+src/renderer/offline-exam.js, offline-project.js, offline-home.js, exam.js, exam.html,
+multi-apartment-eval.js/.html, multi-functional-eval.js/.html, index.html, styles/offline.css;
+package.json and package-lock.json version 1.1.12. Desktop directory is already gitignored;
+git diff alone does NOT enumerate these changes.
+Backend: app/models.py, schemas.py, routers/admin.py, exam.py, multi_apartment.py,
+multi_functional.py, services/exam_lifecycle.py; new services/offline_attempts.py and
+services/offline_grading.py; new tests/test_offline_attempts.py and test_offline_grading.py.
+Pre-existing unrelated dirty worktree/pyc files were preserved, not reverted.
+
+RELEASE ORDER / STILL REQUIRED BEFORE REAL EXAMS
+1. Do not upgrade a workstation with an active old-version examination. Finish old attempts.
+2. Deploy backend first using a newly reviewed scoped procedure. Two standalone additive
+   tables are offline_exam_attempts and offline_exam_content; existing create_all creates
+   them. Verify capability endpoint and legacy/new flows before publishing the EXE.
+3. Then publish desktop 1.1.12 and change the public download/version record. Do NOT reuse
+   old baseline-specific 1.1.11 deployment helpers blindly. New client safely refuses an
+   old backend before Start, but it is not currently usable for new live offline exams.
+4. Supervised physical Windows test still required: real camera/microphone/screen recording,
+   full test exam, disconnect Internet after Start, app termination/restart, deadline expiry,
+   final offline closure/reopen/retry, exact one admin result and inspect actual video.
+   Hidden Electron tests loaded actual app.asar with the installed test runtime; the portable
+   EXE launcher/app.isPackaged branch/update installation are not a hardware acceptance test.
+
+OPERATIONAL LIMITS (DO NOT OVERCLAIM)
+- During offline execution the server cannot know live progress; admin state catches up on
+  final upload. No Internet required for active answers/materials, but initial authorization
+  and receiving the final grade need a reachable compatible server.
+- Do not edit questions/options/answer keys/project PDFs/regulations BETWEEN material
+  preparation/download and Start. Grading snapshot freezes at Start, not during download.
+  If contents changed during preparation, reprepare; automatic content-version handshake
+  for this narrow pre-start interval is not implemented.
+- Offline finish time is a client assertion, not cryptographic proof. Managed/supervised
+  workstations are assumed. Local OS admin/tampering, intentional clock rollback while
+  powered off and physical disk loss cannot be fully prevented by this implementation.
+- Low-space readiness estimates capacity; it does not reserve disk blocks. On actual disk
+  write failure, the latest unsaved chunk can exist only in RAM. Do not silently treat a
+  recording warning as a successful full video; invigilator must inspect/recover it before
+  closing. Persisted chunks/answers remain separate and recordings are not auto-uploaded.
+- No automatic deletion of exam evidence or old recordings. Local store has bounded
+  attempt/material limits; future supervised retention/archival policy may be needed for
+  long-term high-volume workstations. No new server backup clutter created.
+
+RECOVERY COPY
+before/GIPC_exam_1.1.11.exe retained locally (SHA256
+3b783fc93723558497080cbe08d915b180b9af7a227ebcd94330a2faee29100a).
+No old user installer/recording was deleted.

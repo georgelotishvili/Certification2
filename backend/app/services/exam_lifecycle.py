@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session as DbSession, selectinload
 
 from ..database import SessionLocal
 from ..models import Answer, Block, Exam, Option, Question, Session as ExamSession, User
-from .exam_stage import reset_exam_flow
+from .exam_stage import STAGE_THEORY, reset_exam_flow
+from .exam_stage_grants import consume_stage_permission
+from .offline_attempts import theory_attempt
 
 
 SUBMISSION_GRACE_MINUTES = 5
@@ -383,21 +385,39 @@ def finalize_exam_session(
     auto_closed: bool = False,
     auto_close_reason: str | None = None,
     revoke_permission: bool = False,
+    grading_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     finished_at = _naive_utc(finished_at) or utcnow()
-    snapshot, block_stats = build_exam_snapshot(
-        db,
-        session,
-        finished_at=finished_at,
-        auto_closed=auto_closed,
-        auto_close_reason=auto_close_reason,
-    )
+    if grading_snapshot is None:
+        snapshot, block_stats = build_exam_snapshot(
+            db, session, finished_at=finished_at, auto_closed=auto_closed,
+            auto_close_reason=auto_close_reason,
+        )
+    else:
+        snapshot = grading_snapshot
+        block_stats = snapshot["block_stats"]
     response = finish_response_from_snapshot(snapshot)
     session.finished_at = finished_at
     session.active = False
     session.score_percent = response["score_percent"]
     session.block_stats = json.dumps(block_stats, ensure_ascii=False)
     session.exam_snapshot = json.dumps(snapshot, ensure_ascii=False)
+
+    # A result belongs to the generation of permission that created the
+    # session.  Never fall back to the user's current grant: a delayed retry
+    # must not consume a later re-grant.
+    if session.stage_grant_id is not None:
+        candidate = session.user
+        if candidate is None and session.user_id is not None:
+            candidate = db.get(User, session.user_id)
+        if candidate is not None:
+            consume_stage_permission(
+                db,
+                candidate,
+                STAGE_THEORY,
+                grant_id=session.stage_grant_id,
+                now=finished_at,
+            )
 
     if revoke_permission:
         code = (session.candidate_code or "").strip()
@@ -427,6 +447,10 @@ def auto_close_session_if_expired(
 ) -> bool:
     now = _naive_utc(now) or utcnow()
     if not session.active or session.finished_at:
+        return False
+    # Opt-in attempts retain only their original final-upload authorization.
+    # Their local timer still expires at ends_at; legacy APIs cannot bypass it.
+    if theory_attempt(db, session.id) is not None:
         return False
     if now <= submission_deadline(session):
         return False

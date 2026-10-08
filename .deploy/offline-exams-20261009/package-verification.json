@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "version": "1.1.12",
+  "createdAt": "2026-10-08T21:55:10.884Z",
+  "exe": {
+    "path": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\GIPC_exam_1.1.12.exe",
+    "size": 69901743,
+    "sha256": "aecd5b23d88159fc1e3c8785ddad0d985b22bc145039e409c1f68614b39815e1"
+  },
+  "archive": {
+    "path": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar",
+    "sha256": "5d9817ef6bd3f871ecd073a7871eca0514395b53bcd738c273e9e2188813e257"
+  },
+  "sourceFileCount": 29,
+  "matchedSources": {
+    "src/config/api.js": "61d61c1197ef9d2f3064960e64af7ba9f6672bce731e36753a6ba0d166dc7171",
+    "src/main/main.js": "03e5fcdb0c6f46fb6fbf9f1e0dd0ee1078b8717e0b6f1bf46ddc8db8d01c84ac",
+    "src/main/offline-store.js": "c0d704d876413a14fbbb4ef2b5484ea406a09b953111e1ec9b7242e95da4414a",
+    "src/preload/preload.js": "9fd9f61ed8a41293ff8352a2f141b8d668a26da2d80393a33e46feae1234b868",
+    "src/renderer/exam.html": "a2a7994613a3aa983584b003c51ccb5129d46eb72b9283842836d17ffa9cc614",
+    "src/renderer/exam.js": "6b23f725e89e9695986af9120d1cb66a527a7c80760772a3471e64d73c6e3b25",
+    "src/renderer/fonts/bpg_nino_mtavruli_bold.ttf": "daaf598286ceebe8ed7719e66b8f4ae4582f1cb8a4b7dd85dbeca38267f99284",
+    "src/renderer/fonts/dejavu-sans.ttf": "7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954",
+    "src/renderer/images/background.svg": "1f8c77da4345cc914c227b54daea4cf6cd8d948e8f9df12677717a8017cb2ae6",
+    "src/renderer/images/exam logo.svg": "c45e287c5e1d4846c9af8ea1df13e8288863943800075761406a4e7452eed185",
+    "src/renderer/images/logo1-2.ico": "6f4946c58bf357798a2485513f1c1e537b9fe8e525de566bc685dea5b1f9f7da",
+    "src/renderer/images/logo1.svg": "a63e09018e3bf1c1352d61f78262cbdd9b1d4eb5dd2e871050c6f955b81fa42a",
+    "src/renderer/images/logo2.svg": "f3690eb2a3b8ceebb73500191f802d8754d1f4be55cce652e20dbd9d4bbdadae",
+    "src/renderer/images/logo3.svg": "d77906a853f4b4b0693f0e441bf80f2fad7ae97b40195206430a9e6fd773e27d",
+    "src/renderer/images/project logo.svg": "b6e4f363dd678f7b0ebf5cc74b3db047aa2ccf8ae206a36c149a1362db9d73f2",
+    "src/renderer/index.html": "9106c05eb9fb021dd3fc9ed79a3735f5a92fe7b4d2165aad7737b1cdd4945c4f",
+    "src/renderer/multi-apartment-eval.html": "e0de7460c9ec30a8c205f10281874cee74ac673a610c17a00379cd14c2ed6a16",
+    "src/renderer/multi-apartment-eval.js": "1bc96811c69e0795131f474892f30c22d3981b92c8e9924d00e4d665af20c9b3",
+    "src/renderer/multi-functional-eval.html": "6a53c56679dd06c1c1f97caa599e790c27c494b54fb960e5c8650b583425dae1",
+    "src/renderer/multi-functional-eval.js": "a46d549582fa93e4f7f4c8c58ac5b85c3cf3ac552283061d04df140d6e55ae3a",
+    "src/renderer/offline-exam.js": "18fe35204ea8831c6f8bf8d243c9dc13cadb2b1ee2bb495e0398f6609e47d545",
+    "src/renderer/offline-home.js": "c40cffb2fe41d5355a416bf452e7dbcdec90699489992999eff0bbc6115998f2",
+    "src/renderer/offline-project.js": "1d6017d205b1506942679cd7f705a0418c72be222191362e5868df579fd0ace4",
+    "src/renderer/renderer.js": "2584037123a30fe6b14af1d58519b7e4bea009b151ed45847ec7c5b8650ef935",
+    "src/renderer/styles/exam.css": "223f36ffae61142de5913992e8c76fbe16d4004cbb6bcc574495ebd8f52399a3",
+    "src/renderer/styles/main.css": "5f52718f3bd63d2b087ef3773c43d69c167ceb77363f1eb6360278e4df6e698f",
+    "src/renderer/styles/offline.css": "6813a4e2816441b357527f0b68db4b0b37c7f90c75f53acaa3ee42ed304e843b",
+    "src/renderer/styles/project-eval.css": "bf88ce11368723b4e2f26935ce1b6df7b3c6876d3f2d592e80f141c42f42c828",
+    "src/services/api.js": "205fe39005180c68f9166fe3f24ff12d0c291a530431d43cb198cf6dcdda48e8"
+  },
+  "deployed": false,
+  "productionChanged": false
+}

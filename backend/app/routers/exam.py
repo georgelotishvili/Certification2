@@ -39,6 +39,8 @@ from ..schemas import (
     QuestionsResponse,
     StartSessionRequest,
     StartSessionResponse,
+    OfflineTheoryFinalRequest,
+    OfflineAttemptCancelRequest,
 )
 from ..services.exam_lifecycle import (
     auto_close_session_if_expired,
@@ -46,7 +48,14 @@ from ..services.exam_lifecycle import (
     finalize_exam_session,
     finish_response_from_session,
 )
-from ..services.exam_stage import STAGE_THEORY, advance_after_stage_result, is_admin_like, require_stage
+from ..services.exam_stage import STAGE_THEORY, is_admin_like
+from ..services.exam_stage_grants import require_stage_permission
+from ..services.offline_attempts import (
+    authorize_final, check_final, naive_utc, record_receipt,
+    register_theory_attempt, require_legacy_theory_submission, utc_response,
+    theory_attempt, cancel_interrupted_attempt, require_uncancelled_attempt,
+)
+from ..services.offline_grading import grade_theory_snapshot
 from ..services.media_storage import (
     relative_storage_path,
     resolve_storage_path,
@@ -58,6 +67,24 @@ from ..services.media_storage import (
 router = APIRouter()
 
 MEDIA_TYPES = {"camera", "screen"}
+
+
+@router.get("/offline/capabilities")
+def offline_capabilities():
+    """Public, non-mutating deployment check before a client authorizes Start."""
+    return {"protocol": 1, "grading_snapshots": True, "interruption_cancellation": True}
+
+
+@router.post("/offline/cancel")
+def cancel_offline_attempt(
+    payload: OfflineAttemptCancelRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    owner = _get_user_from_auth(db, authorization) if not payload.offline_submission_token else None
+    response = cancel_interrupted_attempt(db, payload, authenticated_user=owner)
+    db.commit()
+    return response
 
 
 def _get_user_from_auth(db: Session, authorization: Optional[str]) -> User:
@@ -120,8 +147,61 @@ def start_session(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
     if candidate_user.id != current_user.id and not is_admin_like(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate mismatch")
-    changed_stage = require_stage(db, candidate_user, STAGE_THEORY, mark_started=True)
+    stage_grant = require_stage_permission(
+        db,
+        candidate_user,
+        STAGE_THEORY,
+        mark_started=False,
+    )
     now = datetime.now(timezone.utc)
+    if stage_grant is not None:
+        existing_session = db.scalar(
+            select(ExamSession)
+            .where(
+                ExamSession.user_id == candidate_user.id,
+                ExamSession.stage_grant_id == stage_grant.id,
+                ExamSession.finished_at.is_(None),
+            )
+            .order_by(ExamSession.id.desc())
+        )
+        if existing_session is not None:
+            if not payload.prepare_only and stage_grant.started_at is None:
+                stage_grant = require_stage_permission(
+                    db,
+                    candidate_user,
+                    STAGE_THEORY,
+                    mark_started=True,
+                    grant_id=stage_grant.id,
+                )
+            existing_exam = (
+                exam
+                if existing_session.exam_id == exam.id
+                else db.get(Exam, existing_session.exam_id)
+            )
+            db.commit()
+            return StartSessionResponse(
+                session_id=existing_session.id,
+                token=existing_session.token,
+                exam_id=existing_session.exam_id,
+                duration_minutes=(
+                    existing_exam.duration_minutes if existing_exam else exam.duration_minutes
+                ),
+                ends_at=existing_session.ends_at,
+                stage_grant_id=existing_session.stage_grant_id,
+            )
+        if stage_grant.started_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This permission is already bound to an exam attempt",
+            )
+        if not payload.prepare_only:
+            stage_grant = require_stage_permission(
+                db,
+                candidate_user,
+                STAGE_THEORY,
+                mark_started=True,
+                grant_id=stage_grant.id,
+            )
     ends_at = now + timedelta(hours=1)
     token = f"sess_{now.timestamp()}_{random.randint(1000,9999)}"
     session = ExamSession(
@@ -131,14 +211,13 @@ def start_session(
         ends_at=ends_at,
         active=False,
         user_id=candidate_user.id if candidate_user else None,
+        stage_grant_id=stage_grant.id if stage_grant else None,
         candidate_first_name=payload.candidate_first_name,
         candidate_last_name=payload.candidate_last_name,
         candidate_code=candidate_code,
     )
     db.add(session)
     db.commit()
-    if changed_stage:
-        db.refresh(candidate_user)
     db.refresh(session)
     return StartSessionResponse(
         session_id=session.id,
@@ -146,6 +225,7 @@ def start_session(
         exam_id=exam.id,
         duration_minutes=exam.duration_minutes,
         ends_at=ends_at,
+        stage_grant_id=session.stage_grant_id,
     )
 
 
@@ -166,10 +246,29 @@ def _get_session_or_401(
 @router.post("/{session_id}/begin", response_model=StartSessionResponse)
 def begin_session(
     session_id: int = Path(...),
+    offline: bool = Query(False),
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     session = _get_session_or_401(session_id, db, authorization)
+    issued_offline = theory_attempt(db, session.id)
+    if issued_offline is not None:
+        # Switching to the legacy Begin URL must never revive a cancelled
+        # offline attempt, including an administrator's no-grant test session.
+        require_uncancelled_attempt(issued_offline)
+    previous_offline = issued_offline if offline else None
+    if previous_offline is not None:
+        # Recover a lost start response even after the original clock expired;
+        # return its original interval, never authorize a fresh start.
+        return StartSessionResponse(
+            session_id=session.id, token=session.token, exam_id=session.exam_id,
+            duration_minutes=int((previous_offline.ends_at - previous_offline.started_at).total_seconds() / 60),
+            ends_at=utc_response(previous_offline.ends_at), stage_grant_id=previous_offline.stage_grant_id,
+            offline_submission_token=previous_offline.token, server_now=utc_response(datetime.utcnow()),
+            started_at=utc_response(previous_offline.started_at),
+        )
+    if offline and not session.selected_map:
+        raise HTTPException(status_code=400, detail="Download all questions before offline begin")
     if session.finished_at:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session already finished")
 
@@ -185,19 +284,67 @@ def begin_session(
         if session.ends_at <= now:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
     else:
-        session.started_at = now
-        session.ends_at = now + timedelta(minutes=exam.duration_minutes)
-        session.active = True
-        db.add(session)
-        db.commit()
+        candidate_user = session.user or (
+            db.get(User, session.user_id) if session.user_id is not None else None
+        )
+        if candidate_user is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate not found")
+        # This database-scoped transition lock is intentionally acquired
+        # before checking other sessions, so simultaneous Begin clicks cannot
+        # both pass a query-then-update race.
+        require_stage_permission(
+            db,
+            candidate_user,
+            STAGE_THEORY,
+            mark_started=True,
+            grant_id=session.stage_grant_id,
+        )
+        # A concurrent Begin for this same session may have committed while
+        # we waited for the user's transition lock.  Refresh before deciding
+        # whether this request is the one that starts the clock.
         db.refresh(session)
+        if session.active:
+            if session.ends_at <= now:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Session inactive or expired",
+                )
+        else:
+            if session.stage_grant_id is not None:
+                another_active = db.scalar(
+                    select(ExamSession.id).where(
+                        ExamSession.stage_grant_id == session.stage_grant_id,
+                        ExamSession.id != session.id,
+                        ExamSession.active == True,  # noqa: E712
+                        ExamSession.finished_at.is_(None),
+                    )
+                )
+                if another_active is not None:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="This permission already has an active session",
+                    )
+            session.started_at = now
+            session.ends_at = now + timedelta(minutes=exam.duration_minutes)
+            session.active = True
+            db.add(session)
+            if not offline:
+                db.commit()
+                db.refresh(session)
 
+    offline_attempt = register_theory_attempt(db, session) if offline else None
+    if offline_attempt is not None:
+        db.commit()
     return StartSessionResponse(
         session_id=session.id,
         token=session.token,
         exam_id=exam.id,
         duration_minutes=exam.duration_minutes,
-        ends_at=session.ends_at,
+        ends_at=utc_response(session.ends_at) if offline_attempt else session.ends_at,
+        stage_grant_id=session.stage_grant_id,
+        offline_submission_token=offline_attempt.token if offline_attempt else None,
+        server_now=utc_response(datetime.utcnow()) if offline_attempt else None,
+        started_at=utc_response(offline_attempt.started_at) if offline_attempt else None,
     )
 
 
@@ -401,6 +548,9 @@ def submit_answers_batch(
 ):
     """ყველა პასუხის ერთიანი გაგზავნა ოფლაინ რეჟიმისთვის."""
     session = _get_session_or_401(session_id, db, authorization)
+    require_legacy_theory_submission(db, session.id)
+    if not session.active and finish_response_from_session(session):
+        return BatchAnswersResponse(saved=0)
     if auto_close_session_if_expired(db, session):
         db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
@@ -474,6 +624,7 @@ def submit_answer(
     db: Session = Depends(get_db),
 ):
     session = _get_session_or_401(session_id, db, authorization)
+    require_legacy_theory_submission(db, session.id)
     now = datetime.utcnow()
     if not session.active or session.ends_at <= now:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
@@ -525,6 +676,7 @@ def finish_exam(
     db: Session = Depends(get_db),
 ):
     session = _get_session_or_401(session_id, db, authorization)
+    require_legacy_theory_submission(db, session.id)
     existing_response = finish_response_from_session(session)
     if not session.active and existing_response:
         return existing_response
@@ -534,11 +686,55 @@ def finish_exam(
     ensure_submission_window(session)
 
     response = finalize_exam_session(db, session, finished_at=datetime.utcnow())
-    candidate_user = session.user
-    if not candidate_user and session.candidate_code:
-        candidate_user = db.scalar(select(User).where(User.code == session.candidate_code.strip()))
-    if candidate_user and (candidate_user.exam_stage or "") == STAGE_THEORY:
-        advance_after_stage_result(db, candidate_user, STAGE_THEORY)
+    db.commit()
+    return response
+
+
+@router.post("/{session_id}/offline-final")
+def finish_offline_exam(
+    payload: OfflineTheoryFinalRequest,
+    session_id: int = Path(...),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    token = authorization.split(" ", 1)[1] if authorization and authorization.lower().startswith("bearer ") else None
+    attempt, _ = authorize_final(db, token, stage=STAGE_THEORY,
+                                 grant_id=payload.stage_grant_id, session_id=session_id)
+    digest, receipt = check_final(attempt, payload.submission_id, payload.finished_at,
+                                 payload.model_dump(mode="json"))
+    if receipt is not None:
+        return receipt
+    session = db.get(ExamSession, session_id)
+    db.refresh(session)
+    if session.finished_at is not None:
+        raise HTTPException(409, "Exam attempt has already been finalized")
+    if (session.stage_grant_id != attempt.stage_grant_id
+            or session.user_id != attempt.user_id
+            or naive_utc(session.ends_at) != naive_utc(attempt.ends_at)):
+        raise HTTPException(409, "Offline exam binding changed")
+    grading_snapshot, correctness = grade_theory_snapshot(db, attempt, payload.answers, payload.finished_at)
+    validated = []
+    for item in payload.answers:
+        option = db.get(Option, item.option_id)
+        # The immutable report remains authoritative even if configuration
+        # edits removed these historical rows. Keep live-FK detail rows only
+        # when they still exist; never recreate deleted question-bank content.
+        if option is not None and option.question_id == item.question_id:
+            validated.append(item)
+    # Full replacement, including unanswered questions, and grading share one
+    # transaction with the receipt. A dropped response can only replay it.
+    for previous in db.scalars(select(Answer).where(Answer.session_id == session.id)).all():
+        db.delete(previous)
+    for item in validated:
+        db.add(Answer(session_id=session.id, question_id=item.question_id,
+                      option_id=item.option_id, is_correct=correctness[item.question_id],
+                      answered_at=naive_utc(payload.finished_at)))
+    db.flush()
+    response = finalize_exam_session(db, session, finished_at=payload.finished_at,
+                                     grading_snapshot=grading_snapshot)
+    response.update(submission_id=str(payload.submission_id), session_id=session.id,
+                    stage_grant_id=session.stage_grant_id)
+    record_receipt(db, attempt, payload.submission_id, digest, response)
     db.commit()
     return response
 

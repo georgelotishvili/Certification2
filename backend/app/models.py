@@ -18,6 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Float,
     Numeric,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -158,6 +159,11 @@ class Session(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     selected_map: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    stage_grant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user_exam_stage_grants.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # Candidate metadata (optional, filled when using admin-started sessions)
     candidate_first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     candidate_last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -176,6 +182,48 @@ class Session(Base):
         back_populates="session",
         cascade="all, delete-orphan",
     )
+
+
+class OfflineExamAttempt(Base):
+    """Opt-in, exact-attempt submission capability and immutable final receipt.
+
+    This is a separate additive table: old clients keep their existing deadlines.
+    A capability authorizes only completion, never another start or account access.
+    """
+
+    __tablename__ = "offline_exam_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    start_request_id: Mapped[Optional[str]] = mapped_column(String(36), unique=True, nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    stage: Mapped[str] = mapped_column(String(32))
+    stage_grant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user_exam_stage_grants.id", ondelete="CASCADE"), unique=True, nullable=True
+    )
+    session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), unique=True, nullable=True
+    )
+    project_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    project_code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    ends_at: Mapped[datetime] = mapped_column(DateTime)
+    submission_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    payload_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    receipt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class OfflineExamContent(Base):
+    """Server-only immutable question/answer-key version for an offline attempt."""
+
+    __tablename__ = "offline_exam_content"
+
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("offline_exam_attempts.id", ondelete="CASCADE"), primary_key=True
+    )
+    snapshot: Mapped[str] = mapped_column(Text)
+    evaluation_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
 
 
 class Answer(Base):
@@ -257,6 +305,43 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+
+class UserExamStageGrant(Base):
+    """One independently issued, historical permission for one exam stage."""
+
+    __tablename__ = "user_exam_stage_grants"
+    __table_args__ = (
+        CheckConstraint(
+            "stage IN ('theory', 'project_stage_1', 'project_stage_2')",
+            name="ck_user_exam_stage_grants_stage",
+        ),
+        Index(
+            "uq_user_exam_stage_grants_open",
+            "user_id",
+            "stage",
+            unique=True,
+            sqlite_where=text(
+                "consumed_at IS NULL AND revoked_at IS NULL AND expired_at IS NULL"
+            ),
+        ),
+        Index("ix_user_exam_stage_grants_user_stage", "user_id", "stage", "id"),
+        # Grant IDs cross the desktop/API boundary; never let a stale result
+        # target a later generation after cascaded account deletion.
+        {"sqlite_autoincrement": True},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    stage: Mapped[str] = mapped_column(String(32), index=True)
+    granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    expired_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class ExamSchedule(Base):
@@ -484,6 +569,12 @@ class MultiApartmentEvaluation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("multi_apartment_projects.id", ondelete="CASCADE"), index=True)
+    stage_grant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_exam_stage_grants.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
     project_code: Mapped[str] = mapped_column(String(50))
     project_name: Mapped[str] = mapped_column(String(255))
     
@@ -602,6 +693,12 @@ class MultiFunctionalEvaluation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("multi_functional_projects.id", ondelete="CASCADE"), index=True)
+    stage_grant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_exam_stage_grants.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
     project_code: Mapped[str] = mapped_column(String(50))
     project_name: Mapped[str] = mapped_column(String(255))
     

@@ -5,6 +5,11 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../scripts/admin/users.js'), 'utf8');
+const stageKeys = ['theory', 'project_stage_1', 'project_stage_2'];
+function stages(granted = false) {
+  return Object.fromEntries(stageKeys.map((key) => [key, { granted, status: granted ? 'available' : 'none',
+    grant_id: null, granted_at: null, expires_at: null, started_at: null, remaining_seconds: 0 }]));
+}
 
 // Only the DOM operations used by the users list are needed; no browser or server.
 class Element {
@@ -42,11 +47,24 @@ class Element {
       card.selectors['.block-questions'] = new Element();
       card.selectors['.user-exam-schedules'] = new Element();
       for (const key of ['date', 'morning', 'evening']) card.selectors[`.exam-schedule-${key}`] = new Element();
-      card.selectors['.chk-exam'] = new Element();
+      for (const key of stageKeys) {
+        const input = new Element();
+        input.dataset.examStage = key;
+        const markup = html.match(new RegExp(`<input[^>]*data-exam-stage="${key}"[^>]*>`))?.[0] || '';
+        input.checked = /\bchecked\b/.test(markup);
+        input.disabled = /\bdisabled\b/.test(markup);
+        card.selectors[`.chk-exam[data-exam-stage="${key}"]`] = input;
+        const statusMarkup = html.match(new RegExp(`<span[^>]*class="user-exam-stage-status"[^>]*data-exam-stage-status="${key}"[^>]*>[^<]*<\\/span>`))?.[0] || '';
+        const status = new Element();
+        status.textContent = statusMarkup.match(/>([^<]*)<\/span>$/)?.[1] || '';
+        const statusValue = statusMarkup.match(/data-status="([^"]+)"/)?.[1] || '';
+        status.setAttribute('data-status', statusValue);
+        card.selectors[`.user-exam-stage-status[data-exam-stage-status="${key}"]`] = status;
+        if (key === 'theory') card.selectors['.chk-exam'] = input;
+      }
       card.selectors['.chk-admin'] = new Element();
       card.selectors['.head-delete'] = new Element();
       card.selectors['.user-name'] = new Element();
-      card.selectors['.chk-exam'].checked = /class="chk-exam"[^>]*\bchecked\b/.test(html);
       for (const name of html.match(/class="([^"]+)"/)[1].split(' ')) card.classList.toggle(name, true);
       this.children.push(card);
     }
@@ -65,7 +83,8 @@ class Element {
 function fixture(id, unread, day, level, admin = false, pending = false) {
   return { id, has_unseen_statements: unread, unseen_statement_count: unread ? 1 : 0,
     has_pending_statements: pending, pending_statement_count: pending ? 1 : 0,
-    days: [day], first_name: `Person ${id}`, certificate: { level }, is_admin: admin };
+    days: [day], first_name: `Person ${id}`, certificate: { level }, is_admin: admin,
+    exam_stage_permissions: stages() };
 }
 
 function harness(options = {}) {
@@ -76,8 +95,8 @@ function harness(options = {}) {
     'usersPageNext', 'usersPageStatus', 'usersListNotice', 'usersListNoticeText',
     'usersListRetry'].map((key) => [key, new Element()]));
   DOM.navLinks = [Object.assign(new Element(), { textContent: 'რეგისტრირებული პირები' })];
-  const state = { requests: [], signals: [], responses: [], mutations: [], alerts: [], timers: new Map(), nextTimer: 1,
-    hold: false, pending: [], today: '2026-10-08', items: [
+  const state = { requests: [], signals: [], responses: [], mutations: [], alerts: [], confirmations: [], timers: new Map(), nextTimer: 1,
+    hold: false, pending: [], heldMutations: [], holdMutation: false, today: '2026-10-08', items: [
     fixture(1, true, '2026-10-08', 'architect', true),
     fixture(2, false, '2026-10-08', 'expert', true),
     fixture(3, true, '2026-10-07', 'architect'),
@@ -85,7 +104,10 @@ function harness(options = {}) {
     fixture(5, true, '2026-10-08', 'expert'),
   ] };
   const window = new Element();
-  window.confirm = () => true;
+  window.confirm = (message) => {
+    state.confirmations.push(message);
+    return state.confirmResult !== false;
+  };
   const document = Object.assign(new Element(), { hidden: false, createElement: () => new Element() });
   const context = { window, document, URLSearchParams, AbortController, setInterval: () => 1,
     alert: (message) => state.alerts.push(message),
@@ -93,16 +115,25 @@ function harness(options = {}) {
     clearTimeout: (id) => state.timers.delete(id),
     fetch: async (address, requestOptions = {}) => {
       const url = new URL(address);
-      const mutation = url.pathname.match(/^\/admin\/users\/(\d+)\/(admin|exam-permission)$/);
+      const mutation = url.pathname.match(/^\/admin\/users\/(\d+)\/(admin|exam-stage-permissions\/(theory|project_stage_1|project_stage_2))$/);
       if (mutation) {
         assert.equal(requestOptions.method, 'PATCH');
         const payload = JSON.parse(requestOptions.body);
         state.mutations.push({ id: Number(mutation[1]), type: mutation[2], payload });
         const user = state.items.find((item) => item.id === Number(mutation[1]));
-        if (mutation[2] === 'admin') Object.assign(user, { is_admin: payload.is_admin,
-          exam_permission: payload.is_admin || false });
-        else user.exam_permission = payload.exam_permission;
-        return { ok: true, json: async () => ({}) };
+        const success = !state.failMutation;
+        state.failMutation = false;
+        if (success) {
+          if (mutation[2] === 'admin') Object.assign(user, { is_admin: payload.is_admin,
+            exam_permission: payload.is_admin || false, exam_stage_permissions: stages(payload.is_admin) });
+          else user.exam_stage_permissions[mutation[3]] = { ...stages(payload.granted)[mutation[3]],
+            grant_id: payload.granted ? state.mutations.length : null };
+        }
+        const responsePayload = structuredClone(user);
+        const result = { ok: success, json: async () => responsePayload };
+        if (!state.holdMutation) return result;
+        state.holdMutation = false;
+        return new Promise((resolve) => state.heldMutations.push(() => resolve(result)));
       }
       assert.equal(url.pathname, '/admin/users');
       state.requests.push(url.searchParams);
@@ -131,7 +162,7 @@ function harness(options = {}) {
         const live = url.searchParams.get('live') === 'true';
         const pageItems = items.slice((page - 1) * size, page * size).map((user) => {
           const revision = JSON.stringify([user.first_name, user.last_name, user.certificate, user.certificate_info, user.is_admin]);
-          const record = live ? Object.fromEntries(['id', 'exam_permission', 'has_unseen_statements',
+          const record = live ? Object.fromEntries(['id', 'exam_permission', 'exam_stage_permissions', 'has_unseen_statements',
             'unseen_statement_count', 'has_pending_statements', 'pending_statement_count'].map((key) => [key, user[key]])) : user;
           return { ...record, display_revision: revision };
         });
@@ -150,7 +181,7 @@ function harness(options = {}) {
   const users = window.AdminModules.createUsersModule({ DOM, API_BASE: 'http://test.local',
     on: (node, name, handler) => node?.addEventListener(name, handler),
     formatDateTime: () => '', escapeHtml: (value) => String(value ?? ''),
-    isFounderActor: () => false, getAdminHeaders: () => ({}), getActorHeaders: () => ({}),
+    isFounderActor: () => !!options.founderActor, getAdminHeaders: () => ({}), getActorHeaders: () => ({}),
     examSchedules: options.examSchedules,
   });
   users.init();
@@ -186,6 +217,369 @@ function paginatedHarness() {
     fixture(index + 1, index === 122, '2026-10-08', index >= 100 ? 'municipal' : 'architect'));
   h.flush = async () => { for (let index = 0; index < 15; index += 1) await Promise.resolve(); };
   return h;
+}
+
+function stageInput(h, id, stage) {
+  return h.card(id).querySelector(`.chk-exam[data-exam-stage="${stage}"]`);
+}
+
+function stageStatus(h, id, stage) {
+  return h.card(id).querySelector(`.user-exam-stage-status[data-exam-stage-status="${stage}"]`);
+}
+
+test('three stage controls have exact Georgian labels, full titles and independent accessible names', () => {
+  for (const [index, key] of stageKeys.entries()) {
+    assert.match(source, new RegExp(`key: '${key}', label: 'ეტაპი ${index + 1}', title: 'ეტაპი ${index + 1} — [^']+'`));
+  }
+  assert.match(source, /data-exam-stage="\$\{key\}" aria-label="\$\{title\}"/);
+  assert.match(source, /class="user-exam-stage-status"[^>]*role="status" aria-live="polite"/);
+  assert.match(source, /role="group" aria-label="გამოცდის ეტაპებზე დაშვება"/);
+  assert.doesNotMatch(source, /\/exam-permission[`'"]/);
+  const css = fs.readFileSync(path.join(__dirname, '../styles/admin.css'), 'utf8');
+  assert.match(css, /\.user-exam-stage-controls\s*\{[^}]*flex-wrap:\s*wrap/s);
+  assert.match(css, /\.user-exam-stage-controls\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
+  assert.match(css, /@media \(max-width:\s*420px\)[\s\S]*?\.user-exam-stage-controls\s*\{[^}]*grid-template-columns:\s*1fr/s);
+});
+
+test('live stage status moves from available to started to completed without an API write or card collapse', async () => {
+  const h = paginatedHarness();
+  h.state.items[0].exam_stage_permissions.theory = {
+    ...stages(true).theory,
+    grant_id: 41,
+  };
+  await h.users.render();
+  const card = h.card(1);
+  card.classList.toggle('open', true);
+
+  assert.equal(stageInput(h, 1, 'theory').checked, true);
+  assert.equal(stageStatus(h, 1, 'theory').textContent, 'ჩართულია');
+  assert.equal(stageStatus(h, 1, 'theory').getAttribute('data-status'), 'available');
+
+  h.state.items[0].exam_stage_permissions.theory = {
+    ...stages().theory,
+    status: 'started',
+    grant_id: 41,
+    started_at: '2026-10-09T10:00:00Z',
+  };
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.card(1), card);
+  assert.equal(card.classList.contains('open'), true);
+  assert.equal(stageInput(h, 1, 'theory').checked, false);
+  assert.equal(stageStatus(h, 1, 'theory').textContent, 'მიმდინარეობს');
+  assert.equal(stageStatus(h, 1, 'theory').getAttribute('data-status'), 'started');
+  assert.equal(h.state.mutations.length, 0);
+
+  h.state.items[0].exam_stage_permissions.theory = {
+    ...stages().theory,
+    status: 'completed',
+    grant_id: 41,
+    started_at: '2026-10-09T10:00:00Z',
+    completed_at: '2026-10-09T10:30:00Z',
+  };
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.card(1), card);
+  assert.equal(card.classList.contains('open'), true);
+  assert.equal(stageInput(h, 1, 'theory').checked, false);
+  assert.equal(stageStatus(h, 1, 'theory').textContent, 'დასრულებულია');
+  assert.equal(stageStatus(h, 1, 'theory').getAttribute('data-status'), 'completed');
+  assert.equal(h.state.mutations.length, 0);
+});
+
+test('a stage entry is editable only when it has the full granted and status contract', async () => {
+  const h = paginatedHarness();
+  h.state.items[0].exam_stage_permissions.theory = { granted: false };
+  await h.users.render();
+  assert.equal(stageInput(h, 1, 'theory').checked, false);
+  assert.equal(stageInput(h, 1, 'theory').disabled, true);
+  assert.equal(stageStatus(h, 1, 'theory').textContent, 'გამორთულია');
+
+  h.state.items[0].exam_stage_permissions.theory = {
+    ...stages().theory,
+    status: 'started',
+    grant_id: 9,
+  };
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(stageInput(h, 1, 'theory').disabled, false);
+  assert.equal(stageStatus(h, 1, 'theory').textContent, 'მიმდინარეობს');
+  assert.equal(h.state.mutations.length, 0);
+});
+
+test('re-authorizing a started stage requires confirmation and binds the replacement to its current grant', async () => {
+  const h = paginatedHarness();
+  h.state.items[0].exam_stage_permissions.theory = {
+    ...stages().theory,
+    status: 'started',
+    grant_id: 73,
+    started_at: '2026-10-09T10:00:00Z',
+  };
+  await h.users.render();
+  const input = stageInput(h, 1, 'theory');
+  assert.equal(input.checked, false);
+
+  input.checked = true;
+  await input.dispatch('change');
+
+  assert.deepEqual(h.state.confirmations, [
+    'ეს ეტაპი უკვე მიმდინარეობს. ხელახლა დაშვება გამოიყენეთ მხოლოდ ახალი ცდის საჭიროებისას. არსებული შედეგები არ წაიშლება. გსურთ ხელახლა დაშვება?',
+  ]);
+  assert.deepEqual(h.state.mutations[0], {
+    id: 1,
+    type: 'exam-stage-permissions/theory',
+    payload: { granted: true, replace_started: true, expected_grant_id: 73 },
+  });
+  assert.equal(input.checked, true);
+  assert.equal(stageStatus(h, 1, 'theory').textContent, 'ჩართულია');
+});
+
+test('declining started-stage re-authorization restores its status without an API write', async () => {
+  const h = paginatedHarness();
+  h.state.items[0].exam_stage_permissions.project_stage_1 = {
+    ...stages().project_stage_1,
+    status: 'started',
+    grant_id: 91,
+    started_at: '2026-10-09T10:00:00Z',
+  };
+  h.state.confirmResult = false;
+  await h.users.render();
+  const input = stageInput(h, 1, 'project_stage_1');
+
+  input.checked = true;
+  await input.dispatch('change');
+
+  assert.equal(h.state.confirmations.length, 1);
+  assert.equal(h.state.mutations.length, 0);
+  assert.equal(input.checked, false);
+  assert.equal(stageStatus(h, 1, 'project_stage_1').textContent, 'მიმდინარეობს');
+});
+
+for (const stage of stageKeys) {
+  test(`${stage}: grant and revoke mutate only that stage and never the legacy all-stage endpoint`, async () => {
+    const h = paginatedHarness();
+    await h.users.render();
+    const input = stageInput(h, 1, stage);
+    input.checked = true;
+    await input.dispatch('change');
+    assert.deepEqual(h.state.mutations[0], { id: 1, type: `exam-stage-permissions/${stage}`, payload: { granted: true } });
+    for (const key of stageKeys) assert.equal(stageInput(h, 1, key).checked, key === stage);
+    input.checked = false;
+    await input.dispatch('change');
+    assert.equal(h.state.mutations[1].payload.granted, false);
+    for (const key of stageKeys) assert.equal(stageInput(h, 1, key).checked, false);
+  });
+
+  test(`${stage}: server expiration/completion switches off only the affected stage and preserves the open card`, async () => {
+    const h = paginatedHarness();
+    h.state.items[0].exam_stage_permissions = stages(true);
+    await h.users.render();
+    const card = h.card(1);
+    card.classList.toggle('open', true);
+    h.state.items[0].exam_stage_permissions[stage] = { ...stages()[stage], status: 'expired' };
+    await h.users.refreshLiveUserStates({ force: true });
+    assert.equal(h.card(1), card);
+    assert.equal(card.classList.contains('open'), true);
+    assert.equal(stageStatus(h, 1, stage).textContent, 'ვადა ამოიწურა');
+    for (const key of stageKeys) assert.equal(stageInput(h, 1, key).checked, key !== stage);
+  });
+}
+
+test('all three permissions can save independently, including reverse-order responses', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  const requests = [];
+  for (const stage of stageKeys) {
+    h.state.holdMutation = true;
+    const input = stageInput(h, 1, stage);
+    assert.equal(input.disabled, false);
+    input.checked = true;
+    requests.push(input.dispatch('change'));
+    assert.equal(input.disabled, true);
+  }
+  for (let index = 2; index >= 0; index -= 1) {
+    h.state.heldMutations[index]();
+    await requests[index];
+    for (const key of stageKeys) assert.equal(stageInput(h, 1, key).checked, true);
+  }
+  for (const key of stageKeys) assert.equal(stageInput(h, 1, key).disabled, false);
+  assert.equal(h.state.mutations.length, 3);
+});
+
+test('polling during a pending grant does not clear its desired value or disable another stage', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.state.holdMutation = true;
+  const input = stageInput(h, 1, 'theory');
+  input.checked = true;
+  const request = input.dispatch('change');
+  h.state.items[0].exam_stage_permissions.theory = stages().theory;
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(input.checked, true);
+  assert.equal(input.disabled, true);
+  assert.equal(stageInput(h, 1, 'project_stage_1').disabled, false);
+  h.state.items[0].exam_stage_permissions.theory = stages(true).theory;
+  h.state.heldMutations.shift()();
+  await request;
+  assert.equal(input.checked, true);
+});
+
+test('duplicate change events cannot resubmit a pending stage or alter its displayed intent', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.state.holdMutation = true;
+  const input = stageInput(h, 1, 'theory');
+  input.checked = true;
+  const request = input.dispatch('change');
+  input.checked = false;
+  await input.dispatch('change');
+  assert.equal(input.checked, true);
+  assert.equal(h.state.mutations.length, 1);
+  h.state.heldMutations.shift()();
+  await request;
+});
+
+test('a failed stage change restores only that stage without undoing a concurrent successful grant', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.state.failMutation = true;
+  h.state.holdMutation = true;
+  const first = stageInput(h, 1, 'theory');
+  first.checked = true;
+  const failed = first.dispatch('change');
+  const second = stageInput(h, 1, 'project_stage_1');
+  second.checked = true;
+  await second.dispatch('change');
+  h.state.heldMutations.shift()();
+  await failed;
+  assert.equal(first.checked, false);
+  assert.equal(second.checked, true);
+  assert.equal(h.state.alerts.length, 1);
+});
+
+for (const role of ['is_admin', 'is_founder']) {
+  test(`${role}: all stages stay checked/read-only even with false legacy and stage data`, async () => {
+    const h = harness({ paginated: true, founderActor: true });
+    Object.assign(h.state.items[0], { is_admin: false, [role]: true, exam_permission: false });
+    await h.users.render();
+    for (const key of stageKeys) {
+      const input = stageInput(h, 1, key);
+      assert.equal(input.checked, true);
+      assert.equal(input.disabled, true);
+      input.checked = false;
+      await input.dispatch('change');
+      assert.equal(input.checked, true);
+    }
+    assert.equal(h.state.mutations.length, 0);
+  });
+}
+
+test('founder-only role controls still grant permanent stages and demotion refreshes all stages', async () => {
+  const h = harness({ paginated: true, founderActor: true });
+  h.state.items[0].is_admin = false;
+  await h.users.render();
+  let admin = h.card(1).querySelector('.chk-admin');
+  admin.checked = true;
+  await admin.dispatch('change');
+  for (const key of stageKeys) {
+    assert.equal(stageInput(h, 1, key).checked, true);
+    assert.equal(stageInput(h, 1, key).disabled, true);
+  }
+  admin = h.card(1).querySelector('.chk-admin');
+  admin.checked = false;
+  await admin.dispatch('change');
+  for (const key of stageKeys) {
+    assert.equal(stageInput(h, 1, key).checked, false);
+    assert.equal(stageInput(h, 1, key).disabled, false);
+  }
+  assert.deepEqual(h.state.mutations.map((item) => item.type), ['admin', 'admin']);
+});
+
+test('regular admins cannot alter roles and founder role remains permanently read-only', async () => {
+  const h = harness({ paginated: true });
+  h.state.items[0].is_founder = true;
+  await h.users.render();
+  for (const id of [1, 3]) {
+    const admin = h.card(id).querySelector('.chk-admin');
+    assert.equal(admin.disabled, true);
+    admin.checked = !admin.checked;
+    await admin.dispatch('change');
+  }
+  assert.equal(h.state.mutations.length, 0);
+  assert.equal(h.card(1).querySelector('.chk-admin').checked, true);
+});
+
+for (const legacyStage of [undefined, ...stageKeys, 'unknown']) {
+  test(`missing stage contract shows only legacy ${legacyStage || 'default theory'} access read-only`, async () => {
+    const h = paginatedHarness();
+    delete h.state.items[0].exam_stage_permissions;
+    Object.assign(h.state.items[0], { exam_permission: true, exam_stage: legacyStage });
+    await h.users.render();
+    for (const key of stageKeys) {
+      const input = stageInput(h, 1, key);
+      const expected = key === (legacyStage || 'theory');
+      assert.equal(input.checked, expected);
+      assert.equal(input.disabled, true);
+      input.checked = !expected;
+      await input.dispatch('change');
+      assert.equal(input.checked, expected);
+    }
+    assert.equal(h.state.mutations.length, 0);
+  });
+}
+
+test('partial new-format map never fills missing stages from the legacy scalar flag', async () => {
+  const h = paginatedHarness();
+  Object.assign(h.state.items[0], { exam_permission: true, exam_stage: 'theory',
+    exam_stage_permissions: { project_stage_1: stages(true).project_stage_1 } });
+  await h.users.render();
+  for (const key of stageKeys) {
+    assert.equal(stageInput(h, 1, key).checked, key === 'project_stage_1');
+    assert.equal(stageInput(h, 1, key).disabled, key !== 'project_stage_1');
+  }
+});
+
+test('empty new-format map leaves all stages unchecked/read-only despite a legacy grant', async () => {
+  const h = paginatedHarness();
+  Object.assign(h.state.items[0], { exam_permission: true, exam_stage: 'theory', exam_stage_permissions: {} });
+  await h.users.render();
+  for (const key of stageKeys) {
+    assert.equal(stageInput(h, 1, key).checked, false);
+    assert.equal(stageInput(h, 1, key).disabled, true);
+  }
+});
+
+test('pending stage permission keeps a closed card mounted if live membership changes', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  const card = h.card(50);
+  h.state.holdMutation = true;
+  const input = stageInput(h, 50, 'project_stage_2');
+  input.checked = true;
+  const saving = input.dispatch('change');
+  h.state.items.unshift(fixture(999, false, '2026-10-08', 'architect'));
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.card(50), card);
+  assert.equal(h.DOM.usersListNotice.hidden, false);
+  h.state.heldMutations.shift()();
+  await saving;
+  assert.equal(h.card(50), null);
+  assert.equal(h.visible()[0], 999);
+});
+
+for (const stage of stageKeys) {
+  test(`failed filters disable ${stage} until the selected result list is verified again`, async () => {
+    const h = paginatedHarness();
+    await h.users.render();
+    h.state.failNext = true;
+    h.DOM.filterMunicipal.checked = true;
+    await h.DOM.filterMunicipal.dispatch('change');
+    const input = stageInput(h, 1, stage);
+    assert.equal(input.disabled, true);
+    input.checked = true;
+    await input.dispatch('change');
+    assert.equal(h.state.mutations.length, 0);
+    assert.equal(input.checked, false);
+    await h.DOM.usersListRetry.dispatch('click');
+    assert.equal(stageInput(h, 101, stage).disabled, false);
+  });
 }
 
 test('paged lists request 50 records and navigate all people with accurate totals', async () => {
@@ -413,7 +807,8 @@ test('an old compact response never switches off newly granted manual exam permi
   checkbox.checked = true;
   await checkbox.dispatch('change');
   assert.equal(h.state.mutations.length, 1);
-  assert.equal(h.state.mutations[0].payload.exam_permission, true);
+  assert.equal(h.state.mutations[0].payload.granted, true);
+  assert.equal(h.state.mutations[0].type, 'exam-stage-permissions/theory');
   h.state.pending.shift()();
   await old;
   await h.flush();
@@ -726,6 +1121,7 @@ test('a successful scheduling callback immediately removes candidates no longer 
 
 test('scheduling refresh preserves open matching cards, their controllers and manual exam access', async () => {
   const h = mountedExamHarness();
+  h.state.items[0].is_admin = false;
   await h.examGroup('morning');
   const card = h.card(1);
   const controller = h.controllers.get(1);

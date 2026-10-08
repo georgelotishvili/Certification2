@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "phase": "write",
+  "cases": [
+    "Actual main.js and preload.js execute in a hidden window at the exact trusted local index.html URL",
+    "Real Windows safeStorage encryption is available (DPAPI; no injected protector)",
+    "IPC preflight verifies DPAPI encryption, writable storage and disk space",
+    "PDF binary caches and reads through real IPC without a network request",
+    "Synthetic recording chunks fsync and assemble under the isolated GIPC_Recordings directory",
+    "Checkpoint, immutable final submission and PDF are encrypted on disk; synthetic secrets absent in all snapshot/asset files"
+  ],
+  "electron": "28.3.3",
+  "safeStorage": "Windows DPAPI available",
+  "visibleWindows": false,
+  "networkAttempts": 0,
+  "realMediaCapture": false,
+  "realAccounts": false,
+  "actualMain": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\src\\main\\main.js",
+  "actualPreload": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\src\\preload\\preload.js",
+  "trustedPage": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\src\\renderer\\index.html",
+  "sourceSha256": {
+    "src/main/main.js": "03e5fcdb0c6f46fb6fbf9f1e0dd0ee1078b8717e0b6f1bf46ddc8db8d01c84ac",
+    "src/main/offline-store.js": "48d037a2bfb9cdeb8a2ddfa2ab4f909e49a083a6a4aa9b5940307b307df49f99",
+    "src/preload/preload.js": "1120b1221cc2d509b26cade399ff43942061402a1f3f20ad8363637433b75c4a"
+  },
+  "userData": "C:\\Users\\george\\Desktop\\certification kode\\certification\\.deploy\\offline-exams-20261009\\electron-smoke-ujBMMt\\userData",
+  "desktop": "C:\\Users\\george\\Desktop\\certification kode\\certification\\.deploy\\offline-exams-20261009\\electron-smoke-ujBMMt\\Desktop",
+  "generatedAt": "2026-10-08T21:38:36.869Z"
+}

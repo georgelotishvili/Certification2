@@ -20,6 +20,22 @@
     const LIVE_REFRESH_MS = 5000;
     const PAGE_SIZE = 50;
     const SEARCH_DELAY_MS = 250;
+    const EXAM_STAGES = [
+      { key: 'theory', label: 'ეტაპი 1', title: 'ეტაპი 1 — თეორიული გამოცდა' },
+      { key: 'project_stage_1', label: 'ეტაპი 2', title: 'ეტაპი 2 — მრავალბინიანი შენობის პროექტი' },
+      { key: 'project_stage_2', label: 'ეტაპი 3', title: 'ეტაპი 3 — მრავალფუნქციური შენობის პროექტი' },
+    ];
+    const STAGE_STATUS_META = Object.freeze({
+      available: { key: 'available', label: 'ჩართულია' },
+      started: { key: 'started', label: 'მიმდინარეობს' },
+      completed: { key: 'completed', label: 'დასრულებულია' },
+      expired: { key: 'expired', label: 'ვადა ამოიწურა' },
+      none: { key: 'none', label: 'გამორთულია' },
+      permanent: { key: 'permanent', label: 'მუდმივია' },
+      pending: { key: 'pending', label: 'ინახება…' },
+    });
+    const STAGE_CONTRACT_STATUSES = new Set(['none', 'available', 'started', 'completed', 'expired']);
+    const STARTED_STAGE_REGRANT_WARNING = 'ეს ეტაპი უკვე მიმდინარეობს. ხელახლა დაშვება გამოიყენეთ მხოლოდ ახალი ცდის საჭიროებისას. არსებული შედეგები არ წაიშლება. გსურთ ხელახლა დაშვება?';
 
     let cachedItems = [];
     const cachedUsersById = new Map();
@@ -43,7 +59,87 @@
     let usersRenderVersion = 0;
     let statementsStateVersion = 0;
     let schedulesStateVersion = 0;
-    const examPermissionSavingIds = new Set();
+    let examPermissionsStateVersion = 0;
+    const adminRoleSavingIds = new Set();
+    const examStageSaves = new Map();
+
+    function stageSaveKey(userId, stage) {
+      return `${userId}:${stage}`;
+    }
+
+    function hasPendingStage(userId) {
+      return EXAM_STAGES.some(({ key }) => examStageSaves.has(stageSaveKey(userId, key)));
+    }
+
+    function hasPermanentExamAccess(user) {
+      return !!(user?.is_admin || user?.is_founder);
+    }
+
+    function hasStageState(user, stage) {
+      const permission = user?.exam_stage_permissions?.[stage];
+      return typeof permission?.granted === 'boolean'
+        && STAGE_CONTRACT_STATUSES.has(permission?.status);
+    }
+
+    function stageGranted(user, stage) {
+      if (hasPermanentExamAccess(user)) return true;
+      if (hasStageState(user, stage)) {
+        const permission = user.exam_stage_permissions[stage];
+        return permission.granted === true && permission.status === 'available';
+      }
+      // Missing entries in a new-format response must not inherit the legacy
+      // all-exam flag. An older backend has only one selected stage; an older
+      // flag without a stage represents the historical theory permission.
+      if (user?.exam_stage_permissions != null) return false;
+      return !!user?.exam_permission && stage === (user?.exam_stage || 'theory');
+    }
+
+    function stageStatusView(user, stage, pending = null) {
+      if (hasPermanentExamAccess(user)) return STAGE_STATUS_META.permanent;
+      if (pending) return STAGE_STATUS_META.pending;
+      if (hasStageState(user, stage)) {
+        return STAGE_STATUS_META[user.exam_stage_permissions[stage].status] || STAGE_STATUS_META.none;
+      }
+      return stageGranted(user, stage) ? STAGE_STATUS_META.available : STAGE_STATUS_META.none;
+    }
+
+    function syncExamControls(card, user) {
+      if (!card || !user) return;
+      const id = String(user.id);
+      EXAM_STAGES.forEach(({ key }) => {
+        const input = card.querySelector(`.chk-exam[data-exam-stage="${key}"]`);
+        if (!input) return;
+        const pending = examStageSaves.get(stageSaveKey(id, key));
+        input.checked = hasPermanentExamAccess(user) ? true : pending ? pending.desired : stageGranted(user, key);
+        input.disabled = listIsStale || hasPermanentExamAccess(user) || adminRoleSavingIds.has(id)
+          || !!pending || !hasStageState(user, key);
+        input.setAttribute('aria-busy', pending ? 'true' : 'false');
+        const statusNode = card.querySelector(`.user-exam-stage-status[data-exam-stage-status="${key}"]`);
+        if (statusNode) {
+          const status = stageStatusView(user, key, pending);
+          statusNode.textContent = status.label;
+          statusNode.setAttribute('data-status', status.key);
+        }
+      });
+      const admin = card.querySelector('.chk-admin');
+      if (admin) {
+        if (!adminRoleSavingIds.has(id)) admin.checked = hasPermanentExamAccess(user);
+        admin.disabled = !!user.is_founder || !isFounderActor() || adminRoleSavingIds.has(id) || hasPendingStage(id);
+      }
+    }
+
+    function mergeUserState(existing, incoming) {
+      const next = { ...incoming };
+      if (incoming.exam_stage_permissions) {
+        next.exam_stage_permissions = { ...existing.exam_stage_permissions, ...incoming.exam_stage_permissions };
+        EXAM_STAGES.forEach(({ key }) => {
+          if (examStageSaves.has(stageSaveKey(existing.id, key))) {
+            next.exam_stage_permissions[key] = existing.exam_stage_permissions?.[key];
+          }
+        });
+      }
+      return Object.assign(existing, next);
+    }
 
     const editOverlay = DOM.userEditOverlay;
     const editForm = DOM.userEditForm;
@@ -103,20 +199,21 @@
     function setListStale(stale) {
       listIsStale = stale;
       cardsById.forEach((card, id) => {
-        const checkbox = card.querySelector('.chk-exam');
-        if (checkbox) checkbox.disabled = stale || !!cachedUsersById.get(id)?.is_founder || examPermissionSavingIds.has(id);
+        syncExamControls(card, cachedUsersById.get(id));
       });
     }
 
     function wouldRemoveUnfinishedEditor(items) {
       const nextIds = new Set(items.map((user) => String(user.id)));
       return [...cardsById].some(([id, card]) => {
-        if (nextIds.has(id) || !card.classList.contains('open')) return false;
+        if (nextIds.has(id)) return false;
+        if (adminRoleSavingIds.has(id) || hasPendingStage(id)) return true;
+        if (!card.classList.contains('open')) return false;
         const panel = card.querySelector('.user-exam-schedules');
         const date = card.querySelector('.exam-schedule-date');
         const morning = card.querySelector('.exam-schedule-morning');
         const evening = card.querySelector('.exam-schedule-evening');
-        return examPermissionSavingIds.has(id) || panel?.getAttribute?.('aria-busy') === 'true'
+        return panel?.getAttribute?.('aria-busy') === 'true'
           || (!!date?.value && !morning?.checked && !evening?.checked);
       });
     }
@@ -126,7 +223,7 @@
       items.forEach((user) => {
         // Do not acknowledge a changed display revision before its name/contact
         // fields have actually been rendered; a later poll must still fetch it.
-        const state = Object.fromEntries(['id', 'exam_permission', 'has_unseen_statements',
+        const state = Object.fromEntries(['id', 'exam_permission', 'exam_stage_permissions', 'has_unseen_statements',
           'unseen_statement_count', 'has_pending_statements', 'pending_statement_count']
           .map((key) => [key, user[key]]));
         applyLiveUserState(state);
@@ -180,7 +277,7 @@
       if (!user || user.id == null) return;
       const existing = cachedUsersById.get(String(user.id));
       // Card callbacks retain the same object and always see the newest data.
-      if (existing) Object.assign(existing, user);
+      if (existing) mergeUserState(existing, user);
     }
 
     function applyLiveUserState(user) {
@@ -190,10 +287,7 @@
       const card = findUserCard(user.id);
       if (!card) return;
 
-      const examCheckbox = card.querySelector('.chk-exam');
-      if (!examPermissionSavingIds.has(String(user.id)) && examCheckbox && !examCheckbox.disabled) {
-        examCheckbox.checked = !!user.exam_permission;
-      }
+      syncExamControls(card, cachedUsersById.get(String(user.id)) || user);
 
       setCardUnseenState(card, user.has_unseen_statements, user.has_pending_statements);
       card.dataset.unseenCount = String(user.unseen_statement_count || 0);
@@ -235,9 +329,11 @@
       const requestVersion = usersRenderVersion;
       const statementVersion = statementsStateVersion;
       const scheduleVersion = schedulesStateVersion;
+      const permissionVersion = examPermissionsStateVersion;
       try {
         const data = await fetchUsers({ live: true });
-        if (requestVersion !== usersRenderVersion || statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) return;
+        if (requestVersion !== usersRenderVersion || statementVersion !== statementsStateVersion
+          || scheduleVersion !== schedulesStateVersion || permissionVersion !== examPermissionsStateVersion) return;
         const items = Array.isArray(data?.items) ? data.items : [];
         if (data.paginated) {
           const membershipChanged = data.page !== currentPage || items.length !== cachedItems.length
@@ -295,10 +391,22 @@
       const canEdit = isFounderActor();
       const checked = founderRow ? 'checked' : (user.is_admin ? 'checked' : '');
       const disabled = founderRow ? 'disabled' : (isFounderActor() ? '' : 'disabled');
-      // exam_permission: მთავარ ადმინს ყოველთვის true, სხვა ადმინებს თუ is_admin = true, მაშინ exam_permission-იც true
-      const examChecked = founderRow ? 'checked' : (user.exam_permission ? 'checked' : '');
-      const examDisabled = founderRow ? 'disabled' : '';
       const safeId = escapeHtml(user.id);
+      const examControls = EXAM_STAGES.map(({ key, label, title }) => {
+        const pending = examStageSaves.get(stageSaveKey(user.id, key));
+        const granted = hasPermanentExamAccess(user) || (pending ? pending.desired : stageGranted(user, key));
+        const locked = listIsStale || hasPermanentExamAccess(user) || adminRoleSavingIds.has(String(user.id))
+          || !!pending || !hasStageState(user, key);
+        const status = stageStatusView(user, key, pending);
+        const statusId = `exam-stage-status-${safeId}-${key}`;
+        return `<label class="user-checkbox-label user-exam-stage-label" title="${title}">
+          <input type="checkbox" class="chk-exam" data-exam-stage="${key}" aria-label="${title}" aria-describedby="${statusId}" ${granted ? 'checked' : ''} ${locked ? 'disabled' : ''} />
+          <span class="user-exam-stage-copy">
+            <span class="user-exam-stage-name">${label}</span>
+            <span class="user-exam-stage-status" id="${statusId}" data-exam-stage-status="${key}" data-status="${status.key}" role="status" aria-live="polite">${status.label}</span>
+          </span>
+        </label>`;
+      }).join('');
       const safeFullName = escapeHtml(fullNameRaw);
       const safePersonalId = escapeHtml(user.personal_id || '');
       const safePhone = escapeHtml(user.phone || '');
@@ -332,10 +440,7 @@
                 <input type="checkbox" class="chk-admin" ${checked} ${disabled} />
                 <span>ადმინი</span>
               </label>
-              <label class="user-checkbox-label" title="გამოცდა">
-                <input type="checkbox" class="chk-exam" ${examChecked} ${examDisabled} />
-                <span>გამოცდა</span>
-              </label>
+              <div class="user-exam-stage-controls" role="group" aria-label="გამოცდის ეტაპებზე დაშვება">${examControls}</div>
             </div>
             <div class="user-actions">
               <button class="head-toggle" type="button" aria-expanded="false">▾</button>
@@ -406,13 +511,18 @@
         checkbox.addEventListener('change', async (event) => {
           const id = card.dataset.id;
           const desired = !!event.target.checked;
+          if (user.is_founder || !isFounderActor() || adminRoleSavingIds.has(String(id)) || hasPendingStage(id)) {
+            syncExamControls(card, cachedUsersById.get(String(id)) || user);
+            return;
+          }
           if (!global.confirm('დარწმუნებული ხართ, რომ შეცვალოთ ადმინის სტატუსი?')) {
             event.target.checked = !desired;
             return;
           }
           statementsStateVersion += 1;
-          examPermissionSavingIds.add(String(id));
-          event.target.disabled = true;
+          examPermissionsStateVersion += 1;
+          adminRoleSavingIds.add(String(id));
+          syncExamControls(card, user);
           try {
             const response = await fetch(`${API_BASE}/admin/users/${id}/admin`, {
               method: 'PATCH',
@@ -421,51 +531,77 @@
             });
             if (!response.ok) throw new Error('failed');
             statementsStateVersion += 1;
-            examPermissionSavingIds.delete(String(id));
+            examPermissionsStateVersion += 1;
+            adminRoleSavingIds.delete(String(id));
             await render({ preserveExisting: true, keepPage: true });
           } catch {
             event.target.checked = !desired;
             alert('ვერ შეინახა სტატუსი');
           } finally {
-            examPermissionSavingIds.delete(String(id));
-            event.target.disabled = false;
+            examPermissionsStateVersion += 1;
+            adminRoleSavingIds.delete(String(id));
+            syncExamControls(findUserCard(id), cachedUsersById.get(String(id)));
           }
         });
       }
 
-      const examCheckbox = card.querySelector('.chk-exam');
-      if (examCheckbox) {
+      EXAM_STAGES.forEach(({ key }) => {
+        const examCheckbox = card.querySelector(`.chk-exam[data-exam-stage="${key}"]`);
+        if (!examCheckbox) return;
         examCheckbox.addEventListener('change', async (event) => {
           const id = card.dataset.id;
+          const saveKey = stageSaveKey(id, key);
+          const current = cachedUsersById.get(String(id)) || user;
           const desired = !!event.target.checked;
+          if (hasPermanentExamAccess(current) || adminRoleSavingIds.has(String(id))
+            || examStageSaves.has(saveKey) || !hasStageState(current, key)) {
+            syncExamControls(card, current);
+            return;
+          }
           if (listIsStale) {
-            event.target.checked = !!cachedUsersById.get(String(id))?.exam_permission;
+            syncExamControls(card, current);
             showToast('ჯერ განაახლეთ სია, რათა არჩეული ფილტრის შედეგები დადასტურდეს.', 'error');
             return;
           }
-          statementsStateVersion += 1;
-          examPermissionSavingIds.add(String(id));
-          event.target.disabled = true;
+          const previous = stageGranted(current, key);
+          if (desired === previous) return;
+          const currentPermission = current.exam_stage_permissions[key];
+          const replacesStarted = desired && currentPermission.status === 'started';
+          if (replacesStarted && !global.confirm(STARTED_STAGE_REGRANT_WARNING)) {
+            syncExamControls(card, current);
+            return;
+          }
+          const payload = replacesStarted
+            ? { granted: true, replace_started: true, expected_grant_id: currentPermission.grant_id }
+            : { granted: desired };
+          examPermissionsStateVersion += 1;
+          examStageSaves.set(saveKey, { desired, previous });
+          syncExamControls(card, current);
           try {
-            const response = await fetch(`${API_BASE}/admin/users/${id}/exam-permission`, {
+            const response = await fetch(`${API_BASE}/admin/users/${id}/exam-stage-permissions/${key}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
-              body: JSON.stringify({ exam_permission: desired }),
+              body: JSON.stringify(payload),
             });
             if (!response.ok) throw new Error('failed');
-            statementsStateVersion += 1;
-            examPermissionSavingIds.delete(String(id));
-            event.target.disabled = listIsStale || !!user.is_founder;
-            await refreshLiveUserStates({ force: true });
+            const updated = await response.json();
+            if (String(updated?.id) !== String(id) || !hasStageState(updated, key)) throw new Error('invalid stage state');
+            examPermissionsStateVersion += 1;
+            examStageSaves.delete(saveKey);
+            // Concurrent stage mutations can finish out of order. A response
+            // is authoritative only for the stage this request changed.
+            mergeCachedUser({ id, exam_stage_permissions: { [key]: updated.exam_stage_permissions[key] } });
           } catch {
-            event.target.checked = !desired;
+            event.target.checked = previous;
             alert('ვერ შეინახა გამოცდის უფლება');
           } finally {
-            examPermissionSavingIds.delete(String(id));
-            event.target.disabled = listIsStale || !!user.is_founder;
+            examPermissionsStateVersion += 1;
+            examStageSaves.delete(saveKey);
+            syncExamControls(findUserCard(id), cachedUsersById.get(String(id)));
+            await refreshLiveUserStates({ force: true });
           }
         });
-      }
+      });
 
       const deleteBtn = card.querySelector('.head-delete');
       if (deleteBtn) {
@@ -626,7 +762,7 @@
       }
       cachedItems = (items || []).map((user) => {
         const existing = cachedUsersById.get(String(user.id));
-        return existing ? Object.assign(existing, user) : user;
+        return existing ? mergeUserState(existing, user) : user;
       });
       cachedUsersById.clear();
       cachedItems.forEach((user) => cachedUsersById.set(String(user.id), user));
@@ -697,7 +833,8 @@
         if (node) node.textContent = field === 'created_at' ? formatDateTime(user[field]) : user[field] || '';
       }
       const admin = card.querySelector('.chk-admin');
-      if (admin && !examPermissionSavingIds.has(String(user.id))) admin.checked = !!(user.is_admin || user.is_founder);
+      if (admin && !adminRoleSavingIds.has(String(user.id))) admin.checked = !!(user.is_admin || user.is_founder);
+      syncExamControls(card, user);
       const filename = card.querySelector('.photo-filename');
       if (filename) filename.textContent = user.photo_filename || '—';
       const deletePhoto = card.querySelector('.photo-delete-btn');
@@ -891,6 +1028,7 @@
       const requestVersion = ++usersRenderVersion;
       const statementVersion = statementsStateVersion;
       const scheduleVersion = schedulesStateVersion;
+      const permissionVersion = examPermissionsStateVersion;
       renderInFlight = true;
       setListStale(true);
       setListNotice('მონაცემები ახლდება — ნაჩვენებია წინა შედეგები.');
@@ -902,7 +1040,8 @@
         if (requestVersion !== usersRenderVersion) return;
         // A statement action may finish while a filter render is loading. Fetch
         // fresh state rather than leaving the cleared grid empty or reviving old colors.
-        if (statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) {
+        if (statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion
+          || permissionVersion !== examPermissionsStateVersion) {
           return render({ preserveExisting: true, keepPage: true });
         }
         if (preserveExisting && data.paginated && deferEditorRemoval(data.items || [])) return;

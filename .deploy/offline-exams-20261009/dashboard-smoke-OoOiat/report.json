@@ -1,0 +1,43 @@
+{
+  "passed": true,
+  "cases": [
+    "Actual index.html, shared coordinator and offline-home dashboard render pending/prepared durable attempts while signed out",
+    "Automatic retry receives a local synthetic 503 and keeps the encrypted outbox pending",
+    "Recovery dashboard and exam cards do not overlap; buttons are visible and receive real Chromium pointer input",
+    "At 800×600, recovery content fits the width, scrolls vertically and remains pointer-accessible",
+    "Prepared resume refuses navigation while signed out and requests the same candidate identity",
+    "Visible retry action resends identical frozen data; bound synthetic server receipt updates both real durable state and dashboard success text",
+    "Unfinished recording warning remains visible after answer ACK; original saved chunk is retained",
+    "Reloaded dashboard preserves recording-review warning from encrypted metadata without resubmitting acknowledged answers"
+  ],
+  "electron": "28.3.3",
+  "actualChromiumRenderer": true,
+  "actualMainAndPreload": true,
+  "externalNetwork": false,
+  "httpHandledLocally": true,
+  "visibleWindows": false,
+  "realAccounts": false,
+  "realMediaCapture": false,
+  "rendererErrorCount": 0,
+  "finalRequests": 2,
+  "screenshots": [
+    "pending-dashboard.png",
+    "pending-dashboard-800x600.png",
+    "acknowledged-dashboard.png",
+    "recording-review-after-reload.png"
+  ],
+  "sourceSha256": {
+    "src/main/main.js": "03e5fcdb0c6f46fb6fbf9f1e0dd0ee1078b8717e0b6f1bf46ddc8db8d01c84ac",
+    "src/main/offline-store.js": "c0d704d876413a14fbbb4ef2b5484ea406a09b953111e1ec9b7242e95da4414a",
+    "src/preload/preload.js": "9fd9f61ed8a41293ff8352a2f141b8d668a26da2d80393a33e46feae1234b868",
+    "src/renderer/offline-exam.js": "18fe35204ea8831c6f8bf8d243c9dc13cadb2b1ee2bb495e0398f6609e47d545",
+    "src/renderer/offline-home.js": "c40cffb2fe41d5355a416bf452e7dbcdec90699489992999eff0bbc6115998f2",
+    "src/renderer/renderer.js": "2584037123a30fe6b14af1d58519b7e4bea009b151ed45847ec7c5b8650ef935",
+    "src/renderer/styles/offline.css": "6813a4e2816441b357527f0b68db4b0b37c7f90c75f53acaa3ee42ed304e843b"
+  },
+  "generatedAt": "2026-10-08T21:55:29.488Z",
+  "runRoot": "C:\\Users\\george\\Desktop\\certification kode\\certification\\.deploy\\offline-exams-20261009\\dashboard-smoke-OoOiat",
+  "sourceRoot": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar",
+  "sourceAppVersion": "1.1.12",
+  "updaterDependency": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar\\node_modules\\electron-updater\\out\\main.js"
+}

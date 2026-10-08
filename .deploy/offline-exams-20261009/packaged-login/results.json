@@ -1,0 +1,16 @@
+{
+  "passed": 6,
+  "cases": [
+    "wrong password: inline error, email preserved, password focused",
+    "second attempt: both fields clickable and editable; retry completes",
+    "server error stays editable and error text cannot inject HTML",
+    "pending retry produces one request, not duplicate submissions",
+    "closing during failure does not reopen modal or steal input focus",
+    "correct retry signs in successfully; zero native alert dialogs"
+  ],
+  "electron": "28.3.3",
+  "external_network": false,
+  "real_accounts": false,
+  "hidden_window": true,
+  "sourceRoot": "C:\\Users\\george\\Desktop\\certification kode\\certification\\desktop_app\\dist\\win-unpacked\\resources\\app.asar\\src\\renderer"
+}

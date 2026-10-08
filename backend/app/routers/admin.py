@@ -37,6 +37,7 @@ from ..schemas import (
     UserOut,
     ToggleAdminRequest,
     ToggleExamPermissionRequest,
+    ToggleExamStagePermissionRequest,
     AdminUserUpdateRequest,
     AdminStatementsResponse,
     AdminStatementOut,
@@ -45,11 +46,15 @@ from ..schemas import (
     StatementAnsweredResponse,
 )
 from ..services.exam_lifecycle import auto_close_expired_sessions, auto_close_session_if_expired
-from ..services.exam_stage import (
-    exam_state_payload,
-    expire_if_unused,
-    reset_exam_flow,
-    start_exam_flow,
+from ..services.offline_grading import guard_pending_session_delete, lock_exam_content
+from ..services.exam_stage import STAGE_THEORY
+from ..services.exam_stage_grants import (
+    current_open_grant,
+    exam_state_with_permissions,
+    expire_unused_stage_permissions,
+    grant_stage_permission,
+    reset_all_stage_permissions,
+    revoke_stage_permission,
 )
 from ..services.media_storage import resolve_storage_path, ensure_media_root, delete_storage_file
 from ..services.expert_certificate_cleanup import delete_expert_certificate_files
@@ -251,6 +256,7 @@ def update_exam_blocks(
 ):
     _require_admin(db, authorization)
     exam = _get_or_create_exam(db, payload.exam_id)
+    lock_exam_content(db, exam.id)
 
     existing_blocks = db.scalars(
         select(Block)
@@ -885,6 +891,7 @@ def delete_result(
     session_obj = db.get(ExamSession, session_id)
     if not session_obj:
         return
+    guard_pending_session_delete(db, session_id)
 
     # Delete video files from disk before deleting the session
     media_records = db.scalars(select(ExamMedia).where(ExamMedia.session_id == session_id)).all()
@@ -1112,11 +1119,11 @@ def admin_users(
         elif is_admin_user:
             exam_perm = True  # ადმინებს exam_permission ყოველთვის true
         else:
-            if expire_if_unused(db, u):
+            if expire_unused_stage_permissions(db, u):
                 stage_expired_changed = True
             exam_perm = bool(u.exam_permission)  # არა-ადმინებს რაც ბაზაშია
 
-        exam_state = exam_state_payload(u, is_admin_user=is_admin_user)
+        exam_state = exam_state_with_permissions(db, u, is_admin_user=is_admin_user)
         user_dict = {
             'id': u.id,
             'personal_id': u.personal_id,
@@ -1133,6 +1140,7 @@ def admin_users(
             'exam_stage_started_at': exam_state.get("exam_stage_started_at"),
             'exam_stage_status': exam_state.get("exam_stage_status"),
             'exam_stage_remaining_seconds': exam_state.get("exam_stage_remaining_seconds"),
+            'exam_stage_permissions': exam_state.get("exam_stage_permissions", {}),
             'created_at': u.created_at,
             'has_unseen_statements': unseen_count > 0,
             'unseen_statement_count': unseen_count,
@@ -1165,7 +1173,10 @@ def admin_users(
             revision = sha256(_json.dumps(display, sort_keys=True).encode()).hexdigest()[:20]
             if live:
                 payload = {key: payload[key] for key in (
-                    "id", "exam_permission", "has_unseen_statements", "unseen_statement_count",
+                    "id", "exam_permission", "exam_stage", "exam_stage_expires_at",
+                    "exam_stage_started_at", "exam_stage_status",
+                    "exam_stage_remaining_seconds", "exam_stage_permissions",
+                    "has_unseen_statements", "unseen_statement_count",
                     "has_pending_statements", "pending_statement_count",
                 )}
             payload["display_revision"] = revision
@@ -1195,6 +1206,8 @@ def admin_toggle_user(
     if (settings.founder_admin_email or "").lower() == u.email.lower():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder admin cannot be modified")
 
+    # Historical candidate grants must never reappear after a later demotion.
+    reset_all_stage_permissions(db, u)
     u.is_admin = bool(payload.is_admin)
     # როცა ადმინი ხდება, exam_permission-იც ჩაირთოს
     # როცა ადმინი გაეთიშება, exam_permission-იც გაითიშოს
@@ -1204,7 +1217,10 @@ def admin_toggle_user(
         u.exam_stage_expires_at = None
         u.exam_stage_started_at = None
     else:
-        reset_exam_flow(u)
+        u.exam_permission = False
+        u.exam_stage = "none"
+        u.exam_stage_expires_at = None
+        u.exam_stage_started_at = None
     db.add(u)
     db.commit()
     return
@@ -1229,12 +1245,95 @@ def admin_toggle_exam_permission(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder admin exam permission cannot be modified")
     
     if payload.exam_permission:
-        start_exam_flow(u)
+        grant_stage_permission(db, u, STAGE_THEORY)
     else:
-        reset_exam_flow(u)
+        reset_all_stage_permissions(db, u)
     db.add(u)
     db.commit()
     return
+
+
+def _stage_permission_user_out(db: Session, user: User) -> UserOut:
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    is_founder = (user.email or "").lower() == founder_email
+    is_admin_user = is_founder or bool(user.is_admin)
+    state = exam_state_with_permissions(db, user, is_admin_user=is_admin_user)
+    return UserOut(
+        id=user.id,
+        personal_id=user.personal_id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        phone=user.phone,
+        email=user.email,
+        code=user.code,
+        is_admin=is_admin_user,
+        is_founder=is_founder,
+        exam_permission=state["exam_permission"],
+        exam_stage=state["exam_stage"],
+        exam_stage_expires_at=state["exam_stage_expires_at"],
+        exam_stage_started_at=state["exam_stage_started_at"],
+        exam_stage_status=state["exam_stage_status"],
+        exam_stage_remaining_seconds=state["exam_stage_remaining_seconds"],
+        exam_stage_permissions=state["exam_stage_permissions"],
+        created_at=user.created_at,
+        photo_filename=user.photo_filename,
+    )
+
+
+@router.patch(
+    "/users/{user_id}/exam-stage-permissions/{stage}", response_model=UserOut
+)
+def admin_toggle_exam_stage_permission(
+    user_id: int,
+    stage: str,
+    payload: ToggleExamStagePermissionRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    settings = get_settings()
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if (settings.founder_admin_email or "").lower() == (user.email or "").lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Founder admin exam permission cannot be modified",
+        )
+
+    if payload.granted:
+        try:
+            grant_stage_permission(
+                db,
+                user,
+                stage,
+                replace_started=payload.replace_started,
+                expected_grant_id=payload.expected_grant_id,
+            )
+            db.commit()
+        except IntegrityError:
+            # The partial unique index is the final concurrency guard.  If a
+            # concurrent identical request won, return that same live grant.
+            db.rollback()
+            user = db.get(User, user_id)
+            if payload.replace_started:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="The running exam attempt changed; refresh and try again",
+                )
+            if user is None or current_open_grant(db, user, stage) is None:
+                raise
+    else:
+        if payload.replace_started or payload.expected_grant_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Replacement fields require granted=true",
+            )
+        revoke_stage_permission(db, user, stage, allow_started=False)
+        db.commit()
+    db.refresh(user)
+    return _stage_permission_user_out(db, user)
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)
@@ -1352,6 +1451,14 @@ def admin_update_user(
         )
     ) or 0
 
+    is_founder_user = (user.email.lower() == founder_email)
+    is_admin_user = is_founder_user or bool(user.is_admin)
+    if not is_admin_user and expire_unused_stage_permissions(db, user, commit=True):
+        db.refresh(user)
+    exam_state = exam_state_with_permissions(
+        db, user, is_admin_user=is_admin_user
+    )
+
     return UserOut(
         id=user.id,
         personal_id=user.personal_id,
@@ -1360,8 +1467,15 @@ def admin_update_user(
         phone=user.phone,
         email=user.email,
         code=user.code,
-        is_admin=(user.email.lower() == founder_email) or bool(user.is_admin),
-        is_founder=(user.email.lower() == founder_email),
+        is_admin=is_admin_user,
+        is_founder=is_founder_user,
+        exam_permission=exam_state["exam_permission"],
+        exam_stage=exam_state["exam_stage"],
+        exam_stage_expires_at=exam_state["exam_stage_expires_at"],
+        exam_stage_started_at=exam_state["exam_stage_started_at"],
+        exam_stage_status=exam_state["exam_stage_status"],
+        exam_stage_remaining_seconds=exam_state["exam_stage_remaining_seconds"],
+        exam_stage_permissions=exam_state["exam_stage_permissions"],
         created_at=user.created_at,
         has_unseen_statements=unseen_count > 0,
         unseen_statement_count=unseen_count,

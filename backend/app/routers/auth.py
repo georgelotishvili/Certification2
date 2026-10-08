@@ -30,7 +30,10 @@ from ..rate_limiter import (
     verification_limiter,
 )
 from ..services import email_verification
-from ..services.exam_stage import exam_state_payload, expire_if_unused
+from ..services.exam_stage_grants import (
+    exam_state_with_permissions,
+    expire_unused_stage_permissions,
+)
 
 
 router = APIRouter()
@@ -166,11 +169,11 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     elif is_admin_user:
         exam_perm = True
     else:
-        if expire_if_unused(db, user, commit=True):
+        if expire_unused_stage_permissions(db, user, commit=True):
             db.refresh(user)
         exam_perm = bool(user.exam_permission)
 
-    exam_state = exam_state_payload(user, is_admin_user=is_admin_user)
+    exam_state = exam_state_with_permissions(db, user, is_admin_user=is_admin_user)
     user_out = UserOut(
         id=user.id,
         personal_id=user.personal_id,
@@ -187,6 +190,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         exam_stage_started_at=exam_state.get("exam_stage_started_at"),
         exam_stage_status=exam_state.get("exam_stage_status"),
         exam_stage_remaining_seconds=exam_state.get("exam_stage_remaining_seconds"),
+        exam_stage_permissions=exam_state.get("exam_stage_permissions", {}),
         created_at=user.created_at,
     )
     

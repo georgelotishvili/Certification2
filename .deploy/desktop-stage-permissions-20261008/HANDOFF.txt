@@ -1,0 +1,76 @@
+Independent exam stages — deployed release, 2026-10-09 (Asia/Tbilisi)
+
+DEPLOYED TO PRODUCTION on explicit user request. All 15 scoped website/backend
+files verified over HTTPS; gipc.service PID 61472. Backend unavailable for 2.9s.
+Portable desktop version 1.1.9 rebuilt and published in the existing admin download
+slot (ID 1). Nothing was installed or launched on candidate computers.
+Deployment receipts: ../exam-stages-release-20261008-01/.
+Production data preserved; no deployment backups or staging retained on server.
+Local preview restarted successfully on 127.0.0.1:8000 with its existing
+.deploy/local-preview-20261008/app.db; all 34 original table counts preserved.
+The local recovery copy before-local-migration.db is intentionally Git-ignored.
+
+Behavior:
+- Admin checkboxes: ეტაპი 1 (theory), ეტაპი 2 (multi-apartment), ეტაპი 3 (multi-functional).
+- Independent one-hour unused permissions. Preparation is not visible Start.
+- Starting preserves access for that attempt; stored completion consumes only its grant.
+- No automatic next-stage authorization; schedules remain planning only.
+- Founder/admin permanent access and founder-only role control remain unchanged.
+- Grant generations protect replacement access from delayed/retried old results.
+
+Website/backend release files:
+backend/app/main.py
+backend/app/models.py
+backend/app/schemas.py
+backend/app/services/exam_stage_grants.py (NEW)
+backend/app/services/exam_lifecycle.py
+backend/app/routers/admin.py
+backend/app/routers/auth.py
+backend/app/routers/users.py
+backend/app/routers/exam.py
+backend/app/routers/multi_apartment.py
+backend/app/routers/multi_functional.py
+backend/scripts/migrate_exam_stage_grants.py (NEW, required startup migration)
+frontend/pages/admin.html
+frontend/scripts/admin/users.js
+frontend/styles/admin.css
+
+Desktop source (desktop_app/ is deliberately ignored by existing .gitignore):
+desktop_app/src/renderer/renderer.js
+desktop_app/src/renderer/exam.js
+desktop_app/src/renderer/multi-apartment-eval.js
+desktop_app/src/renderer/multi-functional-eval.js
+Do not use the inactive duplicate JS files in desktop_app/ root.
+Original source snapshots are under before/ here; current sources are in src/.
+New portable binary: desktop_app/dist/GIPC_exam_1.1.9.exe (69,859,322 bytes).
+SHA256: 3cba4842b94bab11d88eeb92ffc2d54a63aa1e3265a3ded42d71e71aa20bdf6e
+Published via existing admin "სხვადასხვა -> საგამოცდო აპი" download slot ID 1.
+Exact old server binary and temporary upload removed after new-file verification.
+On 2026-10-09, the user explicitly requested removal of the old app: the matching
+local dist/GIPC_exam_1.1.8.exe was moved to Windows Recycle Bin (recoverable there).
+The 1.1.9 binary hash was reverified unchanged. No automatic update of files already
+on exam computers. Candidates must run the new 1.1.9 executable.
+Old clients retain single-stage compatibility; they cannot present three simultaneous
+independent permissions. Ambiguous old no-ID result submissions fail safely with 409.
+
+Verification:
+- Backend 258/258 unittest cases, including 10 HTTP scenarios and real SQLite races.
+- Frontend 339/339 and desktop 18/18 Node tests (357 combined).
+- Production-like autoflush=False exercised; idempotent migration tested on a clone
+  of local preview data; real app startup on clone and registry HTTP200 checked.
+- Synthetic Chrome interaction at 1440/390/320px: independent toggles, expiry,
+  founder protection, no overflow or browser errors. No real credentials used.
+- migration-check.json and local-preview-check.json record local verification.
+- Browser evidence: ../exam-stages-browser-20261008/.
+- Python bytecode/cache changes are generated artifacts, NOT release inputs.
+- Backend 258 tests also passed on the server in an isolated temporary release tree.
+- Idempotent migration validated against a fresh production DB clone; existing
+  records/columns unchanged. No actual candidate exam or role mutation used as a test.
+- Desktop package metadata, archive integrity, and all four embedded renderer source
+  hashes verified; desktop executable itself was not launched during release testing.
+- Both HTTPS hostnames, registry, protected endpoints, six served assets and final
+  desktop file hash verified. Anonymous app downloads still return 401 as before.
+- Local git diff --check passed (only existing LF/CRLF normalization warnings).
+
+For future deployments, keep the established scoped release process.
+Never upload any local DB, source snapshots, tests, .env, credentials, caches, or .deploy/.
