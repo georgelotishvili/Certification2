@@ -20,6 +20,7 @@ class Element {
   }
   addEventListener(name, handler) { this.events[name] = handler; }
   setAttribute(name, value) { this.attributes[name] = String(value); }
+  getAttribute(name) { return this.attributes[name] ?? null; }
   dispatch(name) { return this.events[name]?.({ target: this, preventDefault() {} }); }
   appendChild(child) {
     if (child.parentElement) child.parentElement.children = child.parentElement.children.filter((item) => item !== child);
@@ -40,7 +41,11 @@ class Element {
       card.selectors['.head-toggle'] = new Element();
       card.selectors['.block-questions'] = new Element();
       card.selectors['.user-exam-schedules'] = new Element();
+      for (const key of ['date', 'morning', 'evening']) card.selectors[`.exam-schedule-${key}`] = new Element();
       card.selectors['.chk-exam'] = new Element();
+      card.selectors['.chk-admin'] = new Element();
+      card.selectors['.head-delete'] = new Element();
+      card.selectors['.user-name'] = new Element();
       card.selectors['.chk-exam'].checked = /class="chk-exam"[^>]*\bchecked\b/.test(html);
       for (const name of html.match(/class="([^"]+)"/)[1].split(' ')) card.classList.toggle(name, true);
       this.children.push(card);
@@ -67,9 +72,12 @@ function harness(options = {}) {
   const DOM = Object.fromEntries(['usersGrid', 'usersSearch', 'usersSort', 'onlyAdmins',
     'filterStatements', 'filterPendingStatements', 'statementsDate', 'clearStatementsDate', 'filterArchitects',
     'filterExperts', 'filterMunicipal', 'filterCertified', 'filterExamMorning', 'filterExamEvening',
-    'examScheduleDate', 'clearExamScheduleDate'].map((key) => [key, new Element()]));
+    'examScheduleDate', 'clearExamScheduleDate', 'usersPagination', 'usersPagePrevious',
+    'usersPageNext', 'usersPageStatus', 'usersListNotice', 'usersListNoticeText',
+    'usersListRetry'].map((key) => [key, new Element()]));
   DOM.navLinks = [Object.assign(new Element(), { textContent: 'რეგისტრირებული პირები' })];
-  const state = { requests: [], hold: false, pending: [], today: '2026-10-08', items: [
+  const state = { requests: [], signals: [], responses: [], mutations: [], alerts: [], timers: new Map(), nextTimer: 1,
+    hold: false, pending: [], today: '2026-10-08', items: [
     fixture(1, true, '2026-10-08', 'architect', true),
     fixture(2, false, '2026-10-08', 'expert', true),
     fixture(3, true, '2026-10-07', 'architect'),
@@ -77,22 +85,62 @@ function harness(options = {}) {
     fixture(5, true, '2026-10-08', 'expert'),
   ] };
   const window = new Element();
+  window.confirm = () => true;
   const document = Object.assign(new Element(), { hidden: false, createElement: () => new Element() });
-  const context = { window, document, URLSearchParams, setInterval: () => 1,
-    fetch: async (address) => {
+  const context = { window, document, URLSearchParams, AbortController, setInterval: () => 1,
+    alert: (message) => state.alerts.push(message),
+    setTimeout: (fn, delay) => { const id = state.nextTimer++; state.timers.set(id, { fn, delay }); return id; },
+    clearTimeout: (id) => state.timers.delete(id),
+    fetch: async (address, requestOptions = {}) => {
       const url = new URL(address);
+      const mutation = url.pathname.match(/^\/admin\/users\/(\d+)\/(admin|exam-permission)$/);
+      if (mutation) {
+        assert.equal(requestOptions.method, 'PATCH');
+        const payload = JSON.parse(requestOptions.body);
+        state.mutations.push({ id: Number(mutation[1]), type: mutation[2], payload });
+        const user = state.items.find((item) => item.id === Number(mutation[1]));
+        if (mutation[2] === 'admin') Object.assign(user, { is_admin: payload.is_admin,
+          exam_permission: payload.is_admin || false });
+        else user.exam_permission = payload.exam_permission;
+        return { ok: true, json: async () => ({}) };
+      }
       assert.equal(url.pathname, '/admin/users');
       state.requests.push(url.searchParams);
+      state.signals.push(requestOptions.signal);
       const day = url.searchParams.get('statement_date');
       const search = url.searchParams.get('search') || '';
       const morning = url.searchParams.get('exam_morning') === 'true';
       const evening = url.searchParams.get('exam_evening') === 'true';
       const examDay = url.searchParams.get('exam_date') || ((morning || evening) ? state.today : '');
-      const items = state.items.filter((user) => (!day || user.days.includes(day)) &&
+      let items = state.items.filter((user) => (!day || user.days.includes(day)) &&
         (!examDay || (user.schedules || []).some((schedule) => schedule.exam_date === examDay &&
           ((!morning && !evening) || (morning && schedule.period === 'morning') || (evening && schedule.period === 'evening')))) &&
         (!url.searchParams.has('only_admins') || user.is_admin) && user.first_name.includes(search));
-      const result = { ok: true, json: async () => ({ items: structuredClone(items) }) };
+      let payload = { items: structuredClone(items) };
+      if (options.paginated) {
+        const qualification = url.searchParams.get('qualification');
+        const levels = { architect: ['architect', 'architect_expert'], expert: ['expert'],
+          municipal: ['municipal'], certified: ['architect', 'expert', 'municipal'] };
+        const red = url.searchParams.get('new_statements') === 'true';
+        const blue = url.searchParams.get('pending_statements') === 'true';
+        items = items.filter((user) => (!qualification || levels[qualification].includes((user.certificate || user.certificate_info)?.level))
+          && (day || (!red && !blue) || (red && user.has_unseen_statements)
+            || (blue && !user.has_unseen_statements && user.has_pending_statements)));
+        const size = Number(url.searchParams.get('size'));
+        const page = Math.min(Number(url.searchParams.get('page')), Math.max(1, Math.ceil(items.length / size)));
+        const live = url.searchParams.get('live') === 'true';
+        const pageItems = items.slice((page - 1) * size, page * size).map((user) => {
+          const revision = JSON.stringify([user.first_name, user.last_name, user.certificate, user.certificate_info, user.is_admin]);
+          const record = live ? Object.fromEntries(['id', 'exam_permission', 'has_unseen_statements',
+            'unseen_statement_count', 'has_pending_statements', 'pending_statement_count'].map((key) => [key, user[key]])) : user;
+          return { ...record, display_revision: revision };
+        });
+        payload = { items: structuredClone(pageItems), paginated: true, live, page, size, total: items.length,
+          global_unseen_users: state.items.filter((user) => user.has_unseen_statements).length };
+      }
+      state.responses.push(payload);
+      const result = { ok: !state.failNext, json: async () => payload };
+      state.failNext = false;
       if (!state.hold) return result;
       state.hold = false;
       return new Promise((resolve) => state.pending.push(() => resolve(result)));
@@ -106,7 +154,7 @@ function harness(options = {}) {
     examSchedules: options.examSchedules,
   });
   users.init();
-  return { DOM, users, state,
+  return { DOM, users, state, document,
     visible: () => DOM.usersGrid.children.filter((card) => card.style.display !== 'none').map((card) => Number(card.dataset.id)),
     card: (id) => DOM.usersGrid.querySelector(`.block-card[data-id="${id}"]`),
     date: async (value = '2026-10-08') => { DOM.statementsDate.value = value; await DOM.statementsDate.dispatch('change'); },
@@ -131,6 +179,305 @@ function pendingHarness(options = {}) {
   };
   return h;
 }
+
+function paginatedHarness() {
+  const h = pendingHarness({ paginated: true });
+  h.state.items = Array.from({ length: 123 }, (_, index) =>
+    fixture(index + 1, index === 122, '2026-10-08', index >= 100 ? 'municipal' : 'architect'));
+  h.flush = async () => { for (let index = 0; index < 15; index += 1) await Promise.resolve(); };
+  return h;
+}
+
+test('paged lists request 50 records and navigate all people with accurate totals', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  assert.equal(h.state.requests.at(-1).get('paginated'), 'true');
+  assert.equal(h.state.requests.at(-1).get('size'), '50');
+  assert.equal(h.visible().length, 50);
+  assert.equal(h.DOM.usersPagePrevious.disabled, true);
+  assert.equal(h.DOM.usersPageStatus.textContent, '1–50 / 123 პირი');
+  await h.DOM.usersPageNext.dispatch('click');
+  assert.deepEqual(h.visible(), Array.from({ length: 50 }, (_, index) => index + 51));
+  await h.DOM.usersPageNext.dispatch('click');
+  assert.deepEqual(h.visible(), Array.from({ length: 23 }, (_, index) => index + 101));
+  assert.equal(h.DOM.usersPageNext.disabled, true);
+  assert.equal(h.DOM.usersPageStatus.textContent, '101–123 / 123 პირი');
+  await h.DOM.usersPagePrevious.dispatch('click');
+  assert.equal(h.visible()[0], 51);
+});
+
+test('qualifications and statement colors filter server-wide before paging and reset the current page', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  await h.DOM.usersPageNext.dispatch('click');
+  h.DOM.filterMunicipal.checked = true;
+  await h.DOM.filterMunicipal.dispatch('change');
+  assert.equal(h.state.requests.at(-1).get('qualification'), 'municipal');
+  assert.equal(h.state.requests.at(-1).get('page'), '1');
+  assert.deepEqual(h.visible(), Array.from({ length: 23 }, (_, index) => index + 101));
+  await h.newStatements();
+  assert.deepEqual(h.visible(), [123]);
+  assert.equal(h.state.requests.at(-1).get('new_statements'), 'true');
+  assert.equal(h.DOM.usersPageStatus.textContent, '1–1 / 1 პირი');
+  await h.date();
+  assert.equal(h.visible().length, 23, 'date includes answered/blue/red senders, preserving the selected status checkbox');
+  assert.equal(h.DOM.filterStatements.checked, true);
+});
+
+test('global new-statement badge stays on for a sender outside the displayed page and filters', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  assert.equal(h.visible().includes(123), false);
+  assert.equal(h.DOM.navLinks[0].classList.contains('has-new-statements'), true);
+  h.DOM.usersSearch.value = 'Person 1';
+  await h.users.render();
+  assert.equal(h.DOM.navLinks[0].classList.contains('has-new-statements'), true);
+  h.users.updateUserUnseenStatus(1, false, 0, false, 0);
+  assert.equal(h.DOM.navLinks[0].classList.contains('has-new-statements'), true);
+  await h.flush();
+  h.state.items[122].has_unseen_statements = false;
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.DOM.navLinks[0].classList.contains('has-new-statements'), false);
+});
+
+test('unchanged polling uses compact page data, one request and the same open card', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  const card = h.card(1);
+  card.classList.toggle('open', true);
+  const before = h.state.requests.length;
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.state.requests.length, before + 1);
+  assert.equal(h.state.requests.at(-1).get('live'), 'true');
+  assert.equal(h.state.responses.at(-1).items.length, 50);
+  assert.equal('first_name' in h.state.responses.at(-1).items[0], false);
+  assert.equal(h.card(1), card);
+  assert.equal(card.classList.contains('open'), true);
+});
+
+test('live polling sees new and deleted people and preserves unchanged open cards', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  const card = h.card(1);
+  card.classList.toggle('open', true);
+  h.state.items.unshift(fixture(999, false, '2026-10-08', 'architect'));
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.visible()[0], 999);
+  assert.equal(h.visible().length, 50);
+  assert.equal(h.card(1), card);
+  assert.equal(card.classList.contains('open'), true);
+  h.state.items = h.state.items.filter((user) => user.id !== 2);
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.card(2), null);
+  assert.equal(h.visible().length, 50, 'the next matching person fills the vacated slot');
+});
+
+test('profile and qualification changes refresh display and server-wide membership without closing other cards', async () => {
+  const h = paginatedHarness();
+  h.DOM.filterMunicipal.checked = true;
+  await h.users.render();
+  const card = h.card(101);
+  card.classList.toggle('open', true);
+  h.state.items[100].first_name = 'Updated name';
+  h.state.items[0].certificate.level = 'municipal';
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.visible()[0], 1);
+  assert.equal(h.card(101), card);
+  assert.equal(card.querySelector('.user-name').textContent, 'Updated name');
+  assert.equal(card.classList.contains('open'), true);
+});
+
+test('red and blue membership changes are refilled immediately after statement actions', async () => {
+  const h = paginatedHarness();
+  Object.assign(h.state.items[0], { has_unseen_statements: true, unseen_statement_count: 1 });
+  await h.newStatements();
+  assert.deepEqual(h.visible(), [1, 123]);
+  Object.assign(h.state.items[0], { has_unseen_statements: false, unseen_statement_count: 0,
+    has_pending_statements: true, pending_statement_count: 1 });
+  h.users.updateUserUnseenStatus(1, false, 0, true, 1);
+  await h.flush();
+  assert.deepEqual(h.visible(), [123]);
+  await h.newStatements(false);
+  await h.pending();
+  assert.deepEqual(h.visible(), [1]);
+  Object.assign(h.state.items[0], { has_pending_statements: false, pending_statement_count: 0 });
+  h.users.updateUserUnseenStatus(1, false, 0, false, 0);
+  await h.flush();
+  assert.deepEqual(h.visible(), []);
+  assert.equal(h.DOM.usersPageStatus.textContent, 'პირები ვერ მოიძებნა');
+});
+
+test('last-page deletion automatically clamps to the last remaining page', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  await h.DOM.usersPageNext.dispatch('click');
+  await h.DOM.usersPageNext.dispatch('click');
+  h.state.items = h.state.items.slice(0, 100);
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.visible()[0], 51);
+  assert.equal(h.DOM.usersPageStatus.textContent, '51–100 / 100 პირი');
+  assert.equal(h.DOM.usersPageNext.disabled, true);
+});
+
+test('search debounces keystrokes for 250ms, invalidates stale responses and keeps current rows visible', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.state.hold = true;
+  const old = h.users.render();
+  const oldSignal = h.state.signals.at(-1);
+  for (const value of ['P', 'Pe', 'Person 123']) {
+    h.DOM.usersSearch.value = value;
+    h.DOM.usersSearch.dispatch('input');
+  }
+  assert.equal(oldSignal.aborted, true);
+  assert.equal(h.state.timers.size, 1);
+  assert.equal([...h.state.timers.values()][0].delay, 250);
+  assert.equal(h.visible().length, 50, 'typing and loading do not blank the list');
+  const count = h.state.requests.length;
+  h.state.pending.shift()();
+  await old;
+  assert.equal(h.state.requests.length, count);
+  const timer = [...h.state.timers.values()][0];
+  h.state.timers.clear();
+  timer.fn();
+  await h.flush();
+  assert.equal(h.state.requests.length, count + 1);
+  assert.deepEqual(h.visible(), [123]);
+});
+
+test('failed refresh retains visible people and releases the busy indicator', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  const card = h.card(1);
+  h.state.failNext = true;
+  await h.users.render();
+  assert.equal(h.card(1), card);
+  assert.equal(h.visible().length, 50);
+  assert.equal(h.DOM.usersGrid.attributes['aria-busy'], 'false');
+});
+
+test('ordinary polling is paused while hidden and during an in-flight page request', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.document.hidden = true;
+  const before = h.state.requests.length;
+  await h.users.refreshLiveUserStates();
+  assert.equal(h.state.requests.length, before);
+  h.document.hidden = false;
+  h.state.hold = true;
+  const pending = h.users.render();
+  await h.users.refreshLiveUserStates();
+  assert.equal(h.state.requests.length, before + 1);
+  h.state.pending.shift()();
+  await pending;
+});
+
+test('a late page response cannot replace a newer filter and its result count', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.state.hold = true;
+  const old = h.DOM.usersPageNext.dispatch('click');
+  const oldSignal = h.state.signals.at(-1);
+  h.DOM.filterMunicipal.checked = true;
+  await h.DOM.filterMunicipal.dispatch('change');
+  assert.equal(oldSignal.aborted, true);
+  assert.equal(h.DOM.usersPageStatus.textContent, '1–23 / 23 პირი');
+  h.state.pending.shift()();
+  await old;
+  assert.equal(h.visible()[0], 101);
+  assert.equal(h.DOM.usersPageStatus.textContent, '1–23 / 23 პირი');
+});
+
+test('a late compact poll cannot undo a successful statement reply or resurrect the removed member', async () => {
+  const h = paginatedHarness();
+  Object.assign(h.state.items[0], { has_pending_statements: true, pending_statement_count: 1 });
+  await h.pending();
+  h.state.hold = true;
+  const old = h.users.refreshLiveUserStates({ force: true });
+  Object.assign(h.state.items[0], { has_pending_statements: false, pending_statement_count: 0 });
+  h.users.updateUserUnseenStatus(1, false, 0, false, 0);
+  await h.flush();
+  assert.deepEqual(h.visible(), []);
+  h.state.pending.shift()();
+  await old;
+  assert.deepEqual(h.visible(), []);
+  assert.equal(h.DOM.usersPageStatus.textContent, 'პირები ვერ მოიძებნა');
+});
+
+test('an old compact response never switches off newly granted manual exam permission', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.state.hold = true;
+  const old = h.users.refreshLiveUserStates({ force: true });
+  const checkbox = h.card(1).querySelector('.chk-exam');
+  checkbox.checked = true;
+  await checkbox.dispatch('change');
+  assert.equal(h.state.mutations.length, 1);
+  assert.equal(h.state.mutations[0].payload.exam_permission, true);
+  h.state.pending.shift()();
+  await old;
+  await h.flush();
+  assert.equal(checkbox.checked, true);
+  assert.equal(checkbox.disabled, false);
+  assert.equal(h.state.alerts.length, 0);
+});
+
+test('failed next-page request retains both existing people and the current navigation position', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.state.failNext = true;
+  await h.DOM.usersPageNext.dispatch('click');
+  assert.equal(h.visible()[0], 1);
+  assert.equal(h.DOM.usersPagePrevious.disabled, true);
+  assert.equal(h.DOM.usersPageStatus.textContent, '1–50 / 123 პირი');
+  await h.DOM.usersPageNext.dispatch('click');
+  assert.equal(h.visible()[0], 51);
+});
+
+test('background page membership changes never discard an unfinished expanded scheduling editor', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  const lastCard = h.card(50);
+  lastCard.classList.toggle('open', true);
+  lastCard.querySelector('.exam-schedule-date').value = '2027-01-01';
+  h.state.items.unshift(fixture(999, false, '2026-10-08', 'architect'));
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.card(50), lastCard);
+  assert.equal(lastCard.querySelector('.exam-schedule-date').value, '2027-01-01');
+  assert.equal(h.visible()[0], 1);
+  assert.equal(h.DOM.usersListNotice.hidden, false);
+  assert.match(h.DOM.usersListNoticeText.textContent, /შეყვანილი მონაცემების/);
+  assert.equal(lastCard.querySelector('.chk-exam').disabled, true);
+  await h.DOM.usersListRetry.dispatch('click');
+  assert.equal(h.card(50), lastCard, 'retry must not throw away the unfinished editor either');
+  await lastCard.querySelector('.head-toggle').dispatch('click');
+  await h.flush();
+  assert.equal(h.card(50), null);
+  assert.equal(h.visible()[0], 999);
+  assert.equal(h.DOM.usersListNotice.hidden, true);
+  assert.equal(h.card(1).querySelector('.chk-exam').disabled, false);
+});
+
+test('failed filter results stay visibly stale and cannot be used to grant exam permission until retry succeeds', async () => {
+  const h = paginatedHarness();
+  await h.users.render();
+  h.state.failNext = true;
+  h.DOM.filterMunicipal.checked = true;
+  await h.DOM.filterMunicipal.dispatch('change');
+  assert.equal(h.visible()[0], 1, 'previous rows remain for context');
+  assert.equal(h.DOM.usersListNotice.hidden, false);
+  assert.equal(h.DOM.usersListRetry.hidden, false);
+  assert.match(h.DOM.usersListNoticeText.textContent, /წინა შედეგები/);
+  const checkbox = h.card(1).querySelector('.chk-exam');
+  assert.equal(checkbox.disabled, true);
+  checkbox.checked = true;
+  await checkbox.dispatch('change');
+  assert.equal(h.state.mutations.length, 0);
+  await h.DOM.usersListRetry.dispatch('click');
+  assert.equal(h.visible()[0], 101);
+  assert.equal(h.DOM.usersListNotice.hidden, true);
+  assert.equal(h.card(101).querySelector('.chk-exam').disabled, false);
+});
 
 function municipalHarness() {
   const h = pendingHarness();

@@ -1,0 +1,412 @@
+/* Public registry only. The site's shared header is deliberately unchanged. */
+body.registry-document {
+  background: #f6f8fa;
+  color: #263849;
+}
+
+main.registry-page {
+  width: 80%;
+  max-width: 1280px;
+  min-height: 70vh;
+  margin: 70px auto 0;
+  padding: 105px 0 60px;
+  background: none;
+  aspect-ratio: auto;
+}
+
+.registry-page [hidden] { display: none !important; }
+.registry-page a,
+.registry-page button,
+.registry-page input,
+.registry-page select { -webkit-tap-highlight-color: transparent; }
+
+.registry-page a:focus-visible,
+.registry-page button:focus-visible,
+.registry-page input:focus-visible,
+.registry-page select:focus-visible {
+  outline: 2px solid #244a80;
+  outline-offset: 4px;
+}
+
+.registry-page .registry-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: #6a7785;
+}
+
+.registry-page .registry-breadcrumb a { color: #244a80; }
+.registry-page .registry-breadcrumb a:hover { text-decoration: underline; }
+
+.registry-page .registry-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 44px;
+  margin-bottom: 24px;
+}
+
+.registry-page .registry-intro-copy { max-width: 830px; min-width: 0; }
+.registry-page .registry-kicker {
+  margin-bottom: 13px;
+  color: #466453;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.registry-page h1 {
+  margin: 0 0 17px;
+  color: #223e61;
+  font-family: 'BPG Nino Mtavruli Bold', 'DejaVu Sans', sans-serif;
+  font-size: clamp(30px, 3.2vw, 45px);
+  font-weight: 700;
+  line-height: 1.18;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.registry-page .registry-description {
+  max-width: 760px;
+  color: #637080;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.registry-page .registry-total {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 116px;
+  padding: 8px 0 8px 27px;
+  border-left: 1px solid #d6e0e7;
+  color: #697787;
+  gap: 3px;
+}
+
+.registry-page .registry-total strong {
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: #244a80;
+  font-variant-numeric: tabular-nums;
+}
+
+.registry-page .registry-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 23px;
+  border: 1px solid #dce3ea;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 3px 13px rgba(32, 56, 83, 0.025);
+}
+
+.registry-page .registry-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(235px, 285px);
+  gap: 22px;
+}
+
+.registry-page .registry-search-field,
+.registry-page .registry-sort {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.registry-page .registry-field-label { color: #415469; font-size: 14px; }
+.registry-page .registry-search,
+.registry-page .registry-sort select {
+  width: 100%;
+  min-width: 0;
+  height: 47px;
+  padding: 11px 14px;
+  border: 1px solid #cbd6e0;
+  border-radius: 5px;
+  background: #fff;
+  color: #34485d;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.registry-page .registry-search { padding-right: 43px; }
+.registry-page .registry-search::placeholder { color: #83909e; opacity: 1; }
+.registry-page .registry-search-clear { right: 8px; }
+.registry-page .registry-search::-webkit-search-cancel-button { -webkit-appearance: none; }
+.registry-page .registry-search:focus-visible,
+.registry-page .registry-sort select:focus-visible { border-color: #244a80; outline-offset: 2px; }
+
+.registry-page .registry-filter-fieldset { min-width: 0; border: 0; }
+.registry-page .registry-filter-fieldset legend { margin-bottom: 11px; padding: 0; }
+.registry-page .registry-checkboxes { align-items: stretch; gap: 9px; }
+.registry-page .registry-check {
+  padding: 10px 13px;
+  gap: 9px;
+  border: 1px solid #dce3ea;
+  border-radius: 5px;
+  background: #f9fafb;
+  color: #4d5e70;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+  line-height: 1.65;
+}
+
+.registry-page .registry-check span { font-size: 13px; overflow-wrap: anywhere; }
+.registry-page .registry-check:hover { border-color: #a6b8c9; background: #f4f7fa; }
+.registry-page .registry-check:has(input:checked) { border-color: #8ca8c7; color: #244a80; background: #edf3f9; }
+.registry-page .registry-check input { flex: 0 0 auto; width: 16px; height: 16px; accent-color: #244a80; }
+.registry-page .registry-filter-count { align-self: center; background: #edf3f9; color: #244a80; letter-spacing: normal; }
+
+.registry-page .registry-results { margin-top: 23px; }
+.registry-page .registry-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 19px;
+}
+
+.registry-page .registry-results-head h2 { color: #2b425e; font-size: 15px; font-weight: 600; line-height: 1.7; }
+.registry-page .registry-results-count { margin-top: 3px; color: #728091; font-size: 12px; }
+.registry-page .registry-reset {
+  min-height: 40px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: #244a80;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.registry-page .registry-reset:hover { border-bottom-color: #244a80; }
+.registry-page .registry-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+  padding: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.registry-page .registry-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+.registry-page .registry-pagination[hidden] { display: none; }
+.registry-page .registry-pagination button,
+.registry-page .registry-refresh-error button {
+  min-height: 42px;
+  padding: 9px 15px;
+  border: 1px solid #cbd6e0;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #244a80;
+  font-size: 14px;
+  cursor: pointer;
+}
+.registry-page .registry-pagination button:disabled { opacity: .5; cursor: default; }
+.registry-page .registry-pagination span { font-size: 13px; color: #415469; text-align: center; }
+.registry-page .registry-refresh-error { margin: 12px 0; padding: 12px; color: #7d3b30; background: #fff6f0; }
+.registry-page .registry-refresh-error p { margin-bottom: 8px; font-size: 14px; }
+
+.registry-page .registry-card {
+  --registry-type-color: #8b98a8;
+  position: relative;
+  min-width: 0;
+  min-height: 84px;
+  padding: 15px 20px;
+  align-items: center;
+  gap: 17px;
+  border: 1px solid #dce3ea;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(32, 56, 83, 0.025);
+  cursor: default;
+  opacity: 1;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.registry-page .registry-card[data-qualification="architect"] { --registry-type-color: #3a5c9e; }
+.registry-page .registry-card[data-qualification="expert"] { --registry-type-color: #9e3a3a; }
+.registry-page .registry-card[data-qualification="municipal"] { --registry-type-color: #5a9e3a; }
+
+/* Certificate type lives on the outer edge, not in the readable text.
+   Short rounded returns follow the top/bottom contour without moving content. */
+.registry-page .registry-card[data-qualification]::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: -1px;
+  width: 12px;
+  box-sizing: border-box;
+  border: solid var(--registry-type-color);
+  border-width: 3px 0 3px 6px;
+  border-radius: 5px 0 0 5px;
+  pointer-events: none;
+}
+
+.registry-page .registry-card:hover { border-color: #bacbdc; box-shadow: 0 4px 16px rgba(32, 56, 83, 0.055); }
+.registry-page .registry-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 52px;
+  border: 1px solid #e1e7ed;
+  border-radius: 4px;
+  background: #f1f4f7;
+  color: #6d829b;
+  font-size: 22px;
+  font-weight: 500;
+  padding: 0;
+}
+
+.registry-page .registry-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
+.registry-page .registry-avatar.has-photo:hover { transform: none; border-color: #91aac5; }
+.registry-page button.registry-avatar { position: relative; z-index: 1; cursor: pointer; }
+.registry-page .registry-info {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, .6fr) max-content;
+  grid-template-areas: 'name code status' 'qualification code rating';
+  align-items: center;
+  gap: 4px 24px;
+}
+.registry-page .registry-card-top,
+.registry-page .registry-card-bottom { display: contents; }
+.registry-page .registry-qualification { grid-area: qualification; color: #486079; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.registry-page .registry-status {
+  grid-area: status;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  color: #326c3a;
+  background: #edf5ee;
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.registry-page .registry-card[data-status="suspended"] .registry-status { color: #866333; background: #f7f1e7; }
+.registry-page .registry-card[data-status="expired"] .registry-status { color: #687584; background: #edf0f3; }
+.registry-page .registry-name { grid-area: name; margin: 0; color: #233d5e; font-size: 18px; font-weight: 600; line-height: 1.6; letter-spacing: normal; overflow-wrap: anywhere; }
+.registry-page .registry-profile-link { color: inherit; font-size: inherit; font-weight: inherit; }
+.registry-page .registry-profile-link::after { content: ''; position: absolute; inset: 0; border-radius: 5px; }
+.registry-page .registry-card:focus-within { border-color: #7898ba; }
+.registry-page .registry-profile-link:hover { color: #244a80; text-decoration: underline; text-underline-offset: 4px; }
+.registry-page .registry-code { grid-area: code; display: flex; flex-direction: column; gap: 3px; color: #748293; font-size: 11px; }
+.registry-page .registry-code span { font-size: 12px; }
+.registry-page .registry-code strong { color: #4b5f75; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.registry-page .registry-rating { grid-area: rating; justify-self: end; color: #465a70; font-size: 13px; gap: 5px; font-variant-numeric: tabular-nums; }
+.registry-page .registry-rating span { font-size: inherit; }
+.registry-page .registry-rating strong { color: #375477; font-size: 12px; font-weight: 600; }
+.registry-page .registry-profile-hint { display: none; }
+
+.registry-page .registry-empty,
+.registry-page .registry-noscript {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 44px 24px;
+  border: 1px solid #dce3ea;
+  border-radius: 9px;
+  background: #fff;
+  color: #66788a;
+  font-size: 13px;
+  line-height: 1.9;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.registry-page .registry-empty strong { display: block; margin-bottom: 7px; color: #314d6f; font-size: 16px; font-weight: 500; }
+.registry-page .registry-empty button { min-height: 40px; padding: 9px 17px; color: #244a80; background: #f3f6fa; border-color: #c7d4e1; }
+.registry-page .registry-noscript { margin-bottom: 16px; }
+.registry-page .registry-noscript a { color: #244a80; text-decoration: underline; }
+.registry-page .registry-status-note { max-width: 870px; margin-top: 23px; color: #788595; font-size: 11px; line-height: 1.9; }
+.registry-page .registry-skeleton-card { align-items: center; }
+.registry-page .registry-skeleton-avatar { width: 44px; height: 52px; border-radius: 4px; }
+.registry-page .registry-skeleton-info { gap: 13px; }
+.registry-page .registry-skeleton-info span { background: #e9eef3; }
+
+.registry-document .registry-footer { padding: 32px 0 23px; border-top: 1px solid #dce3ea; box-shadow: none; }
+.registry-document .registry-footer .footer-only-contact { max-width: 1280px; height: auto; flex-wrap: wrap; gap: 18px 25px; }
+.registry-document .registry-footer .footer-contact-item { min-width: 0; white-space: normal; }
+.registry-document .registry-footer .footer-contact-item a { color: #637487; font-size: 11px; overflow-wrap: anywhere; }
+.registry-document .registry-footer .footer-icon { width: 23px; height: 23px; opacity: .75; }
+.registry-document .registry-footer .footer-bottom { width: 80%; max-width: 1280px; margin-top: 25px; border-color: #e4e9ef; padding-top: 20px; }
+.registry-document .registry-footer .footer-bottom p,
+.registry-document .registry-footer .footer-bottom a { color: #7c8794; font-size: 10px; line-height: 1.8; }
+.registry-document .registry-footer a:focus-visible { outline: 2px solid #244a80; outline-offset: 4px; }
+
+@media (max-width: 1180px) {
+  main.registry-page { width: 88%; margin-top: 50px; padding-top: 100px; }
+  .registry-page .registry-intro { gap: 27px; }
+  .registry-page .registry-card { padding: 14px 18px; gap: 15px; }
+  .registry-page .registry-name { font-size: 17px; }
+}
+
+@media (max-width: 900px) {
+  .registry-page .registry-info { grid-template-columns: minmax(0, 1fr) minmax(130px, .6fr) max-content; column-gap: 16px; }
+  .registry-page .registry-control-row { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .registry-page .registry-intro { align-items: flex-start; }
+  .registry-page .registry-total { min-width: 90px; padding-left: 20px; }
+}
+
+@media (max-width: 730px) {
+  main.registry-page { width: 90%; margin-top: 40px; padding-top: 90px; padding-bottom: 40px; }
+  .registry-page .registry-breadcrumb { margin-bottom: 16px; }
+  .registry-page .registry-intro { flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .registry-page .registry-kicker { font-size: 12px; margin-bottom: 8px; }
+  .registry-page h1 { font-size: 30px; margin-bottom: 12px; }
+  .registry-page .registry-description { font-size: 14px; }
+  .registry-page .registry-total { flex-direction: row; align-items: baseline; min-width: 0; padding: 0; border: 0; gap: 8px; }
+  .registry-page .registry-total strong { font-size: 23px; }
+  .registry-page .registry-controls { padding: 16px; gap: 12px; }
+  .registry-page .registry-card { padding: 14px; align-items: flex-start; gap: 12px; }
+  .registry-page .registry-info {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas: 'name name' 'qualification qualification' 'code status' 'code rating';
+    gap: 5px 10px;
+  }
+  .registry-page .registry-code { margin-top: 5px; }
+  .registry-document .registry-footer .footer-bottom { width: 90%; }
+  .registry-document .registry-footer .footer-only-contact { width: 90%; }
+}
+
+@media (max-width: 450px) {
+  main.registry-page { width: 92%; }
+  .registry-page h1 { font-size: 27px; }
+  .registry-page .registry-controls { padding: 14px; }
+  .registry-page .registry-search { font-size: 14px; }
+  .registry-page .registry-check { width: 100%; padding: 8px 10px; min-height: 42px; }
+  .registry-page .registry-card { gap: 10px; padding: 13px 11px; }
+  .registry-page .registry-avatar { width: 36px; height: 44px; font-size: 18px; }
+  .registry-page .registry-name { font-size: 16px; }
+  .registry-page .registry-code span { font-size: 12px; }
+  .registry-page .registry-qualification { font-size: 12px; }
+  .registry-page .registry-results-head { align-items: flex-start; }
+  .registry-page .registry-reset { font-size: 11px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .registry-page *,
+  .registry-page *::before,
+  .registry-page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

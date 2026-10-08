@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json as _json
+from hashlib import sha256
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
@@ -943,7 +944,7 @@ def _today_in_tbilisi() -> date:
     return datetime.now(timezone(timedelta(hours=4))).date()
 
 
-@router.get("/users", response_model=UsersListResponse)
+@router.get("/users", response_model=None)
 def admin_users(
     page: int = 1,
     size: int = 1000000,
@@ -956,6 +957,11 @@ def admin_users(
     exam_date: date | None = None,
     exam_morning: bool = False,
     exam_evening: bool = False,
+    paginated: bool = False,
+    live: bool = False,
+    new_statements: bool = False,
+    pending_statements: bool = False,
+    qualification: str | None = None,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
@@ -975,6 +981,36 @@ def admin_users(
         )
     if only_admins:
         stmt = stmt.where(User.is_admin == True)  # noqa: E712
+
+    # Optional website filters run before LIMIT/OFFSET. Legacy callers keep the
+    # existing complete-list response unless they explicitly request pagination.
+    qualification_levels = {
+        "architect": ("architect", "architect_expert"),
+        "expert": ("expert",),
+        "municipal": ("municipal",),
+        "certified": ("architect", "expert", "municipal"),
+    }
+    if qualification:
+        if qualification not in qualification_levels:
+            raise HTTPException(status_code=422, detail="Unknown qualification filter")
+        stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
+            Certificate.level.in_(qualification_levels[qualification])
+        )))
+
+    if statement_date is None and (new_statements or pending_statements):
+        has_new = select(Statement.id).where(
+            Statement.user_id == User.id, Statement.seen_at.is_(None)
+        ).exists()
+        has_pending = select(Statement.id).where(
+            Statement.user_id == User.id, Statement.seen_at.is_not(None),
+            Statement.answered_at.is_(None),
+        ).exists()
+        colors = []
+        if new_statements:
+            colors.append(has_new)
+        if pending_statements:
+            colors.append(~has_new & has_pending)
+        stmt = stmt.where(or_(*colors))
 
     if exam_date is not None or exam_morning or exam_evening:
         schedule_query = select(ExamSchedule.user_id).where(
@@ -1017,7 +1053,17 @@ def admin_users(
     else:
         stmt = stmt.order_by(User.created_at.desc())
 
-    # Paging not used effectively (size very large) as per spec: show all
+    # Stable tie-breaks prevent duplicated/skipped people at page boundaries.
+    stmt = stmt.order_by(User.id.asc() if sort in ("date_asc", "name_asc") else User.id.desc())
+    total = None
+    if paginated:
+        size = min(100, max(1, size if size != 1000000 else 50))
+        total = int(db.scalar(select(func.count()).select_from(
+            stmt.with_only_columns(User.id).order_by(None).subquery()
+        )) or 0)
+        page = min(max(1, page), max(1, (total + size - 1) // size))
+        stmt = stmt.limit(size).offset((page - 1) * size)
+
     stmt = stmt.options(selectinload(User.certificate))
     users = db.scalars(stmt).all()
     founder_email = (settings.founder_admin_email or "").lower()
@@ -1100,6 +1146,35 @@ def admin_users(
         items.append(UserOut(**user_dict))
     if stage_expired_changed:
         db.commit()
+    if paginated:
+        global_unseen_users = int(db.scalar(
+            select(func.count(func.distinct(Statement.user_id)))
+            .join(User, User.id == Statement.user_id)
+            .where(Statement.seen_at.is_(None))
+        ) or 0)
+        page_items = []
+        for item in items:
+            payload = item.model_dump(mode="json")
+            # A display revision detects other-admin edits without transmitting
+            # names/contact details/certificates on every five-second poll.
+            display = {key: payload.get(key) for key in (
+                "personal_id", "first_name", "last_name", "phone", "email",
+                "code", "is_admin", "is_founder", "created_at", "certificate",
+                "photo_filename",
+            )}
+            revision = sha256(_json.dumps(display, sort_keys=True).encode()).hexdigest()[:20]
+            if live:
+                payload = {key: payload[key] for key in (
+                    "id", "exam_permission", "has_unseen_statements", "unseen_statement_count",
+                    "has_pending_statements", "pending_statement_count",
+                )}
+            payload["display_revision"] = revision
+            page_items.append(payload)
+        return {
+            "items": page_items, "total": total, "page": page, "size": size,
+            "paginated": True, "live": live,
+            "global_unseen_users": global_unseen_users,
+        }
     return UsersListResponse(items=items, total=len(items))
 
 

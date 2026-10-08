@@ -1,0 +1,13 @@
+{
+  "pid": "59502",
+  "files": {
+    "frontend/styles/registry.css": {
+      "before": "23b50eb77a3114a89620556556b9e6fec4671f9c6838f09f1ee8c253cd6d0144",
+      "after": "5a945418b2ce17c282a3014cc19703557fcb186611f60cd7d815191a2332feb7"
+    },
+    "frontend/pages/registry.html": {
+      "before": "e06a82d89664932588b2a47fd99ab4ab006b7681fcc72bfac1898d95bada61db",
+      "after": "ec9d0038a343aeac25812b0adcd76cddbc9a5f5e1cb4de8a0d6487e0a2eaae2a"
+    }
+  }
+}

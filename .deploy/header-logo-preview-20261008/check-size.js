@@ -12,6 +12,7 @@ async function main() {
     const url = new URL(req.url, 'http://127.0.0.1');
     const json = (status, data) => { res.writeHead(status, {'Content-Type': 'application/json'}); res.end(JSON.stringify(data)); };
     if (req.method !== 'GET') return json(405, {});
+    if (url.pathname === '/certified-persons/registry/page') return json(200, {items: [], total: 0, filtered_total: 0, offset: 0, limit: 50});
     if (url.pathname === '/certified-persons/registry') return json(200, []);
     if (url.pathname === '/documents') return json(200, {items: []});
     if (url.pathname === '/logo-check.html') {
@@ -52,10 +53,15 @@ async function main() {
         assert(state.left >= 0 && state.right <= width && state.top >= state.barTop && state.bottom <= state.barBottom);
         assert(!state.overlap, 'Logo overlaps navigation: '+page+' '+width);
         assert(state.scroll <= state.client, 'Horizontal overflow: ' + page + ' ' + width);
+        const resources = await run("performance.getEntriesByType('resource').map(r=>r.name)");
+        assert(resources.some(url=>url.includes('dejavu-sans.woff2')), 'WOFF2 font not loaded');
+        assert(!resources.some(url=>/dejavu-sans\.ttf|vendor\/(jspdf|svg2pdf|mammoth)/.test(url)), 'Unexpected legacy font or PDF/Word resource');
         reports.push({page, viewport: width, logoWidth: state.width, logoHeight: state.height, noOverflow: true});
         if (page === 'index.html' && [1440, 390].includes(width)) {
           const shot = await send('Page.captureScreenshot', {format: 'png', clip: {x: 0, y: 0, width, height: 230, scale: 1}});
           fs.writeFileSync(path.join(__dirname, 'header-' + width + '.png'), Buffer.from(shot.data, 'base64'));
+          const pageShot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width,height:await run('document.documentElement.scrollHeight'),scale:1}});
+          fs.writeFileSync(path.join(__dirname,'home-'+width+'.png'),Buffer.from(pageShot.data,'base64'));
         }
       }
     }

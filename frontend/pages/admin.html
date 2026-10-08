@@ -6,26 +6,25 @@
     <title>ადმინისტრატორის პანელი - Certification</title>
     <meta name="api-base" content="" />
     <script src="../scripts/config.js" defer></script>
-    <script src="../scripts/admin/shared.js" defer></script>
+    <script src="../scripts/admin/shared.js?v=20261008-perf1" defer></script>
     <script src="../scripts/admin/exam-settings.js" defer></script>
     <script src="../scripts/admin/blocks.js" defer></script>
     <script src="../scripts/admin/multi-apartment.js" defer></script>
     <script src="../scripts/admin/multi-functional.js" defer></script>
-    <script src="../scripts/admin/statements.js?v=20261008-1" defer></script>
-    <script src="../scripts/admin/results.js" defer></script>
-    <script src="../scripts/admin/project-results.js" defer></script>
+    <script src="../scripts/admin/statements.js?v=20261008-perf1" defer></script>
+    <script src="../scripts/admin/results.js?v=20261008-perf1" defer></script>
+    <script src="../scripts/admin/project-results.js?v=20261008-perf1" defer></script>
     <script src="../scripts/vendor/qrcode-generator.js?v=1" defer></script>
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
-    <script src="../scripts/admin/certificate.js?v=20261008-center1" defer></script>
+    <script src="../scripts/admin/certificate.js?v=20261008-perf1" defer></script>
     <script src="../scripts/admin/exam-schedules.js?v=20261008-1" defer></script>
-    <script src="../scripts/admin/users.js?v=20261008-7" defer></script>
+    <script src="../scripts/admin/users.js?v=20261008-perf1" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
-    <script src="../vendor/mammoth.browser.min.js" defer></script>
-    <script src="../scripts/admin/documents.js" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=6" />
+    <script src="../scripts/admin/documents.js?v=20261008-perf1" defer></script>
+    <link rel="stylesheet" href="../styles/admin.css?v=20261008-perf1" />
   </head>
   <body>
     <header>
@@ -223,7 +222,16 @@
               <span class="users-exam-filter-hint">თარიღის გარეშე — დღევანდელი ჯგუფი</span>
             </div>
           </div>
+          <div id="usersListNotice" class="users-list-notice" role="status" hidden>
+            <span id="usersListNoticeText" class="users-list-notice-text"></span>
+            <button id="usersListRetry" class="users-list-retry" type="button">ხელახლა ცდა</button>
+          </div>
           <div id="usersGrid" class="exam-blocks-grid"></div>
+          <nav id="usersPagination" class="users-pagination" aria-label="რეგისტრირებული პირების გვერდები" hidden>
+            <button id="usersPagePrevious" class="users-pagination-button" type="button" disabled>წინა გვერდი</button>
+            <span id="usersPageStatus" class="users-page-status" role="status" aria-live="polite"></span>
+            <button id="usersPageNext" class="users-pagination-button" type="button" disabled>შემდეგი გვერდი</button>
+          </nav>
         </div>
       </section>
       <section id="multi-apartment-section" class="exam-settings" style="display:none;">
@@ -763,8 +771,6 @@
       </div>
     </footer>
 
-    <script src="../vendor/jspdf.umd.min.js"></script>
-    <script src="../vendor/svg2pdf.min.js"></script>
     <script src="../scripts/admin.js?v=12" defer></script>
   </body>
 </html>

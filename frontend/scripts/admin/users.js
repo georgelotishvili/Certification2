@@ -18,8 +18,22 @@
     const { onShowResults, onShowStatements, onShowCertificate, onShowMultiApartmentResults, onShowMultiFunctionalResults } = context;
     const navLinks = DOM.navLinks || [];
     const LIVE_REFRESH_MS = 5000;
+    const PAGE_SIZE = 50;
+    const SEARCH_DELAY_MS = 250;
 
     let cachedItems = [];
+    const cachedUsersById = new Map();
+    const cardsById = new Map();
+    let currentPage = 1;
+    let displayedPage = 1;
+    let totalUsers = 0;
+    let paginatedList = false;
+    let globalUnseenUsers = null;
+    let searchTimer = null;
+    let renderController = null;
+    let renderInFlight = false;
+    let liveRefreshQueued = false;
+    let listIsStale = false;
     let editActiveUser = null;
     let editInitialValues = null;
     let editInitialCode = '';
@@ -68,12 +82,76 @@
       }
     }
 
-    async function fetchUsers() {
+    const pagination = {
+      container: DOM.usersPagination || document.getElementById?.('usersPagination'),
+      previous: DOM.usersPagePrevious || document.getElementById?.('usersPagePrevious'),
+      next: DOM.usersPageNext || document.getElementById?.('usersPageNext'),
+      status: DOM.usersPageStatus || document.getElementById?.('usersPageStatus'),
+    };
+    const listNotice = {
+      container: DOM.usersListNotice || document.getElementById?.('usersListNotice'),
+      text: DOM.usersListNoticeText || document.getElementById?.('usersListNoticeText'),
+      retry: DOM.usersListRetry || document.getElementById?.('usersListRetry'),
+    };
+
+    function setListNotice(message = '', retry = false) {
+      if (listNotice.container) listNotice.container.hidden = !message;
+      if (listNotice.text) listNotice.text.textContent = message;
+      if (listNotice.retry) listNotice.retry.hidden = !retry;
+    }
+
+    function setListStale(stale) {
+      listIsStale = stale;
+      cardsById.forEach((card, id) => {
+        const checkbox = card.querySelector('.chk-exam');
+        if (checkbox) checkbox.disabled = stale || !!cachedUsersById.get(id)?.is_founder || examPermissionSavingIds.has(id);
+      });
+    }
+
+    function wouldRemoveUnfinishedEditor(items) {
+      const nextIds = new Set(items.map((user) => String(user.id)));
+      return [...cardsById].some(([id, card]) => {
+        if (nextIds.has(id) || !card.classList.contains('open')) return false;
+        const panel = card.querySelector('.user-exam-schedules');
+        const date = card.querySelector('.exam-schedule-date');
+        const morning = card.querySelector('.exam-schedule-morning');
+        const evening = card.querySelector('.exam-schedule-evening');
+        return examPermissionSavingIds.has(id) || panel?.getAttribute?.('aria-busy') === 'true'
+          || (!!date?.value && !morning?.checked && !evening?.checked);
+      });
+    }
+
+    function deferEditorRemoval(items) {
+      if (!wouldRemoveUnfinishedEditor(items)) return false;
+      items.forEach((user) => {
+        // Do not acknowledge a changed display revision before its name/contact
+        // fields have actually been rendered; a later poll must still fetch it.
+        const state = Object.fromEntries(['id', 'exam_permission', 'has_unseen_statements',
+          'unseen_statement_count', 'has_pending_statements', 'pending_statement_count']
+          .map((key) => [key, user[key]]));
+        applyLiveUserState(state);
+      });
+      setListStale(true);
+      setListNotice('სია შეიცვალა. შეყვანილი მონაცემების შესანარჩუნებლად განახლება გადაიდო — დაასრულეთ მოქმედება და დახურეთ გახსნილი ბარათი.', true);
+      return true;
+    }
+
+    async function fetchUsers({ live = false, signal } = {}) {
       if (!DOM.usersGrid) return { items: [] };
       const params = new URLSearchParams();
       const search = String(DOM.usersSearch?.value || '').trim();
       if (search) params.set('search', search);
       if (DOM.onlyAdmins?.checked) params.set('only_admins', 'true');
+      params.set('paginated', 'true');
+      params.set('page', String(currentPage));
+      params.set('size', String(PAGE_SIZE));
+      if (live) params.set('live', 'true');
+      if (DOM.filterStatements?.checked) params.set('new_statements', 'true');
+      if (DOM.filterPendingStatements?.checked) params.set('pending_statements', 'true');
+      const qualification = DOM.filterCertified?.checked ? 'certified'
+        : DOM.filterArchitects?.checked ? 'architect'
+          : DOM.filterExperts?.checked ? 'expert' : DOM.filterMunicipal?.checked ? 'municipal' : '';
+      if (qualification) params.set('qualification', qualification);
       const statementDate = selectedStatementsDate();
       if (statementDate) params.set('statement_date', statementDate);
       if (DOM.filterExamMorning?.checked) params.set('exam_morning', 'true');
@@ -82,6 +160,7 @@
       params.set('sort', DOM.usersSort?.value || 'date_desc');
       const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, {
         headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        signal,
       });
       if (!response.ok) throw new Error('users failed');
       return await response.json();
@@ -94,16 +173,14 @@
     }
 
     function findUserCard(userId) {
-      const cards = Array.from(DOM.usersGrid?.querySelectorAll('.block-card') || []);
-      return cards.find((card) => String(card.dataset.id) === String(userId)) || null;
+      return cardsById.get(String(userId)) || null;
     }
 
     function mergeCachedUser(user) {
       if (!user || user.id == null) return;
-      const index = cachedItems.findIndex((item) => String(item.id) === String(user.id));
-      if (index !== -1) {
-        cachedItems[index] = { ...cachedItems[index], ...user };
-      }
+      const existing = cachedUsersById.get(String(user.id));
+      // Card callbacks retain the same object and always see the newest data.
+      if (existing) Object.assign(existing, user);
     }
 
     function applyLiveUserState(user) {
@@ -113,9 +190,8 @@
       const card = findUserCard(user.id);
       if (!card) return;
 
-      if (examPermissionSavingIds.has(String(user.id))) return;
       const examCheckbox = card.querySelector('.chk-exam');
-      if (examCheckbox && !examCheckbox.disabled) {
+      if (!examPermissionSavingIds.has(String(user.id)) && examCheckbox && !examCheckbox.disabled) {
         examCheckbox.checked = !!user.exam_permission;
       }
 
@@ -126,21 +202,58 @@
       }
     }
 
+    function updatePagination(data) {
+      paginatedList = data?.paginated === true;
+      if (paginatedList) {
+        currentPage = data.page;
+        displayedPage = data.page;
+        totalUsers = data.total;
+        globalUnseenUsers = data.global_unseen_users;
+        updateNavBadge(globalUnseenUsers > 0);
+      }
+      const pages = Math.max(1, Math.ceil(totalUsers / PAGE_SIZE));
+      if (pagination.container) pagination.container.hidden = !paginatedList;
+      if (pagination.previous) pagination.previous.disabled = currentPage <= 1 || renderInFlight;
+      if (pagination.next) pagination.next.disabled = currentPage >= pages || renderInFlight;
+      if (pagination.status) pagination.status.textContent = totalUsers
+        ? `${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, totalUsers)} / ${totalUsers} პირი`
+        : 'პირები ვერ მოიძებნა';
+    }
+
     async function refreshLiveUserStates(options = {}) {
       const force = !!options.force;
       if (!DOM.usersGrid) return;
       if (!force && document.hidden) return;
       if (!force && !isRegistrationsVisible()) return;
-      if (liveRefreshInFlight) return;
+      if (renderInFlight || searchTimer) return;
+      if (liveRefreshInFlight) {
+        if (force) liveRefreshQueued = true;
+        return;
+      }
 
       liveRefreshInFlight = true;
       const requestVersion = usersRenderVersion;
       const statementVersion = statementsStateVersion;
       const scheduleVersion = schedulesStateVersion;
       try {
-        const data = await fetchUsers();
+        const data = await fetchUsers({ live: true });
         if (requestVersion !== usersRenderVersion || statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) return;
         const items = Array.isArray(data?.items) ? data.items : [];
+        if (data.paginated) {
+          const membershipChanged = data.page !== currentPage || items.length !== cachedItems.length
+            || items.some((user, index) => String(user.id) !== String(cachedItems[index]?.id)
+              || user.display_revision !== cachedItems[index]?.display_revision);
+          if (membershipChanged) {
+            if (deferEditorRemoval(items)) return;
+            await render({ preserveExisting: true, keepPage: true });
+          } else {
+            items.forEach(applyLiveUserState);
+            updatePagination(data);
+            setListStale(false);
+            setListNotice();
+          }
+          return;
+        }
         const dateMembershipChanged = (selectedStatementsDate() || hasExamScheduleFilter()) && (
           items.length !== cachedItems.length ||
           items.some((user, index) => String(user.id) !== String(cachedItems[index]?.id))
@@ -155,21 +268,16 @@
         // Live refresh is best-effort; manual refresh/render still shows errors.
       } finally {
         liveRefreshInFlight = false;
+        if (liveRefreshQueued) {
+          liveRefreshQueued = false;
+          void refreshLiveUserStates({ force: true });
+        }
       }
     }
 
     async function refreshAfterScheduleChange() {
       schedulesStateVersion += 1;
-      const requestVersion = usersRenderVersion;
-      const statementVersion = statementsStateVersion;
-      const scheduleVersion = schedulesStateVersion;
-      try {
-        const data = await fetchUsers();
-        if (requestVersion !== usersRenderVersion || statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) return;
-        drawUsers(Array.isArray(data?.items) ? data.items : [], { preserveExisting: true });
-      } catch {
-        showToast('ცვლილება შენახულია, მაგრამ სიის განახლება ვერ მოხერხდა. განაახლეთ სია.', 'error');
-      }
+      return render({ preserveExisting: true, keepPage: true });
     }
 
     function startLiveRefresh() {
@@ -249,11 +357,11 @@
                       <span class="photo-filename" style="font-size:13px;color:#525252;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.photo_filename ? escapeHtml(user.photo_filename) : '—'}</span>
                     </div>
                     <div style="color:#525252;font-size:13px;line-height:1.8;">
-                      <div>პირადი №: <strong>${safePersonalId}</strong></div>
-                      <div>ტელეფონი: <strong>${safePhone}</strong></div>
-                      <div>კოდი: <strong style="color:#6d28d9;">${safeCode}</strong></div>
-                      <div>მაილი: <strong style="color:#065f46;">${safeEmail}</strong></div>
-                      <div>რეგისტრაცია: <strong>${safeRegistered}</strong></div>
+                      <div>პირადი №: <strong data-user-field="personal_id">${safePersonalId}</strong></div>
+                      <div>ტელეფონი: <strong data-user-field="phone">${safePhone}</strong></div>
+                      <div>კოდი: <strong data-user-field="code" style="color:#6d28d9;">${safeCode}</strong></div>
+                      <div>მაილი: <strong data-user-field="email" style="color:#065f46;">${safeEmail}</strong></div>
+                      <div>რეგისტრაცია: <strong data-user-field="created_at">${safeRegistered}</strong></div>
                     </div>
                   </div>
                   <div>
@@ -290,6 +398,7 @@
         card.querySelector('.block-questions')?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
         toggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
         if (!isOpen) schedulesController?.load?.();
+        else if (listIsStale) void refreshLiveUserStates({ force: true });
       });
 
       const checkbox = card.querySelector('.chk-admin');
@@ -301,6 +410,9 @@
             event.target.checked = !desired;
             return;
           }
+          statementsStateVersion += 1;
+          examPermissionSavingIds.add(String(id));
+          event.target.disabled = true;
           try {
             const response = await fetch(`${API_BASE}/admin/users/${id}/admin`, {
               method: 'PATCH',
@@ -308,9 +420,15 @@
               body: JSON.stringify({ is_admin: desired }),
             });
             if (!response.ok) throw new Error('failed');
+            statementsStateVersion += 1;
+            examPermissionSavingIds.delete(String(id));
+            await render({ preserveExisting: true, keepPage: true });
           } catch {
             event.target.checked = !desired;
             alert('ვერ შეინახა სტატუსი');
+          } finally {
+            examPermissionSavingIds.delete(String(id));
+            event.target.disabled = false;
           }
         });
       }
@@ -320,6 +438,12 @@
         examCheckbox.addEventListener('change', async (event) => {
           const id = card.dataset.id;
           const desired = !!event.target.checked;
+          if (listIsStale) {
+            event.target.checked = !!cachedUsersById.get(String(id))?.exam_permission;
+            showToast('ჯერ განაახლეთ სია, რათა არჩეული ფილტრის შედეგები დადასტურდეს.', 'error');
+            return;
+          }
+          statementsStateVersion += 1;
           examPermissionSavingIds.add(String(id));
           event.target.disabled = true;
           try {
@@ -329,15 +453,16 @@
               body: JSON.stringify({ exam_permission: desired }),
             });
             if (!response.ok) throw new Error('failed');
+            statementsStateVersion += 1;
             examPermissionSavingIds.delete(String(id));
-            event.target.disabled = false;
+            event.target.disabled = listIsStale || !!user.is_founder;
             await refreshLiveUserStates({ force: true });
           } catch {
             event.target.checked = !desired;
             alert('ვერ შეინახა გამოცდის უფლება');
           } finally {
             examPermissionSavingIds.delete(String(id));
-            event.target.disabled = false;
+            event.target.disabled = listIsStale || !!user.is_founder;
           }
         });
       }
@@ -353,7 +478,12 @@
               headers: { ...getAdminHeaders(), ...getActorHeaders() },
             });
             if (!response.ok) throw new Error('failed');
+            statementsStateVersion += 1;
             card.remove();
+            cardsById.delete(String(id));
+            cachedUsersById.delete(String(id));
+            cachedItems = cachedItems.filter((item) => String(item.id) !== String(id));
+            await render({ preserveExisting: true, keepPage: true });
           } catch {
             alert('წაშლა ვერ შესრულდა');
           }
@@ -427,6 +557,8 @@
               return;
             }
             const data = await response.json();
+            statementsStateVersion += 1;
+            mergeCachedUser({ id: user.id, photo_filename: data.photo_filename || file.name });
             if (photoFilename) photoFilename.textContent = data.photo_filename || file.name;
             if (photoDeleteBtn) photoDeleteBtn.style.display = '';
             showToast('ფოტო წარმატებით აიტვირთა');
@@ -446,6 +578,8 @@
               headers: { ...getAdminHeaders(), ...getActorHeaders() },
             });
             if (!response.ok) throw new Error('failed');
+            statementsStateVersion += 1;
+            mergeCachedUser({ id: user.id, photo_filename: null });
             if (photoFilename) photoFilename.textContent = '—';
             photoDeleteBtn.style.display = 'none';
             showToast('ფოტო წაიშალა');
@@ -488,17 +622,23 @@
         });
       } else {
         DOM.usersGrid.innerHTML = '';
+        cardsById.clear();
       }
-      cachedItems = items || [];
+      cachedItems = (items || []).map((user) => {
+        const existing = cachedUsersById.get(String(user.id));
+        return existing ? Object.assign(existing, user) : user;
+      });
+      cachedUsersById.clear();
+      cachedItems.forEach((user) => cachedUsersById.set(String(user.id), user));
       
       // Apply certificate filters
-      let filteredItems = items || [];
+      let filteredItems = cachedItems;
       const filterArchitects = DOM.filterArchitects?.checked;
       const filterExperts = DOM.filterExperts?.checked;
       const filterMunicipal = DOM.filterMunicipal?.checked;
       const filterCertified = DOM.filterCertified?.checked;
       
-      if (filterArchitects || filterExperts || filterMunicipal || filterCertified) {
+      if (!paginatedList && (filterArchitects || filterExperts || filterMunicipal || filterCertified)) {
         filteredItems = filteredItems.filter((user) => {
           const certificate = user.certificate || user.certificate_info || {};
           const certLevel = certificate.level || '';
@@ -525,6 +665,7 @@
         if (existingCard) {
           existingCards.delete(String(user.id));
           applyLiveUserState(user);
+          updateUserDisplay(existingCard, user);
           DOM.usersGrid.appendChild(existingCard);
           return;
         }
@@ -536,11 +677,32 @@
           card.dataset.pendingCount = String(user.pending_statement_count || 0);
           setCardUnseenState(card, user.has_unseen_statements, user.has_pending_statements);
           mountUserCard(card, user);
+          cardsById.set(String(user.id), card);
           DOM.usersGrid.appendChild(card);
         }
       });
-      existingCards.forEach((card) => card.remove());
-      updateNavBadge(cachedItems.some((user) => user.has_unseen_statements));
+      existingCards.forEach((card, id) => {
+        card.remove();
+        cardsById.delete(id);
+      });
+      updateNavBadge(globalUnseenUsers == null
+        ? cachedItems.some((user) => user.has_unseen_statements) : globalUnseenUsers > 0);
+    }
+
+    function updateUserDisplay(card, user) {
+      const name = card.querySelector('.user-name');
+      if (name) name.textContent = `${user.first_name || ''} ${user.last_name || ''}`.trim() || '(უსახელო)';
+      for (const field of ['personal_id', 'phone', 'code', 'email', 'created_at']) {
+        const node = card.querySelector(`[data-user-field="${field}"]`);
+        if (node) node.textContent = field === 'created_at' ? formatDateTime(user[field]) : user[field] || '';
+      }
+      const admin = card.querySelector('.chk-admin');
+      if (admin && !examPermissionSavingIds.has(String(user.id))) admin.checked = !!(user.is_admin || user.is_founder);
+      const filename = card.querySelector('.photo-filename');
+      if (filename) filename.textContent = user.photo_filename || '—';
+      const deletePhoto = card.querySelector('.photo-delete-btn');
+      if (deletePhoto) deletePhoto.style.display = user.photo_filename ? 'inline-flex' : 'none';
+      updateUserCardColor(user.id, user.certificate || user.certificate_info, false);
     }
 
     function normalizeUserValue(value) {
@@ -623,10 +785,12 @@
           return;
         }
         const data = await response.json();
+        statementsStateVersion += 1;
         const nextItems = cachedItems.map((item) => (String(item.id) === String(data.id) ? { ...item, ...data } : item));
         drawUsers(nextItems);
         showToast('მონაცემები წარმატებით განახლდა');
         closeEditModal();
+        if (paginatedList) void render({ preserveExisting: true, keepPage: true });
       } catch {
         showToast('მონაცემების განახლება ვერ შესრულდა', 'error');
       } finally {
@@ -718,28 +882,76 @@
       }
     }
 
-    async function render() {
+    async function render({ preserveExisting = false, keepPage = false } = {}) {
       if (!DOM.usersGrid) return;
+      if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
+      if (!keepPage) currentPage = 1;
+      renderController?.abort();
+      renderController = typeof AbortController === 'function' ? new AbortController() : null;
       const requestVersion = ++usersRenderVersion;
       const statementVersion = statementsStateVersion;
       const scheduleVersion = schedulesStateVersion;
-      DOM.usersGrid.innerHTML = '';
+      renderInFlight = true;
+      setListStale(true);
+      setListNotice('მონაცემები ახლდება — ნაჩვენებია წინა შედეგები.');
+      DOM.usersGrid.setAttribute('aria-busy', 'true');
+      if (pagination.previous) pagination.previous.disabled = true;
+      if (pagination.next) pagination.next.disabled = true;
       try {
-        const data = await fetchUsers();
+        const data = await fetchUsers({ signal: renderController?.signal });
         if (requestVersion !== usersRenderVersion) return;
         // A statement action may finish while a filter render is loading. Fetch
         // fresh state rather than leaving the cleared grid empty or reviving old colors.
-        if (statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) return render();
-        cachedItems = Array.isArray(data?.items) ? data.items : [];
-        drawUsers(cachedItems);
-      } catch {
+        if (statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) {
+          return render({ preserveExisting: true, keepPage: true });
+        }
+        if (preserveExisting && data.paginated && deferEditorRemoval(data.items || [])) return;
+        updatePagination(data);
+        drawUsers(Array.isArray(data?.items) ? data.items : [], { preserveExisting });
+        setListStale(false);
+        setListNotice();
+      } catch (error) {
         if (requestVersion !== usersRenderVersion) return;
-        DOM.usersGrid.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
+        if (error?.name === 'AbortError') return;
+        currentPage = displayedPage;
+        // A failed refresh must not wipe the currently visible people.
+        if (!cachedItems.length) DOM.usersGrid.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
+        setListNotice('სიის განახლება ვერ მოხერხდა — ნაჩვენებია წინა შედეგები და ისინი შესაძლოა არჩეულ ფილტრს არ შეესაბამებოდეს. გამოცდაზე დაშვებამდე ხელახლა სცადეთ.', true);
+        showToast('სიის განახლება ვერ მოხერხდა. სცადეთ ხელახლა.', 'error');
+      } finally {
+        if (requestVersion === usersRenderVersion) {
+          renderInFlight = false;
+          DOM.usersGrid.setAttribute('aria-busy', 'false');
+          if (pagination.previous) pagination.previous.disabled = currentPage <= 1;
+          if (pagination.next) pagination.next.disabled = currentPage * PAGE_SIZE >= totalUsers;
+        }
       }
     }
 
     function init() {
-      on(DOM.usersSearch, 'input', render);
+      on(DOM.usersSearch, 'input', () => {
+        // Invalidate old responses immediately, not only after the debounce.
+        ++usersRenderVersion;
+        renderController?.abort();
+        renderInFlight = false;
+        setListStale(true);
+        setListNotice('მონაცემები ახლდება — ნაჩვენებია წინა შედეგები.');
+        if (pagination.previous) pagination.previous.disabled = true;
+        if (pagination.next) pagination.next.disabled = true;
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => { searchTimer = null; void render(); }, SEARCH_DELAY_MS);
+      });
+      on(listNotice.retry, 'click', () => render({ preserveExisting: true, keepPage: true }));
+      on(pagination.previous, 'click', () => {
+        if (renderInFlight || searchTimer || currentPage <= 1) return;
+        currentPage -= 1;
+        return render({ keepPage: true });
+      });
+      on(pagination.next, 'click', () => {
+        if (renderInFlight || searchTimer || currentPage * PAGE_SIZE >= totalUsers) return;
+        currentPage += 1;
+        return render({ keepPage: true });
+      });
       on(DOM.usersSort, 'change', render);
       on(DOM.onlyAdmins, 'change', render);
       on(DOM.filterStatements, 'change', render);
@@ -810,14 +1022,16 @@
       if (hasPending != null) pendingChanges.has_pending_statements = !!hasPending;
       if (pendingCount != null) pendingChanges.pending_statement_count = pendingCount || 0;
       else if (hasPending === false) pendingChanges.pending_statement_count = 0;
-      const index = cachedItems.findIndex((item) => String(item.id) === String(userId));
-      if (index !== -1) {
-        cachedItems[index] = {
-          ...cachedItems[index],
+      const existing = cachedUsersById.get(String(userId));
+      if (existing) {
+        if (globalUnseenUsers != null) {
+          globalUnseenUsers = Math.max(0, globalUnseenUsers + Number(!!hasUnseen) - Number(!!existing.has_unseen_statements));
+        }
+        Object.assign(existing, {
           has_unseen_statements: !!hasUnseen,
           unseen_statement_count: count || 0,
           ...pendingChanges,
-        };
+        });
       }
       const card = findUserCard(userId);
       if (card) {
@@ -827,11 +1041,16 @@
           card.dataset.pendingCount = String(pendingChanges.pending_statement_count);
         }
       }
-      updateNavBadge(cachedItems.some((item) => item.has_unseen_statements));
+      updateNavBadge(globalUnseenUsers == null
+        ? cachedItems.some((item) => item.has_unseen_statements) : globalUnseenUsers > 0);
+      if (paginatedList) void render({ preserveExisting: true, keepPage: true });
     }
 
-    function updateUserCardColor(userId, certificateData) {
-      const card = DOM.usersGrid?.querySelector(`.block-card[data-id="${userId}"]`);
+    function updateUserCardColor(userId, certificateData, refresh = true) {
+      if (refresh) statementsStateVersion += 1;
+      mergeCachedUser({ id: userId, certificate: certificateData, certificate_info: certificateData });
+      if (refresh && paginatedList) void render({ preserveExisting: true, keepPage: true });
+      const card = findUserCard(userId);
       if (!card) return;
       
       const nameElement = card.querySelector('.user-name');
@@ -856,15 +1075,6 @@
       
       nameElement.style.color = nameColor;
       
-      // Update cached data
-      const index = cachedItems.findIndex((item) => String(item.id) === String(userId));
-      if (index !== -1) {
-        cachedItems[index] = {
-          ...cachedItems[index],
-          certificate: certificateData,
-          certificate_info: certificateData,
-        };
-      }
     }
 
     function updateNavBadge(hasAny) {
@@ -877,12 +1087,15 @@
     }
 
     async function refreshUnseenSummary() {
+      const statementVersion = statementsStateVersion;
+      const requestVersion = usersRenderVersion;
       try {
         const response = await fetch(`${API_BASE}/admin/statements/summary`, {
           headers: { ...getAdminHeaders(), ...getActorHeaders() },
         });
         if (!response.ok) throw new Error('summary failed');
         const data = await response.json();
+        if (statementVersion !== statementsStateVersion || requestVersion !== usersRenderVersion) return;
         updateNavBadge(!!data?.has_unseen);
       } catch {}
     }

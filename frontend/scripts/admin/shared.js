@@ -53,30 +53,38 @@
     return global.btoa(binary);
   };
 
+  const scriptLoads = new Map();
   shared.loadExternalScript = function loadExternalScript(src) {
-    return new Promise((resolve, reject) => {
-      const existing = document.querySelector(`script[data-dynamic-src="${src}"]`);
-      if (existing) {
-        if (existing.dataset.loaded === 'true') {
-          resolve();
-        } else {
-          existing.addEventListener('load', () => resolve(), { once: true });
-          existing.addEventListener('error', (error) => reject(error), { once: true });
-        }
-        return;
-      }
+    if (scriptLoads.has(src)) return scriptLoads.get(src);
+    const promise = new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = src;
       script.async = true;
-      script.defer = true;
       script.dataset.dynamicSrc = src;
-      script.addEventListener('load', () => {
-        script.dataset.loaded = 'true';
-        resolve();
-      }, { once: true });
-      script.addEventListener('error', (error) => reject(error), { once: true });
-      document.head.appendChild(script);
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        if (error) {
+          script.remove();
+          reject(error);
+        } else {
+          script.dataset.loaded = 'true';
+          resolve();
+        }
+      };
+      const timeout = setTimeout(() => finish(new Error('Script loading timed out')), 30000);
+      script.addEventListener('load', () => finish(), { once: true });
+      script.addEventListener('error', () => finish(new Error('Script could not be loaded')), { once: true });
+      try { document.head.appendChild(script); } catch (error) { finish(error); }
     });
+    const retryable = promise.catch((error) => {
+      scriptLoads.delete(src);
+      throw error;
+    });
+    scriptLoads.set(src, retryable);
+    return retryable;
   };
 
   shared.escapeHtml = function escapeHtml(value) {

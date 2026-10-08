@@ -1,0 +1,10 @@
+{
+  "status": "deployed",
+  "files": [
+    "frontend/styles/registry.css",
+    "frontend/pages/registry.html"
+  ],
+  "backend_pid_unchanged": true,
+  "server_backup_created": false,
+  "server_staging_created": false
+}

@@ -75,7 +75,8 @@ html, body {
 
 @font-face {
   font-family: 'DejaVu Sans';
-  src: url('../assets/fonts/dejavu-sans.ttf') format('truetype');
+  src: url('../assets/fonts/dejavu-sans.woff2?v=20261008-1') format('woff2'),
+       url('../assets/fonts/dejavu-sans.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -976,7 +977,57 @@ main {
 
 .users-filter-label span {
   line-height: 1.4;
+  font-size: 14px;
 }
+
+.users-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+.users-pagination[hidden] { display: none; }
+.users-list-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px;
+  padding: 12px 14px;
+  border: 1px solid #d5b76d;
+  background: #fffaf0;
+  color: #684b13;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.users-list-notice[hidden] { display: none; }
+.users-list-notice-text { flex: 1 1 220px; }
+.users-list-retry {
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid #9db4e4;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.users-list-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.users-pagination-button {
+  min-height: 42px;
+  padding: 9px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--text-strong);
+  cursor: pointer;
+  font-size: 14px;
+}
+.users-pagination-button:disabled { opacity: .5; cursor: default; }
+.users-pagination-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.users-page-status { color: var(--text-strong); font-size: 13px; text-align: center; }
 
 .users-statements-filter,
 .users-exam-date-filter {

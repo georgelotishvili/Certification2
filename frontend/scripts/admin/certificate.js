@@ -1437,19 +1437,15 @@
       return null;
     }
 
-    async function waitForScriptToLoad(_src, checkFn, maxWait = 1500) {
-      const startTime = Date.now();
-      while (Date.now() - startTime < maxWait) {
-        if (checkFn()) return true;
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      return false;
-    }
-
     async function ensureVectorPdfLibrariesLoaded() {
       if (global.jspdf?.jsPDF && findSvg2PdfFunction()) return true;
-      // If scripts are present in DOM but not yet initialized, wait briefly
-      await waitForScriptToLoad('', () => !!(global.jspdf?.jsPDF && findSvg2PdfFunction()), 1500);
+      try {
+        // svg2pdf extends jsPDF, so the dependency must finish first.
+        if (!global.jspdf?.jsPDF) await loadExternalScript('../vendor/jspdf.umd.min.js');
+        if (!findSvg2PdfFunction()) await loadExternalScript('../vendor/svg2pdf.min.js');
+      } catch {
+        return false; // Existing export error handling re-enables the button.
+      }
       return !!(global.jspdf?.jsPDF && findSvg2PdfFunction());
     }
 

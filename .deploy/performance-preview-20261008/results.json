@@ -1,0 +1,43 @@
+{
+  "reports": [
+    {
+      "width": 1920,
+      "noOverflow": true
+    },
+    {
+      "width": 1440,
+      "noOverflow": true
+    },
+    {
+      "width": 1024,
+      "noOverflow": true
+    },
+    {
+      "width": 768,
+      "noOverflow": true
+    },
+    {
+      "width": 730,
+      "noOverflow": true
+    },
+    {
+      "width": 600,
+      "noOverflow": true
+    },
+    {
+      "width": 390,
+      "noOverflow": true
+    },
+    {
+      "width": 320,
+      "noOverflow": true
+    }
+  ],
+  "pagination": true,
+  "searchBeyondFirstPage": true,
+  "emptyEagerLibraries": true,
+  "staleExamGuard": true,
+  "retry": true,
+  "realGeorgianWordImport": true,
+  "browserErrors": 0
+}

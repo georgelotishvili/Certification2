@@ -650,8 +650,7 @@
     async function ensureJsPdf() {
       if (global.jspdf?.jsPDF) return global.jspdf.jsPDF;
       if (!jsPdfLoader) {
-        const CDN_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        jsPdfLoader = loadExternalScript(CDN_SRC).catch((error) => {
+        jsPdfLoader = loadExternalScript('../vendor/jspdf.umd.min.js').catch((error) => {
           jsPdfLoader = null;
           throw error;
         });

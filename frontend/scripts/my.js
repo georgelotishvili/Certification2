@@ -730,10 +730,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   loadCertificate();
 
-  function getJsPdf() {
-    try { return window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : null; } catch { return null; }
-  }
-
   // Convert certificate level to full Georgian label as printed on the certificate
   function formatCertificateLevel(rawLevel) {
     if (!rawLevel) return '—';

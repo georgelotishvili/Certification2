@@ -132,7 +132,8 @@ function harness(options = {}) {
   document.getElementById = (id) => DOM[id] || null;
   if (options.mode !== 'absent') {
     for (const key of ['registryPage', 'registryList', 'registrySearch', 'registryFilterArchitect', 'registryFilterExpert',
-      'registryFilterMunicipal', 'registrySort', 'registryResultsCount', 'registryTotalCount', 'registryResetFilters']) {
+      'registryFilterMunicipal', 'registrySort', 'registryResultsCount', 'registryTotalCount', 'registryResetFilters',
+      'registryPagination', 'registryPrevious', 'registryNext', 'registryPageNumber', 'registryError']) {
       const element = DOM[key] = new Element(key.includes('Filter') || key === 'registrySearch' ? 'input' : key === 'registrySort' ? 'select' : 'div');
       element.id = key;
     }
@@ -143,15 +144,31 @@ function harness(options = {}) {
     for (const key of ['registryFilterArchitect', 'registryFilterExpert', 'registryFilterMunicipal']) checkboxes.appendChild(DOM[key]);
     DOM.registrySort.value = 'date_desc';
   }
-  const state = { items: options.items ?? people(), requests: [], fail: !!options.fail, hold: !!options.hold, pending: [], average: 4.75 };
+  const state = { items: options.items ?? people(), requests: [], fail: !!options.fail, hold: !!options.hold, pending: [], malformed: false };
+  const timers = new Map(); let timerId = 0;
+  const normalize = (value) => String(value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const collator = new Intl.Collator('ka', { sensitivity: 'base', ignorePunctuation: true });
   const window = { location: { href: 'http://test.local/pages/registry.html' }, APP_CONFIG: { API_BASE: 'http://api.test' } };
   const fetch = async (address, requestOptions = {}) => {
     const url = new URL(address);
     state.requests.push({ url, options: requestOptions });
-    if (/^\/reviews\/[^/]+\/summary$/.test(url.pathname)) return { ok: true, json: async () => ({ average: state.average }) };
-    assert.equal(url.pathname, '/certified-persons/registry');
+    assert.equal(url.pathname, '/certified-persons/registry/page');
     assert.equal(requestOptions.method || 'GET', 'GET', 'public registry must be read-only');
-    const snapshot = structuredClone(state.items);
+    let items = structuredClone(state.items);
+    const total = items.length;
+    const q = normalize(url.searchParams.get('q'));
+    if (q) items = items.filter((person) => [person.full_name, person.unique_code].some((value) => normalize(value).includes(q)));
+    const qualifications = url.searchParams.get('qualifications')?.split(',').filter(Boolean) || [];
+    if (qualifications.length && qualifications.length < 3) items = items.filter((person) => qualifications.includes(person.qualification));
+    const sort = url.searchParams.get('sort');
+    const comparison = sort?.startsWith('name') ? (a, b) => collator.compare(a.full_name, b.full_name)
+      : sort?.startsWith('rating') ? (a, b) => Number(a.rating || 0) - Number(b.rating || 0)
+      : (a, b) => Date.parse(a.registration_date) - Date.parse(b.registration_date);
+    items.sort((a, b) => (sort?.endsWith('desc') ? -1 : 1) * comparison(a, b));
+    const limit = Number(url.searchParams.get('limit'));
+    const filtered_total = items.length;
+    const offset = filtered_total ? Math.min(Number(url.searchParams.get('offset')), Math.floor((filtered_total - 1) / limit) * limit) : 0;
+    const snapshot = state.malformed ? [] : { items: items.slice(offset, offset + limit), total, filtered_total, offset, limit };
     const response = { ok: !state.fail, json: async () => snapshot };
     if (state.hold) {
       state.hold = false;
@@ -159,12 +176,16 @@ function harness(options = {}) {
     }
     return response;
   };
-  vm.runInNewContext(source, { window, document, fetch, URL, URLSearchParams, console, setTimeout, clearTimeout });
+  vm.runInNewContext(source, { window, document, fetch, URL, URLSearchParams, console, AbortController,
+    setTimeout: (callback) => { const id = ++timerId; timers.set(id, callback); return id; },
+    clearTimeout: (id) => timers.delete(id),
+  });
   const registry = window.Registry.init({ refreshRating: options.refreshRating ?? false });
   const h = { DOM, document, window, state, registry,
     cards: () => DOM.registryList?.querySelectorAll('.registry-card').filter((card) => !card.classList.contains('registry-skeleton-card')) || [],
     names: () => h.cards().map((card) => card.querySelector('.registry-name')?.textContent.trim()),
-    async input(value) { DOM.registrySearch.value = value; await DOM.registrySearch.dispatch('input'); },
+    async flushSearch() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach((callback) => callback()); await settle(); },
+    async input(value) { DOM.registrySearch.value = value; await DOM.registrySearch.dispatch('input'); await h.flushSearch(); },
     async filter(kind, checked = true) { const checkbox = DOM[`registryFilter${kind}`]; checkbox.checked = checked; await checkbox.dispatch('change'); },
     async sort(key) { DOM.registrySort.value = key; await DOM.registrySort.dispatch('change'); },
   };
@@ -176,7 +197,7 @@ async function settle() { for (let index = 0; index < 12; index += 1) await Prom
 test('a dedicated registry page loads automatically without opening an overlay or locking scrolling', async () => {
   const h = harness(); await settle();
   assert.equal(h.state.requests.length, 1);
-  assert.equal(h.state.requests[0].url.searchParams.get('limit'), '500');
+  assert.equal(h.state.requests[0].url.searchParams.get('limit'), '50');
   assert.equal(h.state.requests[0].options.headers['Cache-Control'], 'no-cache');
   assert.deepEqual(h.names(), ['Beka Beridze', 'Dato Chikovani', 'Ana Abashidze']);
   assert.equal(h.document.body.classList.contains('registry-open'), false);
@@ -213,7 +234,8 @@ for (const [query, names] of [
   test(`registry searches names and certification codes: ${query.trim()}`, async () => {
     const h = harness(); await settle(); await h.input(query);
     assert.deepEqual(h.names(), names);
-    assert.equal(h.state.requests.length, 1, 'typing must not start extra registry requests');
+    assert.equal(h.state.requests.length, 2, 'a debounced search must query all server records once');
+    assert.equal(h.state.requests[1].url.searchParams.get('q'), query.toLowerCase().replace(/\s+/g, ' ').trim());
   });
 }
 
@@ -274,7 +296,8 @@ test('reset clears search, all qualification choices, and restores the original 
   for (const kind of ['Architect', 'Expert', 'Municipal']) assert.equal(h.DOM[`registryFilter${kind}`].checked, false);
   assert.equal(h.DOM.registrySort.value, 'date_desc');
   assert.deepEqual(h.names(), ['Beka Beridze', 'Dato Chikovani', 'Ana Abashidze']);
-  assert.equal(h.state.requests.length, 1);
+  assert.equal(h.state.requests.at(-1).url.searchParams.get('q'), '');
+  assert.equal(h.state.requests.at(-1).url.searchParams.get('qualifications'), '');
 });
 
 test('clear-search control preserves the independently selected qualification filters', async () => {
@@ -304,14 +327,14 @@ test('a failed registry request offers retry and retains controls chosen before 
   assert.deepEqual(h.names(), ['Dato Chikovani']);
   assert.equal(h.DOM.registryFilterMunicipal.checked, true);
   assert.equal(h.DOM.registrySearch.value, 'Dato');
-  assert.equal(h.state.requests.length, 2);
+  assert.equal(h.state.requests.length, 4);
 });
 
 test('controls changed while initial data is in flight are respected when data arrives', async () => {
   const h = harness({ hold: true });
   await h.filter('Municipal'); await h.input('Dato'); await h.sort('name_asc');
   await h.registry.refresh(true);
-  assert.equal(h.state.requests.length, 1, 'simultaneous calls must not duplicate the in-flight request');
+  assert.ok(h.state.requests[0].options.signal.aborted, 'changed controls cancel the stale initial request');
   h.state.pending.shift()(); await settle();
   assert.deepEqual(h.names(), ['Dato Chikovani']);
   assert.equal(h.DOM.registryFilterMunicipal.checked, true);
@@ -326,7 +349,7 @@ test('forced refresh uses new records while preserving current search, sort, and
   assert.equal(h.DOM.registryFilterArchitect.checked, true);
   assert.equal(h.DOM.registrySearch.value, 'Ana');
   assert.equal(h.DOM.registrySort.value, 'name_asc');
-  assert.equal(h.state.requests.length, 2);
+  assert.equal(h.state.requests.at(-1).url.searchParams.get('q'), 'ana');
 });
 
 test('profiles are real navigable links with safely encoded user IDs', async () => {
@@ -371,11 +394,146 @@ test('photo enlargement is an accessible separate button and does not navigate t
   assert.equal(modal.classList.contains('open'), false);
 });
 
-test('existing public review summaries continue refreshing card ratings', async () => {
+test('ratings use the page response and do not request one review summary per person', async () => {
   const h = harness({ refreshRating: true }); await settle();
   const requests = h.state.requests.filter(({ url }) => url.pathname.startsWith('/reviews/'));
-  assert.equal(requests.length, 3);
-  for (const card of h.cards()) assert.match(card.querySelector('.registry-rating').textContent, /4\.75/);
+  assert.equal(requests.length, 0);
+  assert.equal(h.state.requests.length, 1);
+  assert.deepEqual(h.cards().map((card) => card.querySelector('.registry-rating').textContent.trim()), ['⭐ 2.00', '⭐ 5.00', '⭐ 4.00']);
+  h.state.items[0].rating = 4.75;
+  await h.registry.refresh(true);
+  assert.equal(h.state.requests.length, 2);
+  assert.ok(h.cards().some((card) => card.querySelector('.registry-rating').textContent.includes('4.75')));
+});
+
+function manyPeople(count) {
+  return Array.from({ length: count }, (_, index) => ({ ...people()[0], id: index + 1,
+    full_name: `Person ${String(index + 1).padStart(4, '0')}`, unique_code: String(index + 1).padStart(10, '0'),
+    registration_date: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString() }));
+}
+
+test('bounded pages keep global totals and reach people beyond 500 without loading every row', async () => {
+  const h = harness({ items: manyPeople(611) }); await settle();
+  assert.equal(h.cards().length, 50);
+  assert.equal(h.DOM.registryTotalCount.textContent, '611');
+  assert.match(h.DOM.registryResultsCount.textContent, /1–50 \/ 611/);
+  assert.equal(h.DOM.registryPagination.hidden, false);
+  assert.equal(h.DOM.registryPrevious.disabled, true);
+  const ids = new Set();
+  for (let page = 1; page <= 13; page += 1) {
+    h.names().forEach((name) => ids.add(name));
+    assert.equal(h.DOM.registryPageNumber.textContent, `გვერდი ${page} / 13`);
+    if (page < 13) await h.DOM.registryNext.dispatch('click');
+  }
+  assert.equal(ids.size, 611);
+  assert.equal(h.cards().length, 11);
+  assert.equal(h.DOM.registryNext.disabled, true);
+  await h.DOM.registryPrevious.dispatch('click');
+  assert.equal(h.state.requests.at(-1).url.searchParams.get('offset'), '550');
+  await h.input('0000000001');
+  assert.deepEqual(h.names(), ['Person 0001']);
+  assert.equal(h.DOM.registryPagination.hidden, true);
+  assert.equal(h.state.requests.at(-1).url.searchParams.get('offset'), '0');
+});
+
+test('qualification, sort and reset changes return to first page instead of filtering one page locally', async () => {
+  const h = harness({ items: manyPeople(120) }); await settle();
+  for (const change of [() => h.filter('Architect'), () => h.sort('name_asc'), () => h.DOM.registryResetFilters.dispatch('click')]) {
+    await h.DOM.registryNext.dispatch('click');
+    assert.equal(h.state.requests.at(-1).url.searchParams.get('offset'), '50');
+    await change();
+    assert.equal(h.state.requests.at(-1).url.searchParams.get('offset'), '0');
+    assert.equal(h.cards().length, 50);
+  }
+});
+
+test('rapid typing sends one request after debounce and preserves previous rows until it completes', async () => {
+  const h = harness(); await settle();
+  const firstCards = h.cards();
+  for (const value of ['B', 'Be', 'Bek', 'Beka']) {
+    h.DOM.registrySearch.value = value;
+    await h.DOM.registrySearch.dispatch('input');
+  }
+  assert.equal(h.state.requests.length, 1);
+  assert.equal(h.cards()[0], firstCards[0]);
+  assert.equal(h.DOM.registryList.getAttribute('aria-busy'), 'true');
+  await h.flushSearch();
+  assert.equal(h.state.requests.length, 2);
+  assert.deepEqual(h.names(), ['Beka Beridze']);
+  assert.equal(h.DOM.registryList.getAttribute('aria-busy'), 'false');
+});
+
+test('in-flight duplicate refresh calls share one request', async () => {
+  const h = harness({ hold: true });
+  const first = h.registry.refresh(true);
+  const second = h.registry.refresh(true);
+  assert.equal(h.state.requests.length, 1);
+  assert.equal(first, second);
+  h.state.pending.shift()(); await first; await settle();
+  assert.equal(h.cards().length, 3);
+});
+
+test('a slow old response cannot overwrite a newer filtered page even when transport ignores abort', async () => {
+  const h = harness({ hold: true });
+  await h.filter('Expert');
+  assert.deepEqual(h.names(), ['Beka Beridze']);
+  h.state.pending.shift()(); await settle();
+  assert.deepEqual(h.names(), ['Beka Beridze']);
+  assert.equal(h.DOM.registryList.getAttribute('aria-busy'), 'false');
+});
+
+test('typing invalidates the old request before debounce fires', async () => {
+  const h = harness({ hold: true });
+  h.DOM.registrySearch.value = 'Ana';
+  await h.DOM.registrySearch.dispatch('input');
+  assert.equal(h.state.requests[0].options.signal.aborted, true);
+  h.state.pending.shift()(); await settle();
+  assert.deepEqual(h.names(), []);
+  assert.equal(h.DOM.registryList.getAttribute('aria-busy'), 'true');
+  await h.flushSearch();
+  assert.deepEqual(h.names(), ['Ana Abashidze']);
+});
+
+test('failed background refresh keeps the previous page visible with explicit stale notice and working retry', async () => {
+  const h = harness({ items: manyPeople(55) }); await settle();
+  const oldCard = h.cards()[0];
+  h.state.fail = true;
+  await h.DOM.registryNext.dispatch('click');
+  assert.equal(h.cards()[0], oldCard);
+  assert.match(h.DOM.registryResultsCount.textContent, /წინა შედეგები/);
+  assert.equal(h.DOM.registryError.hidden, false);
+  assert.equal(h.DOM.registryNext.disabled, true);
+  const retry = h.DOM.registryError.querySelector('.registry-retry'); assert.ok(retry);
+  h.state.fail = false;
+  await retry.dispatch('click');
+  assert.equal(h.cards().length, 5);
+  assert.equal(h.DOM.registryError.hidden, true);
+  assert.match(h.DOM.registryResultsCount.textContent, /51–55 \/ 55/);
+  assert.equal(h.DOM.registryNext.disabled, true);
+  assert.equal(h.DOM.registryPrevious.disabled, false);
+});
+
+test('malformed page data reports a retryable failure instead of a false empty registry', async () => {
+  const h = harness(); await settle();
+  h.state.malformed = true;
+  await h.registry.refresh(true);
+  assert.equal(h.cards().length, 3);
+  assert.ok(h.DOM.registryError.querySelector('.registry-retry'));
+  h.state.malformed = false;
+  await h.DOM.registryError.querySelector('.registry-retry').dispatch('click');
+  assert.equal(h.DOM.registryError.hidden, true);
+});
+
+test('server-clamped offset is reflected after the last page shrinks', async () => {
+  const h = harness({ items: manyPeople(51) }); await settle();
+  await h.DOM.registryNext.dispatch('click');
+  assert.equal(h.cards().length, 1);
+  h.state.items.pop();
+  await h.registry.refresh(true);
+  assert.equal(h.cards().length, 50);
+  assert.equal(h.DOM.registryPrevious.disabled, true);
+  assert.equal(h.DOM.registryPagination.hidden, true);
+  assert.match(h.DOM.registryResultsCount.textContent, /1–50 \/ 50/);
 });
 
 test('standalone page has crawlable Georgian title, canonical URL, description, and visible heading', () => {
@@ -462,4 +620,24 @@ test('public registry retains one full-width row per person instead of a multi-c
   }
   assert.match(css, /grid-template-areas:\s*'name code status'\s*'qualification code rating'/);
   assert.match(css, /grid-template-areas:\s*'name name'\s*'qualification qualification'\s*'code status'\s*'code rating'/);
+});
+
+test('certificate colors mark the outer left contour while qualification labels remain neutral', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../styles/registry.css'), 'utf8');
+  const colors = {architect: ['#3a5c9e', 'architect'], expert: ['#9e3a3a', 'expert'], municipal: ['#5a9e3a', 'municip']};
+  for (const [type, [color, template]] of Object.entries(colors)) {
+    assert.ok(css.includes(`.registry-page .registry-card[data-qualification="${type}"] { --registry-type-color: ${color}; }`));
+    const certificate = fs.readFileSync(path.join(__dirname, `../certificate/${template} bac.svg`), 'utf8');
+    assert.ok(certificate.toLowerCase().includes(color), 'accent must match the actual certificate');
+  }
+  const labels = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector]) => selector.includes('.registry-qualification'));
+  assert.ok(labels.length > 0);
+  assert.ok(labels.every(([, selector]) => !selector.includes('data-qualification') && !selector.includes('data-status')));
+  assert.match(css, /\.registry-qualification\s*\{[^}]*color:\s*#486079;/);
+  const edge = css.match(/\.registry-page \.registry-card\[data-qualification\]::before\s*\{([^}]+)\}/)[1];
+  assert.match(edge, /border-width:\s*3px 0 3px 6px;/);
+  assert.match(edge, /border-radius:\s*5px 0 0 5px;/);
+  assert.match(edge, /pointer-events:\s*none;/);
+  assert.match(edge, /left:\s*-1px;/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../pages/registry.html'), 'utf8'), /registry\.css\?v=20261008-accent1/);
 });

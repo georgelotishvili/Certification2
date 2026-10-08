@@ -50,13 +50,15 @@ body {
 
 @font-face {
   font-family: 'DejaVu Sans';
-  src: url('../assets/fonts/dejavu-sans.ttf') format('truetype');
+  src: url('../assets/fonts/dejavu-sans.woff2?v=20261008-1') format('woff2'),
+       url('../assets/fonts/dejavu-sans.ttf') format('truetype');
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'BPG Nino Mtavruli Bold';
-  src: url('../assets/fonts/bpg_nino_mtavruli_bold.ttf') format('truetype');
+  src: url('../assets/fonts/bpg_nino_mtavruli_bold.woff2?v=20261008-1') format('woff2'),
+       url('../assets/fonts/bpg_nino_mtavruli_bold.ttf') format('truetype');
   font-style: normal;
   font-weight: 700;
   font-display: swap;
@@ -149,10 +151,11 @@ footer {
 
 .footer-content.footer-only-contact {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   width: 80%;
-  height: 50px;
+  min-height: 50px;
   max-width: none;
   gap: 16px;
 }
@@ -266,6 +269,7 @@ footer {
 .footer-contact-item a,
 .footer-contact-item span {
   color: #111111;
+  font-size: 14px;
 }
 .footer-contact-item a:hover {
   color: #0a0a0a;
@@ -1168,6 +1172,11 @@ body.registry-open {
 }
 
 @media (max-width: 730px) {
+  .home-document { background: #ffffff; }
+  .home-document main {
+    background-image: linear-gradient(90deg, rgba(255,255,255,.90), rgba(255,255,255,.46)), url('../assets/photos/main backenground.jpg');
+  }
+
   main {
     margin-top: 40px;
     padding-top: 80px;

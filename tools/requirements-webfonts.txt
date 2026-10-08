@@ -1,0 +1,3 @@
+# Build/test tooling only. Do not add these to production backend dependencies.
+fonttools==4.59.0
+Brotli==1.1.0

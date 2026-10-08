@@ -6,6 +6,7 @@
       escapeHtml,
       getAdminHeaders,
       getActorHeaders,
+      loadExternalScript,
     } = context;
 
     const state = {
@@ -13,6 +14,8 @@
       editingId: null,
       selectedFile: null,
     };
+    let fileReadVersion = 0;
+    let fileImportPending = false;
 
     const els = {
       titleInput: document.getElementById('documentTitle'),
@@ -197,6 +200,8 @@
     }
 
     function clearForm() {
+      fileReadVersion += 1;
+      fileImportPending = false;
       if (els.titleInput) els.titleInput.value = '';
       if (els.contentEditor) els.contentEditor.innerHTML = '';
       if (els.fileInput) els.fileInput.value = '';
@@ -208,6 +213,8 @@
     }
 
     function startEdit(doc) {
+      fileReadVersion += 1;
+      fileImportPending = false;
       state.editingId = doc.id;
       state.selectedFile = null;
       if (els.titleInput) els.titleInput.value = doc.title || '';
@@ -223,6 +230,10 @@
     }
 
     async function handleAddOrUpdate() {
+      if (fileImportPending) {
+        showToast('გთხოვთ, დაელოდოთ ფაილის დამუშავებას', 'error');
+        return;
+      }
       const title = (els.titleInput?.value || '').trim();
       const content = (els.contentEditor?.innerHTML || '').trim();
 
@@ -305,16 +316,19 @@
 
     // Word ფაილის კონვერტაცია mammoth.js-ით
     async function convertWordToHtml(file) {
+      if (!global.mammoth?.convertToHtml) {
+        await loadExternalScript('../vendor/mammoth.browser.min.js');
+      }
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async function(e) {
           try {
-            if (typeof mammoth === 'undefined') {
+            if (!global.mammoth?.convertToHtml) {
               reject(new Error('mammoth.js არ არის ჩატვირთული'));
               return;
             }
             const arrayBuffer = e.target.result;
-            const result = await mammoth.convertToHtml({ arrayBuffer });
+            const result = await global.mammoth.convertToHtml({ arrayBuffer });
             resolve(result.value);
           } catch (err) {
             reject(err);
@@ -326,6 +340,8 @@
     }
 
     async function handleFileSelect(event) {
+      const readVersion = ++fileReadVersion;
+      fileImportPending = false;
       const file = event.target.files[0];
       if (!file) {
         state.selectedFile = null;
@@ -341,6 +357,7 @@
       }
 
       state.selectedFile = file;
+      fileImportPending = true;
       if (els.fileNameDisplay) els.fileNameDisplay.textContent = file.name;
 
       // კონვერტაცია HTML-ად
@@ -349,16 +366,20 @@
           els.contentEditor.innerHTML = '<p style="opacity:0.5">იტვირთება...</p>';
         }
         const html = await convertWordToHtml(file);
+        if (readVersion !== fileReadVersion) return;
         if (els.contentEditor) {
           els.contentEditor.innerHTML = html;
         }
         showToast('ფაილი წარმატებით დამუშავდა');
       } catch (err) {
+        if (readVersion !== fileReadVersion) return;
         console.error('Word conversion error:', err);
         showToast('ფაილის კონვერტაცია ვერ მოხერხდა', 'error');
         if (els.contentEditor) {
           els.contentEditor.innerHTML = '';
         }
+      } finally {
+        if (readVersion === fileReadVersion) fileImportPending = false;
       }
     }
 

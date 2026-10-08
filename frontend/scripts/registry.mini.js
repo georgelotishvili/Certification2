@@ -12,7 +12,8 @@
     const triggers = options.triggers || ['.nav-registry', '.drawer-registry'];
     const beforeOpen = typeof options.beforeOpen === 'function' ? options.beforeOpen : null;
     const onCardClick = typeof options.onCardClick === 'function' ? options.onCardClick : null;
-    const refreshRating = options.refreshRating !== false;
+    // Ratings arrive with each page; legacy refreshRating callers no longer
+    // need an additional HTTP request per displayed person.
     const pageRoot = document.getElementById('registryPage');
     const pageMode = !!pageRoot;
 
@@ -29,6 +30,11 @@
       resultsCount: document.getElementById('registryResultsCount'),
       totalCount: document.getElementById('registryTotalCount'),
       resetFilters: document.getElementById('registryResetFilters'),
+      pagination: document.getElementById('registryPagination'),
+      previous: document.getElementById('registryPrevious'),
+      next: document.getElementById('registryNext'),
+      pageNumber: document.getElementById('registryPageNumber'),
+      error: document.getElementById('registryError'),
       clearSearch: null,
       filterBadge: null,
     };
@@ -40,9 +46,17 @@
       failed: false,
       items: [],
       filtered: [],
+      total: 0,
+      filteredTotal: 0,
+      offset: 0,
+      limit: 50,
+      requestId: 0,
+      controller: null,
+      requestKey: '',
+      loadedKey: '',
+      pending: null,
+      searchTimer: null,
     };
-
-    const collator = new Intl.Collator('ka', { sensitivity: 'base', ignorePunctuation: true, usage: 'sort' });
 
     // Utils
     const toNumber = (value) => {
@@ -63,16 +77,6 @@
     const formatRating = (value) => {
       const n = Number(value);
       return Number.isFinite(n) ? n.toFixed(2) : '0.00';
-    };
-
-    const toTimeValue = (value) => {
-      if (!value) return 0;
-      const parsed = Date.parse(value);
-      if (!Number.isNaN(parsed)) return parsed;
-      const s = String(value).trim();
-      const withTz = /Z$|[+-]\d{2}:?\d{2}$/.test(s) ? s : (s.includes('T') ? s : s.replace(' ', 'T')) + 'Z';
-      const t = Date.parse(withTz);
-      return Number.isNaN(t) ? 0 : t;
     };
 
     function bindEvents() {
@@ -100,18 +104,24 @@
         if (event.target === DOM.overlay) close();
       });
 
-      DOM.search?.addEventListener('input', applyFilters);
-      DOM.filterArchitect?.addEventListener('change', applyFilters);
-      DOM.filterExpert?.addEventListener('change', applyFilters);
-      DOM.filterMunicipal?.addEventListener('change', applyFilters);
-      DOM.sort?.addEventListener('change', applyFilters);
+      DOM.search?.addEventListener('input', scheduleSearch);
+      DOM.filterArchitect?.addEventListener('change', () => applyFilters());
+      DOM.filterExpert?.addEventListener('change', () => applyFilters());
+      DOM.filterMunicipal?.addEventListener('change', () => applyFilters());
+      DOM.sort?.addEventListener('change', () => applyFilters());
+      DOM.previous?.addEventListener('click', () => {
+        if (!STATE.loading && STATE.offset > 0) return ensureData(true, Math.max(0, STATE.offset - STATE.limit));
+      });
+      DOM.next?.addEventListener('click', () => {
+        if (!STATE.loading && STATE.offset + STATE.items.length < STATE.filteredTotal) return ensureData(true, STATE.offset + STATE.limit);
+      });
       DOM.resetFilters?.addEventListener('click', () => {
         if (DOM.search) DOM.search.value = '';
         [DOM.filterArchitect, DOM.filterExpert, DOM.filterMunicipal].forEach((input) => {
           if (input) input.checked = false;
         });
         if (DOM.sort) DOM.sort.value = 'date_desc';
-        applyFilters();
+        return applyFilters();
       });
     }
 
@@ -142,7 +152,7 @@
           event.preventDefault();
           DOM.search.value = '';
           DOM.search.focus();
-          applyFilters();
+          return applyFilters();
         });
         wrapper.appendChild(clear);
         DOM.clearSearch = clear;
@@ -180,44 +190,113 @@
       setOpen(false);
     }
 
-    async function ensureData(force = false) {
-      if (!DOM.list) return;
-      if (STATE.loading) return;
-      if (STATE.loaded && !force) {
-        applyFilters();
-        return;
-      }
+    function selectedQualifications() {
+      return [
+        ['architect', DOM.filterArchitect], ['expert', DOM.filterExpert], ['municipal', DOM.filterMunicipal],
+      ].filter(([, input]) => input?.checked).map(([key]) => key);
+    }
+
+    function updateControls() {
+      if (DOM.clearSearch) DOM.clearSearch.hidden = !normalizeText(DOM.search?.value);
+      updateFilterBadge(selectedQualifications().length);
+    }
+
+    function cancelRequest() {
+      STATE.requestId += 1;
+      STATE.controller?.abort();
+      STATE.loading = false;
+      STATE.pending = null;
+    }
+
+    function scheduleSearch() {
+      clearTimeout(STATE.searchTimer);
+      // Invalidate immediately, not only after debounce: an older response
+      // must never replace results for text the visitor has already changed.
+      cancelRequest();
+      updateControls();
+      STATE.loading = true;
+      DOM.list?.setAttribute('aria-busy', 'true');
+      if (DOM.resultsCount) DOM.resultsCount.textContent = 'მონაცემები ახლდება...';
+      updatePagination();
+      STATE.searchTimer = setTimeout(() => {
+        STATE.searchTimer = null;
+        STATE.loading = false;
+        void ensureData(true, 0);
+      }, 250);
+    }
+
+    function ensureData(force = false, offset = STATE.offset) {
+      if (!DOM.list) return Promise.resolve();
+      clearTimeout(STATE.searchTimer);
+      STATE.searchTimer = null;
+      updateControls();
+      const params = new URLSearchParams({
+        limit: String(STATE.limit), offset: String(offset),
+        q: normalizeText(DOM.search?.value),
+        qualifications: selectedQualifications().join(','),
+        sort: DOM.sort?.value || 'date_desc',
+      });
+      const key = params.toString();
+      if (STATE.loading && STATE.requestKey === key && STATE.pending) return STATE.pending;
+      if (STATE.loaded && !STATE.failed && !force && STATE.loadedKey === key) return Promise.resolve();
+      cancelRequest();
+      const requestId = STATE.requestId;
+      STATE.controller = typeof AbortController === 'function' ? new AbortController() : null;
+      STATE.requestKey = key;
       STATE.loading = true;
       STATE.failed = false;
+      if (DOM.error) { DOM.error.hidden = true; DOM.error.innerHTML = ''; }
       DOM.list.setAttribute('aria-busy', 'true');
-      if (DOM.resultsCount) DOM.resultsCount.textContent = 'მონაცემები იტვირთება...';
-      renderSkeleton();
+      if (DOM.resultsCount) DOM.resultsCount.textContent = STATE.loaded ? 'მონაცემები ახლდება...' : 'მონაცემები იტვირთება...';
+      if (!STATE.loaded) renderSkeleton();
+      updatePagination();
+      STATE.pending = loadPage(params, requestId, STATE.controller?.signal);
+      return STATE.pending;
+    }
+
+    async function loadPage(params, requestId, signal) {
       try {
-        const params = new URLSearchParams({ limit: '500' });
-        const response = await fetch(`${apiBase}/certified-persons/registry?${params.toString()}`, {
-          headers: { 'Cache-Control': 'no-cache' },
+        const response = await fetch(`${apiBase}/certified-persons/registry/page?${params.toString()}`, {
+          headers: { 'Cache-Control': 'no-cache' }, signal,
         });
         if (!response.ok) throw new Error('registry failed');
         const data = await response.json();
-        STATE.items = (Array.isArray(data) ? data : []).map(normalizePerson);
+        if (requestId !== STATE.requestId) return;
+        if (!data || !Array.isArray(data.items) || !Number.isInteger(data.total)
+          || !Number.isInteger(data.filtered_total) || !Number.isInteger(data.offset)
+          || !Number.isInteger(data.limit) || data.limit < 1 || data.limit > 100
+          || data.total < 0 || data.filtered_total < 0 || data.filtered_total > data.total
+          || data.offset < 0 || data.items.length > data.limit) throw new Error('invalid registry page');
+        STATE.items = data.items.map(normalizePerson);
+        STATE.total = data.total;
+        STATE.filteredTotal = data.filtered_total;
+        STATE.offset = data.offset;
+        STATE.limit = data.limit;
+        params.set('offset', String(data.offset));
+        STATE.loadedKey = params.toString();
         STATE.loaded = true;
-        applyFilters();
-      } catch {
+        renderList(STATE.items);
+      } catch (error) {
+        if (requestId !== STATE.requestId || error?.name === 'AbortError') return;
         STATE.failed = true;
-        if (DOM.resultsCount) DOM.resultsCount.textContent = 'მონაცემების ჩატვირთვა ვერ მოხერხდა';
-        DOM.list.innerHTML = `
-          <div class="registry-empty">
-            <strong>რეესტრი ვერ ჩაიტვირთა</strong>
-            <p>გთხოვთ, სცადოთ ხელახლა.</p>
-            <button type="button" class="registry-retry">კიდევ სცადე</button>
-          </div>`;
-        DOM.list.querySelector('.registry-retry')?.addEventListener('click', (e) => {
-          e.preventDefault();
-          ensureData(true);
+        if (DOM.resultsCount) DOM.resultsCount.textContent = STATE.loaded
+          ? 'განახლება ვერ მოხერხდა — ნაჩვენებია წინა შედეგები' : 'მონაცემების ჩატვირთვა ვერ მოხერხდა';
+        const target = STATE.loaded && DOM.error ? DOM.error : DOM.list;
+        target.hidden = false;
+        target.innerHTML = `<div class="registry-empty">
+          <strong>რეესტრი ვერ ჩაიტვირთა</strong><p>გთხოვთ, სცადოთ ხელახლა.</p>
+          <button type="button" class="registry-retry">კიდევ სცადე</button></div>`;
+        target.querySelector('.registry-retry')?.addEventListener('click', (event) => {
+          event.preventDefault();
+          return ensureData(true, Number(params.get('offset')) || 0);
         });
       } finally {
-        STATE.loading = false;
-        DOM.list.setAttribute('aria-busy', 'false');
+        if (requestId === STATE.requestId) {
+          STATE.loading = false;
+          STATE.pending = null;
+          DOM.list.setAttribute('aria-busy', 'false');
+          updatePagination();
+        }
       }
     }
 
@@ -290,60 +369,15 @@
       photoModal.querySelector('.photo-modal-close')?.focus();
     }
 
-    function getSorter(key) {
-      const map = {
-        name_asc: (a, b) => collator.compare(a.full_name || '', b.full_name || ''),
-        name_desc: (a, b) => collator.compare(b.full_name || '', a.full_name || ''),
-        date_asc: (a, b) => toTimeValue(a.registration_date) - toTimeValue(b.registration_date),
-        date_desc: (a, b) => toTimeValue(b.registration_date) - toTimeValue(a.registration_date),
-        rating_asc: (a, b) => (a.rating ?? -Infinity) - (b.rating ?? -Infinity),
-        rating_desc: (a, b) => (b.rating ?? -Infinity) - (a.rating ?? -Infinity),
-      };
-      return map[key] || map.date_desc;
+    function applyFilters() {
+      return ensureData(true, 0);
     }
 
-    function applyFilters() {
-      if (!DOM.list) return;
-      // Keep the retry action visible after a network failure; filtering an
-      // unavailable response must not replace the error with a false empty list.
-      if (STATE.failed) return;
-      if (!STATE.loaded) {
-        if (!STATE.loading && !STATE.items.length) {
-          DOM.list.innerHTML = '<div class="registry-empty">ჩანაწერები ვერ მოიძებნა</div>';
-        }
-        return;
-      }
-      let next = STATE.items.slice();
-
-      const query = normalizeText(DOM.search?.value);
-      if (DOM.clearSearch) DOM.clearSearch.hidden = !query;
-      if (query) {
-        next = next.filter((person) => {
-          const parts = (person.full_name || '').split(/\s+/).filter(Boolean);
-          const first = parts[0] || '';
-          const last = parts.slice(1).join(' ') || '';
-          const tokens = [normalizeText(person.full_name), normalizeText(person.unique_code), normalizeText(first), normalizeText(last)];
-          return tokens.some((t) => t && t.includes(query));
-        });
-      }
-
-      const architectChecked = !!DOM.filterArchitect?.checked;
-      const expertChecked = !!DOM.filterExpert?.checked;
-      const municipalChecked = !!DOM.filterMunicipal?.checked;
-      const checkedCount = [architectChecked, expertChecked, municipalChecked].filter(Boolean).length;
-      updateFilterBadge(checkedCount);
-      if (checkedCount > 0 && checkedCount < 3) {
-        const allowedQualifications = [];
-        if (architectChecked) allowedQualifications.push('architect');
-        if (expertChecked) allowedQualifications.push('expert');
-        if (municipalChecked) allowedQualifications.push('municipal');
-        next = next.filter((p) => allowedQualifications.includes(p.qualification));
-      }
-
-      const sortKey = DOM.sort?.value || 'date_desc';
-      next.sort(getSorter(sortKey));
-
-      renderList(next);
+    function updatePagination() {
+      if (DOM.pagination) DOM.pagination.hidden = STATE.filteredTotal <= STATE.limit;
+      if (DOM.previous) DOM.previous.disabled = STATE.loading || STATE.failed || STATE.offset === 0;
+      if (DOM.next) DOM.next.disabled = STATE.loading || STATE.failed || STATE.offset + STATE.items.length >= STATE.filteredTotal;
+      if (DOM.pageNumber) DOM.pageNumber.textContent = `გვერდი ${Math.floor(STATE.offset / STATE.limit) + 1} / ${Math.max(1, Math.ceil(STATE.filteredTotal / STATE.limit))}`;
     }
 
     function updateFilterBadge(count) {
@@ -374,9 +408,10 @@
     function renderList(items) {
       if (!DOM.list) return;
       STATE.filtered = items;
-      if (DOM.totalCount) DOM.totalCount.textContent = String(STATE.items.length);
+      if (DOM.totalCount) DOM.totalCount.textContent = String(STATE.total);
       if (DOM.resultsCount) {
-        DOM.resultsCount.textContent = `ნაჩვენებია ${items.length} ჩანაწერი / ${STATE.items.length}`;
+        const range = items.length ? `${STATE.offset + 1}–${STATE.offset + items.length}` : '0';
+        DOM.resultsCount.textContent = `ნაჩვენებია ${range} / ${STATE.filteredTotal} ჩანაწერი · სულ ${STATE.total}`;
       }
       if (!items.length) {
         DOM.list.innerHTML = '<div class="registry-empty"><strong>ჩანაწერები ვერ მოიძებნა</strong><p>შეცვალეთ საძიებო სიტყვა ან გაასუფთავეთ ფილტრები.</p></div>';
@@ -422,10 +457,6 @@
           e.stopPropagation();
           showPhotoModal(person.photo_url, person.full_name, avatar);
         });
-      }
-
-      if (refreshRating) {
-        void refreshCardRating(card, person.id);
       }
 
       card.addEventListener('click', () => {
@@ -484,23 +515,7 @@
           onCardClick(person);
         });
       }
-      if (refreshRating) void refreshCardRating(card, person.id);
       return card;
-    }
-
-    async function refreshCardRating(card, userId) {
-      try {
-        if (!userId) return;
-        const res = await fetch(`${apiBase}/reviews/${encodeURIComponent(userId)}/summary`, {
-          headers: { 'Cache-Control': 'no-cache' },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const avg = Number(data?.average);
-        if (!Number.isFinite(avg)) return;
-        const ratingEl = card.querySelector('.registry-rating');
-        if (ratingEl) ratingEl.textContent = `⭐ ${formatRating(avg)}`;
-      } catch {}
     }
 
     // Wire up events on load
