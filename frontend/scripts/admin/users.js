@@ -449,22 +449,26 @@
       let filteredItems = items || [];
       const filterArchitects = DOM.filterArchitects?.checked;
       const filterExperts = DOM.filterExperts?.checked;
+      const filterMunicipal = DOM.filterMunicipal?.checked;
       const filterCertified = DOM.filterCertified?.checked;
       
-      if (filterArchitects || filterExperts || filterCertified) {
+      if (filterArchitects || filterExperts || filterMunicipal || filterCertified) {
         filteredItems = filteredItems.filter((user) => {
           const certificate = user.certificate || user.certificate_info || {};
           const certLevel = certificate.level || '';
           const hasCertificate = !!certificate.level;
           
           if (filterCertified) {
-            return hasCertificate && (certLevel === 'architect' || certLevel === 'expert');
+            return hasCertificate && (certLevel === 'architect' || certLevel === 'expert' || certLevel === 'municipal');
           }
           if (filterArchitects) {
             return certLevel === 'architect' || certLevel === 'architect_expert';
           }
           if (filterExperts) {
             return certLevel === 'expert';
+          }
+          if (filterMunicipal) {
+            return certLevel === 'municipal';
           }
           return true;
         });
@@ -710,23 +714,34 @@
         // Ensure only one certificate filter is active at a time
         if (DOM.filterArchitects?.checked) {
           if (DOM.filterExperts) DOM.filterExperts.checked = false;
+          if (DOM.filterMunicipal) DOM.filterMunicipal.checked = false;
           if (DOM.filterCertified) DOM.filterCertified.checked = false;
         }
-        render();
+        return render();
       });
       on(DOM.filterExperts, 'change', () => {
         if (DOM.filterExperts?.checked) {
           if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
+          if (DOM.filterMunicipal) DOM.filterMunicipal.checked = false;
           if (DOM.filterCertified) DOM.filterCertified.checked = false;
         }
-        render();
+        return render();
+      });
+      on(DOM.filterMunicipal, 'change', () => {
+        if (DOM.filterMunicipal?.checked) {
+          if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
+          if (DOM.filterExperts) DOM.filterExperts.checked = false;
+          if (DOM.filterCertified) DOM.filterCertified.checked = false;
+        }
+        return render();
       });
       on(DOM.filterCertified, 'change', () => {
         if (DOM.filterCertified?.checked) {
           if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
           if (DOM.filterExperts) DOM.filterExperts.checked = false;
+          if (DOM.filterMunicipal) DOM.filterMunicipal.checked = false;
         }
-        render();
+        return render();
       });
       setupEditModal();
       startLiveRefresh();

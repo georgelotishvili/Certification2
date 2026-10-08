@@ -1,0 +1,6 @@
+{
+  "frontend/pages/admin.html": {
+    "before": "bcdb48ee6df737473f76de225627f2337d3021918d131aef1e97fbaae2dc3bcc",
+    "after": "31760d230e24a5174efae685d1b231fdc624ecb55422bc2b32da29e0cbea1901"
+  }
+}

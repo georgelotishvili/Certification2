@@ -52,7 +52,7 @@ function fixture(id, unread, day, level, admin = false, pending = false) {
 function harness() {
   const DOM = Object.fromEntries(['usersGrid', 'usersSearch', 'usersSort', 'onlyAdmins',
     'filterStatements', 'filterPendingStatements', 'statementsDate', 'clearStatementsDate', 'filterArchitects',
-    'filterExperts', 'filterCertified'].map((key) => [key, new Element()]));
+    'filterExperts', 'filterMunicipal', 'filterCertified'].map((key) => [key, new Element()]));
   DOM.navLinks = [Object.assign(new Element(), { textContent: 'რეგისტრირებული პირები' })];
   const state = { requests: [], hold: false, pending: [], items: [
     fixture(1, true, '2026-10-08', 'architect', true),
@@ -106,6 +106,106 @@ function pendingHarness() {
   };
   return h;
 }
+
+function municipalHarness() {
+  const h = pendingHarness();
+  h.state.items.push(
+    fixture(6, true, '2026-10-08', 'municipal', true),
+    fixture(7, false, '2026-10-08', 'municipal', true, true),
+    fixture(8, false, '2026-10-07', 'municipal', false, true),
+  );
+  h.selectCertificate = async (key, checked = true) => {
+    h.DOM[key].checked = checked;
+    await h.DOM[key].dispatch('change');
+  };
+  return h;
+}
+
+test('municipal certificate filter includes only municipal specialists', async () => {
+  const h = municipalHarness();
+  await h.selectCertificate('filterMunicipal');
+  assert.deepEqual(h.visible(), [6, 7, 8]);
+  assert.equal(h.state.requests.at(-1).has('statement_date'), false);
+});
+
+test('all-certified filter includes all three certificate types and excludes uncertified users', async () => {
+  const h = municipalHarness();
+  await h.selectCertificate('filterCertified');
+  assert.deepEqual(h.visible(), [1, 2, 3, 5, 6, 7, 8]);
+  assert.equal(h.card(4), null);
+});
+
+const certificateFilterResults = {
+  filterArchitects: [1, 3],
+  filterExperts: [2, 5],
+  filterMunicipal: [6, 7, 8],
+  filterCertified: [1, 2, 3, 5, 6, 7, 8],
+};
+
+for (const from of Object.keys(certificateFilterResults)) {
+  for (const to of Object.keys(certificateFilterResults)) {
+    if (from === to) continue;
+    test(`certificate filter ${to} clears ${from} and leaves only the selected filter active`, async () => {
+      const h = municipalHarness();
+      await h.selectCertificate(from);
+      assert.deepEqual(h.visible(), certificateFilterResults[from]);
+      await h.selectCertificate(to);
+      for (const key of Object.keys(certificateFilterResults)) {
+        assert.equal(h.DOM[key].checked, key === to);
+      }
+      assert.deepEqual(h.visible(), certificateFilterResults[to]);
+    });
+  }
+
+  test(`unchecking ${from} restores all users without activating another certificate filter`, async () => {
+    const h = municipalHarness();
+    await h.selectCertificate(from);
+    await h.selectCertificate(from, false);
+    for (const key of Object.keys(certificateFilterResults)) assert.equal(h.DOM[key].checked, false);
+    assert.deepEqual(h.visible(), [1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+}
+
+test('municipal filter composes with search, admin, date, unread and pending filters', async () => {
+  const h = municipalHarness();
+  h.DOM.usersSearch.value = ' Person ';
+  h.DOM.onlyAdmins.checked = true;
+  await h.selectCertificate('filterMunicipal');
+  await h.date();
+  const query = h.state.requests.at(-1);
+  assert.equal(query.get('search'), 'Person');
+  assert.equal(query.get('only_admins'), 'true');
+  assert.equal(query.get('statement_date'), '2026-10-08');
+  assert.deepEqual(h.visible(), [6, 7]);
+
+  await h.DOM.clearStatementsDate.dispatch('click');
+  assert.deepEqual(h.visible(), [6]);
+  await h.pending();
+  assert.equal(h.DOM.filterMunicipal.checked, true);
+  assert.equal(h.state.requests.at(-1).has('statement_date'), false);
+  assert.deepEqual(h.visible(), [7]);
+
+  h.DOM.onlyAdmins.checked = false;
+  await h.users.render();
+  assert.deepEqual(h.visible(), [7, 8]);
+  h.DOM.usersSearch.value = 'Person 8';
+  await h.users.render();
+  assert.deepEqual(h.visible(), [8]);
+  h.DOM.onlyAdmins.checked = true;
+  await h.users.render();
+  assert.deepEqual(h.visible(), []);
+});
+
+test('municipal and all-certified filters support the certificate_info fallback', async () => {
+  const h = municipalHarness();
+  const municipalUser = h.state.items.find((user) => user.id === 6);
+  municipalUser.certificate_info = municipalUser.certificate;
+  delete municipalUser.certificate;
+  await h.selectCertificate('filterMunicipal');
+  assert.deepEqual(h.visible(), [6, 7, 8]);
+  await h.selectCertificate('filterCertified');
+  assert.deepEqual(h.visible(), [1, 2, 3, 5, 6, 7, 8]);
+});
 
 test('pending filter includes read unanswered users even with newer unread statements', async () => {
   const h = pendingHarness();

@@ -15,7 +15,7 @@
     <script src="../scripts/admin/results.js" defer></script>
     <script src="../scripts/admin/project-results.js" defer></script>
     <script src="../scripts/admin/certificate.js?v=4" defer></script>
-    <script src="../scripts/admin/users.js?v=20261008-4" defer></script>
+    <script src="../scripts/admin/users.js?v=20261008-5" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js" defer></script>
@@ -171,7 +171,7 @@
             <div class="users-filters-checkboxes">
               <label class="users-filter-label">
                 <input id="onlyAdmins" type="checkbox" />
-                <span>მხოლოდ ადმინები</span>
+                <span>მხოლოდ ადმინისტრატორები</span>
               </label>
               <label class="users-filter-label">
                 <input id="filterArchitects" type="checkbox" />
@@ -181,6 +181,10 @@
                 <input id="filterExperts" type="checkbox" />
                 <span>არქიტექტორი ექსპერტები</span>
               </label>
+              <label class="users-filter-label" title="მუნიციპალიტეტის სპეციალისტები">
+                <input id="filterMunicipal" type="checkbox" />
+                <span>მუნიციპალიტეტის სპეციალისტები</span>
+              </label>
               <label class="users-filter-label">
                 <input id="filterCertified" type="checkbox" />
                 <span>სერტიფიცირებული პირები</span>
@@ -188,7 +192,7 @@
               <div class="users-statements-filter">
                 <label class="users-filter-label" title="თარიღის გარეშე — მხოლოდ წაუკითხავი; თარიღით — იმ დღეს მიღებული ყველა განცხადება">
                   <input id="filterStatements" type="checkbox" />
-                  <span>განცხადებები</span>
+                  <span>ახალი განცხადებები</span>
                 </label>
                 <input id="statementsDate" class="users-filter-date" type="date" aria-label="განცხადების მიღების თარიღი" title="არჩეული დღე თბილისის დროით, 00:00–24:00; წაკითხვის მიუხედავად" />
                 <button id="clearStatementsDate" class="users-filter-date-clear" type="button" aria-label="განცხადების თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
@@ -741,6 +745,6 @@
 
     <script src="../vendor/jspdf.umd.min.js"></script>
     <script src="../vendor/svg2pdf.min.js"></script>
-    <script src="../scripts/admin.js?v=10" defer></script>
+    <script src="../scripts/admin.js?v=11" defer></script>
   </body>
 </html>

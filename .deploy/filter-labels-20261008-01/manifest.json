@@ -1,0 +1,14 @@
+{
+  "frontend/scripts/admin.js": {
+    "before": "16c543b5aa82e27ce67bb794bad9df215bacdcc9beaa16a75471d115a04fc863",
+    "after": "462efdec108ce74b825a6136f1090ee1d55bd1e1a2fe7992e328210888372cbf"
+  },
+  "frontend/scripts/admin/users.js": {
+    "before": "a44501ba5f86a88d918bcd4668fa70d1c50715ef0138dec6265d28814bab282a",
+    "after": "e60ce58eccaadf8c2638edf303f0d4845428ea0ed59793a9def13fe21c78a474"
+  },
+  "frontend/pages/admin.html": {
+    "before": "2829d8190112999daaa920c165c6f2e560cc962dcd1af0efa81081ed672c81fe",
+    "after": "bcdb48ee6df737473f76de225627f2337d3021918d131aef1e97fbaae2dc3bcc"
+  }
+}

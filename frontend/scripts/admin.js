@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     onlyAdmins: document.getElementById('onlyAdmins'),
     filterArchitects: document.getElementById('filterArchitects'),
     filterExperts: document.getElementById('filterExperts'),
+    filterMunicipal: document.getElementById('filterMunicipal'),
     filterCertified: document.getElementById('filterCertified'),
     filterStatements: document.getElementById('filterStatements'),
     filterPendingStatements: document.getElementById('filterPendingStatements'),

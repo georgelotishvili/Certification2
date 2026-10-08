@@ -1,0 +1,42 @@
+{
+  "backend/app/main.py": {
+    "before": "a837e7ab91d53b47d64132ed3b03e363cac19182532e1a3c143df814854abfb2",
+    "after": "5ec50bb07065951a7f853f71ad0f662762331b180954908f6328737eb59b47f2"
+  },
+  "backend/app/models.py": {
+    "before": "9504b1ee8519a5da258a392896c2407e2d10067bf633c48d8abe295b5e4b9592",
+    "after": "255dd7248efa2cc05caf5e6f6bd0ab243d42bc59f68f5c106b6bf8794acfc49f"
+  },
+  "backend/app/schemas.py": {
+    "before": "aed3889ffbb3e9ada8c356a20d6b0ae917f86289155f0d96c87f69cff6914839",
+    "after": "05774626074eb811a42d75d4cc5c37e8285fbffe78ef2ee4cfb6182717cd7b27"
+  },
+  "backend/app/routers/admin.py": {
+    "before": "5f11e77f62ccda3142eab2464538bd753e528e629370fb61554fa93c79a44868",
+    "after": "c8dcd39dc3421f8ce0d280e2156a044abea791a6221f5d3d01082cf7c269e582"
+  },
+  "backend/scripts/migrate_statements_answered.py": {
+    "before": null,
+    "after": "332d7dfc479ef36d1b02313bc07009106a8825481d6213418cc2023f30e8ea10"
+  },
+  "frontend/scripts/admin.js": {
+    "before": "c6553ebf0f05b9e376d83e17d4d81407474c5fc6b006d577674c9a9c00f98fc5",
+    "after": "16c543b5aa82e27ce67bb794bad9df215bacdcc9beaa16a75471d115a04fc863"
+  },
+  "frontend/scripts/admin/users.js": {
+    "before": "d5d3b5dffa88f408e67d4cfa6133fcb3a21d43e07e64dd8f034b79f45dfa08da",
+    "after": "a44501ba5f86a88d918bcd4668fa70d1c50715ef0138dec6265d28814bab282a"
+  },
+  "frontend/scripts/admin/statements.js": {
+    "before": "9017a58a9fe5ab15cb6738521de639da902e95bc275915529ec784223fd8cb2d",
+    "after": "30b88525b418dbe5d5b9658d846f9ed0465c60319ba5b3ecbd5f82839042e932"
+  },
+  "frontend/styles/admin.css": {
+    "before": "d513347d700c1aefcc6158552eaa6d7e17ad93b7e270de8398f3ef617182643b",
+    "after": "76d38c77235b843649a450ecf8eb3d46e35442cc1aa9f479dcd4a1b8004d002c"
+  },
+  "frontend/pages/admin.html": {
+    "before": "0daf090eb44012af1727f4c3d77e9b3fb632c3ff2b6130001e6ab424f6c691a7",
+    "after": "2829d8190112999daaa920c165c6f2e560cc962dcd1af0efa81081ed672c81fe"
+  }
+}
