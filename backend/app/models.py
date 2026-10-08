@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import random
 import string
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -190,6 +193,20 @@ class Answer(Base):
 
 
 
+class UserCodeReservation(Base):
+    """Minimal identity-to-code record that survives account deletion."""
+
+    __tablename__ = "user_code_reservations"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_user_code_reservations_code"),
+    )
+
+    # Deliberately no foreign key to users: deleting an account must not delete
+    # this reservation or make its code available to another person.
+    personal_id: Mapped[str] = mapped_column(String(11), primary_key=True)
+    code: Mapped[str] = mapped_column(String(10))
+
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
@@ -235,6 +252,32 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    exam_schedules: Mapped[List["ExamSchedule"]] = relationship(
+        "ExamSchedule",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class ExamSchedule(Base):
+    """Administrative planning only; never grants permission to take an exam."""
+
+    __tablename__ = "exam_schedules"
+    __table_args__ = (
+        UniqueConstraint("user_id", "exam_date", "period", name="uq_exam_schedules_user_date_period"),
+        CheckConstraint("period IN ('morning', 'evening')", name="ck_exam_schedules_period"),
+        Index("ix_exam_schedules_date_period_user", "exam_date", "period", "user_id"),
+        # A stale admin page must never target a newly created row by a reused ID.
+        {"sqlite_autoincrement": True},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    exam_date: Mapped[date] = mapped_column(Date)
+    period: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User", back_populates="exam_schedules")
 
 
 class Statement(Base):

@@ -769,7 +769,7 @@
 
   async function loadHeader() {
     try {
-      const response = await fetch('../partials/header.html');
+      const response = await fetch('../partials/header.html', { cache: 'no-cache' });
       if (!response.ok) return;
       const html = await response.text();
       document.body.insertAdjacentHTML('afterbegin', html);

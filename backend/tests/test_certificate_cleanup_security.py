@@ -244,6 +244,7 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
         with (
             patch.object(admin, "get_settings", return_value=settings),
             patch.object(admin, "_is_founder_actor", return_value=True),
+            patch.object(admin, "remember_user_code") as preserve_code,
             patch.object(admin, "_delete_user_photo_file"),
             patch.object(admin, "delete_expert_certificate_files") as cleanup,
         ):
@@ -254,6 +255,7 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
             )
 
         self.assertIsNone(result)
+        preserve_code.assert_called_once_with(db, user)
         cleanup.assert_called_once_with("EX-admin-single")
         self.assertEqual(db.deleted, [user])
         self.assertEqual(db.commit_calls, 1)
@@ -275,6 +277,7 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
         with (
             patch.object(admin, "get_settings", return_value=settings),
             patch.object(admin, "_is_founder_actor", return_value=True),
+            patch.object(admin, "remember_user_code") as preserve_code,
             patch.object(admin, "_delete_user_photo_file"),
             patch.object(admin, "delete_expert_certificate_files") as cleanup,
         ):
@@ -284,6 +287,7 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
             )
 
         self.assertIsNone(result)
+        preserve_code.assert_called_once_with(db, target)
         cleanup.assert_called_once_with("EX-admin-bulk")
         self.assertEqual(db.deleted, [target])
         self.assertEqual(db.commit_calls, 1)

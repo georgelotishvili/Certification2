@@ -84,6 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
     filterPendingStatements: document.getElementById('filterPendingStatements'),
     statementsDate: document.getElementById('statementsDate'),
     clearStatementsDate: document.getElementById('clearStatementsDate'),
+    filterExamMorning: document.getElementById('filterExamMorning'),
+    filterExamEvening: document.getElementById('filterExamEvening'),
+    examScheduleDate: document.getElementById('examScheduleDate'),
+    clearExamScheduleDate: document.getElementById('clearExamScheduleDate'),
     candidateResultsOverlay: document.getElementById('candidateResultsOverlay'),
     candidateResultsList: document.getElementById('candidateResultsList'),
     candidateResultsFullName: document.getElementById('candidateResultsFullName'),
@@ -448,8 +452,10 @@ document.addEventListener('DOMContentLoaded', () => {
       },
     }, { init: noop, open: noop, close: noop });
 
+    const examSchedulesModule = createModule(modules.createExamSchedulesModule, { mount: noop });
     const usersModule = createModuleWithContext(modules.createUsersModule, {
       ...moduleContextBase,
+      examSchedules: examSchedulesModule,
       onShowResults: resultsModule.open,
       onShowStatements: statementsModule.open,
       onShowCertificate: certificateModule.open,

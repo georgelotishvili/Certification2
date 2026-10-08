@@ -10,7 +10,7 @@ const source = fs.readFileSync(path.join(__dirname, '../scripts/admin/users.js')
 class Element {
   constructor() {
     this.children = []; this.events = {}; this.dataset = {}; this.style = {};
-    this.selectors = {};
+    this.selectors = {}; this.attributes = {};
     this.value = ''; this.checked = false; this.disabled = false;
     const classes = new Set();
     this.classList = {
@@ -19,8 +19,17 @@ class Element {
     };
   }
   addEventListener(name, handler) { this.events[name] = handler; }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
   dispatch(name) { return this.events[name]?.({ target: this, preventDefault() {} }); }
-  appendChild(child) { this.children.push(child); return child; }
+  appendChild(child) {
+    if (child.parentElement) child.parentElement.children = child.parentElement.children.filter((item) => item !== child);
+    child.parentElement = this;
+    this.children.push(child);
+    return child;
+  }
+  remove() {
+    if (this.parentElement) this.parentElement.children = this.parentElement.children.filter((item) => item !== this);
+  }
   set innerHTML(html) {
     this.children = [];
     const id = html.match(/data-id="([^"]+)"/);
@@ -28,6 +37,11 @@ class Element {
       const card = new Element();
       card.dataset.id = id[1];
       card.selectors['.btn-user-announcements'] = new Element();
+      card.selectors['.head-toggle'] = new Element();
+      card.selectors['.block-questions'] = new Element();
+      card.selectors['.user-exam-schedules'] = new Element();
+      card.selectors['.chk-exam'] = new Element();
+      card.selectors['.chk-exam'].checked = /class="chk-exam"[^>]*\bchecked\b/.test(html);
       for (const name of html.match(/class="([^"]+)"/)[1].split(' ')) card.classList.toggle(name, true);
       this.children.push(card);
     }
@@ -49,12 +63,13 @@ function fixture(id, unread, day, level, admin = false, pending = false) {
     days: [day], first_name: `Person ${id}`, certificate: { level }, is_admin: admin };
 }
 
-function harness() {
+function harness(options = {}) {
   const DOM = Object.fromEntries(['usersGrid', 'usersSearch', 'usersSort', 'onlyAdmins',
     'filterStatements', 'filterPendingStatements', 'statementsDate', 'clearStatementsDate', 'filterArchitects',
-    'filterExperts', 'filterMunicipal', 'filterCertified'].map((key) => [key, new Element()]));
+    'filterExperts', 'filterMunicipal', 'filterCertified', 'filterExamMorning', 'filterExamEvening',
+    'examScheduleDate', 'clearExamScheduleDate'].map((key) => [key, new Element()]));
   DOM.navLinks = [Object.assign(new Element(), { textContent: 'რეგისტრირებული პირები' })];
-  const state = { requests: [], hold: false, pending: [], items: [
+  const state = { requests: [], hold: false, pending: [], today: '2026-10-08', items: [
     fixture(1, true, '2026-10-08', 'architect', true),
     fixture(2, false, '2026-10-08', 'expert', true),
     fixture(3, true, '2026-10-07', 'architect'),
@@ -70,7 +85,12 @@ function harness() {
       state.requests.push(url.searchParams);
       const day = url.searchParams.get('statement_date');
       const search = url.searchParams.get('search') || '';
+      const morning = url.searchParams.get('exam_morning') === 'true';
+      const evening = url.searchParams.get('exam_evening') === 'true';
+      const examDay = url.searchParams.get('exam_date') || ((morning || evening) ? state.today : '');
       const items = state.items.filter((user) => (!day || user.days.includes(day)) &&
+        (!examDay || (user.schedules || []).some((schedule) => schedule.exam_date === examDay &&
+          ((!morning && !evening) || (morning && schedule.period === 'morning') || (evening && schedule.period === 'evening')))) &&
         (!url.searchParams.has('only_admins') || user.is_admin) && user.first_name.includes(search));
       const result = { ok: true, json: async () => ({ items: structuredClone(items) }) };
       if (!state.hold) return result;
@@ -83,6 +103,7 @@ function harness() {
     on: (node, name, handler) => node?.addEventListener(name, handler),
     formatDateTime: () => '', escapeHtml: (value) => String(value ?? ''),
     isFounderActor: () => false, getAdminHeaders: () => ({}), getActorHeaders: () => ({}),
+    examSchedules: options.examSchedules,
   });
   users.init();
   return { DOM, users, state,
@@ -92,8 +113,8 @@ function harness() {
   };
 }
 
-function pendingHarness() {
-  const h = harness();
+function pendingHarness(options = {}) {
+  const h = harness(options);
   // 1: unread only; 2: read and unanswered; 3: both unread and pending;
   // 4: no statements; 5: read and answered.
   Object.assign(h.state.items[1], { has_pending_statements: true, pending_statement_count: 1 });
@@ -103,6 +124,10 @@ function pendingHarness() {
   h.pending = async (checked = true) => {
     h.DOM.filterPendingStatements.checked = checked;
     await h.DOM.filterPendingStatements.dispatch('change');
+  };
+  h.newStatements = async (checked = true) => {
+    h.DOM.filterStatements.checked = checked;
+    await h.DOM.filterStatements.dispatch('change');
   };
   return h;
 }
@@ -120,6 +145,281 @@ function municipalHarness() {
   };
   return h;
 }
+
+function examFilterHarness(options = {}) {
+  const h = pendingHarness(options);
+  const schedule = (exam_date, period) => ({ exam_date, period });
+  h.state.items[0].schedules = [schedule('2026-10-08', 'morning'), schedule('2026-09-01', 'evening')];
+  h.state.items[1].schedules = [schedule('2026-10-08', 'evening'), schedule('2026-11-20', 'morning')];
+  h.state.items[2].schedules = [schedule('2026-10-08', 'morning'), schedule('2026-10-08', 'evening')];
+  h.state.items[3].schedules = [schedule('2026-09-01', 'morning')];
+  h.state.items[4].schedules = [schedule('2026-11-20', 'evening')];
+  h.examDate = async (value) => {
+    h.DOM.examScheduleDate.value = value;
+    await h.DOM.examScheduleDate.dispatch('change');
+  };
+  h.examGroup = async (period, checked = true) => {
+    const checkbox = h.DOM[period === 'morning' ? 'filterExamMorning' : 'filterExamEvening'];
+    checkbox.checked = checked;
+    await checkbox.dispatch('change');
+  };
+  return h;
+}
+
+test('inactive exam filters do not constrain the existing user list', async () => {
+  const h = examFilterHarness();
+  await h.users.render();
+  assert.deepEqual(h.visible(), [1, 2, 3, 4, 5]);
+  for (const key of ['exam_date', 'exam_morning', 'exam_evening']) {
+    assert.equal(h.state.requests.at(-1).has(key), false);
+  }
+});
+
+for (const [period, ids] of [['morning', [1, 3]], ['evening', [2, 3]]]) {
+  test(`undated ${period} exam filter asks the backend for the current Tbilisi day`, async () => {
+    const h = examFilterHarness();
+    await h.examGroup(period);
+    assert.deepEqual(h.visible(), ids);
+    const query = h.state.requests.at(-1);
+    assert.equal(query.get(`exam_${period}`), 'true');
+    assert.equal(query.has('exam_date'), false, 'client must not guess today using the computer timezone');
+    assert.equal(h.DOM.examScheduleDate.value, '');
+  });
+}
+
+test('both exam group filters form a union without duplicating a candidate', async () => {
+  const h = examFilterHarness();
+  await h.examGroup('morning');
+  await h.examGroup('evening');
+  assert.equal(h.DOM.filterExamMorning.checked, true);
+  assert.equal(h.DOM.filterExamEvening.checked, true);
+  assert.deepEqual(h.visible(), [1, 2, 3]);
+});
+
+test('date-only exam filter includes both groups and supports past and future dates', async () => {
+  const h = examFilterHarness();
+  await h.examDate('2026-09-01');
+  assert.deepEqual(h.visible(), [1, 4]);
+  assert.equal(h.state.requests.at(-1).get('exam_date'), '2026-09-01');
+  assert.equal(h.DOM.filterExamMorning.checked, false);
+  assert.equal(h.DOM.filterExamEvening.checked, false);
+  await h.examDate('2026-11-20');
+  assert.deepEqual(h.visible(), [2, 5]);
+});
+
+test('an explicit date and selected group select only that group on that day', async () => {
+  const h = examFilterHarness();
+  await h.examGroup('morning');
+  await h.examDate('2026-09-01');
+  assert.deepEqual(h.visible(), [4]);
+  await h.examDate('2026-11-20');
+  assert.deepEqual(h.visible(), [2]);
+  await h.examGroup('evening');
+  assert.deepEqual(h.visible(), [2, 5]);
+  await h.examGroup('morning', false);
+  assert.deepEqual(h.visible(), [5]);
+});
+
+test('clearing the exam date retains group selection and returns to the current day', async () => {
+  const h = examFilterHarness();
+  assert.equal(h.DOM.clearExamScheduleDate.disabled, true);
+  await h.examGroup('morning');
+  await h.examDate('2026-09-01');
+  assert.equal(h.DOM.clearExamScheduleDate.disabled, false);
+  await h.DOM.clearExamScheduleDate.dispatch('click');
+  assert.equal(h.DOM.examScheduleDate.value, '');
+  assert.equal(h.DOM.clearExamScheduleDate.disabled, true);
+  assert.equal(h.DOM.filterExamMorning.checked, true);
+  assert.equal(h.state.requests.at(-1).has('exam_date'), false);
+  assert.deepEqual(h.visible(), [1, 3]);
+});
+
+test('turning both exam groups off preserves a selected date and includes both groups', async () => {
+  const h = examFilterHarness();
+  await h.examDate('2026-11-20');
+  await h.examGroup('morning');
+  await h.examGroup('morning', false);
+  assert.equal(h.DOM.examScheduleDate.value, '2026-11-20');
+  assert.deepEqual(h.visible(), [2, 5]);
+});
+
+test('statement and exam dates remain independent and intersect candidate lists', async () => {
+  const h = examFilterHarness();
+  await h.date('2026-10-07');
+  await h.examDate('2026-10-08');
+  assert.equal(h.DOM.statementsDate.value, '2026-10-07');
+  assert.equal(h.DOM.examScheduleDate.value, '2026-10-08');
+  assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-07');
+  assert.equal(h.state.requests.at(-1).get('exam_date'), '2026-10-08');
+  assert.deepEqual(h.visible(), [3]);
+  await h.DOM.clearStatementsDate.dispatch('click');
+  assert.equal(h.DOM.examScheduleDate.value, '2026-10-08');
+  assert.deepEqual(h.visible(), [1, 2, 3]);
+  await h.date('2026-10-07');
+  await h.DOM.clearExamScheduleDate.dispatch('click');
+  assert.equal(h.DOM.statementsDate.value, '2026-10-07');
+  assert.deepEqual(h.visible(), [3]);
+});
+
+test('exam selection composes with red and blue status filters without changing them', async () => {
+  const h = examFilterHarness();
+  await h.examDate('2026-10-08');
+  await h.newStatements();
+  assert.deepEqual(h.visible(), [1, 3]);
+  await h.pending();
+  assert.deepEqual(h.visible(), [1, 2, 3]);
+  await h.newStatements(false);
+  assert.deepEqual(h.visible(), [2]);
+  await h.examDate('2026-11-20');
+  assert.equal(h.DOM.filterPendingStatements.checked, true);
+  assert.equal(h.DOM.filterStatements.checked, false);
+  assert.deepEqual(h.visible(), [2]);
+});
+
+test('exam selection composes with certificate, administrator and search filters', async () => {
+  const h = examFilterHarness();
+  h.DOM.filterExperts.checked = true;
+  h.DOM.onlyAdmins.checked = true;
+  h.DOM.usersSearch.value = ' Person 2 ';
+  await h.examDate('2026-11-20');
+  assert.deepEqual(h.visible(), [2]);
+  assert.equal(h.state.requests.at(-1).get('only_admins'), 'true');
+  assert.equal(h.state.requests.at(-1).get('search'), 'Person 2');
+  assert.equal(h.DOM.filterExperts.checked, true);
+});
+
+test('polling updates exam filter membership after another administrator schedules or deletes an exam', async () => {
+  const h = examFilterHarness();
+  await h.examGroup('morning');
+  const firstCard = h.card(1);
+  firstCard.classList.toggle('open', true);
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.equal(h.card(1), firstCard);
+  assert.equal(h.card(1).classList.contains('open'), true);
+  h.state.items[0].schedules = [];
+  h.state.items[4].schedules.push({ exam_date: '2026-10-08', period: 'morning' });
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.deepEqual(h.visible(), [3, 5]);
+});
+
+test('undated exam group polling rolls over using the backend Tbilisi day', async () => {
+  const h = examFilterHarness();
+  await h.examGroup('morning');
+  assert.deepEqual(h.visible(), [1, 3]);
+  h.state.today = '2026-11-20';
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.deepEqual(h.visible(), [2]);
+  assert.equal(h.state.requests.at(-1).has('exam_date'), false);
+});
+
+for (const requestType of ['render', 'poll']) {
+  test(`late ${requestType} response cannot overwrite a newer exam date`, async () => {
+    const h = examFilterHarness();
+    await h.examDate('2026-09-01');
+    h.state.hold = true;
+    const stale = requestType === 'render' ? h.users.render() : h.users.refreshLiveUserStates({ force: true });
+    await h.examDate('2026-11-20');
+    assert.deepEqual(h.visible(), [2, 5]);
+    h.state.pending.shift()();
+    await stale;
+    assert.deepEqual(h.visible(), [2, 5]);
+  });
+
+  test(`late ${requestType} response cannot overwrite a newer exam group`, async () => {
+    const h = examFilterHarness();
+    await h.examGroup('morning');
+    h.state.hold = true;
+    const stale = requestType === 'render' ? h.users.render() : h.users.refreshLiveUserStates({ force: true });
+    await h.examGroup('morning', false);
+    await h.examGroup('evening');
+    assert.deepEqual(h.visible(), [2, 3]);
+    h.state.pending.shift()();
+    await stale;
+    assert.deepEqual(h.visible(), [2, 3]);
+  });
+}
+
+function mountedExamHarness() {
+  const controllers = new Map();
+  const examSchedules = { mount(panel, user, options) {
+    assert.ok(panel, 'each user card must expose a scheduling panel');
+    const controller = { panel, options, loads: 0, load() { this.loads += 1; } };
+    controllers.set(user.id, controller);
+    return controller;
+  } };
+  const h = examFilterHarness({ examSchedules });
+  h.controllers = controllers;
+  return h;
+}
+
+test('exam history mounts per card but only loads when that card opens', async () => {
+  const h = mountedExamHarness();
+  await h.users.render();
+  assert.equal(h.controllers.size, 5);
+  assert.equal([...h.controllers.values()].reduce((total, controller) => total + controller.loads, 0), 0);
+  await h.card(1).querySelector('.head-toggle').dispatch('click');
+  assert.equal(h.controllers.get(1).loads, 1);
+  assert.equal(h.card(1).classList.contains('open'), true);
+  await h.card(1).querySelector('.head-toggle').dispatch('click');
+  assert.equal(h.controllers.get(1).loads, 1, 'closing does not fetch history');
+  await h.card(1).querySelector('.head-toggle').dispatch('click');
+  assert.equal(h.controllers.get(1).loads, 2, 'reopening checks for other administrator changes');
+  assert.equal(h.controllers.get(2).loads, 0);
+});
+
+test('a successful scheduling callback immediately removes candidates no longer matching the exam filter', async () => {
+  const h = mountedExamHarness();
+  await h.examGroup('morning');
+  assert.deepEqual(h.visible(), [1, 3]);
+  h.state.items[0].schedules = [];
+  await h.controllers.get(1).options.onChanged({ userId: 1 });
+  assert.deepEqual(h.visible(), [3]);
+  assert.equal(h.state.requests.at(-1).get('exam_morning'), 'true');
+});
+
+test('scheduling refresh preserves open matching cards, their controllers and manual exam access', async () => {
+  const h = mountedExamHarness();
+  await h.examGroup('morning');
+  const card = h.card(1);
+  const controller = h.controllers.get(1);
+  await card.querySelector('.head-toggle').dispatch('click');
+  assert.equal(card.querySelector('.chk-exam').checked, false);
+  h.state.items[1].schedules.push({ exam_date: '2026-10-08', period: 'morning' });
+  await controller.options.onChanged({ userId: 2 });
+  assert.deepEqual(h.visible(), [1, 2, 3]);
+  assert.equal(h.card(1), card);
+  assert.equal(h.controllers.get(1), controller);
+  assert.equal(card.classList.contains('open'), true);
+  assert.equal(card.querySelector('.chk-exam').checked, false);
+  assert.equal(controller.loads, 1);
+});
+
+for (const requestType of ['render', 'poll']) {
+  test(`late ${requestType} cannot undo a successful scheduling callback refresh`, async () => {
+    const h = mountedExamHarness();
+    await h.examGroup('morning');
+    h.state.hold = true;
+    const oldRequest = requestType === 'render' ? h.users.render() : h.users.refreshLiveUserStates({ force: true });
+    h.state.items[0].schedules = [];
+    await h.controllers.get(1).options.onChanged({ userId: 1 });
+    assert.deepEqual(h.visible(), [3]);
+    h.state.pending.shift()();
+    await oldRequest;
+    assert.deepEqual(h.visible(), [3]);
+  });
+}
+
+test('late scheduling callback refresh cannot restore an older selected exam date', async () => {
+  const h = mountedExamHarness();
+  await h.examGroup('morning');
+  h.state.hold = true;
+  const oldRefresh = h.controllers.get(1).options.onChanged({ userId: 1 });
+  await h.examDate('2026-11-20');
+  assert.deepEqual(h.visible(), [2]);
+  h.state.pending.shift()();
+  await oldRefresh;
+  assert.deepEqual(h.visible(), [2]);
+});
 
 test('municipal certificate filter includes only municipal specialists', async () => {
   const h = municipalHarness();
@@ -171,6 +471,7 @@ test('municipal filter composes with search, admin, date, unread and pending fil
   h.DOM.usersSearch.value = ' Person ';
   h.DOM.onlyAdmins.checked = true;
   await h.selectCertificate('filterMunicipal');
+  await h.newStatements();
   await h.date();
   const query = h.state.requests.at(-1);
   assert.equal(query.get('search'), 'Person');
@@ -180,6 +481,7 @@ test('municipal filter composes with search, admin, date, unread and pending fil
 
   await h.DOM.clearStatementsDate.dispatch('click');
   assert.deepEqual(h.visible(), [6]);
+  await h.newStatements(false);
   await h.pending();
   assert.equal(h.DOM.filterMunicipal.checked, true);
   assert.equal(h.state.requests.at(-1).has('statement_date'), false);
@@ -207,10 +509,10 @@ test('municipal and all-certified filters support the certificate_info fallback'
   assert.deepEqual(h.visible(), [1, 2, 3, 5, 6, 7, 8]);
 });
 
-test('pending filter includes read unanswered users even with newer unread statements', async () => {
+test('pending filter shows only blue cards and excludes mixed red cards', async () => {
   const h = pendingHarness();
   await h.pending();
-  assert.deepEqual(h.visible(), [2, 3]);
+  assert.deepEqual(h.visible(), [2]);
   assertStatementState(h.card(2), 'blue');
   assertStatementState(h.card(3), 'red');
   assert.equal(h.state.requests.at(-1).has('statement_date'), false);
@@ -223,13 +525,13 @@ test('pending filter reacts immediately to reading, replying and undoing reply',
   await h.pending();
   const card = h.card(1);
   h.users.updateUserUnseenStatus(1, false, 0, true, 1);
-  assert.deepEqual(h.visible(), [1, 2, 3]);
+  assert.deepEqual(h.visible(), [1, 2]);
   assertStatementState(card, 'blue');
   h.users.updateUserUnseenStatus(1, false, 0, false, 0);
-  assert.deepEqual(h.visible(), [2, 3]);
+  assert.deepEqual(h.visible(), [2]);
   assertStatementState(card, 'normal');
   h.users.updateUserUnseenStatus(1, false, 0, true, 1);
-  assert.deepEqual(h.visible(), [1, 2, 3]);
+  assert.deepEqual(h.visible(), [1, 2]);
   assert.equal(h.card(1), card);
   // Replying to the older pending statement leaves only unread work: not pending.
   h.users.updateUserUnseenStatus(3, true, 1, false, 0);
@@ -237,60 +539,86 @@ test('pending filter reacts immediately to reading, replying and undoing reply',
   assertStatementState(h.card(3), 'red');
 });
 
-test('pending and statements filters are exclusive and pending ignores but retains a selected date', async () => {
+const statementFilterCases = [
+  { name: 'neither status', unread: false, pending: false, visible: [1, 2, 3, 4, 5] },
+  { name: 'red only', unread: true, pending: false, visible: [1, 3] },
+  { name: 'blue only', unread: false, pending: true, visible: [2] },
+  { name: 'red or blue', unread: true, pending: true, visible: [1, 2, 3] },
+];
+
+for (const status of statementFilterCases) {
+  for (const clearMethod of ['button', 'date input']) {
+    test(`${status.name}: date overrides colors independently and ${clearMethod} clearing restores status selections`, async () => {
+      const h = pendingHarness();
+      await h.newStatements(status.unread);
+      await h.pending(status.pending);
+      assert.equal(h.DOM.filterStatements.checked, status.unread);
+      assert.equal(h.DOM.filterPendingStatements.checked, status.pending);
+      assert.deepEqual(h.visible(), status.visible);
+      assert.equal(h.state.requests.at(-1).has('statement_date'), false);
+      assert.equal(h.DOM.statementsDate.disabled, false);
+      assert.equal(h.DOM.clearStatementsDate.disabled, true);
+
+      await h.date();
+      assert.equal(h.DOM.filterStatements.checked, status.unread);
+      assert.equal(h.DOM.filterPendingStatements.checked, status.pending);
+      assert.equal(h.DOM.statementsDate.disabled, false);
+      assert.equal(h.DOM.clearStatementsDate.disabled, false);
+      assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-08');
+      assert.deepEqual(h.visible(), [1, 2, 5]);
+      assertStatementState(h.card(1), 'red');
+      assertStatementState(h.card(2), 'blue');
+      assertStatementState(h.card(5), 'normal');
+
+      await h.date('2026-10-07');
+      assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-07');
+      assert.deepEqual(h.visible(), [3]);
+      assert.equal(h.DOM.filterStatements.checked, status.unread);
+      assert.equal(h.DOM.filterPendingStatements.checked, status.pending);
+
+      if (clearMethod === 'button') await h.DOM.clearStatementsDate.dispatch('click');
+      else await h.date('');
+      assert.equal(h.DOM.statementsDate.value, '');
+      assert.equal(h.DOM.statementsDate.disabled, false);
+      assert.equal(h.DOM.clearStatementsDate.disabled, true);
+      assert.equal(h.DOM.filterStatements.checked, status.unread);
+      assert.equal(h.DOM.filterPendingStatements.checked, status.pending);
+      assert.equal(h.state.requests.at(-1).has('statement_date'), false);
+      assert.deepEqual(h.visible(), status.visible);
+    });
+  }
+}
+
+test('status checkboxes can be toggled in either order without clearing each other', async () => {
   const h = pendingHarness();
-  await h.date();
   await h.pending();
-  assert.equal(h.DOM.filterStatements.checked, false);
-  assert.equal(h.DOM.statementsDate.value, '2026-10-08');
-  assert.equal(h.DOM.statementsDate.disabled, true);
-  assert.equal(h.DOM.clearStatementsDate.disabled, true);
-  assert.equal(h.state.requests.at(-1).has('statement_date'), false);
-  assert.deepEqual(h.visible(), [2, 3]);
-  h.DOM.filterStatements.checked = true;
-  await h.DOM.filterStatements.dispatch('change');
-  assert.equal(h.DOM.filterPendingStatements.checked, false);
-  assert.equal(h.DOM.statementsDate.disabled, false);
-  assert.equal(h.DOM.clearStatementsDate.disabled, false);
-  assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-08');
-  assert.deepEqual(h.visible(), [1, 2, 5]);
-  await h.DOM.clearStatementsDate.dispatch('click');
+  await h.newStatements();
+  assert.equal(h.DOM.filterStatements.checked, true);
+  assert.equal(h.DOM.filterPendingStatements.checked, true);
+  assert.deepEqual(h.visible(), [1, 2, 3]);
+  await h.pending(false);
+  assert.equal(h.DOM.filterStatements.checked, true);
   assert.deepEqual(h.visible(), [1, 3]);
   await h.pending();
-  assert.equal(h.DOM.filterStatements.checked, false);
-  assert.deepEqual(h.visible(), [2, 3]);
+  await h.newStatements(false);
+  assert.equal(h.DOM.filterPendingStatements.checked, true);
+  assert.deepEqual(h.visible(), [2]);
+  await h.pending(false);
+  assert.deepEqual(h.visible(), [1, 2, 3, 4, 5]);
 });
 
-test('turning pending filter off restores date controls and does not silently enable date filtering', async () => {
+test('toggling either status while a date is selected keeps date filtering and date controls active', async () => {
   const h = pendingHarness();
   await h.date();
-  await h.pending();
-  await h.pending(false);
-  assert.equal(h.DOM.filterStatements.checked, false);
-  assert.equal(h.DOM.statementsDate.value, '2026-10-08');
-  assert.equal(h.DOM.statementsDate.disabled, false);
-  assert.equal(h.DOM.clearStatementsDate.disabled, false);
-  assert.equal(h.state.requests.at(-1).has('statement_date'), false);
-  assert.deepEqual(h.visible(), [1, 2, 3, 4, 5]);
-  await h.DOM.clearStatementsDate.dispatch('click');
-  assert.equal(h.DOM.clearStatementsDate.disabled, true);
-  await h.pending();
-  await h.pending(false);
-  assert.equal(h.DOM.statementsDate.disabled, false);
-  assert.equal(h.DOM.clearStatementsDate.disabled, true);
-});
-
-test('choosing a date activates statements mode and clears pending mode', async () => {
-  const h = pendingHarness();
-  await h.pending();
-  // Programmatic change also follows the same invariant as a user-selected date.
-  await h.date('2026-10-07');
-  assert.equal(h.DOM.filterStatements.checked, true);
-  assert.equal(h.DOM.filterPendingStatements.checked, false);
-  assert.equal(h.DOM.statementsDate.disabled, false);
-  assert.equal(h.DOM.clearStatementsDate.disabled, false);
-  assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-07');
-  assert.deepEqual(h.visible(), [3]);
+  for (const [change, checked] of [[h.pending, true], [h.newStatements, true],
+    [h.pending, false], [h.newStatements, false]]) {
+    await change(checked);
+    assert.equal(h.DOM.statementsDate.value, '2026-10-08');
+    assert.equal(h.DOM.statementsDate.disabled, false);
+    assert.equal(h.DOM.clearStatementsDate.disabled, false);
+    assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-08');
+    assert.deepEqual(h.visible(), [1, 2, 5]);
+  }
 });
 
 test('pending filter composes with search, administrator and certificate filters', async () => {
@@ -310,11 +638,11 @@ test('pending filter composes with search, administrator and certificate filters
   assert.deepEqual(h.visible(), []);
   h.DOM.onlyAdmins.checked = false;
   await h.users.render();
-  assert.deepEqual(h.visible(), [3]);
+  assert.deepEqual(h.visible(), []);
   h.DOM.filterArchitects.checked = false;
   h.DOM.filterCertified.checked = true;
   await h.users.render();
-  assert.deepEqual(h.visible(), [2, 3]);
+  assert.deepEqual(h.visible(), [2]);
   h.DOM.usersSearch.value = 'Person 2';
   await h.users.render();
   assert.deepEqual(h.visible(), [2]);
@@ -329,23 +657,79 @@ test('pending polling reveals newly read cards and hides replied cards without r
     has_pending_statements: true, pending_statement_count: 1 });
   Object.assign(h.state.items[1], { has_pending_statements: false, pending_statement_count: 0 });
   await h.users.refreshLiveUserStates({ force: true });
-  assert.deepEqual(h.visible(), [1, 3]);
+  assert.deepEqual(h.visible(), [1]);
   assert.equal(h.card(2), card);
   assert.equal(card.classList.contains('open'), true);
   assertStatementState(card, 'normal');
   Object.assign(h.state.items[1], { has_unseen_statements: true, unseen_statement_count: 1,
     has_pending_statements: true, pending_statement_count: 2 });
   await h.users.refreshLiveUserStates({ force: true });
-  assert.deepEqual(h.visible(), [1, 2, 3]);
+  assert.deepEqual(h.visible(), [1]);
   assert.equal(h.card(2), card);
   assertStatementState(card, 'red');
 });
 
-test('legacy unread-only status updates preserve pending membership on mixed red cards', async () => {
+test('combined red and blue filters retain read cards until answered and restore them for a new statement', async () => {
+  const h = pendingHarness();
+  await h.newStatements();
+  await h.pending();
+  const card = h.card(1);
+  card.classList.toggle('open', true);
+  h.users.updateUserUnseenStatus(1, false, 0, true, 1);
+  assert.deepEqual(h.visible(), [1, 2, 3]);
+  assertStatementState(card, 'blue');
+  h.users.updateUserUnseenStatus(1, false, 0, false, 0);
+  assert.deepEqual(h.visible(), [2, 3]);
+  assertStatementState(card, 'normal');
+  h.users.updateUserUnseenStatus(1, true, 1, false, 0);
+  assert.deepEqual(h.visible(), [1, 2, 3]);
+  assertStatementState(card, 'red');
+  assert.equal(h.card(1), card);
+  assert.equal(card.classList.contains('open'), true);
+});
+
+test('combined status polling applies red-to-blue-to-answered changes without recreating cards', async () => {
+  const h = pendingHarness();
+  await h.pending();
+  await h.newStatements();
+  const card = h.card(3);
+  card.classList.toggle('open', true);
+  Object.assign(h.state.items[2], { has_unseen_statements: false, unseen_statement_count: 0 });
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.deepEqual(h.visible(), [1, 2, 3]);
+  assertStatementState(card, 'blue');
+  Object.assign(h.state.items[2], { has_pending_statements: false, pending_statement_count: 0 });
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.deepEqual(h.visible(), [1, 2]);
+  assertStatementState(card, 'normal');
+  assert.equal(h.card(3), card);
+  assert.equal(card.classList.contains('open'), true);
+});
+
+test('date filtering retains members when statement colors change while both statuses are checked', async () => {
+  const h = pendingHarness();
+  await h.newStatements();
+  await h.pending();
+  await h.date();
+  const card = h.card(1);
+  h.users.updateUserUnseenStatus(1, false, 0, true, 1);
+  assert.deepEqual(h.visible(), [1, 2, 5]);
+  assertStatementState(card, 'blue');
+  h.users.updateUserUnseenStatus(1, false, 0, false, 0);
+  assert.deepEqual(h.visible(), [1, 2, 5]);
+  assertStatementState(card, 'normal');
+  Object.assign(h.state.items[1], { has_pending_statements: false, pending_statement_count: 0 });
+  await h.users.refreshLiveUserStates({ force: true });
+  assert.deepEqual(h.visible(), [1, 2, 5]);
+  assertStatementState(h.card(2), 'normal');
+  assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-08');
+});
+
+test('legacy unread-only status updates hide mixed red cards until they become blue', async () => {
   const h = pendingHarness();
   await h.pending();
   h.users.updateUserUnseenStatus(3, true, 2);
-  assert.deepEqual(h.visible(), [2, 3]);
+  assert.deepEqual(h.visible(), [2]);
   h.users.updateUserUnseenStatus(3, false, 0);
   assert.deepEqual(h.visible(), [2, 3]);
   assertStatementState(h.card(3), 'blue');
@@ -357,12 +741,13 @@ for (const requestType of ['render', 'poll']) {
     await h.date();
     h.state.hold = true;
     const staleRequest = requestType === 'render' ? h.users.render() : h.users.refreshLiveUserStates({ force: true });
+    await h.DOM.clearStatementsDate.dispatch('click');
     await h.pending();
-    assert.deepEqual(h.visible(), [2, 3]);
+    assert.deepEqual(h.visible(), [2]);
     assert.equal(h.state.pending.length, 1);
     h.state.pending.shift()();
     await staleRequest;
-    assert.deepEqual(h.visible(), [2, 3]);
+    assert.deepEqual(h.visible(), [2]);
   });
 
   test(`late ${requestType} response cannot return replied users to the pending filter`, async () => {
@@ -372,10 +757,10 @@ for (const requestType of ['render', 'poll']) {
     const staleRequest = requestType === 'render' ? h.users.render() : h.users.refreshLiveUserStates({ force: true });
     Object.assign(h.state.items[1], { has_pending_statements: false, pending_statement_count: 0 });
     h.users.updateUserUnseenStatus(2, false, 0, false, 0);
-    if (requestType === 'poll') assert.deepEqual(h.visible(), [3]);
+    if (requestType === 'poll') assert.deepEqual(h.visible(), []);
     h.state.pending.shift()();
     await staleRequest;
-    assert.deepEqual(h.visible(), [3]);
+    assert.deepEqual(h.visible(), []);
   });
 }
 
@@ -391,10 +776,11 @@ test('without a date, statements filter shows only red cards and reacts to readi
   assert.deepEqual(h.visible(), [2, 3, 5]);
 });
 
-test('date selection enables statements filter and keeps both read and unread senders visible', async () => {
+test('date selection leaves both status filters off and keeps read and unread senders visible', async () => {
   const h = harness();
   await h.date();
-  assert.equal(h.DOM.filterStatements.checked, true);
+  assert.equal(h.DOM.filterStatements.checked, false);
+  assert.equal(h.DOM.filterPendingStatements.checked, false);
   assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-08');
   assert.deepEqual(h.visible(), [1, 2, 5]);
   assert.equal(h.card(2).classList.contains('has-new-statements'), false);
@@ -406,6 +792,8 @@ test('date selection enables statements filter and keeps both read and unread se
 test('clear date returns to red-only filtering and removes the server date parameter', async () => {
   const h = harness();
   assert.equal(h.DOM.clearStatementsDate.disabled, true);
+  h.DOM.filterStatements.checked = true;
+  await h.DOM.filterStatements.dispatch('change');
   await h.date();
   assert.equal(h.DOM.clearStatementsDate.disabled, false);
   await h.DOM.clearStatementsDate.dispatch('click');
@@ -416,14 +804,16 @@ test('clear date returns to red-only filtering and removes the server date param
   assert.deepEqual(h.visible(), [1, 3, 5]);
 });
 
-test('turning statements checkbox off ignores a retained selected date', async () => {
+test('turning statements checkbox off keeps independently selected date filtering', async () => {
   const h = harness();
+  h.DOM.filterStatements.checked = true;
+  await h.DOM.filterStatements.dispatch('change');
   await h.date();
   h.DOM.filterStatements.checked = false;
   await h.DOM.filterStatements.dispatch('change');
   assert.equal(h.DOM.statementsDate.value, '2026-10-08');
-  assert.equal(h.state.requests.at(-1).has('statement_date'), false);
-  assert.deepEqual(h.visible(), [1, 2, 3, 4, 5]);
+  assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-08');
+  assert.deepEqual(h.visible(), [1, 2, 5]);
 });
 
 test('date filtering composes with certificate, search and administrator filters', async () => {

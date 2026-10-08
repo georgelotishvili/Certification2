@@ -1,15 +1,24 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const API_BASE = (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string')
     ? window.APP_CONFIG.API_BASE
     : 'http://127.0.0.1:8000';
-  const VIEW_USER_ID = (() => {
+  const publicTarget = (() => {
     try {
       const params = new URLSearchParams(window.location.search);
+      if (params.has('code')) {
+        const code = params.get('code') || '';
+        return { publicView: true, code, valid: code.length === 10 && /^[0-9]{10}$/.test(code), userId: null };
+      }
+      if (!params.has('userId')) return { publicView: false };
       const raw = params.get('userId');
       const n = Number(raw);
-      return Number.isFinite(n) && n > 0 ? n : null;
-    } catch { return null; }
+      const valid = !!raw && !/[^0-9]/.test(raw) && Number.isSafeInteger(n) && n > 0;
+      return { publicView: true, valid, userId: valid ? n : null };
+    } catch { return { publicView: true, valid: false }; }
   })();
+  const PUBLIC_VIEW = publicTarget.publicView;
+  let VIEW_USER_ID = publicTarget.userId || null;
+  let publicProfileData = null;
 
   const DOM = {
     body: document.body,
@@ -85,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // A public profile shows only the approved personal-information fields.
-  if (VIEW_USER_ID) {
+  if (PUBLIC_VIEW) {
     [DOM.pfPersonalId, DOM.pfPhone, DOM.pfCode].forEach((element) => {
       element?.closest('.profile-row')?.remove();
     });
@@ -104,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function attachCopyTargets() {
     try {
-      if (!VIEW_USER_ID) window.Utils?.attachCopyButton?.(DOM.pfCode);
+      if (!PUBLIC_VIEW) window.Utils?.attachCopyButton?.(DOM.pfCode);
       window.Utils?.attachCopyButton?.(DOM.certCode);
     } catch {}
   }
@@ -123,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     return true;
   }
-  if (!VIEW_USER_ID && !guard()) return;
+  if (!PUBLIC_VIEW && !guard()) return;
 
   // Body offset not needed (handled via CSS)
 
@@ -143,7 +152,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   // Initial title from local user, fallback to default
-  updatePageTitleFrom(getCurrentUser());
+  if (PUBLIC_VIEW) {
+    if (DOM.pageTitle) DOM.pageTitle.textContent = 'მონაცემები იტვირთება…';
+    if (DOM.myGrid) DOM.myGrid.setAttribute('aria-busy', 'true');
+    const editButton = document.getElementById('profileEditBtn');
+    if (editButton) editButton.style.display = 'none';
+  } else {
+    updatePageTitleFrom(getCurrentUser());
+  }
 
   // Snapshot of self profile loaded from API (used for profile edit modal)
   let selfProfileData = null;
@@ -220,38 +236,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const user = getCurrentUser();
     const savedEmail = (window.Auth?.getSavedEmail?.() || '').trim();
 
-    if (VIEW_USER_ID) {
-      // Populate full public info by user id (requires authenticated actor)
+    if (PUBLIC_VIEW) {
+      // Resolve a persistent code first. Never fall back to the signed-in actor.
+      let failedStatus = 0;
       try {
-        const res = await fetch(`${API_BASE}/users/${encodeURIComponent(VIEW_USER_ID)}/public`, {
-          headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() },
+        if (!publicTarget.valid) {
+          failedStatus = 404;
+          throw new Error('Invalid public profile link');
+        }
+        const path = publicTarget.code
+          ? `/users/public/by-code/${encodeURIComponent(publicTarget.code)}`
+          : `/users/${encodeURIComponent(VIEW_USER_ID)}/public-details`;
+        const res = await fetch(`${API_BASE}${path}`, {
+          headers: { 'Cache-Control': 'no-cache' },
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (DOM.pfFirstName) DOM.pfFirstName.textContent = data.first_name || '—';
-          if (DOM.pfLastName) DOM.pfLastName.textContent = data.last_name || '—';
-          if (DOM.pfEmail) DOM.pfEmail.textContent = data.email || '—';
-          if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = window.Utils?.formatDateTime?.(data.created_at);
-          updatePageTitleFrom({ firstName: data.first_name || '', lastName: data.last_name || '' });
-          return;
+        failedStatus = res.status;
+        if (!res.ok) throw new Error('Public profile unavailable');
+        const data = await res.json();
+        const resolvedId = Number(data.id);
+        if (!Number.isSafeInteger(resolvedId) || resolvedId <= 0 || !data.certificate
+          || (publicTarget.code ? String(data.code) !== publicTarget.code : resolvedId !== VIEW_USER_ID)) {
+          throw new Error('Invalid public profile response');
         }
-      } catch {}
-      // Fallback to registry (limited info)
-      try {
-        const res = await fetch(`${API_BASE}/certified-persons/registry?limit=500`, { headers: { 'Cache-Control': 'no-cache' } });
-        if (res.ok) {
-          const list = await res.json();
-          const item = Array.isArray(list) ? list.find((x) => Number(x?.id) === Number(VIEW_USER_ID)) : null;
-          if (item) {
-            const parts = String(item.full_name || '').trim().split(/\s+/);
-            if (DOM.pfFirstName) DOM.pfFirstName.textContent = parts[0] || '—';
-            if (DOM.pfLastName) DOM.pfLastName.textContent = parts.slice(1).join(' ') || '—';
-            if (DOM.pfEmail) DOM.pfEmail.textContent = '—';
-            if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = window.Utils?.formatDateTime?.(item.registration_date);
-            updatePageTitleFrom({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' });
-          }
+        VIEW_USER_ID = resolvedId;
+        publicProfileData = data;
+        if (DOM.pfFirstName) DOM.pfFirstName.textContent = data.first_name || '—';
+        if (DOM.pfLastName) DOM.pfLastName.textContent = data.last_name || '—';
+        if (DOM.pfEmail) DOM.pfEmail.textContent = data.email || '—';
+        if (DOM.pfCreatedAt) DOM.pfCreatedAt.textContent = window.Utils?.formatDateTime?.(data.created_at);
+        updatePageTitleFrom(data);
+      } catch {
+        const notFound = failedStatus === 404 || failedStatus === 400 || failedStatus === 422;
+        const message = notFound
+          ? 'ამ ბმულზე საჯარო სერტიფიკატი ვერ მოიძებნა.'
+          : 'მონაცემების ჩატვირთვა ვერ მოხერხდა. გთხოვთ, განაახლოთ გვერდი.';
+        if (DOM.pageTitle) DOM.pageTitle.textContent = message;
+        if (DOM.myGrid) {
+          DOM.myGrid.hidden = true;
+          DOM.myGrid.style.display = 'none';
         }
-      } catch {}
+        if (DOM.pageTitle) DOM.pageTitle.setAttribute('role', 'alert');
+      } finally {
+        if (DOM.myGrid) DOM.myGrid.setAttribute('aria-busy', 'false');
+      }
       return;
     }
 
@@ -283,7 +310,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch {}
   }
-  loadProfile();
+  if (PUBLIC_VIEW) {
+    await loadProfile();
+    if (!publicProfileData) return;
+  } else {
+    loadProfile();
+  }
 
   // Profile edit modal (self only)
   const profileEditDOM = {
@@ -594,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function bindProfileEdit() {
     // Self only
-    if (VIEW_USER_ID) return;
+    if (PUBLIC_VIEW) return;
     if (profileEditDOM.btn) profileEditDOM.btn.style.display = '';
     utils.on(profileEditDOM.btn, 'click', openProfileEdit);
     utils.on(profileEditDOM.close, 'click', closeProfileEdit);
@@ -634,14 +666,14 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadCertificate() {
     const user = getCurrentUser();
     const card = DOM.certCard;
-    const targetId = VIEW_USER_ID || (user && user.id);
+    const targetId = PUBLIC_VIEW ? VIEW_USER_ID : (user && user.id);
     if (!targetId || !card) {
       setCertificatePanelVisible(false);
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(targetId)}/certificate`, { headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() } });
-      if (!res.ok) {
+      const res = PUBLIC_VIEW ? null : await fetch(`${API_BASE}/users/${encodeURIComponent(targetId)}/certificate`, { headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() } });
+      if (res && !res.ok) {
         certData = null;
         setCertificatePanelVisible(false);
         if (res.status === 404) {
@@ -654,7 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return;
       }
-      const data = await res.json();
+      const data = PUBLIC_VIEW ? publicProfileData.certificate : await res.json();
       certData = data;
       setCertificatePanelVisible(true);
       card.classList.remove('is-empty');
@@ -730,7 +762,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function handleCertDownload() {
     const user = getCurrentUser();
-    const targetId = VIEW_USER_ID || (user && user.id);
+    const targetId = PUBLIC_VIEW ? VIEW_USER_ID : (user && user.id);
     if (!targetId) return;
     if (!certData) {
       alert('სერტიფიკატი არ არის შექმნილი');
@@ -745,7 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reviews module
   function createReviewsModule() {
     const state = {
-      targetUserId: VIEW_USER_ID || (isLoggedIn() ? (getCurrentUser()?.id || null) : null),
+      targetUserId: PUBLIC_VIEW ? VIEW_USER_ID : (isLoggedIn() ? (getCurrentUser()?.id || null) : null),
       actor: isLoggedIn() ? getCurrentUser() : null,
       actorEmail: (isLoggedIn() && getCurrentUser()?.email) ? String(getCurrentUser().email).trim() : '',
       average: 0,
@@ -977,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Determine certification (based on previously loaded certData)
       setCertified(!!certData);
       // Self rating disabled
-      const isSelf = !!(state.actor && state.targetUserId && state.actor.id === state.targetUserId);
+      const isSelf = !!(state.actor && state.targetUserId && Number(state.actor.id) === Number(state.targetUserId));
       state.isSelf = isSelf;
       setCanRate(state.isCertified && !isSelf && !!state.actorEmail);
       // React to certificate loading later
@@ -994,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Hide statements triggers when viewing other user's page
-  if (VIEW_USER_ID) {
+  if (PUBLIC_VIEW) {
     try { document.querySelector('.drawer-statements')?.setAttribute('hidden', ''); } catch {}
   }
 
@@ -1452,7 +1484,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function init() {
       // Public view: show submitted uploads list for that user, hide editing UI
-      if (VIEW_USER_ID) {
+      if (PUBLIC_VIEW) {
         state.publicMode = true;
         const form = document.getElementById('expertForm');
         const actions = document.querySelector('.expert-actions');
@@ -1489,10 +1521,10 @@ document.addEventListener('DOMContentLoaded', () => {
       bindSearch();
       bindEvents();
       // Enabled only if certificate level is expert
-      setEnabled(!VIEW_USER_ID && isExpertCertificate(certData));
+      setEnabled(!PUBLIC_VIEW && isExpertCertificate(certData));
       document.addEventListener('certificate:loaded', (ev) => {
         const cd = ev?.detail?.certData || null;
-        setEnabled(!VIEW_USER_ID && isExpertCertificate(cd));
+        setEnabled(!PUBLIC_VIEW && isExpertCertificate(cd));
       });
       updateClearStates();
     }
@@ -1514,10 +1546,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // goIndex not needed; anchors use native navigation
   // Personal page behavior:
-  // - Registry: open local modal (no navigation)
+  // - Registry: anchors navigate to the public registry page.
   // statements click handled by header.js (opens modal directly)
-
-  // Registry modal is initialized globally in script.js; use DOM to close if needed
 
   // Exam dropdown handled by script.js
 

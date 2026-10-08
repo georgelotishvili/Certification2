@@ -8,11 +8,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as F
 from fastapi.responses import FileResponse
 import uuid
 from sqlalchemy import case, func, select, or_, delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
 from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
+from ..models import ExamSchedule
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -50,6 +52,7 @@ from ..services.exam_stage import (
 )
 from ..services.media_storage import resolve_storage_path, ensure_media_root, delete_storage_file
 from ..services.expert_certificate_cleanup import delete_expert_certificate_files
+from ..services.user_codes import UserCodeConflict, move_user_code, remember_user_code
 from ..services.bounded_upload import (
     DEFAULT_UPLOAD_MAX_BYTES,
     UploadTooLarge,
@@ -936,6 +939,10 @@ def admin_download_statement_file(
 
 # ================= Users admin endpoints =================
 
+def _today_in_tbilisi() -> date:
+    return datetime.now(timezone(timedelta(hours=4))).date()
+
+
 @router.get("/users", response_model=UsersListResponse)
 def admin_users(
     page: int = 1,
@@ -946,6 +953,9 @@ def admin_users(
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
     statement_date: date | None = None,
+    exam_date: date | None = None,
+    exam_morning: bool = False,
+    exam_evening: bool = False,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
@@ -965,6 +975,17 @@ def admin_users(
         )
     if only_admins:
         stmt = stmt.where(User.is_admin == True)  # noqa: E712
+
+    if exam_date is not None or exam_morning or exam_evening:
+        schedule_query = select(ExamSchedule.user_id).where(
+            ExamSchedule.exam_date == (exam_date if exam_date is not None else _today_in_tbilisi())
+        )
+        # Both selected, or a date alone, includes both groups without duplicates.
+        if exam_morning and not exam_evening:
+            schedule_query = schedule_query.where(ExamSchedule.period == "morning")
+        elif exam_evening and not exam_morning:
+            schedule_query = schedule_query.where(ExamSchedule.period == "evening")
+        stmt = stmt.where(User.id.in_(schedule_query))
 
     if statement_date is not None:
         # Statements are stored in naive UTC; the selected day is in Georgia.
@@ -1159,6 +1180,7 @@ def admin_update_user(
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
     updates_made = False
+    new_personal_id = None
 
     if payload.first_name is not None:
         first_name = (payload.first_name or "").strip()
@@ -1189,7 +1211,7 @@ def admin_update_user(
         if exists_pid:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="personal_id already registered")
         if personal_id != user.personal_id:
-            user.personal_id = personal_id
+            new_personal_id = personal_id
             updates_made = True
 
     if payload.phone is not None:
@@ -1225,6 +1247,14 @@ def admin_update_user(
         code_candidate = (payload.code or "").strip()
         if code_candidate != user.code:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="code cannot be modified")
+
+    if new_personal_id is not None:
+        try:
+            move_user_code(db, user, new_personal_id)
+        except (UserCodeConflict, IntegrityError):
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ამ პირად ნომერზე კოდის გადაბმა შეუძლებელია: შენახულ კოდთან კონფლიქტია")
+        user.personal_id = new_personal_id
 
     if updates_made:
         db.add(user)
@@ -1279,6 +1309,13 @@ def admin_delete_user(
         return
     if (settings.founder_admin_email or "").lower() == u.email.lower():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Founder admin cannot be deleted")
+
+    # Preserve only the identifier mapping before deleting any account files.
+    try:
+        remember_user_code(db, u)
+    except (UserCodeConflict, IntegrityError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="წაშლა ვერ შესრულდა: პირადი ნომრისა და კოდის კავშირი შესამოწმებელია")
 
     # Delete user photo file before cascade delete
     _delete_user_photo_file(u)
@@ -1356,6 +1393,15 @@ def admin_delete_all_users(
 
     # Do not delete founder
     users = db.scalars(select(User)).all()  # fetch all users
+    # Validate/preserve every mapping before file cleanup starts, so a conflict
+    # on a later account cannot partially delete earlier accounts' files.
+    try:
+        for u in users:
+            if (u.email or "").lower() != founder_email:
+                remember_user_code(db, u)
+    except (UserCodeConflict, IntegrityError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="წაშლა ვერ შესრულდა: პირადი ნომრისა და კოდის კავშირი შესამოწმებელია")
     for u in users:
         if (u.email or "").lower() == founder_email:
             continue

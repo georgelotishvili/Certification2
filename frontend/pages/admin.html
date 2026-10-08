@@ -14,15 +14,18 @@
     <script src="../scripts/admin/statements.js?v=20261008-1" defer></script>
     <script src="../scripts/admin/results.js" defer></script>
     <script src="../scripts/admin/project-results.js" defer></script>
-    <script src="../scripts/admin/certificate.js?v=4" defer></script>
-    <script src="../scripts/admin/users.js?v=20261008-5" defer></script>
+    <script src="../scripts/vendor/qrcode-generator.js?v=1" defer></script>
+    <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
+    <script src="../scripts/admin/certificate.js?v=20261008-center1" defer></script>
+    <script src="../scripts/admin/exam-schedules.js?v=20261008-1" defer></script>
+    <script src="../scripts/admin/users.js?v=20261008-7" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
     <script src="../vendor/mammoth.browser.min.js" defer></script>
     <script src="../scripts/admin/documents.js" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=5" />
+    <link rel="stylesheet" href="../styles/admin.css?v=6" />
   </head>
   <body>
     <header>
@@ -52,9 +55,9 @@
             <div class="drawer-other-submenu drawer-submenu" hidden>
               <a href="#" class="drawer-submenu-item" data-target="guide">გზამკვლევი</a>
               <a href="#" class="drawer-submenu-item" data-target="regulations">რეგულაციები</a>
-              <a href="#" class="drawer-submenu-item" data-target="documents">დოკუმენტები</a>
-              <a href="#" class="drawer-submenu-item" data-target="app">APP</a>
               <a href="#" class="drawer-submenu-item" data-target="applicationForm">განაცხადის ფორმა</a>
+              <a href="#" class="drawer-submenu-item" data-target="app">საგამოცდო აპი</a>
+              <a href="#" class="drawer-submenu-item" data-target="documents">დოკუმენტის დამატება</a>
             </div>
           </div>
         </nav>
@@ -73,9 +76,9 @@
           <div class="dropdown other-dropdown" role="menu">
             <a href="#" class="dropdown-item" data-target="guide">გზამკვლევი</a>
             <a href="#" class="dropdown-item" data-target="regulations">რეგულაციები</a>
-            <a href="#" class="dropdown-item" data-target="documents">დოკუმენტები</a>
-            <a href="#" class="dropdown-item" data-target="app">APP</a>
             <a href="#" class="dropdown-item" data-target="applicationForm">განაცხადის ფორმა</a>
+            <a href="#" class="dropdown-item" data-target="app">საგამოცდო აპი</a>
+            <a href="#" class="dropdown-item" data-target="documents">დოკუმენტის დამატება</a>
           </div>
         </div>
       </nav>
@@ -189,18 +192,35 @@
                 <input id="filterCertified" type="checkbox" />
                 <span>სერტიფიცირებული პირები</span>
               </label>
-              <div class="users-statements-filter">
-                <label class="users-filter-label" title="თარიღის გარეშე — მხოლოდ წაუკითხავი; თარიღით — იმ დღეს მიღებული ყველა განცხადება">
-                  <input id="filterStatements" type="checkbox" />
-                  <span>ახალი განცხადებები</span>
-                </label>
-                <input id="statementsDate" class="users-filter-date" type="date" aria-label="განცხადების მიღების თარიღი" title="არჩეული დღე თბილისის დროით, 00:00–24:00; წაკითხვის მიუხედავად" />
-                <button id="clearStatementsDate" class="users-filter-date-clear" type="button" aria-label="განცხადების თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
-              </div>
-              <label class="users-filter-label" title="პირები, რომლებსაც წაკითხული, მაგრამ ჯერ უპასუხო განცხადება აქვთ">
+              <label class="users-filter-label" title="გაუხსნელი განცხადებების მქონე პირები — წითელი კონტურით">
+                <input id="filterStatements" type="checkbox" />
+                <span>ახალი განცხადებები</span>
+              </label>
+              <label class="users-filter-label" title="მხოლოდ ლურჯკონტურიანი პირები — წაკითხული, მაგრამ ჯერ უპასუხო განცხადებებით">
                 <input id="filterPendingStatements" type="checkbox" />
                 <span>უპასუხო განცხადებები</span>
               </label>
+              <div class="users-statements-filter">
+                <label class="users-filter-label" for="statementsDate">განცხადების მიღების თარიღი</label>
+                <input id="statementsDate" class="users-filter-date" type="date" aria-label="განცხადების მიღების თარიღი" title="არჩეული დღე თბილისის დროით, 00:00–24:00; ჩანს იმ დღეს მიღებული ყველა განცხადების გამომგზავნი, სტატუსის ფილტრების მიუხედავად" />
+                <button id="clearStatementsDate" class="users-filter-date-clear" type="button" aria-label="განცხადების თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
+              </div>
+            </div>
+            <div class="users-filters-checkboxes users-exam-filters">
+              <label class="users-filter-label">
+                <input id="filterExamMorning" type="checkbox" />
+                <span>გამოცდა დილით</span>
+              </label>
+              <label class="users-filter-label">
+                <input id="filterExamEvening" type="checkbox" />
+                <span>გამოცდა საღამოს</span>
+              </label>
+              <div class="users-exam-date-filter">
+                <label class="users-filter-label" for="examScheduleDate">გამოცდის თარიღი</label>
+                <input id="examScheduleDate" class="users-filter-date" type="date" aria-label="გამოცდის თარიღი" title="აირჩიეთ წარსული ან მომავალი დღე; თარიღის გარეშე ჯგუფი დღევანდელი დღის მიხედვით იფილტრება თბილისის დროით" />
+                <button id="clearExamScheduleDate" class="users-filter-date-clear" type="button" aria-label="გამოცდის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
+              </div>
+              <span class="users-exam-filter-hint">თარიღის გარეშე — დღევანდელი ჯგუფი</span>
             </div>
           </div>
           <div id="usersGrid" class="exam-blocks-grid"></div>
@@ -745,6 +765,6 @@
 
     <script src="../vendor/jspdf.umd.min.js"></script>
     <script src="../vendor/svg2pdf.min.js"></script>
-    <script src="../scripts/admin.js?v=11" defer></script>
+    <script src="../scripts/admin.js?v=12" defer></script>
   </body>
 </html>

@@ -56,6 +56,13 @@
     const templateContainer = overlay?.querySelector('#certificateTemplateContainer');
     const BASE_CERTIFICATE_WIDTH = 1123;
     const BASE_CERTIFICATE_HEIGHT = 793;
+    // Shared preview/export placement, measured from the approved landscape-A4 design.
+    // The white quiet zone is included in this physical 30 mm square.
+    const QR_SIZE = BASE_CERTIFICATE_WIDTH * 30 / 297;
+    // Colored panel's straight SVG edges are identical in all three templates.
+    const QR_CENTER_X = (783.628 + 1019.13) / 2;
+    const QR_X = QR_CENTER_X - QR_SIZE / 2;
+    const QR_Y = BASE_CERTIFICATE_HEIGHT * 0.345 - QR_SIZE / 2;
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const CERTIFICATE_BACKGROUND_FILES = {
       architect: 'architect bac.svg',
@@ -323,18 +330,25 @@
 
         // No SVG @font-face needed; fonts are embedded into PDF by jsPDF
 
-        try {
-          const backgroundNode = await buildBackgroundNode(levelKey);
-          if (backgroundNode) {
-            svgEl.appendChild(backgroundNode);
-          }
-        } catch (_error) {}
+        const backgroundNode = await buildBackgroundNode(levelKey);
+        if (!backgroundNode) throw new Error('Certificate background unavailable');
+        svgEl.appendChild(backgroundNode);
 
         const fieldNodesList = clone.querySelectorAll('[data-field]');
         fieldNodesList.forEach((fieldNode) => {
           const textNode = createSvgTextNodeFromField(fieldNode, baseRect, levelKey);
           if (textNode) svgEl.appendChild(textNode);
         });
+
+        const qr = clone.querySelector('.certificate-qr');
+        if (!qr) throw new Error('Certificate QR unavailable');
+        const exportedQr = qr.cloneNode(true);
+        exportedQr.removeAttribute('style');
+        exportedQr.setAttribute('x', String(QR_X));
+        exportedQr.setAttribute('y', String(QR_Y));
+        exportedQr.setAttribute('width', String(QR_SIZE));
+        exportedQr.setAttribute('height', String(QR_SIZE));
+        svgEl.appendChild(exportedQr);
 
         return svgEl;
       } finally {
@@ -393,6 +407,10 @@
     let activeUserRef = null;
     let activeUser = null;
     let activeData = null;
+    let exportBusy = false;
+    let previewReady = false;
+    let renderRevision = 0;
+    let openRevision = 0;
     let formOpen = false;
     let formMode = 'create';
 
@@ -816,8 +834,8 @@
       return themeLinkEl;
     }
 
-    async function loadCertificateTemplate(level) {
-      if (!templateContainer) return;
+    async function loadCertificateTemplate(level, revision) {
+      if (!templateContainer) return false;
       
       const levelKey = level === 'expert' ? 'expert' : (level === 'municipal' ? 'municipal' : 'architect');
       const templatePath = `../certificate/${levelKey}.html`;
@@ -826,8 +844,9 @@
       
       try {
         const response = await fetch(templatePath);
-        if (!response.ok) return;
+        if (!response.ok) return false;
         const html = await response.text();
+        if (revision !== renderRevision) return false;
         // Wrap template with a scale wrapper so transform scaling preserves layout centering
         templateContainer.innerHTML = `<div class="certificate-scale-wrapper">${html}</div>`;
         
@@ -838,10 +857,22 @@
         const link = ensureThemeStyles();
         const cacheBuster = `${themeVersion}_${Date.now()}`;
         const versionedCssPath = `${cssPath}?v=${cacheBuster}`;
-        link.setAttribute('href', versionedCssPath);
-
-        // Field nodes updated; scaling will be handled by caller
-      } catch {}
+        const loaded = await new Promise((resolve) => {
+          const timeout = setTimeout(() => finish(false), 8000);
+          function finish(ok) {
+            clearTimeout(timeout);
+            link.removeEventListener('load', onLoad);
+            link.removeEventListener('error', onError);
+            resolve(ok);
+          }
+          const onLoad = () => finish(true);
+          const onError = () => finish(false);
+          link.addEventListener('load', onLoad);
+          link.addEventListener('error', onError);
+          link.setAttribute('href', versionedCssPath);
+        });
+        return loaded && revision === renderRevision;
+      } catch { return false; }
     }
 
     function fitCertificateToContainer() {
@@ -933,25 +964,52 @@
 
     async function populateView(data) {
       if (!data) return;
+      const revision = ++renderRevision;
+      const person = activeUser ? { ...activeUser } : null;
+      previewReady = false;
+      if (downloadBtn) downloadBtn.disabled = true;
       applyCardStyling(data);
       
       // Load certificate template based on level
       const levelKey = resolveLevelKey(data.level || data.level?.key);
-      await loadCertificateTemplate(levelKey);
+      const loaded = await loadCertificateTemplate(levelKey, revision);
+      if (revision !== renderRevision) return;
+      if (!loaded) {
+        if (templateContainer) templateContainer.innerHTML = '';
+        showToast('სერტიფიკატის შაბლონი ვერ ჩაიტვირთა. გახსენით ხელახლა.', 'error');
+        return;
+      }
       
       // Wait next frame for DOM render
       await nextAnimationFrame();
+      if (revision !== renderRevision) return;
       
       // Fit after DOM update
       fitCertificateToContainer();
       
       setField('uniqueCode', data.uniqueCode || '—');
-      setField('fullName', data.fullName || buildFullName(activeUser) || '—');
-      setField('personalId', activeUser?.personal_id || '—');
+      setField('fullName', data.fullName || buildFullName(person) || '—');
+      setField('personalId', person?.personal_id || '—');
       setField('issueDate', data.hasCertificate ? data.issueDate || '—' : '—');
       setField('validityTerm', data.hasCertificate ? data.validityTerm || '—' : '—');
       setField('validUntil', data.hasCertificate ? data.validUntil || '—' : '—');
       renderStatus(data);
+      if (data.hasCertificate) {
+        try {
+          const qr = global.CertificateQR.createSvg(person.code);
+          qr.setAttribute('class', 'certificate-qr');
+          qr.style.position = 'absolute';
+          qr.style.left = `${QR_X}px`;
+          qr.style.top = `${QR_Y}px`;
+          qr.style.width = `${QR_SIZE}px`;
+          qr.style.height = `${QR_SIZE}px`;
+          qr.style.display = 'block';
+          getCertificateElement().appendChild(qr);
+          previewReady = true;
+        } catch {
+          showToast('QR კოდი ვერ შეიქმნა. განაახლეთ გვერდი და სცადეთ ხელახლა.', 'error');
+        }
+      }
     }
 
     function setFormSummary(data) {
@@ -1042,27 +1100,28 @@
 
       if (card) card.classList.toggle('hidden', !showCard);
       if (deleteBtn) {
-        deleteBtn.disabled = !hasCertificate || formOpen;
+        deleteBtn.disabled = exportBusy || !hasCertificate || formOpen;
       }
       if (editBtn) {
         editBtn.classList.toggle('hidden', !hasCertificate);
-        editBtn.disabled = formOpen;
+        editBtn.disabled = exportBusy || formOpen;
         editBtn.textContent = formOpen ? 'ფორმის დახურვა' : 'რედაქტირება';
       }
       if (emptyState) emptyState.classList.toggle('hidden', hasCertificate || formOpen);
       if (form) form.classList.toggle('hidden', !formOpen);
 
       if (downloadBtn) {
-        downloadBtn.textContent = downloadBtnDefaultLabel;
-        downloadBtn.disabled = !hasCertificate || formOpen || !!(activeData && activeData.isInactive);
+        downloadBtn.textContent = exportBusy ? 'მუშავდება...' : downloadBtnDefaultLabel;
+        downloadBtn.disabled = exportBusy || !previewReady || !hasCertificate || formOpen || !!(activeData && activeData.isInactive);
       }
+      if (closeBtn) closeBtn.disabled = exportBusy;
       if (emptyCreateBtn && !hasCertificate && !formOpen) {
         emptyCreateBtn.textContent = 'სერტიფიკატის შექმნა';
       }
     }
 
     function openForm(mode) {
-      if (!form) return;
+      if (!form || exportBusy) return;
       formMode = mode || (activeData?.hasCertificate ? 'update' : 'create');
       formOpen = true;
       populateFormFields();
@@ -1098,6 +1157,7 @@
     }
 
     async function handleFormSubmit(event) {
+      if (exportBusy) { event?.preventDefault?.(); return; }
       event?.preventDefault?.();
       if (!form || !activeUser?.id) return;
 
@@ -1128,8 +1188,10 @@
         valid_until: validUntilValue,
       };
 
+      const requestRevision = openRevision;
+      const requestUserId = activeUser.id;
       try {
-        const url = `${API_BASE}/users/${activeUser.id}/certificate`;
+        const url = `${API_BASE}/users/${requestUserId}/certificate`;
         const method = formMode === 'create' ? 'POST' : 'PUT';
         const response = await fetch(url, {
           method,
@@ -1147,6 +1209,7 @@
         }
 
         const certificateData = await response.json();
+        if (requestRevision !== openRevision || activeUser?.id !== requestUserId) return;
 
         // Trust the selected level in the form for UI consistency
         const normalizedLevel = normalizeLevel(levelValue);
@@ -1197,6 +1260,7 @@
 
         closeForm({ force: true });
         await populateView(activeData);
+        if (requestRevision !== openRevision || activeUser?.id !== requestUserId) return;
         updateView();
         
         // Update user card color in users list immediately
@@ -1211,6 +1275,7 @@
     }
 
     async function handleDelete() {
+      if (exportBusy) return;
       if (!activeData?.hasCertificate || !activeUser?.id) {
         showToast('სერტიფიკატი ჯერ არ არის შექმნილი', 'info');
         return;
@@ -1222,8 +1287,10 @@
         return;
       }
 
+      const requestRevision = openRevision;
+      const requestUserId = activeUser.id;
       try {
-        const response = await fetch(`${API_BASE}/users/${activeUser.id}/certificate`, {
+        const response = await fetch(`${API_BASE}/users/${requestUserId}/certificate`, {
           method: 'DELETE',
           headers: { ...getAdminHeaders(), ...getActorHeaders() },
         });
@@ -1233,6 +1300,7 @@
           return;
         }
 
+        if (requestRevision !== openRevision || activeUser?.id !== requestUserId) return;
         const userAfterDelete = {
           ...(activeUser || {}),
           certificate: null,
@@ -1252,6 +1320,7 @@
         activeData = buildCertificateData(userAfterDelete);
         closeForm({ force: true });
         await populateView(activeData);
+        if (requestRevision !== openRevision || activeUser?.id !== requestUserId) return;
         updateView();
         if (activeUser?.id && onUserCertificateUpdated) {
           onUserCertificateUpdated(activeUser.id, null);
@@ -1385,13 +1454,13 @@
     }
 
     // Upload generated PDF to backend for persistent storage
-    async function uploadCertificatePdf(pdf, filename) {
+    async function uploadCertificatePdf(pdf, filename, userId) {
       try {
-        if (!activeUser?.id) return false;
+        if (!userId) return false;
         const blob = await pdf.output('blob');
         const form = new FormData();
         form.append('file', blob, filename || 'certificate.pdf');
-        const res = await fetch(`${API_BASE}/users/${activeUser.id}/certificate/file`, {
+        const res = await fetch(`${API_BASE}/users/${userId}/certificate/file`, {
           method: 'POST',
           headers: { ...getAdminHeaders(), ...getActorHeaders() },
           body: form,
@@ -1408,6 +1477,7 @@
     }
 
     async function handleDownload() {
+      if (exportBusy) return;
       if (!activeData?.hasCertificate) {
         showToast('სერტიფიკატი ჯერ არ არის შექმნილი', 'error');
         return;
@@ -1421,70 +1491,81 @@
         return;
       }
 
-      const safeFullNameEarly = (activeData?.fullName || '')
-        .trim()
-        .replace(/[<>:"/\\|?*]+/g, '')
-        .replace(/\s+/g, '_');
-      const safeCodeEarly = (activeData?.uniqueCode || '').trim().replace(/[<>:"/\\|?*]+/g, '');
-      const filenamePartsEarly = ['certificate'];
-      if (safeFullNameEarly) filenamePartsEarly.push(safeFullNameEarly);
-      if (safeCodeEarly) filenamePartsEarly.push(safeCodeEarly);
-      const earlyFilename = `${filenamePartsEarly.join('_')}.pdf`;
-      const prep = await preparePdfSaveHandle(earlyFilename, { showToast });
-      if (prep?.aborted) {
-        return;
-      }
-      const saveHandle = prep?.handle || null;
-
-      const libsOk = await ensureVectorPdfLibrariesLoaded();
-      if (!libsOk) {
-        showToast('PDF ბიბლიოთეკები ვერ ჩაიტვირთა', 'error');
+      if (!previewReady || !getCertificateElement()?.querySelector('.certificate-qr')) {
+        showToast('სერტიფიკატი და QR კოდი ჯერ მზად არ არის. გახსენით ხელახლა.', 'error');
         return;
       }
 
-      const levelKey = resolveLevelKey(activeData.level || activeData.level?.key);
-      let svgElement = null;
+      // Freeze the person throughout the save dialog, vector render and upload.
+      const exportUserId = activeUser.id;
+      const exportData = { ...activeData };
+      exportBusy = true;
+      updateView();
+      let svgSandbox = null;
       try {
-        svgElement = await buildCertificateSvgElement(levelKey);
-      } catch {
-        showToast('სერტიფიკატის SVG ვერ შეიქმნა', 'error');
-        return;
-      }
 
-      if (!svgElement) {
-        showToast('სერტიფიკატის SVG ვერ შეიქმნა', 'error');
-        return;
-      }
+        const safeFullNameEarly = (exportData.fullName || '')
+          .trim()
+          .replace(/[<>:"/\\|?*]+/g, '')
+          .replace(/\s+/g, '_');
+        const safeCodeEarly = (exportData.uniqueCode || '').trim().replace(/[<>:"/\\|?*]+/g, '');
+        const filenamePartsEarly = ['certificate'];
+        if (safeFullNameEarly) filenamePartsEarly.push(safeFullNameEarly);
+        if (safeCodeEarly) filenamePartsEarly.push(safeCodeEarly);
+        const earlyFilename = `${filenamePartsEarly.join('_')}.pdf`;
+        const prep = await preparePdfSaveHandle(earlyFilename, { showToast });
+        if (prep?.aborted) {
+          return;
+        }
+        const saveHandle = prep?.handle || null;
 
-      const jsPdfFactory = global.jspdf?.jsPDF;
-      const svg2pdfLib = findSvg2PdfFunction();
-      if (!jsPdfFactory || !svg2pdfLib) {
-        showToast('PDF ბიბლიოთეკები ვერ ჩაიტვირთა', 'error');
-        return;
-      }
+        const libsOk = await ensureVectorPdfLibrariesLoaded();
+        if (!libsOk) {
+          showToast('PDF ბიბლიოთეკები ვერ ჩაიტვირთა', 'error');
+          return;
+        }
 
-      const previousDisabled = downloadBtn?.disabled ?? false;
-      const previousLabel = downloadBtn?.textContent ?? downloadBtnDefaultLabel;
-      if (downloadBtn) {
-        downloadBtn.disabled = true;
-        downloadBtn.textContent = 'მუშავდება...';
-      }
+        if (document.fonts?.ready) await document.fonts.ready;
+        const levelKey = resolveLevelKey(exportData.level || exportData.level?.key);
+        let svgElement = null;
+        try {
+          svgElement = await buildCertificateSvgElement(levelKey);
+        } catch {
+          showToast('სერტიფიკატის SVG ვერ შეიქმნა', 'error');
+          return;
+        }
 
-      const svgSandbox = document.createElement('div');
-      svgSandbox.style.position = 'fixed';
-      svgSandbox.style.left = '-10000px';
-      svgSandbox.style.top = '-10000px';
-      svgSandbox.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
-      svgSandbox.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
-      svgSandbox.style.opacity = '0';
-      svgSandbox.style.pointerEvents = 'none';
-      svgSandbox.setAttribute('aria-hidden', 'true');
-      svgSandbox.className = 'certificate-svg-export';
-      svgSandbox.appendChild(svgElement);
-      document.body.appendChild(svgSandbox);
+        if (!svgElement) {
+          showToast('სერტიფიკატის SVG ვერ შეიქმნა', 'error');
+          return;
+        }
 
-      try {
-        const pdf = new jsPdfFactory('l', 'pt', [BASE_CERTIFICATE_WIDTH, BASE_CERTIFICATE_HEIGHT]);
+        const jsPdfFactory = global.jspdf?.jsPDF;
+        const svg2pdfLib = findSvg2PdfFunction();
+        if (!jsPdfFactory || !svg2pdfLib) {
+          showToast('PDF ბიბლიოთეკები ვერ ჩაიტვირთა', 'error');
+          return;
+        }
+
+        svgSandbox = document.createElement('div');
+        svgSandbox.style.position = 'fixed';
+        svgSandbox.style.left = '-10000px';
+        svgSandbox.style.top = '-10000px';
+        svgSandbox.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
+        svgSandbox.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
+        svgSandbox.style.opacity = '0';
+        svgSandbox.style.pointerEvents = 'none';
+        svgSandbox.setAttribute('aria-hidden', 'true');
+        svgSandbox.className = 'certificate-svg-export';
+        svgSandbox.appendChild(svgElement);
+        document.body.appendChild(svgSandbox);
+
+        const pdf = new jsPdfFactory('l', 'pt', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        // Preserve all template coordinates while fitting the vector to physical A4.
+        svgElement.setAttribute('width', String(pageWidth));
+        svgElement.setAttribute('height', String(pageHeight));
         // Ensure DejaVu Sans is available in jsPDF before rendering
         await ensureDejaVuSansRegistered(pdf);
         // Register BPG Nino (required for fullName). If missing, DejaVuSans will be used (but requirement is BPGNino).
@@ -1495,32 +1576,32 @@
           await Promise.resolve(svg2pdfLib(svgElement, pdf, {
             x: 0,
             y: 0,
-            width: BASE_CERTIFICATE_WIDTH,
-            height: BASE_CERTIFICATE_HEIGHT,
+            width: pageWidth,
+            height: pageHeight,
           }));
         } else if (global.jspdf && global.jspdf.jsPDF && global.jspdf.jsPDF.API && typeof global.jspdf.jsPDF.API.svg === 'function') {
           await Promise.resolve(global.jspdf.jsPDF.API.svg(svgElement, pdf, {
             x: 0,
             y: 0,
-            width: BASE_CERTIFICATE_WIDTH,
-            height: BASE_CERTIFICATE_HEIGHT,
+            width: pageWidth,
+            height: pageHeight,
           }));
         } else {
           throw new Error('svg2pdf function not available');
         }
 
-        const safeFullName = (activeData.fullName || '')
+        const safeFullName = (exportData.fullName || '')
           .trim()
           .replace(/[<>:"/\\|?*]+/g, '')
           .replace(/\s+/g, '_');
-        const safeCode = (activeData.uniqueCode || '').trim().replace(/[<>:"/\\|?*]+/g, '');
+        const safeCode = (exportData.uniqueCode || '').trim().replace(/[<>:"/\\|?*]+/g, '');
         const filenameParts = ['certificate'];
         if (safeFullName) filenameParts.push(safeFullName);
         if (safeCode) filenameParts.push(safeCode);
         const filename = `${filenameParts.join('_')}.pdf`;
 
         // Upload to server (replace existing), then offer local save
-        await uploadCertificatePdf(pdf, filename);
+        await uploadCertificatePdf(pdf, filename, exportUserId);
         await deliverPdf(pdf, filename, { showToast, handle: saveHandle });
       } catch {
         showToast('PDF ფაილის შექმნა ვერ მოხერხდა', 'error');
@@ -1528,14 +1609,15 @@
         if (svgSandbox?.parentNode) {
           svgSandbox.parentNode.removeChild(svgSandbox);
         }
-        if (downloadBtn) {
-          downloadBtn.disabled = previousDisabled;
-          downloadBtn.textContent = previousLabel || downloadBtnDefaultLabel;
-        }
+        exportBusy = false;
+        updateView();
       }
     }
 
     function resetState() {
+      ++renderRevision;
+      ++openRevision;
+      previewReady = false;
       activeUserRef = null;
       activeUser = null;
       activeData = null;
@@ -1545,6 +1627,7 @@
     }
 
     function handleClose() {
+      if (exportBusy) return;
       if (!overlay) return;
       if (formOpen) {
         const confirmed = global.confirm('დახურვის შემთხვევაში ცვლილებები არ შეინახება. გსურთ გაგრძელება?');
@@ -1575,9 +1658,17 @@
     }
 
     async function open(user) {
+      if (exportBusy) {
+        showToast('დაელოდეთ სერტიფიკატის PDF-ის დასრულებას.', 'info');
+        return;
+      }
       if (!ensureOverlay()) return;
+      const requestRevision = ++openRevision;
+      ++renderRevision;
+      previewReady = false;
       activeUserRef = user || null;
       activeUser = user ? { ...user } : null;
+      if (downloadBtn) downloadBtn.disabled = true;
       
       // Try to load certificate from backend
       let certificateData = null;
@@ -1596,6 +1687,7 @@
         }
       }
       
+      if (requestRevision !== openRevision) return;
       const userWithCert = certificateData
         ? {
             ...user,
@@ -1618,6 +1710,7 @@
       formMode = activeData?.hasCertificate ? 'update' : 'create';
       resetForm();
       await populateView(activeData);
+      if (requestRevision !== openRevision) return;
       updateView();
       openOverlay(overlay);
       // Fit after content is populated by populateView
@@ -1639,6 +1732,7 @@
       
       // Load template when level changes in form
       formFields.level?.addEventListener('change', async (event) => {
+        if (exportBusy) return;
         const level = event.target.value;
       // Update activeData level and re-render; populateView will load correct template
       if (activeData) {
@@ -1646,6 +1740,7 @@
         activeData.level = normalized;
       }
         await populateView(activeData);
+        updateView();
       });
       
       // Initial field nodes update

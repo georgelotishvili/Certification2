@@ -1,0 +1,7 @@
+qrcode-generator by Kazuhiko Arase
+MIT License (see qrcode-generator.LICENSE.txt)
+Vendored unmodified from the official upstream repository.
+Revision: 83b7e8fe3fddd3b0368dbafd6ce56995bd25e3c8
+Source: https://github.com/kazuhikoarase/qrcode-generator/blob/83b7e8fe3fddd3b0368dbafd6ce56995bd25e3c8/js/dist/qrcode.js
+License: https://github.com/kazuhikoarase/qrcode-generator/blob/83b7e8fe3fddd3b0368dbafd6ce56995bd25e3c8/LICENSE
+No runtime CDN, QR-generation service, or network request is required.

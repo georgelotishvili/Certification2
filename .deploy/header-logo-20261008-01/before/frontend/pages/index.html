@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>certification</title>
+    <!-- instant black cover between pages -->
+    <script>
+      (function(){
+        try {
+          if (sessionStorage.getItem('pageCover') === '1') {
+            var s = document.createElement('style');
+            s.textContent = '#pageCover{position:fixed;inset:0;background:#fff;z-index:2147483647;opacity:1;pointer-events:none;}';
+            document.head.appendChild(s);
+            var d = document.createElement('div');
+            d.id = 'pageCover';
+            document.documentElement.appendChild(d);
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <meta name="api-base" content="" />
+    <script src="../scripts/config.js?v=4" defer></script>
+    <script src="../scripts/header.js?v=20261008-2" defer></script>
+    <link rel="stylesheet" href="../styles/styles.css?v=20261008-3" />
+    <link rel="stylesheet" href="../styles/header.css?v=3" />
+  </head>
+  <body>
+    <!-- Header will be loaded dynamically by header.js -->
+
+    <main>
+      <section class="main-hero" aria-label="პლატფორმის აღწერა">
+        <p class="gi-line"><span class="initial">G</span>eorgian <span class="initial">I</span>nstitute of <span class="initial">P</span>rofessional <span class="initial">C</span>ertification</p>
+        <p>Architect Certification Platform</p>
+        <h1>არქიტექტორთა სასერტიფიკაციო პლატფორმა</h1>
+        <p>საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი</p>
+        <a class="main-registry-link" href="../pages/registry.html">სერტიფიცირებული პირების რეესტრი <span aria-hidden="true">→</span></a>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-content footer-only-contact">
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/E-mail.svg" alt="" aria-hidden="true" />
+          <a href="mailto:info@gipc.ge" aria-label="ელფოსტა">info@gipc.ge</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/phone.svg" alt="" aria-hidden="true" />
+          <a href="tel:+995593222033" aria-label="ტელეფონი">+995 593 222 033</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/location.svg" alt="" aria-hidden="true" />
+          <a href="https://maps.app.goo.gl/MbTQmmvtGZBNgCEj9" target="_blank" aria-label="მისამართი">თბილისი, მირიან მეფის 98</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/world.svg" alt="" aria-hidden="true" />
+          <a href="https://gipc.ge/" aria-label="ვებსაიტი">gipc.ge</a>
+        </div>
+      </div>
+      
+      <div class="footer-bottom">
+        <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია <a href="admin.html" class="admin-link" style="display:none">/ ადმინ გვერდი</a></p>
+      </div>
+    </footer>
+    <script src="../scripts/registry.mini.js?v=20261008-4" defer></script>
+    <script src="../scripts/script.js?v=6" defer></script>
+  </body>
+</html>
+

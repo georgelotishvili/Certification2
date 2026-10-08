@@ -44,8 +44,8 @@ header {
   cursor: pointer;
 }
 .logo img {
-  height: 30px;
-  width: auto;
+  height: auto;
+  width: 169.2px;
   display: block;
   object-fit: contain;
   transition: none;

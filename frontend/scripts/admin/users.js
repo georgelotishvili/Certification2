@@ -13,6 +13,7 @@
       handleAdminErrorResponse = () => {},
       openOverlay = () => {},
       closeOverlay = () => {},
+      examSchedules,
     } = context;
     const { onShowResults, onShowStatements, onShowCertificate, onShowMultiApartmentResults, onShowMultiFunctionalResults } = context;
     const navLinks = DOM.navLinks || [];
@@ -27,6 +28,7 @@
     let liveRefreshInFlight = false;
     let usersRenderVersion = 0;
     let statementsStateVersion = 0;
+    let schedulesStateVersion = 0;
     const examPermissionSavingIds = new Set();
 
     const editOverlay = DOM.userEditOverlay;
@@ -46,14 +48,23 @@
     };
 
     function selectedStatementsDate() {
-      return DOM.filterStatements?.checked ? (DOM.statementsDate?.value || '') : '';
+      return DOM.statementsDate?.value || '';
     }
 
     function syncStatementFilterControls() {
-      const pendingOnly = !!DOM.filterPendingStatements?.checked;
-      if (DOM.statementsDate) DOM.statementsDate.disabled = pendingOnly;
+      if (DOM.statementsDate) DOM.statementsDate.disabled = false;
       if (DOM.clearStatementsDate) {
-        DOM.clearStatementsDate.disabled = pendingOnly || !DOM.statementsDate?.value;
+        DOM.clearStatementsDate.disabled = !selectedStatementsDate();
+      }
+    }
+
+    function hasExamScheduleFilter() {
+      return !!(DOM.examScheduleDate?.value || DOM.filterExamMorning?.checked || DOM.filterExamEvening?.checked);
+    }
+
+    function syncExamScheduleFilterControls() {
+      if (DOM.clearExamScheduleDate) {
+        DOM.clearExamScheduleDate.disabled = !DOM.examScheduleDate?.value;
       }
     }
 
@@ -65,6 +76,9 @@
       if (DOM.onlyAdmins?.checked) params.set('only_admins', 'true');
       const statementDate = selectedStatementsDate();
       if (statementDate) params.set('statement_date', statementDate);
+      if (DOM.filterExamMorning?.checked) params.set('exam_morning', 'true');
+      if (DOM.filterExamEvening?.checked) params.set('exam_evening', 'true');
+      if (DOM.examScheduleDate?.value) params.set('exam_date', DOM.examScheduleDate.value);
       params.set('sort', DOM.usersSort?.value || 'date_desc');
       const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, {
         headers: { ...getAdminHeaders(), ...getActorHeaders() },
@@ -122,16 +136,17 @@
       liveRefreshInFlight = true;
       const requestVersion = usersRenderVersion;
       const statementVersion = statementsStateVersion;
+      const scheduleVersion = schedulesStateVersion;
       try {
         const data = await fetchUsers();
-        if (requestVersion !== usersRenderVersion || statementVersion !== statementsStateVersion) return;
+        if (requestVersion !== usersRenderVersion || statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) return;
         const items = Array.isArray(data?.items) ? data.items : [];
-        const dateMembershipChanged = selectedStatementsDate() && (
+        const dateMembershipChanged = (selectedStatementsDate() || hasExamScheduleFilter()) && (
           items.length !== cachedItems.length ||
           items.some((user, index) => String(user.id) !== String(cachedItems[index]?.id))
         );
         if (dateMembershipChanged) {
-          drawUsers(items);
+          drawUsers(items, { preserveExisting: true });
         } else {
           items.forEach(applyLiveUserState);
         }
@@ -140,6 +155,20 @@
         // Live refresh is best-effort; manual refresh/render still shows errors.
       } finally {
         liveRefreshInFlight = false;
+      }
+    }
+
+    async function refreshAfterScheduleChange() {
+      schedulesStateVersion += 1;
+      const requestVersion = usersRenderVersion;
+      const statementVersion = statementsStateVersion;
+      const scheduleVersion = schedulesStateVersion;
+      try {
+        const data = await fetchUsers();
+        if (requestVersion !== usersRenderVersion || statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) return;
+        drawUsers(Array.isArray(data?.items) ? data.items : [], { preserveExisting: true });
+      } catch {
+        showToast('ცვლილება შენახულია, მაგრამ სიის განახლება ვერ მოხერხდა. განაახლეთ სია.', 'error');
       }
     }
 
@@ -243,6 +272,7 @@
                     </div>
                   </div>
                 </div>
+                <section class="user-exam-schedules" aria-label="გამოცდის დაგეგმვა"></section>
               </div>
             </div>
           </div>
@@ -250,11 +280,16 @@
     }
 
     function mountUserCard(card, user) {
+      const schedulesController = examSchedules?.mount?.(card.querySelector('.user-exam-schedules'), user, {
+        onChanged: refreshAfterScheduleChange,
+      });
       const toggle = card.querySelector('.head-toggle');
       toggle?.addEventListener('click', () => {
         const isOpen = card.classList.contains('open');
         card.classList.toggle('open', !isOpen);
         card.querySelector('.block-questions')?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+        toggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+        if (!isOpen) schedulesController?.load?.();
       });
 
       const checkbox = card.querySelector('.chk-admin');
@@ -429,9 +464,13 @@
       card.classList.toggle('has-pending-statements', !hasUnseen && pending);
       // Keep cards mounted so live updates can reveal new statements without
       // rebuilding the list or closing expanded cards.
-      const hiddenByStatementFilter = DOM.filterPendingStatements?.checked
-        ? !pending
-        : DOM.filterStatements?.checked && !selectedStatementsDate() && !hasUnseen;
+      const showNew = !!DOM.filterStatements?.checked;
+      const showPending = !!DOM.filterPendingStatements?.checked;
+      const matchesStatus = (showNew && hasUnseen) || (showPending && !hasUnseen && pending);
+      // A date independently selects every sender from that day, regardless
+      // of status. Without a date, the two checkboxes select red OR blue cards.
+      const hiddenByStatementFilter = !selectedStatementsDate()
+        && (showNew || showPending) && !matchesStatus;
       card.style.display = hiddenByStatementFilter ? 'none' : '';
       const announcementsButton = card.querySelector('.btn-user-announcements');
       if (announcementsButton) {
@@ -440,9 +479,16 @@
       }
     }
 
-    function drawUsers(items) {
+    function drawUsers(items, { preserveExisting = false } = {}) {
       if (!DOM.usersGrid) return;
-      DOM.usersGrid.innerHTML = '';
+      const existingCards = new Map();
+      if (preserveExisting) {
+        Array.from(DOM.usersGrid.querySelectorAll('.block-card')).forEach((card) => {
+          existingCards.set(String(card.dataset.id), card);
+        });
+      } else {
+        DOM.usersGrid.innerHTML = '';
+      }
       cachedItems = items || [];
       
       // Apply certificate filters
@@ -475,6 +521,13 @@
       }
       
       filteredItems.forEach((user) => {
+        const existingCard = existingCards.get(String(user.id));
+        if (existingCard) {
+          existingCards.delete(String(user.id));
+          applyLiveUserState(user);
+          DOM.usersGrid.appendChild(existingCard);
+          return;
+        }
         const wrapper = document.createElement('div');
         wrapper.innerHTML = userRowHTML(user);
         const card = wrapper.firstElementChild;
@@ -486,6 +539,7 @@
           DOM.usersGrid.appendChild(card);
         }
       });
+      existingCards.forEach((card) => card.remove());
       updateNavBadge(cachedItems.some((user) => user.has_unseen_statements));
     }
 
@@ -668,13 +722,14 @@
       if (!DOM.usersGrid) return;
       const requestVersion = ++usersRenderVersion;
       const statementVersion = statementsStateVersion;
+      const scheduleVersion = schedulesStateVersion;
       DOM.usersGrid.innerHTML = '';
       try {
         const data = await fetchUsers();
         if (requestVersion !== usersRenderVersion) return;
         // A statement action may finish while a filter render is loading. Fetch
         // fresh state rather than leaving the cleared grid empty or reviving old colors.
-        if (statementVersion !== statementsStateVersion) return render();
+        if (statementVersion !== statementsStateVersion || scheduleVersion !== schedulesStateVersion) return render();
         cachedItems = Array.isArray(data?.items) ? data.items : [];
         drawUsers(cachedItems);
       } catch {
@@ -687,20 +742,9 @@
       on(DOM.usersSearch, 'input', render);
       on(DOM.usersSort, 'change', render);
       on(DOM.onlyAdmins, 'change', render);
-      on(DOM.filterStatements, 'change', () => {
-        if (DOM.filterStatements.checked && DOM.filterPendingStatements) DOM.filterPendingStatements.checked = false;
-        syncStatementFilterControls();
-        return render();
-      });
-      on(DOM.filterPendingStatements, 'change', () => {
-        if (DOM.filterPendingStatements.checked && DOM.filterStatements) DOM.filterStatements.checked = false;
-        syncStatementFilterControls();
-        return render();
-      });
+      on(DOM.filterStatements, 'change', render);
+      on(DOM.filterPendingStatements, 'change', render);
       on(DOM.statementsDate, 'change', () => {
-        const hasDate = !!DOM.statementsDate.value;
-        if (hasDate && DOM.filterStatements) DOM.filterStatements.checked = true;
-        if (hasDate && DOM.filterPendingStatements) DOM.filterPendingStatements.checked = false;
         syncStatementFilterControls();
         return render();
       });
@@ -710,6 +754,18 @@
         return render();
       });
       syncStatementFilterControls();
+      on(DOM.filterExamMorning, 'change', render);
+      on(DOM.filterExamEvening, 'change', render);
+      on(DOM.examScheduleDate, 'change', () => {
+        syncExamScheduleFilterControls();
+        return render();
+      });
+      on(DOM.clearExamScheduleDate, 'click', () => {
+        if (DOM.examScheduleDate) DOM.examScheduleDate.value = '';
+        syncExamScheduleFilterControls();
+        return render();
+      });
+      syncExamScheduleFilterControls();
       on(DOM.filterArchitects, 'change', () => {
         // Ensure only one certificate filter is active at a time
         if (DOM.filterArchitects?.checked) {

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, List, Optional
+from datetime import date, datetime
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import EmailStr
@@ -411,6 +411,25 @@ class PublicUserOut(BaseModel):
     created_at: datetime
 
 
+class PublicCertificateOut(BaseModel):
+    """Certificate verification fields, never storage or account metadata."""
+
+    unique_code: str | None = None
+    level: str
+    status: str
+    issue_date: datetime | None = None
+    validity_term: int | None = None
+    valid_until: datetime | None = None
+
+
+class PublicPersonPageOut(PublicUserOut):
+    """Shared, read-only person page for guests and signed-in visitors."""
+
+    id: int
+    code: str
+    certificate: PublicCertificateOut
+
+
 class UserCreate(BaseModel):
     personal_id: str
     first_name: str
@@ -443,6 +462,27 @@ class UserProfileUpdateRequest(BaseModel):
 class UsersListResponse(BaseModel):
     items: List[UserOut]
     total: int
+
+
+class ExamScheduleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    exam_date: date
+    period: Literal["morning", "evening"]
+
+
+class ExamScheduleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    exam_date: date
+    period: Literal["morning", "evening"]
+    created_at: datetime
+
+
+class ExamSchedulesResponse(BaseModel):
+    items: List[ExamScheduleOut]
 
 
 class StatementCreate(BaseModel):

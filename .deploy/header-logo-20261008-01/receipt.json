@@ -1,0 +1,14 @@
+{
+  "status": "deployed",
+  "files": [
+    "frontend/assets/svg/logo.svg",
+    "frontend/styles/header.css",
+    "frontend/partials/header.html",
+    "frontend/pages/index.html",
+    "frontend/pages/my.html",
+    "frontend/pages/registry.html"
+  ],
+  "backend_pid_unchanged": true,
+  "server_backup_created": false,
+  "server_staging_created": false
+}

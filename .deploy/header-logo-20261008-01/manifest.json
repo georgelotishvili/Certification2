@@ -1,0 +1,29 @@
+{
+  "pid": "56505",
+  "files": {
+    "frontend/assets/svg/logo.svg": {
+      "before": "5cd14f9bc06355789a9062ff701fadd83c8a2b588362f60bcb76ce2b47e0b90f",
+      "after": "200ca49d50c8fe80ed50d7d77f99a765556f1ecb7bcd3ff45262c777e4f5fece"
+    },
+    "frontend/styles/header.css": {
+      "before": "d76e4ee60711a619ae1f17031cdc2309a6c30f532729ccf28a70dad8f3ae417b",
+      "after": "ecea4742bff2bd2e7f7cb4d4fbf376b12558752f2f8ccce1ab2784dcb1b93f60"
+    },
+    "frontend/partials/header.html": {
+      "before": "a0488c54f31de9607ce10616b7a91b5679c3b408a15a27dbabd80a8768799467",
+      "after": "262b54c59b585a05c80550b5b94274f7da7caa08e4f8ee41622826699e654db5"
+    },
+    "frontend/pages/index.html": {
+      "before": "6c7a022b81e1e3dcf4cf6c4bbbbd121cf19a78de6f923d0a597553ec279ba4a1",
+      "after": "63dfcb76ab42c00d06ae41982f92e84865b85ae85dfdbd3ab613a4dc28aa7c72"
+    },
+    "frontend/pages/my.html": {
+      "before": "46d5047ae66ce60ce26cddfcfd9c369fa7f011c88cdea09edcd3384451a1c244",
+      "after": "59db477145c9c52014bf3731e926454e79e14eda9d0c7dd2c4a4b540f416027d"
+    },
+    "frontend/pages/registry.html": {
+      "before": "35afcf474f56956e25e522b0ee213f37076b0015d4afdb496130d769657bf013",
+      "after": "988c5a4f7fea597a8c4d814eeedbfff461cc10362dc782b62f53a06bbbcfbe38"
+    }
+  }
+}

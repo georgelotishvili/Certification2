@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Header, UploadFile, File, Request
 from fastapi.responses import FileResponse
 from sqlalchemy import select, or_, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession
 from ..schemas import (
-    UserCreate, UserOut, PublicUserOut, UserProfileUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate,
+    UserCreate, UserOut, PublicUserOut, PublicPersonPageOut, PublicCertificateOut,
+    UserProfileUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate,
     SendVerificationCodeRequest, SendVerificationCodeResponse, VerifyCodeRequest, VerifyCodeResponse,
     UserCreateWithVerification,
 )
@@ -27,6 +29,12 @@ from ..services.bounded_upload import (
 )
 from ..services import email_verification
 from ..services.exam_stage import exam_state_payload, expire_if_unused
+from ..services.user_codes import (
+    UserCodeConflict,
+    UserCodeGenerationError,
+    move_user_code,
+    reserve_registration_code,
+)
 from ..rate_limiter import (
     code_verify_limiter,
     verification_account_limiter,
@@ -70,18 +78,6 @@ def _require_admin(db: Session, authorization: str | None) -> User:
     if user.email.lower() == founder_email or user.is_admin:
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
-
-
-def _gen_code(db: Session) -> str:
-    import random
-    # Try 100 random attempts for a unique 10-digit code
-    for _ in range(100):
-        c = str(10**9 + random.randint(0, 9_999_999_999 - 10**9))[:10]
-        exists = db.scalar(select(User).where(User.code == c))
-        if not exists:
-            return c
-    # Fallback: time-based last 10 digits
-    return str(int(datetime.utcnow().timestamp() * 1000))[-10:]
 
 
 def _delete_certificate_files(cert: Certificate, user_id: int) -> None:
@@ -229,24 +225,48 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
             detail="ეს მონაცემები სისტემაში უკვე რეგისტრირებულია",
         )
 
-    # Generate unique code
-    code = _gen_code(db)
-
     settings = get_settings()
     is_founder = (settings.founder_admin_email or "").lower() == email_norm
+    password_hash = hash_code(password_trimmed)
 
-    user = User(
-        personal_id=personal_id_norm,
-        first_name=first_name_norm,
-        last_name=last_name_norm,
-        phone=phone_norm,
-        email=email_norm,
-        password_hash=hash_code(password_trimmed),
-        code=code,
-        is_admin=is_founder or False,
-    )
-    db.add(user)
-    db.commit()
+    # A reservation and the new account form one transaction. Retry allocation
+    # collisions without consuming the email verification code a second time.
+    for attempt in range(3):
+        try:
+            code = reserve_registration_code(db, personal_id_norm)
+            user = User(
+                personal_id=personal_id_norm,
+                first_name=first_name_norm,
+                last_name=last_name_norm,
+                phone=phone_norm,
+                email=email_norm,
+                password_hash=password_hash,
+                code=code,
+                is_admin=is_founder or False,
+            )
+            db.add(user)
+            db.commit()
+            break
+        except UserCodeConflict:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="პირადი ნომრისა და კოდის კავშირი შესამოწმებელია; მიმართეთ ადმინისტრატორს")
+        except UserCodeGenerationError:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="კოდის მინიჭება დროებით ვერ შესრულდა; სცადეთ ხელახლა")
+        except IntegrityError:
+            db.rollback()
+            conflict = db.scalar(select(User.id).where(or_(
+                User.personal_id == personal_id_norm,
+                func.lower(User.email) == email_norm,
+                User.phone == phone_norm,
+            )))
+            if conflict is not None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ეს მონაცემები სისტემაში უკვე რეგისტრირებულია")
+            if attempt == 2:
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="რეგისტრაცია დროებით ვერ შესრულდა; სცადეთ ხელახლა")
+        except Exception:
+            db.rollback()
+            raise
     db.refresh(user)
 
     is_admin_user = is_founder or bool(user.is_admin)
@@ -272,6 +292,64 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
         exam_permission=exam_perm,
         created_at=user.created_at,
     )
+
+
+def _public_person_page(db: Session, *, user_id: int | None = None, code: str | None = None) -> PublicPersonPageOut:
+    """Resolve only a current public registry entry; never a deleted reservation."""
+    query = (
+        select(User, Certificate)
+        .join(Certificate, Certificate.user_id == User.id)
+        .where(Certificate.status.in_(("active", "suspended", "expired")))
+    )
+    if code is not None:
+        # QR identity is the immutable account code, not the editable label on
+        # a certificate. Use ASCII digits only and never fall back to user ID.
+        if len(code) != 10 or not code.isascii() or not code.isdigit():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        query = query.where(User.code == code)
+    else:
+        query = query.where(User.id == user_id)
+    row = db.execute(query.limit(1)).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user, cert = row
+    effective_status = cert.status
+    if effective_status == "active" and cert.valid_until is not None:
+        # Stored timestamps are naive UTC; tolerate aware timestamps without
+        # changing the record or making a guest GET perform database writes.
+        valid_until = cert.valid_until
+        if valid_until.tzinfo is not None:
+            valid_until = valid_until.astimezone(timezone.utc).replace(tzinfo=None)
+        if valid_until < datetime.utcnow():
+            effective_status = "expired"
+    return PublicPersonPageOut(
+        id=user.id,
+        code=user.code,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        email=user.email,
+        created_at=user.created_at,
+        certificate=PublicCertificateOut(
+            unique_code=cert.unique_code,
+            level=cert.level,
+            status=effective_status,
+            issue_date=cert.issue_date,
+            validity_term=cert.validity_term,
+            valid_until=cert.valid_until,
+        ),
+    )
+
+
+@router.get("/public/by-code/{code}", response_model=PublicPersonPageOut)
+def public_person_page_by_code(code: str, db: Session = Depends(get_db)):
+    """Stable QR destination lookup, available without authentication."""
+    return _public_person_page(db, code=code)
+
+
+@router.get("/{user_id}/public-details", response_model=PublicPersonPageOut)
+def public_person_page(user_id: int, db: Session = Depends(get_db)):
+    """Public profile and certificate verification data for an existing link."""
+    return _public_person_page(db, user_id=user_id)
 
 
 @router.get("/{user_id}/public", response_model=PublicUserOut)
@@ -436,6 +514,13 @@ def update_profile(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="გთხოვთ შეიყვანოთ მიმდინარე პაროლი")
     if not verify_code(current, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="მიმდინარე პაროლი არასწორია")
+
+    if personal_id_changed:
+        try:
+            move_user_code(db, user, personal_id)
+        except (UserCodeConflict, IntegrityError):
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ამ პირად ნომერზე კოდის გადაბმა შეუძლებელია; მიმართეთ ადმინისტრატორს")
 
     # Apply updates (commit only at the end)
     if first_name is not None:

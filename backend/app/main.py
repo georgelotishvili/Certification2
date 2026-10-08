@@ -25,6 +25,8 @@ try:
     from backend.scripts.migrate_certificate_file_cols import run as run_certificate_file_cols_migration
     from backend.scripts.migrate_statements_attachment import run as run_statements_attachment_migration
     from backend.scripts.migrate_statements_answered import run as run_statements_answered_migration
+    from backend.scripts.migrate_user_code_reservations import run as run_user_code_reservations_migration
+    from backend.scripts.migrate_exam_schedules import run as run_exam_schedules_migration
     from backend.scripts.migrate_exam_permission import run as run_exam_permission_migration
     from backend.scripts.migrate_multi_apartment import run as run_multi_apartment_migration
     from backend.scripts.migrate_multi_functional import run as run_multi_functional_migration
@@ -41,6 +43,8 @@ except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.
     from scripts.migrate_certificate_file_cols import run as run_certificate_file_cols_migration  # type: ignore
     from scripts.migrate_statements_attachment import run as run_statements_attachment_migration  # type: ignore
     from scripts.migrate_statements_answered import run as run_statements_answered_migration  # type: ignore
+    from scripts.migrate_user_code_reservations import run as run_user_code_reservations_migration  # type: ignore
+    from scripts.migrate_exam_schedules import run as run_exam_schedules_migration  # type: ignore
     from scripts.migrate_exam_permission import run as run_exam_permission_migration  # type: ignore
     from scripts.migrate_multi_apartment import run as run_multi_apartment_migration  # type: ignore
     from scripts.migrate_multi_functional import run as run_multi_functional_migration  # type: ignore
@@ -81,6 +85,12 @@ def create_app() -> FastAPI:
     # Required by the Statement mapper: surface a migration failure instead of
     # starting with missing columns and failing all statement operations later.
     run_statements_answered_migration()
+    # Preserve all currently assigned registration codes before accepting
+    # registrations/deletions. Conflicts must not be silently overwritten.
+    run_user_code_reservations_migration()
+    # Scheduling is additive and independent of examination access/results.
+    # Fail startup visibly if its required table/indexes cannot be created.
+    run_exam_schedules_migration()
 
     ensure_media_root()
 
@@ -110,10 +120,12 @@ def create_app() -> FastAPI:
     )
 
     from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents, taxonomy
+    from .routers import exam_schedules
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
+    app.include_router(exam_schedules.router, prefix="/admin", tags=["admin"])
     app.include_router(taxonomy.router, prefix="/taxonomy", tags=["taxonomy"])
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])

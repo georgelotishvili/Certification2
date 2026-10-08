@@ -956,7 +956,10 @@ main {
   color: var(--text-strong);
   user-select: none;
   transition: color 0.2s ease;
-  white-space: nowrap;
+  white-space: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .users-filter-label:hover {
@@ -975,11 +978,114 @@ main {
   line-height: 1.4;
 }
 
-.users-statements-filter {
+.users-statements-filter,
+.users-exam-date-filter {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.users-exam-filters {
+  margin-top: 12px;
+}
+
+.users-exam-filter-hint,
+.exam-schedule-hint,
+.exam-schedule-empty {
+  color: var(--text-muted, #526079);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.user-exam-schedules {
+  margin: 0 12px 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  min-width: 0;
+}
+
+.exam-schedule-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--text-strong);
+}
+
+.exam-schedule-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  min-width: 0;
+}
+
+.exam-schedule-date-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 13px;
+}
+
+.exam-schedule-status {
+  margin: 8px 0;
+  font-size: 13px;
+  color: #065f46;
+  overflow-wrap: anywhere;
+}
+
+.exam-schedule-status:empty {
+  display: none;
+}
+
+.exam-schedule-status.is-error {
+  color: #b91c1c;
+}
+
+.exam-schedule-history {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.exam-schedule-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.exam-schedule-delete {
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  padding: 5px 10px;
+  background: #fff;
+  color: #b91c1c;
+  font: inherit;
+  cursor: pointer;
+}
+
+.exam-schedule-delete:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.exam-schedule-delete:focus-visible,
+.exam-schedule-controls input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .users-filter-date,

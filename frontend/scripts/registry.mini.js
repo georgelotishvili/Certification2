@@ -1,5 +1,5 @@
 // frontend/scripts/registry.mini.js
-// Small, shared registry modal module used by multiple pages.
+// Shared registry data/filter logic; the public registry has its own page.
 // Exposes: window.Registry.init({ api, triggers, beforeOpen, onCardClick, refreshRating })
 (function () {
   function init(options = {}) {
@@ -13,10 +13,12 @@
     const beforeOpen = typeof options.beforeOpen === 'function' ? options.beforeOpen : null;
     const onCardClick = typeof options.onCardClick === 'function' ? options.onCardClick : null;
     const refreshRating = options.refreshRating !== false;
+    const pageRoot = document.getElementById('registryPage');
+    const pageMode = !!pageRoot;
 
     const DOM = {
       body: document.body,
-      overlay: document.getElementById('registryOverlay'),
+      overlay: pageRoot || document.getElementById('registryOverlay'),
       closeBtn: document.getElementById('registryClose'),
       list: document.getElementById('registryList'),
       search: document.getElementById('registrySearch'),
@@ -24,6 +26,9 @@
       filterExpert: document.getElementById('registryFilterExpert'),
       filterMunicipal: document.getElementById('registryFilterMunicipal'),
       sort: document.getElementById('registrySort'),
+      resultsCount: document.getElementById('registryResultsCount'),
+      totalCount: document.getElementById('registryTotalCount'),
+      resetFilters: document.getElementById('registryResetFilters'),
       clearSearch: null,
       filterBadge: null,
     };
@@ -32,6 +37,7 @@
       open: false,
       loading: false,
       loaded: false,
+      failed: false,
       items: [],
       filtered: [],
     };
@@ -73,8 +79,9 @@
       if (!DOM.overlay) return;
       enhanceControls();
 
-      // Event delegation: works for dynamically inserted header
-      document.addEventListener('click', (event) => {
+      // Dedicated-page navigation stays native (including open-in-new-tab).
+      // Retain modal compatibility only for pages that still contain its markup.
+      if (!pageMode) document.addEventListener('click', (event) => {
         const target = event.target;
         if (!target) return;
         const matched = triggers.map((sel) => target.closest(sel)).find(Boolean);
@@ -89,7 +96,7 @@
         close();
       });
 
-      DOM.overlay?.addEventListener('click', (event) => {
+      if (!pageMode) DOM.overlay?.addEventListener('click', (event) => {
         if (event.target === DOM.overlay) close();
       });
 
@@ -98,6 +105,14 @@
       DOM.filterExpert?.addEventListener('change', applyFilters);
       DOM.filterMunicipal?.addEventListener('change', applyFilters);
       DOM.sort?.addEventListener('change', applyFilters);
+      DOM.resetFilters?.addEventListener('click', () => {
+        if (DOM.search) DOM.search.value = '';
+        [DOM.filterArchitect, DOM.filterExpert, DOM.filterMunicipal].forEach((input) => {
+          if (input) input.checked = false;
+        });
+        if (DOM.sort) DOM.sort.value = 'date_desc';
+        applyFilters();
+      });
     }
 
     function createClearIcon() {
@@ -144,6 +159,7 @@
     }
 
     function setOpen(value) {
+      if (pageMode || !DOM.overlay) return;
       STATE.open = !!value;
       DOM.overlay?.classList.toggle('is-open', STATE.open);
       DOM.overlay?.setAttribute('aria-hidden', STATE.open ? 'false' : 'true');
@@ -151,12 +167,15 @@
     }
 
     function open() {
+      if (pageMode) return ensureData();
+      if (!DOM.overlay) return;
       if (STATE.open) return;
       setOpen(true);
       ensureData();
     }
 
     function close() {
+      if (pageMode) return;
       if (!STATE.open) return;
       setOpen(false);
     }
@@ -169,6 +188,9 @@
         return;
       }
       STATE.loading = true;
+      STATE.failed = false;
+      DOM.list.setAttribute('aria-busy', 'true');
+      if (DOM.resultsCount) DOM.resultsCount.textContent = 'მონაცემები იტვირთება...';
       renderSkeleton();
       try {
         const params = new URLSearchParams({ limit: '500' });
@@ -181,9 +203,12 @@
         STATE.loaded = true;
         applyFilters();
       } catch {
+        STATE.failed = true;
+        if (DOM.resultsCount) DOM.resultsCount.textContent = 'მონაცემების ჩატვირთვა ვერ მოხერხდა';
         DOM.list.innerHTML = `
           <div class="registry-empty">
-            <div>რეესტრი ვერ ჩაიტვირთა</div>
+            <strong>რეესტრი ვერ ჩაიტვირთა</strong>
+            <p>გთხოვთ, სცადოთ ხელახლა.</p>
             <button type="button" class="registry-retry">კიდევ სცადე</button>
           </div>`;
         DOM.list.querySelector('.registry-retry')?.addEventListener('click', (e) => {
@@ -192,6 +217,7 @@
         });
       } finally {
         STATE.loading = false;
+        DOM.list.setAttribute('aria-busy', 'false');
       }
     }
 
@@ -215,10 +241,20 @@
 
     // Photo modal for enlarged view
     let photoModal = null;
-    function showPhotoModal(photoUrl, altText) {
+    let photoTrigger = null;
+    function closePhotoModal() {
+      photoModal?.classList.remove('open');
+      photoModal?.setAttribute('aria-hidden', 'true');
+      photoTrigger?.focus?.();
+    }
+    function showPhotoModal(photoUrl, altText, trigger) {
+      photoTrigger = trigger || null;
       if (!photoModal) {
         photoModal = document.createElement('div');
         photoModal.className = 'photo-modal-overlay';
+        photoModal.setAttribute('role', 'dialog');
+        photoModal.setAttribute('aria-modal', 'true');
+        photoModal.setAttribute('aria-label', 'ფოტოს გადიდება');
         photoModal.innerHTML = `
           <div class="photo-modal-content">
             <button type="button" class="photo-modal-close" aria-label="დახურვა">×</button>
@@ -229,13 +265,17 @@
         
         photoModal.addEventListener('click', (e) => {
           if (e.target === photoModal || e.target.classList.contains('photo-modal-close')) {
-            photoModal.classList.remove('open');
+            closePhotoModal();
           }
         });
         
         document.addEventListener('keydown', (e) => {
           if (e.key === 'Escape' && photoModal.classList.contains('open')) {
-            photoModal.classList.remove('open');
+            closePhotoModal();
+          } else if (e.key === 'Tab' && photoModal.classList.contains('open')) {
+            // The close button is the only interactive control in this dialog.
+            e.preventDefault();
+            photoModal.querySelector('.photo-modal-close')?.focus();
           }
         });
       }
@@ -246,6 +286,8 @@
         img.alt = altText || 'ფოტო';
       }
       photoModal.classList.add('open');
+      photoModal.setAttribute('aria-hidden', 'false');
+      photoModal.querySelector('.photo-modal-close')?.focus();
     }
 
     function getSorter(key) {
@@ -262,6 +304,9 @@
 
     function applyFilters() {
       if (!DOM.list) return;
+      // Keep the retry action visible after a network failure; filtering an
+      // unavailable response must not replace the error with a false empty list.
+      if (STATE.failed) return;
       if (!STATE.loaded) {
         if (!STATE.loading && !STATE.items.length) {
           DOM.list.innerHTML = '<div class="registry-empty">ჩანაწერები ვერ მოიძებნა</div>';
@@ -328,8 +373,13 @@
 
     function renderList(items) {
       if (!DOM.list) return;
+      STATE.filtered = items;
+      if (DOM.totalCount) DOM.totalCount.textContent = String(STATE.items.length);
+      if (DOM.resultsCount) {
+        DOM.resultsCount.textContent = `ნაჩვენებია ${items.length} ჩანაწერი / ${STATE.items.length}`;
+      }
       if (!items.length) {
-        DOM.list.innerHTML = '<div class="registry-empty">ჩანაწერები ვერ მოიძებნა</div>';
+        DOM.list.innerHTML = '<div class="registry-empty"><strong>ჩანაწერები ვერ მოიძებნა</strong><p>შეცვალეთ საძიებო სიტყვა ან გაასუფთავეთ ფილტრები.</p></div>';
         return;
       }
       const fragment = document.createDocumentFragment();
@@ -339,6 +389,7 @@
     }
 
     function createCard(person) {
+      if (pageMode) return createPageCard(person);
       const card = document.createElement('article');
       card.className = 'registry-card';
       card.dataset.qualification = person.qualification || '';
@@ -369,7 +420,7 @@
         const avatar = card.querySelector('.registry-avatar');
         avatar?.addEventListener('click', (e) => {
           e.stopPropagation();
-          showPhotoModal(person.photo_url, person.full_name);
+          showPhotoModal(person.photo_url, person.full_name, avatar);
         });
       }
 
@@ -386,6 +437,54 @@
         window.location.href = id ? `my.html?userId=${encodeURIComponent(id)}` : 'my.html';
       });
 
+      return card;
+    }
+
+    function createPageCard(person) {
+      const card = document.createElement('article');
+      card.className = 'registry-card';
+      card.dataset.qualification = person.qualification || '';
+      card.dataset.status = person.certificate_status || '';
+      card.setAttribute('role', 'listitem');
+      const qualifications = {
+        architect: 'არქიტექტორი',
+        expert: 'არქიტექტორი ექსპერტი',
+        municipal: 'მუნიციპალიტეტის სპეციალისტი',
+      };
+      const statuses = {
+        active: 'მოქმედი',
+        suspended: 'შეჩერებული',
+        expired: 'ვადაგასული',
+      };
+      const fullName = escapeHtml(person.full_name || '—');
+      const profileUrl = person.id != null ? `my.html?userId=${encodeURIComponent(person.id)}` : 'my.html';
+      const avatar = person.photo_url
+        ? `<button type="button" class="registry-avatar has-photo" aria-label="${fullName} — ფოტოს გადიდება"><img src="${escapeHtml(person.photo_url)}" alt="${fullName}" class="registry-avatar-img" loading="lazy" decoding="async" /></button>`
+        : `<div class="registry-avatar" aria-hidden="true">${DEFAULT_PROFILE_ICON}</div>`;
+      card.innerHTML = `
+        ${avatar}
+        <div class="registry-info">
+          <div class="registry-card-top">
+            <span class="registry-qualification">${escapeHtml(qualifications[person.qualification] || 'სერტიფიცირებული პირი')}</span>
+            <span class="registry-status"><span aria-hidden="true"></span>${escapeHtml(statuses[person.certificate_status] || 'სტატუსი მითითებული არ არის')}</span>
+          </div>
+          <h3 class="registry-name"><a class="registry-profile-link" href="${escapeHtml(profileUrl)}">${fullName}</a></h3>
+          <div class="registry-card-bottom">
+            <div class="registry-code"><span>სერტიფიცირების კოდი</span><strong>${escapeHtml(person.unique_code || '—')}</strong></div>
+            <span class="registry-rating" aria-label="რეიტინგი">⭐ ${formatRating(person.rating)}</span>
+          </div>
+          <span class="registry-profile-hint" aria-hidden="true">პროფილის ნახვა <span>↗</span></span>
+        </div>`;
+      const avatarButton = card.querySelector('button.registry-avatar');
+      avatarButton?.addEventListener('click', () => showPhotoModal(person.photo_url, person.full_name, avatarButton));
+      if (onCardClick) {
+        card.querySelector('.registry-profile-link')?.addEventListener('click', (event) => {
+          if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0) return;
+          event.preventDefault();
+          onCardClick(person);
+        });
+      }
+      if (refreshRating) void refreshCardRating(card, person.id);
       return card;
     }
 
@@ -406,6 +505,7 @@
 
     // Wire up events on load
     bindEvents();
+    if (pageMode) void ensureData();
 
     return {
       open,

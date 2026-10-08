@@ -1,0 +1,152 @@
+{
+  "reports": [
+    {
+      "page": "index.html",
+      "viewport": 1920,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "index.html",
+      "viewport": 1440,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "index.html",
+      "viewport": 1200,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "index.html",
+      "viewport": 1180,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "index.html",
+      "viewport": 768,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "index.html",
+      "viewport": 390,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "index.html",
+      "viewport": 320,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "my.html?code=invalid",
+      "viewport": 1920,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "my.html?code=invalid",
+      "viewport": 1440,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "my.html?code=invalid",
+      "viewport": 1200,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "my.html?code=invalid",
+      "viewport": 1180,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "my.html?code=invalid",
+      "viewport": 768,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "my.html?code=invalid",
+      "viewport": 390,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "my.html?code=invalid",
+      "viewport": 320,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "registry.html",
+      "viewport": 1920,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "registry.html",
+      "viewport": 1440,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "registry.html",
+      "viewport": 1200,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "registry.html",
+      "viewport": 1180,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "registry.html",
+      "viewport": 768,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "registry.html",
+      "viewport": 390,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    },
+    {
+      "page": "registry.html",
+      "viewport": 320,
+      "logoWidth": 169.1875,
+      "logoHeight": 55.421875,
+      "noOverflow": true
+    }
+  ],
+  "browserErrors": []
+}

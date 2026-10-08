@@ -114,6 +114,23 @@ padding-top: 180px;
   text-indent: 42px;
 }
 
+.main-hero .main-registry-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  margin-top: 16px;
+  padding: 8px 0;
+  color: #244a80;
+  font-size: 13px;
+  line-height: 1.65;
+  border-bottom: 1px solid #aabccf;
+}
+
+.main-hero .main-registry-link span { font-size: 18px; }
+.main-hero .main-registry-link:hover { color: #173457; border-bottom-color: #244a80; }
+.main-hero .main-registry-link:focus-visible { outline: 2px solid #244a80; outline-offset: 5px; }
+
 footer {
   background-color: white;
   /* border-top: 1px solid var(--color-border); */
