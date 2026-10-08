@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 import os
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status, UploadFile, File, Form, Query
 from fastapi.responses import FileResponse
@@ -12,14 +13,19 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Statement, User, UserSession
 from ..schemas import StatementOut
-from ..services.media_storage import ensure_statement_dir, relative_storage_path, resolve_storage_path
+from ..services.media_storage import ensure_statement_dir, relative_storage_path, resolve_storage_path, delete_storage_file
+from ..services.bounded_upload import (
+    DEFAULT_UPLOAD_MAX_BYTES,
+    UploadTooLarge,
+    save_upload_stream,
+)
 
 
 router = APIRouter()
 
 
 ALLOWED_EXTS = {".zip", ".rar", ".pdf", ".jpg", ".jpeg", ".doc", ".docx"}
-MAX_BYTES = 100 * 1024 * 1024  # 100MB
+MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
 
 
 def _get_actor_user(
@@ -53,35 +59,20 @@ def _validate_attachment(upload: Optional[UploadFile]):
     ext = os.path.splitext(upload.filename or "")[1].lower()
     if ext not in ALLOWED_EXTS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file type not allowed (zip/rar/pdf/jpeg/word only)")
-    try:
-        upload.file.seek(0, os.SEEK_END)
-        size = upload.file.tell()
-        upload.file.seek(0)
-        if size and size > MAX_BYTES:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file too large (max 100MB)")
-    except Exception:
-        pass
 
 
 def _save_attachment(user_id: int, statement_id: int, upload: UploadFile) -> tuple[str, str, str | None, int | None]:
     directory = ensure_statement_dir(user_id, statement_id)
     safe_name = os.path.basename(upload.filename or "attachment")
-    path = directory / safe_name
-    total = 0
-    with open(path, "wb") as f:
-        while True:
-            chunk = upload.file.read(1024 * 1024)
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > MAX_BYTES:
-                f.close()
-                try:
-                    path.unlink(missing_ok=True)  # type: ignore[arg-type]
-                except Exception:
-                    pass
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file too large (max 100MB)")
-            f.write(chunk)
+    ext = os.path.splitext(safe_name)[1].lower()
+    path = directory / f"{uuid4().hex}{ext}"
+    try:
+        total = save_upload_stream(upload.file, path, max_bytes=MAX_BYTES)
+    except UploadTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 100MB)",
+        ) from exc
     rel = relative_storage_path(path)
     mime = (upload.content_type or "").strip() or None
     return rel, safe_name, mime, total or None
@@ -94,27 +85,30 @@ def create_statement(
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ) -> StatementOut:
+    saved_storage_path: str | None = None
+    committed = False
     try:
         user = _get_actor_user(db, authorization)
         msg = (message or "").strip()
         if not msg:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="message required")
 
+        _validate_attachment(attachment)
         st = Statement(user_id=user.id, message=msg)
         db.add(st)
-        db.commit()
-        db.refresh(st)
 
         if attachment:
-            _validate_attachment(attachment)
+            db.flush()
             rel, name, mime, size = _save_attachment(user.id, st.id, attachment)
+            saved_storage_path = rel
             st.attachment_path = rel
             st.attachment_filename = name
             st.attachment_mime_type = mime
             st.attachment_size_bytes = size
-            db.add(st)
-            db.commit()
-            db.refresh(st)
+
+        db.commit()
+        committed = True
+        db.refresh(st)
 
         return StatementOut(
             id=st.id,
@@ -123,10 +117,24 @@ def create_statement(
             attachment_filename=getattr(st, 'attachment_filename', None),
         )
     except HTTPException:
+        if not committed:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            if saved_storage_path:
+                delete_storage_file(saved_storage_path)
         raise
     except Exception as e:
         import traceback
         traceback.print_exc()
+        if not committed:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            if saved_storage_path:
+                delete_storage_file(saved_storage_path)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error: {str(e)}")
 
 

@@ -393,6 +393,8 @@ class UserOut(BaseModel):
     created_at: datetime
     has_unseen_statements: bool | None = None
     unseen_statement_count: int | None = None
+    has_pending_statements: bool | None = None
+    pending_statement_count: int | None = None
     certificate: dict | None = None
     certificate_info: dict | None = None
     photo_filename: str | None = None
@@ -464,6 +466,8 @@ class AdminStatementOut(BaseModel):
     created_at: datetime
     seen_at: datetime | None = None
     seen_by: str | None = None
+    answered_at: datetime | None = None
+    answered_by: str | None = None
     attachment_filename: str | None = None
     attachment_size_bytes: int | None = None
 
@@ -475,6 +479,19 @@ class AdminStatementsResponse(BaseModel):
 
 class StatementSeenRequest(BaseModel):
     statement_ids: List[int]
+
+
+class StatementAnsweredRequest(BaseModel):
+    answered: bool
+
+
+class StatementAnsweredResponse(BaseModel):
+    statement: AdminStatementOut
+    user_id: int
+    has_unseen_statements: bool
+    unseen_statement_count: int
+    has_pending_statements: bool
+    pending_statement_count: int
 
 
 class ToggleAdminRequest(BaseModel):

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json as _json
-from datetime import datetime
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as FPath, Response, Query, UploadFile, File
 from fastapi.responses import FileResponse
 import uuid
-from sqlalchemy import func, select, or_, delete
+from sqlalchemy import case, func, select, or_, delete
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
@@ -38,6 +38,8 @@ from ..schemas import (
     AdminStatementsResponse,
     AdminStatementOut,
     StatementSeenRequest,
+    StatementAnsweredRequest,
+    StatementAnsweredResponse,
 )
 from ..services.exam_lifecycle import auto_close_expired_sessions, auto_close_session_if_expired
 from ..services.exam_stage import (
@@ -47,6 +49,12 @@ from ..services.exam_stage import (
     start_exam_flow,
 )
 from ..services.media_storage import resolve_storage_path, ensure_media_root, delete_storage_file
+from ..services.expert_certificate_cleanup import delete_expert_certificate_files
+from ..services.bounded_upload import (
+    DEFAULT_UPLOAD_MAX_BYTES,
+    UploadTooLarge,
+    save_async_upload,
+)
 
 
 router = APIRouter()
@@ -937,6 +945,7 @@ def admin_users(
     sort: str = "date_desc",  # date_desc|date_asc|name_asc|name_desc
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
+    statement_date: date | None = None,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
@@ -957,6 +966,27 @@ def admin_users(
     if only_admins:
         stmt = stmt.where(User.is_admin == True)  # noqa: E712
 
+    if statement_date is not None:
+        # Statements are stored in naive UTC; the selected day is in Georgia.
+        try:
+            day_start = datetime.combine(
+                statement_date, time.min, tzinfo=timezone(timedelta(hours=4))
+            ).astimezone(timezone.utc).replace(tzinfo=None)
+            day_end = day_start + timedelta(days=1)
+        except OverflowError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="statement_date is outside the supported range",
+            )
+        stmt = stmt.where(
+            User.id.in_(
+                select(Statement.user_id).where(
+                    Statement.created_at >= day_start,
+                    Statement.created_at < day_end,
+                )
+            )
+        )
+
     if sort == "date_asc":
         stmt = stmt.order_by(User.created_at.asc())
     elif sort == "name_asc":
@@ -973,22 +1003,28 @@ def admin_users(
 
     user_ids = [u.id for u in users]
     unseen_counts: dict[int, int] = {}
+    pending_counts: dict[int, int] = {}
     if user_ids:
         stmt = (
-            select(Statement.user_id, func.count())
-            .where(
-                Statement.user_id.in_(user_ids),
-                Statement.seen_at.is_(None),
+            select(
+                Statement.user_id,
+                func.sum(case((Statement.seen_at.is_(None), 1), else_=0)),
+                func.sum(case((
+                    Statement.seen_at.is_not(None) & Statement.answered_at.is_(None), 1
+                ), else_=0)),
             )
+            .where(Statement.user_id.in_(user_ids))
             .group_by(Statement.user_id)
         )
-        for user_id, count in db.execute(stmt):
-            unseen_counts[int(user_id)] = int(count)
+        for user_id, unseen_count, pending_count in db.execute(stmt):
+            unseen_counts[int(user_id)] = int(unseen_count)
+            pending_counts[int(user_id)] = int(pending_count)
 
     items = []
     stage_expired_changed = False
     for u in users:
         unseen_count = unseen_counts.get(u.id, 0)
+        pending_count = pending_counts.get(u.id, 0)
         cert_data = None
         if u.certificate:
             cert_data = {
@@ -1033,6 +1069,8 @@ def admin_users(
             'created_at': u.created_at,
             'has_unseen_statements': unseen_count > 0,
             'unseen_statement_count': unseen_count,
+            'has_pending_statements': pending_count > 0,
+            'pending_statement_count': pending_count,
             'photo_filename': u.photo_filename,
         }
         if cert_data:
@@ -1201,6 +1239,13 @@ def admin_update_user(
             Statement.seen_at.is_(None),
         )
     ) or 0
+    pending_count = db.scalar(
+        select(func.count()).select_from(Statement).where(
+            Statement.user_id == user.id,
+            Statement.seen_at.is_not(None),
+            Statement.answered_at.is_(None),
+        )
+    ) or 0
 
     return UserOut(
         id=user.id,
@@ -1215,6 +1260,8 @@ def admin_update_user(
         created_at=user.created_at,
         has_unseen_statements=unseen_count > 0,
         unseen_statement_count=unseen_count,
+        has_pending_statements=pending_count > 0,
+        pending_statement_count=pending_count,
     )
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1286,52 +1333,9 @@ def admin_delete_user(
             # Best-effort: continue even if directory deletion fails
             pass
 
-        # For expert certificates, also delete the expert directory if it exists
-        # Check if this is an expert certificate with EX-... unique_code
-        if cert.level and (cert.level.lower() == "expert") and cert.unique_code:
-            unique_code = cert.unique_code.strip()
-            # Check if unique_code matches EX-... pattern
-            if unique_code.startswith("EX-"):
-                try:
-                    media_root = ensure_media_root()
-                    expert_dir = media_root / "expert" / unique_code
-                    if expert_dir.exists() and expert_dir.is_dir():
-                        # Delete all certificate PDF files in the expert directory
-                        # Look for files that start with "certificate" and end with ".pdf"
-                        for pdf_file in expert_dir.glob("certificate*.pdf"):
-                            try:
-                                if pdf_file.is_file():
-                                    pdf_file.unlink()
-                            except OSError:
-                                # Best-effort: continue if file deletion fails
-                                pass
-                        
-                        # Try to remove the directory if it's now empty
-                        try:
-                            # Check if directory is empty (no files or only empty subdirectories)
-                            if not any(expert_dir.iterdir()):
-                                expert_dir.rmdir()
-                            else:
-                                # Directory still has files, try to remove empty subdirectories
-                                for item in expert_dir.iterdir():
-                                    if item.is_dir():
-                                        try:
-                                            if not any(item.iterdir()):
-                                                item.rmdir()
-                                        except OSError:
-                                            pass
-                                # Try to remove the directory again if it's now empty
-                                try:
-                                    if not any(expert_dir.iterdir()):
-                                        expert_dir.rmdir()
-                                except OSError:
-                                    pass
-                        except OSError:
-                            # Directory not empty or other error, that's okay
-                            pass
-                except Exception:
-                    # Best-effort: continue even if expert directory deletion fails
-                    pass
+        # Expert certificate cleanup treats the persisted code as untrusted.
+        if cert.level and cert.level.lower() == "expert" and cert.unique_code:
+            delete_expert_certificate_files(cert.unique_code)
 
     db.delete(u)
     db.commit()
@@ -1395,56 +1399,31 @@ def admin_delete_all_users(
                 # Best-effort: continue even if directory deletion fails
                 pass
 
-            # For expert certificates, also delete the expert directory if it exists
-            # Check if this is an expert certificate with EX-... unique_code
-            if cert.level and (cert.level.lower() == "expert") and cert.unique_code:
-                unique_code = cert.unique_code.strip()
-                # Check if unique_code matches EX-... pattern
-                if unique_code.startswith("EX-"):
-                    try:
-                        media_root = ensure_media_root()
-                        expert_dir = media_root / "expert" / unique_code
-                        if expert_dir.exists() and expert_dir.is_dir():
-                            # Delete all certificate PDF files in the expert directory
-                            # Look for files that start with "certificate" and end with ".pdf"
-                            for pdf_file in expert_dir.glob("certificate*.pdf"):
-                                try:
-                                    if pdf_file.is_file():
-                                        pdf_file.unlink()
-                                except OSError:
-                                    # Best-effort: continue if file deletion fails
-                                    pass
-                            
-                            # Try to remove the directory if it's now empty
-                            try:
-                                # Check if directory is empty (no files or only empty subdirectories)
-                                if not any(expert_dir.iterdir()):
-                                    expert_dir.rmdir()
-                                else:
-                                    # Directory still has files, try to remove empty subdirectories
-                                    for item in expert_dir.iterdir():
-                                        if item.is_dir():
-                                            try:
-                                                if not any(item.iterdir()):
-                                                    item.rmdir()
-                                            except OSError:
-                                                pass
-                                    # Try to remove the directory again if it's now empty
-                                    try:
-                                        if not any(expert_dir.iterdir()):
-                                            expert_dir.rmdir()
-                                    except OSError:
-                                        pass
-                            except OSError:
-                                # Directory not empty or other error, that's okay
-                                pass
-                    except Exception:
-                        # Best-effort: continue even if expert directory deletion fails
-                        pass
-        
+            # Expert certificate cleanup treats the persisted code as untrusted.
+            if cert.level and cert.level.lower() == "expert" and cert.unique_code:
+                delete_expert_certificate_files(cert.unique_code)
+
         db.delete(u)
     db.commit()
     return
+
+
+def _admin_statement_payload(statement: Statement, user: User) -> AdminStatementOut:
+    return AdminStatementOut(
+        id=statement.id,
+        user_id=user.id,
+        user_first_name=user.first_name,
+        user_last_name=user.last_name,
+        user_email=user.email,
+        message=statement.message,
+        created_at=statement.created_at,
+        seen_at=statement.seen_at,
+        seen_by=statement.seen_by,
+        answered_at=statement.answered_at,
+        answered_by=statement.answered_by,
+        attachment_filename=statement.attachment_filename,
+        attachment_size_bytes=statement.attachment_size_bytes,
+    )
 
 
 @router.get("/users/{user_id}/statements", response_model=AdminStatementsResponse)
@@ -1464,22 +1443,72 @@ def admin_user_statements(
         .order_by(Statement.created_at.desc(), Statement.id.desc())
     ).all()
     items = [
-        AdminStatementOut(
-            id=statement.id,
-            user_id=user.id,
-            user_first_name=user.first_name,
-            user_last_name=user.last_name,
-            user_email=user.email,
-            message=statement.message,
-            created_at=statement.created_at,
-            seen_at=statement.seen_at,
-            seen_by=statement.seen_by,
-            attachment_filename=statement.attachment_filename,
-            attachment_size_bytes=statement.attachment_size_bytes,
-        )
+        _admin_statement_payload(statement, user)
         for statement in statements
     ]
     return AdminStatementsResponse(items=items, total=len(items))
+
+
+@router.patch("/statements/{statement_id}/answered", response_model=StatementAnsweredResponse)
+def admin_set_statement_answered(
+    statement_id: int,
+    payload: StatementAnsweredRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    actor = _require_admin(db, authorization)
+    statement = db.get(Statement, statement_id)
+    if not statement:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Statement not found")
+    user = db.get(User, statement.user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if payload.answered:
+        now = datetime.utcnow()
+        actor_email = actor.email.lower()
+        # Conditional update preserves the first answer/reader even if requests
+        # from two admin tabs overlap. Only this statement can be affected.
+        db.execute(
+            Statement.__table__.update()
+            .where(Statement.id == statement_id, Statement.answered_at.is_(None))
+            .values(
+                answered_at=now,
+                answered_by=actor_email,
+                seen_at=case((Statement.seen_at.is_(None), now), else_=Statement.seen_at),
+                seen_by=case((Statement.seen_at.is_(None), actor_email), else_=Statement.seen_by),
+            )
+        )
+    else:
+        db.execute(
+            Statement.__table__.update()
+            .where(Statement.id == statement_id)
+            .values(answered_at=None, answered_by=None)
+        )
+    db.commit()
+    db.refresh(statement)
+
+    unseen_count = db.scalar(
+        select(func.count()).select_from(Statement).where(
+            Statement.user_id == statement.user_id,
+            Statement.seen_at.is_(None),
+        )
+    ) or 0
+    pending_count = db.scalar(
+        select(func.count()).select_from(Statement).where(
+            Statement.user_id == statement.user_id,
+            Statement.seen_at.is_not(None),
+            Statement.answered_at.is_(None),
+        )
+    ) or 0
+    return StatementAnsweredResponse(
+        statement=_admin_statement_payload(statement, user),
+        user_id=statement.user_id,
+        has_unseen_statements=unseen_count > 0,
+        unseen_statement_count=unseen_count,
+        has_pending_statements=pending_count > 0,
+        pending_statement_count=pending_count,
+    )
 
 
 @router.delete("/statements/{statement_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1529,7 +1558,7 @@ def admin_mark_statements_seen(
     now = datetime.utcnow()
     db.execute(
         Statement.__table__.update()
-        .where(Statement.id.in_(statement_ids))
+        .where(Statement.id.in_(statement_ids), Statement.seen_at.is_(None))
         .values(seen_at=now, seen_by=actor_email)
     )
     db.commit()
@@ -1540,6 +1569,7 @@ def admin_mark_statements_seen(
 
 ALLOWED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_PHOTO_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+PHOTO_UPLOAD_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
 
 
 def _delete_user_photo_file(user: User) -> None:
@@ -1584,38 +1614,57 @@ async def admin_upload_user_photo(
             detail="Invalid content type"
         )
 
-    # Delete old photo if exists
-    _delete_user_photo_file(user)
-
     # Generate unique filename
     unique_code = str(uuid.uuid4())[:12]
     new_filename = f"{unique_code}{ext}"
 
     # Save file
+    previous_photo_path = user.photo_path
+    file_path = None
     try:
         media_root = ensure_media_root()
         photos_dir = media_root / "photos"
         photos_dir.mkdir(parents=True, exist_ok=True)
         file_path = photos_dir / new_filename
 
-        content = await file.read()
-        file_path.write_bytes(content)
+        await save_async_upload(
+            file,
+            file_path,
+            max_bytes=PHOTO_UPLOAD_MAX_BYTES,
+        )
 
         # Store relative path
         user.photo_path = f"photos/{new_filename}"
         user.photo_filename = original_filename
         db.add(user)
         db.commit()
-
-        return {
-            "photo_url": f"/admin/users/{user_id}/photo/file",
-            "photo_filename": original_filename,
-        }
+    except UploadTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 100MB)",
+        ) from exc
     except Exception as exc:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        if file_path is not None:
+            try:
+                file_path.unlink(missing_ok=True)
+            except OSError:
+                pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save photo"
         ) from exc
+
+    if previous_photo_path and previous_photo_path != user.photo_path:
+        delete_storage_file(previous_photo_path)
+
+    return {
+        "photo_url": f"/admin/users/{user_id}/photo/file",
+        "photo_filename": original_filename,
+    }
 
 
 @router.get("/users/{user_id}/photo/file")

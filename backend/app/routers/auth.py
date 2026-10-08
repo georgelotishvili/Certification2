@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status, Request
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -21,12 +22,19 @@ from ..schemas import (
 )
 from ..security import generate_session_token, verify_code, hash_code, validate_password_strength
 from ..config import get_settings
-from ..rate_limiter import login_limiter, verification_limiter, code_verify_limiter
+from ..rate_limiter import (
+    code_verify_limiter,
+    login_account_limiter,
+    login_limiter,
+    verification_account_limiter,
+    verification_limiter,
+)
 from ..services import email_verification
 from ..services.exam_stage import exam_state_payload, expire_if_unused
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/code", response_model=AuthCodeResponse)
@@ -98,6 +106,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     email_norm = (payload.email or "").strip().lower()
     if not email_norm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email required")
+    login_account_limiter.check_key(email_norm)
     
     user = db.scalar(select(User).where(User.email == email_norm))
     if not user:
@@ -181,7 +190,31 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         created_at=user.created_at,
     )
     
-    return LoginResponse(token=token, user=user_out)
+    response = LoginResponse(token=token, user=user_out)
+    login_account_limiter.reset_key(email_norm)
+    return response
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Revoke the current website session without affecting exam sessions."""
+    if authorization:
+        scheme, separator, raw_token = authorization.partition(" ")
+        token = raw_token.strip()
+        if separator and scheme.lower() == "bearer" and token:
+            user_session = db.scalar(
+                select(UserSession).where(UserSession.token == token)
+            )
+            if user_session is not None:
+                db.delete(user_session)
+                db.commit()
+
+    # Logout is intentionally idempotent: stale or missing tokens are already
+    # logged out from the server's point of view.
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
@@ -195,10 +228,19 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
     email_norm = (payload.email or "").strip().lower()
     if not email_norm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email required")
+    verification_account_limiter.check_key(
+        (email_norm, "password_reset")
+    )
     
     user = db.scalar(select(User).where(User.email == email_norm))
     if user:
-        email_verification.send_verification_code(email_norm, "password_reset")
+        try:
+            email_verification.send_verification_code(email_norm, "password_reset")
+        except RuntimeError:
+            # Keep the public response identical for registered and unknown
+            # addresses, including during an SMTP outage. Otherwise the status
+            # code itself becomes an account-enumeration signal.
+            logger.warning("Password reset email delivery failed", exc_info=True)
     
     return ForgotPasswordResponse(
         success=True,
@@ -236,6 +278,10 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
         )
 
     user.password_hash = hash_code(new_password)
+    # A password reset is also an account-recovery event. Invalidate every web
+    # login session for this user so a previously copied bearer token cannot
+    # survive the reset. Exam sessions use a separate model and are untouched.
+    db.execute(delete(UserSession).where(UserSession.user_id == user.id))
     db.add(user)
     db.commit()
 

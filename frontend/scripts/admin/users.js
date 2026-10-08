@@ -25,6 +25,8 @@
     let editSubmitting = false;
     let liveRefreshTimer = null;
     let liveRefreshInFlight = false;
+    let usersRenderVersion = 0;
+    let statementsStateVersion = 0;
     const examPermissionSavingIds = new Set();
 
     const editOverlay = DOM.userEditOverlay;
@@ -43,12 +45,26 @@
       email: DOM.userEditEmail,
     };
 
+    function selectedStatementsDate() {
+      return DOM.filterStatements?.checked ? (DOM.statementsDate?.value || '') : '';
+    }
+
+    function syncStatementFilterControls() {
+      const pendingOnly = !!DOM.filterPendingStatements?.checked;
+      if (DOM.statementsDate) DOM.statementsDate.disabled = pendingOnly;
+      if (DOM.clearStatementsDate) {
+        DOM.clearStatementsDate.disabled = pendingOnly || !DOM.statementsDate?.value;
+      }
+    }
+
     async function fetchUsers() {
       if (!DOM.usersGrid) return { items: [] };
       const params = new URLSearchParams();
       const search = String(DOM.usersSearch?.value || '').trim();
       if (search) params.set('search', search);
       if (DOM.onlyAdmins?.checked) params.set('only_admins', 'true');
+      const statementDate = selectedStatementsDate();
+      if (statementDate) params.set('statement_date', statementDate);
       params.set('sort', DOM.usersSort?.value || 'date_desc');
       const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, {
         headers: { ...getAdminHeaders(), ...getActorHeaders() },
@@ -89,8 +105,11 @@
         examCheckbox.checked = !!user.exam_permission;
       }
 
-      setCardUnseenState(card, user.has_unseen_statements);
+      setCardUnseenState(card, user.has_unseen_statements, user.has_pending_statements);
       card.dataset.unseenCount = String(user.unseen_statement_count || 0);
+      if (user.pending_statement_count != null) {
+        card.dataset.pendingCount = String(user.pending_statement_count || 0);
+      }
     }
 
     async function refreshLiveUserStates(options = {}) {
@@ -101,10 +120,21 @@
       if (liveRefreshInFlight) return;
 
       liveRefreshInFlight = true;
+      const requestVersion = usersRenderVersion;
+      const statementVersion = statementsStateVersion;
       try {
         const data = await fetchUsers();
+        if (requestVersion !== usersRenderVersion || statementVersion !== statementsStateVersion) return;
         const items = Array.isArray(data?.items) ? data.items : [];
-        items.forEach(applyLiveUserState);
+        const dateMembershipChanged = selectedStatementsDate() && (
+          items.length !== cachedItems.length ||
+          items.some((user, index) => String(user.id) !== String(cachedItems[index]?.id))
+        );
+        if (dateMembershipChanged) {
+          drawUsers(items);
+        } else {
+          items.forEach(applyLiveUserState);
+        }
         updateNavBadge(cachedItems.some((user) => user.has_unseen_statements));
       } catch {
         // Live refresh is best-effort; manual refresh/render still shows errors.
@@ -157,7 +187,7 @@
       }
       
       return `
-        <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : ''}" data-id="${safeId}">
+        <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : (user.has_pending_statements ? ' has-pending-statements' : '')}" data-id="${safeId}">
           <div class="block-head user-block-head">
             <div class="user-name" style="font-size:16px;font-weight:700;color:${nameColor};">${safeFullName}</div>
             <div class="user-controls">
@@ -391,12 +421,22 @@
       }
     }
 
-    function setCardUnseenState(card, hasUnseen) {
+    function setCardUnseenState(card, hasUnseen, hasPending) {
       if (!card) return;
+      const pending = hasPending == null ? card.dataset.hasPendingStatements === 'true' : !!hasPending;
+      card.dataset.hasPendingStatements = String(pending);
       card.classList.toggle('has-new-statements', !!hasUnseen);
+      card.classList.toggle('has-pending-statements', !hasUnseen && pending);
+      // Keep cards mounted so live updates can reveal new statements without
+      // rebuilding the list or closing expanded cards.
+      const hiddenByStatementFilter = DOM.filterPendingStatements?.checked
+        ? !pending
+        : DOM.filterStatements?.checked && !selectedStatementsDate() && !hasUnseen;
+      card.style.display = hiddenByStatementFilter ? 'none' : '';
       const announcementsButton = card.querySelector('.btn-user-announcements');
       if (announcementsButton) {
         announcementsButton.classList.toggle('has-new-statements', !!hasUnseen);
+        announcementsButton.classList.toggle('has-pending-statements', !hasUnseen && pending);
       }
     }
 
@@ -436,7 +476,8 @@
         const card = wrapper.firstElementChild;
         if (card) {
           card.dataset.unseenCount = String(user.unseen_statement_count || 0);
-          setCardUnseenState(card, user.has_unseen_statements);
+          card.dataset.pendingCount = String(user.pending_statement_count || 0);
+          setCardUnseenState(card, user.has_unseen_statements, user.has_pending_statements);
           mountUserCard(card, user);
           DOM.usersGrid.appendChild(card);
         }
@@ -621,12 +662,19 @@
 
     async function render() {
       if (!DOM.usersGrid) return;
+      const requestVersion = ++usersRenderVersion;
+      const statementVersion = statementsStateVersion;
       DOM.usersGrid.innerHTML = '';
       try {
         const data = await fetchUsers();
+        if (requestVersion !== usersRenderVersion) return;
+        // A statement action may finish while a filter render is loading. Fetch
+        // fresh state rather than leaving the cleared grid empty or reviving old colors.
+        if (statementVersion !== statementsStateVersion) return render();
         cachedItems = Array.isArray(data?.items) ? data.items : [];
         drawUsers(cachedItems);
       } catch {
+        if (requestVersion !== usersRenderVersion) return;
         DOM.usersGrid.innerHTML = '<div class="block-tile">ჩატვირთვის შეცდომა</div>';
       }
     }
@@ -635,6 +683,29 @@
       on(DOM.usersSearch, 'input', render);
       on(DOM.usersSort, 'change', render);
       on(DOM.onlyAdmins, 'change', render);
+      on(DOM.filterStatements, 'change', () => {
+        if (DOM.filterStatements.checked && DOM.filterPendingStatements) DOM.filterPendingStatements.checked = false;
+        syncStatementFilterControls();
+        return render();
+      });
+      on(DOM.filterPendingStatements, 'change', () => {
+        if (DOM.filterPendingStatements.checked && DOM.filterStatements) DOM.filterStatements.checked = false;
+        syncStatementFilterControls();
+        return render();
+      });
+      on(DOM.statementsDate, 'change', () => {
+        const hasDate = !!DOM.statementsDate.value;
+        if (hasDate && DOM.filterStatements) DOM.filterStatements.checked = true;
+        if (hasDate && DOM.filterPendingStatements) DOM.filterPendingStatements.checked = false;
+        syncStatementFilterControls();
+        return render();
+      });
+      on(DOM.clearStatementsDate, 'click', () => {
+        if (DOM.statementsDate) DOM.statementsDate.value = '';
+        syncStatementFilterControls();
+        return render();
+      });
+      syncStatementFilterControls();
       on(DOM.filterArchitects, 'change', () => {
         // Ensure only one certificate filter is active at a time
         if (DOM.filterArchitects?.checked) {
@@ -661,18 +732,29 @@
       startLiveRefresh();
     }
 
-    function updateUserUnseenStatus(userId, hasUnseen, count) {
-      const card = DOM.usersGrid?.querySelector(`.block-card[data-id="${userId}"]`);
-      if (!card) return;
-      setCardUnseenState(card, hasUnseen);
-      card.dataset.unseenCount = String(count || 0);
+    function updateUserUnseenStatus(userId, hasUnseen, count, hasPending, pendingCount) {
+      // A successful statement action is newer than any list response already in flight.
+      statementsStateVersion += 1;
+      const pendingChanges = {};
+      if (hasPending != null) pendingChanges.has_pending_statements = !!hasPending;
+      if (pendingCount != null) pendingChanges.pending_statement_count = pendingCount || 0;
+      else if (hasPending === false) pendingChanges.pending_statement_count = 0;
       const index = cachedItems.findIndex((item) => String(item.id) === String(userId));
       if (index !== -1) {
         cachedItems[index] = {
           ...cachedItems[index],
           has_unseen_statements: !!hasUnseen,
           unseen_statement_count: count || 0,
+          ...pendingChanges,
         };
+      }
+      const card = findUserCard(userId);
+      if (card) {
+        setCardUnseenState(card, hasUnseen, hasPending);
+        card.dataset.unseenCount = String(count || 0);
+        if (pendingChanges.pending_statement_count != null) {
+          card.dataset.pendingCount = String(pendingChanges.pending_statement_count);
+        }
       }
       updateNavBadge(cachedItems.some((item) => item.has_unseen_statements));
     }
@@ -754,37 +836,9 @@
           return;
         }
         
-        // Build results HTML
-        let html = `<div style="max-height:400px;overflow-y:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:14px;">
-            <thead>
-              <tr style="background:#f3f4f6;">
-                <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">თარიღი</th>
-                <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">პროექტი</th>
-                <th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">პროცენტი</th>
-                <th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">არასწორი</th>
-              </tr>
-            </thead>
-            <tbody>`;
-        
-        items.forEach((item) => {
-          const date = new Date(item.createdAt).toLocaleString('ka-GE');
-          const percentColor = item.percentage >= 75 ? '#22c55e' : item.percentage >= 70 ? '#eab308' : '#ef4444';
-          const wrongColor = item.wrongCount <= 1 ? '#22c55e' : item.wrongCount === 2 ? '#eab308' : '#ef4444';
-          
-          html += `<tr style="border-bottom:1px solid #e5e7eb;">
-            <td style="padding:8px;">${date}</td>
-            <td style="padding:8px;">${item.projectName || item.projectCode}</td>
-            <td style="padding:8px;text-align:center;font-weight:bold;color:${percentColor}">${item.percentage.toFixed(1)}%</td>
-            <td style="padding:8px;text-align:center;font-weight:bold;color:${wrongColor}">${item.wrongCount}</td>
-          </tr>`;
-        });
-        
-        html += '</tbody></table></div>';
-        
         // Show in modal
         const userName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'მომხმარებელი';
-        showModal(`მრავალბინიანი: ${userName}`, html);
+        showModal(`მრავალბინიანი: ${userName}`, buildResultsTable(items));
         
       } catch (e) {
         console.error('Error fetching multi-apartment results:', e);
@@ -792,6 +846,59 @@
       }
     }
     
+    function createResultsCell(tagName, text, centered = false) {
+      const cell = document.createElement(tagName);
+      cell.style.padding = '8px';
+      cell.style.textAlign = centered ? 'center' : 'left';
+      cell.textContent = String(text ?? '');
+      return cell;
+    }
+
+    function renderResultsRows(body, items) {
+      items.forEach((item) => {
+        const percentage = Number.isFinite(Number(item?.percentage)) ? Number(item.percentage) : 0;
+        const wrongCount = Number.isFinite(Number(item?.wrongCount)) ? Number(item.wrongCount) : 0;
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid #e5e7eb';
+        row.appendChild(createResultsCell('td', new Date(item?.createdAt).toLocaleString('ka-GE')));
+        row.appendChild(createResultsCell('td', item?.projectName || item?.projectCode || ''));
+
+        const percentageCell = createResultsCell('td', `${percentage.toFixed(1)}%`, true);
+        percentageCell.style.fontWeight = 'bold';
+        percentageCell.style.color = percentage >= 75 ? '#22c55e' : percentage >= 70 ? '#eab308' : '#ef4444';
+        row.appendChild(percentageCell);
+
+        const wrongCell = createResultsCell('td', wrongCount, true);
+        wrongCell.style.fontWeight = 'bold';
+        wrongCell.style.color = wrongCount <= 1 ? '#22c55e' : wrongCount === 2 ? '#eab308' : '#ef4444';
+        row.appendChild(wrongCell);
+        body.appendChild(row);
+      });
+    }
+
+    function buildResultsTable(items) {
+      const content = document.createElement('div');
+      content.style.cssText = 'max-height:400px;overflow-y:auto;';
+      const table = document.createElement('table');
+      table.style.cssText = 'width:100%;border-collapse:collapse;font-size:14px;';
+      const head = document.createElement('thead');
+      const headRow = document.createElement('tr');
+      headRow.style.background = '#f3f4f6';
+      [['თარიღი', false], ['პროექტი', false], ['პროცენტი', true], ['არასწორი', true]].forEach(([label, centered]) => {
+        const cell = createResultsCell('th', label, centered);
+        cell.style.borderBottom = '2px solid #e5e7eb';
+        headRow.appendChild(cell);
+      });
+      head.appendChild(headRow);
+      table.appendChild(head);
+
+      const body = document.createElement('tbody');
+      renderResultsRows(body, items);
+      table.appendChild(body);
+      content.appendChild(table);
+      return content;
+    }
+
     function showModal(title, content) {
       // Remove existing modal if any
       const existing = document.getElementById('ma-results-modal');
@@ -803,12 +910,15 @@
       modal.innerHTML = `
         <div style="background:white;border-radius:12px;max-width:600px;width:90%;max-height:90vh;overflow:hidden;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);">
           <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
-            <h3 style="margin:0;font-size:18px;color:#1f2937;">${title}</h3>
+            <h3 id="ma-results-title" style="margin:0;font-size:18px;color:#1f2937;"></h3>
             <button id="close-ma-modal" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280;">&times;</button>
           </div>
-          <div style="padding:20px;">${content}</div>
+          <div id="ma-results-body" style="padding:20px;"></div>
         </div>
       `;
+
+      modal.querySelector('#ma-results-title').textContent = String(title || '');
+      if (content) modal.querySelector('#ma-results-body').appendChild(content);
       
       document.body.appendChild(modal);
       

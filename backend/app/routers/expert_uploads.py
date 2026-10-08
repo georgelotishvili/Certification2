@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, Header, UploadFile, File, Form, Path as FPath, Query
 from fastapi.responses import FileResponse
@@ -15,12 +16,17 @@ from ..config import get_settings
 from ..models import User, Certificate, ExpertUpload, UserSession
 from ..schemas import ExpertUploadOut
 from ..services.media_storage import ensure_media_root, resolve_storage_path, delete_storage_file
+from ..services.bounded_upload import (
+    DEFAULT_UPLOAD_MAX_BYTES,
+    UploadTooLarge,
+    save_upload_stream,
+)
 
 
 router = APIRouter()
 
 ALLOWED_EXTS = {".pdf", ".zip", ".rar"}
-MAX_BYTES = 1024 * 1024 * 1024  # 1GB
+MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
 
 
 def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
@@ -80,10 +86,56 @@ def _gen_unique_code(db: Session) -> str:
 
 
 def _expert_dir(unique_code: str) -> Path:
-    root = ensure_media_root()
-    d = root / "expert" / unique_code
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    if not isinstance(unique_code, str):
+        raise ValueError("Invalid expert storage code")
+
+    code = unique_code.strip()
+    if (
+        len(code) <= len("EX-")
+        or not code.startswith("EX-")
+        or "/" in code
+        or chr(92) in code
+    ):
+        raise ValueError("Invalid expert storage code")
+
+    code_path = Path(code)
+    if code_path.is_absolute() or code_path.parts != (code,) or code_path.name != code:
+        raise ValueError("Invalid expert storage code")
+
+    try:
+        media_root = ensure_media_root().resolve()
+        configured_expert_root = media_root / "expert"
+        if configured_expert_root.is_symlink():
+            raise ValueError("Invalid expert storage root")
+        configured_expert_root.mkdir(exist_ok=True)
+        if configured_expert_root.is_symlink():
+            raise ValueError("Invalid expert storage root")
+
+        expert_root = configured_expert_root.resolve()
+        if (
+            expert_root != configured_expert_root
+            or expert_root.parent != media_root
+            or not expert_root.is_dir()
+        ):
+            raise ValueError("Invalid expert storage root")
+
+        candidate = expert_root / code
+        if candidate.is_symlink():
+            raise ValueError("Invalid expert storage directory")
+        candidate.mkdir(exist_ok=True)
+        if candidate.is_symlink():
+            raise ValueError("Invalid expert storage directory")
+
+        expert_dir = candidate.resolve()
+        if (
+            expert_dir != candidate
+            or expert_dir.parent != expert_root
+            or not expert_dir.is_dir()
+        ):
+            raise ValueError("Invalid expert storage directory")
+        return expert_dir
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("Invalid expert storage directory") from exc
 
 
 def _validate_file(upload: Optional[UploadFile]):
@@ -92,29 +144,27 @@ def _validate_file(upload: Optional[UploadFile]):
     ext = os.path.splitext(upload.filename or "")[1].lower()
     if ext not in ALLOWED_EXTS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file type not allowed")
-    # Try read small chunk to detect size; rely on header otherwise
-    try:
-        upload.file.seek(0, os.SEEK_END)
-        size = upload.file.tell()
-        upload.file.seek(0)
-        if size and size > MAX_BYTES:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file too large")
-    except Exception:
-        pass
 
 
 def _save_file(unique_code: str, upload: UploadFile) -> tuple[str, str]:
     directory = _expert_dir(unique_code)
     safe_name = os.path.basename(upload.filename or "file")
-    path = directory / safe_name
-    with open(path, "wb") as f:
-        while True:
-            chunk = upload.file.read(1024 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
+    ext = os.path.splitext(safe_name)[1].lower()
+    path = directory / f"{uuid4().hex}{ext}"
+    try:
+        save_upload_stream(upload.file, path, max_bytes=MAX_BYTES)
+    except UploadTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 100MB)",
+        ) from exc
     rel = str(path.resolve().relative_to(ensure_media_root().resolve()))
     return rel, safe_name
+
+
+def _cleanup_saved_files(storage_paths: list[str]) -> None:
+    for storage_path in storage_paths:
+        delete_storage_file(storage_path)
 
 
 def _to_out(eu: ExpertUpload) -> ExpertUploadOut:
@@ -183,12 +233,23 @@ async def create_upload(
     )
     _validate_file(expertise)
     _validate_file(project)
-    if expertise:
-        eu.expertise_path, eu.expertise_filename = _save_file(code, expertise)
-    if project:
-        eu.project_path, eu.project_filename = _save_file(code, project)
-    db.add(eu)
-    db.commit()
+    saved_paths: list[str] = []
+    try:
+        if expertise:
+            eu.expertise_path, eu.expertise_filename = _save_file(code, expertise)
+            saved_paths.append(eu.expertise_path)
+        if project:
+            eu.project_path, eu.project_filename = _save_file(code, project)
+            saved_paths.append(eu.project_path)
+        db.add(eu)
+        db.commit()
+    except BaseException:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        _cleanup_saved_files(saved_paths)
+        raise
     db.refresh(eu)
     return _to_out(eu)
 
@@ -213,18 +274,43 @@ async def update_upload(
     if eu.status != "draft":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="not editable")
 
-    # Always update fields when provided (even if empty string)
-    eu.building_function = building_function.strip()
-    eu.cadastral_code = cadastral_code.strip()
-    eu.project_address = project_address.strip()
     _validate_file(expertise)
     _validate_file(project)
-    if expertise:
-        eu.expertise_path, eu.expertise_filename = _save_file(eu.unique_code, expertise)
-    if project:
-        eu.project_path, eu.project_filename = _save_file(eu.unique_code, project)
-    db.commit()
+
+    previous_expertise_path = eu.expertise_path
+    previous_project_path = eu.project_path
+    saved_paths: list[str] = []
+    try:
+        new_expertise = _save_file(eu.unique_code, expertise) if expertise else None
+        if new_expertise:
+            saved_paths.append(new_expertise[0])
+        new_project = _save_file(eu.unique_code, project) if project else None
+        if new_project:
+            saved_paths.append(new_project[0])
+
+        # Always update fields when provided (even if empty string).
+        eu.building_function = building_function.strip()
+        eu.cadastral_code = cadastral_code.strip()
+        eu.project_address = project_address.strip()
+        if new_expertise:
+            eu.expertise_path, eu.expertise_filename = new_expertise
+        if new_project:
+            eu.project_path, eu.project_filename = new_project
+        db.commit()
+    except BaseException:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        _cleanup_saved_files(saved_paths)
+        raise
     db.refresh(eu)
+
+    if expertise and previous_expertise_path and previous_expertise_path != eu.expertise_path:
+        delete_storage_file(previous_expertise_path)
+    if project and previous_project_path and previous_project_path != eu.project_path:
+        delete_storage_file(previous_project_path)
+
     return _to_out(eu)
 
 

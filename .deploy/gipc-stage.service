@@ -1,0 +1,17 @@
+[Unit]
+Description=GIPC FastAPI Application
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/gipc/backend
+Environment="PATH=/var/www/gipc/backend/venv-hardening-20260803/bin:/usr/bin"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+ExecStart=/var/www/gipc/backend/venv-hardening-20260803/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=5
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

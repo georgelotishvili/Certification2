@@ -13,7 +13,17 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Regulation
 from ..routers.admin import _require_admin
-from ..services.media_storage import ensure_media_root
+from ..services.media_storage import (
+    delete_storage_file,
+    ensure_media_root,
+    relative_storage_path,
+    resolve_storage_path,
+)
+from ..services.bounded_upload import (
+    DEFAULT_UPLOAD_MAX_BYTES,
+    UploadTooLarge,
+    save_upload_stream,
+)
 from pydantic import BaseModel
 
 
@@ -47,6 +57,7 @@ class RegulationsReorderRequest(BaseModel):
 # Constants
 REGULATIONS_FOLDER = "regulations"
 ALLOWED_EXTENSIONS = {".pdf"}
+REGULATION_UPLOAD_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
 
 
 def _get_regulations_folder() -> Path:
@@ -55,6 +66,27 @@ def _get_regulations_folder() -> Path:
     folder = media_root / REGULATIONS_FOLDER
     folder.mkdir(parents=True, exist_ok=True)
     return folder
+
+
+def _resolve_regulation_file(storage_path: str | None) -> Path | None:
+    '''Resolve an untrusted stored path only when it is a file under media root.'''
+    if not storage_path:
+        return None
+    try:
+        resolved = resolve_storage_path(storage_path)
+        return resolved if resolved.is_file() else None
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return None
+
+
+def _delete_regulation_file(storage_path: str | None) -> None:
+    '''Best-effort deletion that reuses media storage containment checks.'''
+    if _resolve_regulation_file(storage_path) is None:
+        return
+    try:
+        delete_storage_file(storage_path)
+    except (OSError, RuntimeError, TypeError, ValueError):
+        pass
 
 
 def _regulation_out(reg: Regulation) -> RegulationOut:
@@ -144,14 +176,7 @@ def admin_upload_regulation_file(
             detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-    # Delete old file if exists
-    if regulation.file_path:
-        old_path = Path(regulation.file_path)
-        if old_path.exists():
-            try:
-                old_path.unlink()
-            except Exception:
-                pass
+    previous_file_path = regulation.file_path
 
     # Save new file
     folder = _get_regulations_folder()
@@ -159,8 +184,16 @@ def admin_upload_regulation_file(
     file_path = folder / unique_name
 
     try:
-        content = file.file.read()
-        file_path.write_bytes(content)
+        save_upload_stream(
+            file.file,
+            file_path,
+            max_bytes=REGULATION_UPLOAD_MAX_BYTES,
+        )
+    except UploadTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 100MB)",
+        ) from exc
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to save file: {e}")
 
@@ -169,9 +202,25 @@ def admin_upload_regulation_file(
     regulation.file_path = str(file_path).replace("\\", "/")
     regulation.updated_at = datetime.utcnow()
 
-    db.add(regulation)
-    db.commit()
+    try:
+        stored_file_path = Path(relative_storage_path(file_path)).as_posix()
+        regulation.file_path = stored_file_path
+        db.add(regulation)
+        db.commit()
+    except BaseException:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        try:
+            file_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
     db.refresh(regulation)
+
+    if previous_file_path and previous_file_path != stored_file_path:
+        _delete_regulation_file(previous_file_path)
 
     return _regulation_out(regulation)
 
@@ -187,12 +236,12 @@ def admin_download_regulation(
     if not regulation or not regulation.file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    file_path = Path(regulation.file_path)
-    if not file_path.exists():
+    file_path = _resolve_regulation_file(regulation.file_path)
+    if file_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on disk")
 
     return FileResponse(
-        path=str(file_path),
+        path=file_path,
         filename=regulation.filename or "document",
         media_type="application/octet-stream",
     )
@@ -236,17 +285,18 @@ def admin_delete_regulation(
     if not regulation:
         return
 
-    # Delete file if exists
-    if regulation.file_path:
-        file_path = Path(regulation.file_path)
-        if file_path.exists():
-            try:
-                file_path.unlink()
-            except Exception:
-                pass
-
+    previous_file_path = regulation.file_path
     db.delete(regulation)
-    db.commit()
+    try:
+        db.commit()
+    except BaseException:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise
+
+    _delete_regulation_file(previous_file_path)
     return
 
 
@@ -270,13 +320,13 @@ def public_view_regulation(
     if not regulation or not regulation.file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    file_path = Path(regulation.file_path)
-    if not file_path.exists():
+    file_path = _resolve_regulation_file(regulation.file_path)
+    if file_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on disk")
 
     # PDF inline display
     return FileResponse(
-        path=str(file_path),
+        path=file_path,
         media_type="application/pdf",
         headers={
             "Content-Disposition": "inline",

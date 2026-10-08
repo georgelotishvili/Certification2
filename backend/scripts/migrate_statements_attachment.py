@@ -4,10 +4,14 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+try:
+    from backend.app.database import SQLITE_PATH
+except ImportError:  # pragma: no cover - fallback for running from backend/
+    from app.database import SQLITE_PATH  # type: ignore
+
 
 def run():
-    base_dir = Path(__file__).parent.parent
-    db_path = base_dir / "app.db"
+    db_path = Path(SQLITE_PATH)
     if not db_path.exists():
         print("Database not found, skipping migration")
         return

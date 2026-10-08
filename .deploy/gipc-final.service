@@ -1,0 +1,35 @@
+[Unit]
+Description=GIPC FastAPI Application
+After=network.target
+
+[Service]
+Type=simple
+User=gipcapp
+Group=gipcapp
+WorkingDirectory=/var/www/gipc/backend
+Environment="PATH=/var/www/gipc/backend/venv-hardening-20260803/bin:/usr/bin"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="GIPC_DATABASE_PATH=/var/lib/gipc/db/app.db"
+ExecStart=/var/www/gipc/backend/venv-hardening-20260803/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=5
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/gipc/db /var/www/gipc/backend/app/media /var/www/gipc/backend/uploads
+
+[Install]
+WantedBy=multi-user.target

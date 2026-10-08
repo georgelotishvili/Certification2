@@ -29,9 +29,14 @@ from ..schemas import (
     MultiApartmentGateVerifyResponse,
 )
 from ..services.media_storage import (
+    InvalidPdfUpload,
+    PdfUploadTooLarge,
+    delete_replaced_multi_apartment_pdf,
     multi_apartment_pdf_path,
     relative_storage_path,
     resolve_storage_path,
+    safe_pdf_display_filename,
+    save_pdf_upload,
     delete_storage_file,
 )
 from ..routers.admin import _require_admin
@@ -470,17 +475,42 @@ async def upload_pdf(
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files allowed")
     
-    filename = file.filename or "project.pdf"
-    pdf_path = multi_apartment_pdf_path(project.id, filename)
-    
-    with open(pdf_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-    
-    project.pdf_path = relative_storage_path(pdf_path).replace("\\", "/")
-    project.pdf_filename = filename
-    db.add(project)
-    db.commit()
+    previous_pdf_path = project.pdf_path
+    display_filename = safe_pdf_display_filename(file.filename)
+    pdf_path = multi_apartment_pdf_path(project.id)
+
+    try:
+        await save_pdf_upload(file, pdf_path)
+    except InvalidPdfUpload as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF files allowed",
+        ) from exc
+    except PdfUploadTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 100MB)",
+        ) from exc
+
+    try:
+        stored_pdf_path = relative_storage_path(pdf_path).replace("\\", "/")
+        project.pdf_path = stored_pdf_path
+        project.pdf_filename = display_filename
+        db.add(project)
+        db.commit()
+    except BaseException:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        try:
+            pdf_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+    if previous_pdf_path and previous_pdf_path != stored_pdf_path:
+        delete_replaced_multi_apartment_pdf(project.id, previous_pdf_path)
     
     return {"message": "PDF uploaded successfully"}
 
@@ -510,9 +540,8 @@ def download_pdf(
         return FileResponse(
             pdf_path,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'inline; filename="{project.pdf_filename or "project.pdf"}"',
-            },
+            filename=safe_pdf_display_filename(project.pdf_filename),
+            content_disposition_type="inline",
         )
     except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
@@ -662,9 +691,8 @@ def get_public_pdf(
         return FileResponse(
             pdf_path,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'inline; filename="{project.pdf_filename or "project.pdf"}"',
-            },
+            filename=safe_pdf_display_filename(project.pdf_filename),
+            content_disposition_type="inline",
         )
     except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")

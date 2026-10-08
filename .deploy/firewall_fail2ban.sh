@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if [[ "$(id -u)" -ne 0 ]]; then
+    echo "This hardening step must run as root." >&2
+    exit 1
+fi
+
+STAGED_JAIL="${1:?staged fail2ban jail is required}"
+BACKUP_DIR="/root/gipc-backups/firewall-fail2ban-20260803"
+
+test -f "$STAGED_JAIL"
+test ! -e "$BACKUP_DIR"
+systemctl is-active --quiet ssh.service
+systemctl is-active --quiet nginx.service
+systemctl is-active --quiet gipc.service
+[[ "$(ufw status | head -n 1)" == "Status: inactive" ]]
+[[ "$(ufw show added | tail -n +2 | grep -c . || true)" -eq 0 ]]
+
+install -d -o root -g root -m 0700 "$BACKUP_DIR"
+cp -a /etc/ufw /etc/default/ufw /lib/ufw "$BACKUP_DIR/"
+iptables-save > "$BACKUP_DIR/iptables-before.rules"
+ip6tables-save > "$BACKUP_DIR/ip6tables-before.rules"
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --no-install-recommends fail2ban
+
+cp -a /etc/fail2ban "$BACKUP_DIR/fail2ban-package-defaults"
+install -o root -g root -m 0644 "$STAGED_JAIL" /etc/fail2ban/jail.d/gipc-sshd.local
+fail2ban-client -t
+systemctl enable --now fail2ban.service
+systemctl is-active --quiet fail2ban.service
+fail2ban-client status sshd
+
+ufw default deny incoming
+ufw default allow outgoing
+ufw limit 22/tcp comment 'SSH rate limited'
+ufw allow 80/tcp comment 'HTTP'
+ufw allow 443/tcp comment 'HTTPS'
+ufw --force enable
+
+ufw status verbose
+ufw status numbered
+systemctl is-active --quiet ssh.service
+systemctl is-active --quiet nginx.service
+systemctl is-active --quiet gipc.service
+curl --fail --silent --show-error http://127.0.0.1:8000/regulations -o /dev/null
+echo "FIREWALL_FAIL2BAN_OK"

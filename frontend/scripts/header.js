@@ -155,6 +155,122 @@
       .replace(/'/g, '&#039;');
   }
 
+  const DOCUMENT_ALLOWED_TAGS = new Set([
+    'A', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DEL', 'DIV', 'EM', 'H1', 'H2', 'H3',
+    'H4', 'H5', 'H6', 'HR', 'I', 'LI', 'OL', 'P', 'PRE', 'S', 'SPAN', 'STRONG',
+    'SUB', 'SUP', 'TABLE', 'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR', 'U', 'UL',
+  ]);
+  const DOCUMENT_DROP_CONTENT_TAGS = new Set([
+    'AUDIO', 'BASE', 'BUTTON', 'CANVAS', 'EMBED', 'FORM', 'IFRAME', 'INPUT', 'LINK',
+    'MATH', 'META', 'OBJECT', 'OPTION', 'SCRIPT', 'SELECT', 'SOURCE', 'STYLE', 'SVG',
+    'TEMPLATE', 'TEXTAREA', 'TRACK', 'VIDEO',
+  ]);
+  const DOCUMENT_ALLOWED_STYLE_PROPERTIES = [
+    'background-color',
+    'color',
+    'font-style',
+    'font-weight',
+    'text-align',
+    'text-decoration',
+    'text-decoration-line',
+    'vertical-align',
+    'white-space',
+  ];
+
+  function safeDocumentHref(value) {
+    const href = String(value || '').trim();
+    if (!href) return null;
+    if (href.startsWith('#')) return href;
+    try {
+      const parsed = new URL(href, window.location.href);
+      return ['http:', 'https:', 'mailto:', 'tel:'].includes(parsed.protocol) ? href : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function copySafeDocumentAttributes(source, target, tagName) {
+    const direction = String(source.getAttribute('dir') || '').toLowerCase();
+    if (['auto', 'ltr', 'rtl'].includes(direction)) target.setAttribute('dir', direction);
+
+    const title = source.getAttribute('title');
+    if (title) target.setAttribute('title', title);
+
+    const rawStyle = source.getAttribute('style');
+    if (rawStyle) {
+      const styleParser = document.createElement('span');
+      styleParser.setAttribute('style', rawStyle);
+      DOCUMENT_ALLOWED_STYLE_PROPERTIES.forEach((property) => {
+        const value = styleParser.style.getPropertyValue(property);
+        if (value) target.style.setProperty(property, value);
+      });
+    }
+
+    if (tagName === 'A') {
+      const href = safeDocumentHref(source.getAttribute('href'));
+      if (href) target.setAttribute('href', href);
+      const requestedTarget = source.getAttribute('target');
+      if (requestedTarget === '_blank') {
+        target.setAttribute('target', '_blank');
+        target.setAttribute('rel', 'noopener noreferrer');
+      }
+    }
+
+    if (tagName === 'TD' || tagName === 'TH') {
+      ['colspan', 'rowspan'].forEach((attribute) => {
+        const value = Number.parseInt(source.getAttribute(attribute), 10);
+        if (Number.isInteger(value) && value >= 1 && value <= 100) {
+          target.setAttribute(attribute, String(value));
+        }
+      });
+    }
+
+    if (tagName === 'OL') {
+      const start = Number.parseInt(source.getAttribute('start'), 10);
+      if (Number.isInteger(start)) target.setAttribute('start', String(start));
+    }
+  }
+
+  function cloneSafeDocumentNode(node) {
+    if (node.nodeType === 3) return document.createTextNode(node.nodeValue || '');
+
+    const fragment = document.createDocumentFragment();
+    if (node.nodeType !== 1) return fragment;
+
+    const tagName = String(node.tagName || '').toUpperCase();
+    if (DOCUMENT_DROP_CONTENT_TAGS.has(tagName)) return fragment;
+
+    const destination = DOCUMENT_ALLOWED_TAGS.has(tagName)
+      ? document.createElement(tagName.toLowerCase())
+      : fragment;
+
+    if (destination !== fragment) copySafeDocumentAttributes(node, destination, tagName);
+    Array.from(node.childNodes || []).forEach((child) => {
+      destination.appendChild(cloneSafeDocumentNode(child));
+    });
+    return destination;
+  }
+
+  function renderSafeDocumentHtml(container, html) {
+    if (!container) return;
+    const output = document.createDocumentFragment();
+    try {
+      const parsed = new DOMParser().parseFromString(String(html || ''), 'text/html');
+      Array.from(parsed.body.childNodes).forEach((node) => {
+        output.appendChild(cloneSafeDocumentNode(node));
+      });
+    } catch {
+      output.appendChild(document.createTextNode(String(html || '')));
+    }
+
+    container.replaceChildren(output);
+    if (!container.hasChildNodes()) {
+      const empty = document.createElement('p');
+      empty.textContent = 'შიგთავსი არ არის.';
+      container.appendChild(empty);
+    }
+  }
+
   async function populateInfoDropdowns() {
     try {
       const documents = await fetchSiteDocuments();
@@ -268,7 +384,7 @@
       
       if (els.title) els.title.textContent = doc.title || 'დოკუმენტი';
       if (els.body) {
-        els.body.innerHTML = doc.content || '<p>შიგთავსი არ არის.</p>';
+        renderSafeDocumentHtml(els.body, doc.content);
         sanitizeWordStyles(els.body);
       }
     } catch (err) {

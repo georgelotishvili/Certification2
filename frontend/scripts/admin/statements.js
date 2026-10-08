@@ -27,7 +27,9 @@
 
     let activeUser = null;
     let cache = [];
-    let loading = false;
+    let viewVersion = 0;
+    const seenInFlight = new Set();
+    const answersInFlight = new Set();
     let jsPdfLoader = null;
     let fontLoader = null;
 
@@ -54,23 +56,100 @@
       list.appendChild(wrapper);
     }
 
+    function isCurrentView(version, userId) {
+      return version === viewVersion && activeUser?.id === userId;
+    }
+
+    function notifyStatementState(serverState) {
+      if (!activeUser) return;
+      const unseen = serverState?.unseen_statement_count ?? cache.filter((item) => item.seen_at == null).length;
+      const pending = serverState?.pending_statement_count ?? cache.filter((item) => item.seen_at != null && item.answered_at == null).length;
+      window.dispatchEvent(new CustomEvent('admin:statementsSeen', {
+        detail: {
+          userId: activeUser.id,
+          remainingCount: unseen,
+          hasUnseen: unseen > 0,
+          pendingCount: pending,
+          hasPending: pending > 0,
+          refreshSummary: true,
+        },
+      }));
+    }
+
+    function updateStatementElement(details, item) {
+      const unseen = item.seen_at == null;
+      const pending = !unseen && item.answered_at == null;
+      details.classList.toggle('is-unseen', unseen);
+      details.classList.toggle('is-pending', pending);
+      const status = details.querySelector('.statement-status');
+      if (status) status.textContent = unseen ? 'ახალი' : pending ? 'უპასუხო' : 'პასუხი გაცემულია';
+      const checkbox = details.querySelector('.statement-answered-checkbox');
+      if (checkbox && !checkbox.disabled) checkbox.checked = item.answered_at != null;
+    }
+
+    function bindAnswered(checkbox, statementId) {
+      const version = viewVersion;
+      const userId = activeUser?.id;
+      on(checkbox, 'change', async () => {
+        const key = `${version}:${statementId}`;
+        if (!isCurrentView(version, userId) || answersInFlight.has(key)) return;
+        const answered = checkbox.checked;
+        answersInFlight.add(key);
+        checkbox.disabled = true;
+        try {
+          const response = await fetch(`${API_BASE}/admin/statements/${statementId}/answered`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', ...getAdminHeaders(), ...getActorHeaders() },
+            body: JSON.stringify({ answered }),
+          });
+          if (!isCurrentView(version, userId)) return;
+          if (!response.ok) {
+            await handleAdminErrorResponse(response, 'პასუხის სტატუსი ვერ შეინახა', showToast);
+            return;
+          }
+          const data = await response.json();
+          if (!isCurrentView(version, userId)) return;
+          if (data.statement?.id !== statementId) throw new Error('Invalid statement response');
+          cache = cache.map((item) => item.id === statementId ? { ...item, ...data.statement } : item);
+          const currentDetails = list?.querySelector(`.statement-item[data-statement-id="${statementId}"]`);
+          if (currentDetails) updateStatementElement(currentDetails, data.statement);
+          notifyStatementState(data);
+        } catch {
+          if (isCurrentView(version, userId)) showToast('პასუხის სტატუსი ვერ შეინახა', 'error');
+        } finally {
+          answersInFlight.delete(key);
+          if (isCurrentView(version, userId)) {
+            const currentDetails = list?.querySelector(`.statement-item[data-statement-id="${statementId}"]`);
+            const currentCheckbox = currentDetails?.querySelector('.statement-answered-checkbox');
+            if (currentCheckbox) currentCheckbox.disabled = false;
+            const item = cache.find((entry) => entry.id === statementId);
+            if (item && currentDetails) updateStatementElement(currentDetails, item);
+          }
+        }
+      });
+    }
+
     function bindDelete(button, statementId) {
       if (!button) return;
       on(button, 'click', async (event) => {
         event.preventDefault();
         event.stopPropagation();
         if (!global.confirm('ნამდვილად გსურთ განცხადების წაშლა?')) return;
+        const version = viewVersion;
+        const userId = activeUser?.id;
         try {
           const response = await fetch(`${API_BASE}/admin/statements/${statementId}`, {
             method: 'DELETE',
             headers: { ...getAdminHeaders(), ...getActorHeaders() },
           });
+          if (!isCurrentView(version, userId)) return;
           if (!response.ok) {
             await handleAdminErrorResponse(response, 'განცხადების წაშლა ვერ შესრულდა', showToast);
             return;
           }
           cache = cache.filter((item) => item.id !== statementId);
           renderList(cache);
+          notifyStatementState();
           showToast('განცხადება წაიშალა');
         } catch {
           showToast('განცხადების წაშლა ვერ შესრულდა', 'error');
@@ -102,14 +181,11 @@
         return;
       }
       const fragment = document.createDocumentFragment();
-      items.forEach((item, index) => {
+      items.forEach((item) => {
         const details = document.createElement('details');
         details.className = 'statement-item';
         details.dataset.statementId = String(item.id);
         details.setAttribute('role', 'listitem');
-        if (item.seen_at == null) {
-          details.classList.add('is-unseen');
-        }
 
         const summary = document.createElement('summary');
         summary.className = 'statement-summary';
@@ -127,6 +203,11 @@
           summary.appendChild(preview);
         }
 
+        const status = document.createElement('span');
+        status.className = 'statement-status';
+        status.setAttribute('aria-live', 'polite');
+        summary.appendChild(status);
+
         details.appendChild(summary);
 
         const messageWrapper = document.createElement('div');
@@ -139,6 +220,21 @@
 
         const actions = document.createElement('div');
         actions.className = 'statement-actions';
+
+        const answeredLabel = document.createElement('label');
+        answeredLabel.className = 'statement-answered-label';
+        const answeredCheckbox = document.createElement('input');
+        answeredCheckbox.type = 'checkbox';
+        answeredCheckbox.className = 'statement-answered-checkbox';
+        answeredCheckbox.checked = item.answered_at != null;
+        answeredCheckbox.disabled = answersInFlight.has(`${viewVersion}:${item.id}`);
+        answeredCheckbox.setAttribute('aria-label', 'პასუხი გაცემულია');
+        bindAnswered(answeredCheckbox, item.id);
+        answeredLabel.appendChild(answeredCheckbox);
+        const answeredText = document.createElement('span');
+        answeredText.textContent = 'პასუხი გაცემულია';
+        answeredLabel.appendChild(answeredText);
+        actions.appendChild(answeredLabel);
 
         const downloadBtn = document.createElement('button');
         downloadBtn.type = 'button';
@@ -188,11 +284,12 @@
         messageWrapper.appendChild(actions);
 
         details.appendChild(messageWrapper);
+        updateStatementElement(details, item);
         fragment.appendChild(details);
 
         details.addEventListener('toggle', () => {
           if (details.open && details.classList.contains('is-unseen')) {
-            markStatementsSeen([item.id]);
+            return markStatementsSeen([item.id]);
           }
         });
       });
@@ -201,29 +298,37 @@
     }
 
     async function loadStatements() {
-      if (!activeUser || loading) return;
-      loading = true;
+      if (!activeUser) return;
+      const version = viewVersion;
+      const userId = activeUser.id;
       try {
-        const response = await fetch(`${API_BASE}/admin/users/${activeUser.id}/statements`, {
+        const response = await fetch(`${API_BASE}/admin/users/${userId}/statements`, {
           headers: { ...getAdminHeaders(), ...getActorHeaders() },
         });
+        if (!isCurrentView(version, userId)) return;
         if (!response.ok) {
           await handleAdminErrorResponse(response, 'განცხადებების ჩატვირთვა ვერ შესრულდა', showToast);
+          if (!isCurrentView(version, userId)) return;
           renderPlaceholder('განცხადებების ჩატვირთვა ვერ შესრულდა', 'statements-error');
           return;
         }
         const data = await response.json();
+        if (!isCurrentView(version, userId)) return;
         cache = Array.isArray(data?.items) ? data.items : [];
         renderList(cache);
+        notifyStatementState();
       } catch {
-        renderPlaceholder('განცხადებების ჩატვირთვა ვერ შესრულდა', 'statements-error');
-      } finally {
-        loading = false;
+        if (isCurrentView(version, userId)) renderPlaceholder('განცხადებების ჩატვირთვა ვერ შესრულდა', 'statements-error');
       }
     }
 
     async function markStatementsSeen(ids) {
-      if (!Array.isArray(ids) || !ids.length) return;
+      if (!activeUser || !Array.isArray(ids) || !ids.length) return;
+      const version = viewVersion;
+      const userId = activeUser.id;
+      ids = ids.filter((id) => !seenInFlight.has(`${version}:${id}`) && cache.some((item) => item.id === id && item.seen_at == null));
+      if (!ids.length) return;
+      ids.forEach((id) => seenInFlight.add(`${version}:${id}`));
       try {
         const response = await fetch(`${API_BASE}/admin/statements/mark-seen`, {
           method: 'POST',
@@ -234,41 +339,41 @@
           },
           body: JSON.stringify({ statement_ids: ids }),
         });
+        if (!isCurrentView(version, userId)) return;
         if (!response.ok) throw new Error('mark failed');
         const nowIso = new Date().toISOString();
-        cache = cache.map((item) => (ids.includes(item.id) ? { ...item, seen_at: nowIso, seen_by: window.Auth?.getSavedEmail?.() || 'admin' } : item));
-        const remaining = cache.filter((item) => item.seen_at == null).length;
+        cache = cache.map((item) => (ids.includes(item.id) && item.seen_at == null ? { ...item, seen_at: nowIso, seen_by: window.Auth?.getSavedEmail?.() || 'admin' } : item));
         if (list) {
           list.querySelectorAll('.statement-item').forEach((element) => {
             const statementId = Number(element.dataset.statementId);
             if (ids.includes(statementId)) {
-              element.classList.remove('is-unseen');
+              const item = cache.find((entry) => entry.id === statementId);
+              if (item) updateStatementElement(element, item);
             }
           });
         }
-        window.dispatchEvent(new CustomEvent('admin:statementsSeen', {
-          detail: {
-            userId: activeUser?.id,
-            ids,
-            remainingCount: remaining,
-            hasUnseen: remaining > 0,
-            refreshSummary: remaining <= 0,
-          },
-        }));
-      } catch {}
+        notifyStatementState();
+      } catch {
+        if (isCurrentView(version, userId)) showToast('განცხადება წაკითხულად ვერ მოინიშნა. სცადეთ ხელახლა გახსნა.', 'error');
+      } finally {
+        ids.forEach((id) => seenInFlight.delete(`${version}:${id}`));
+      }
     }
 
     function open(user) {
       if (!overlay || !list) return;
+      viewVersion += 1;
       activeUser = user || null;
+      cache = [];
       setMeta();
       renderPlaceholder('იტვირთება...', 'statements-loading');
       openOverlay(overlay);
-      loadStatements();
+      return loadStatements();
     }
 
     function close() {
       if (!overlay) return;
+      viewVersion += 1;
       closeOverlay(overlay);
       activeUser = null;
       cache = [];

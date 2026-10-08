@@ -79,6 +79,10 @@ document.addEventListener('DOMContentLoaded', () => {
     filterArchitects: document.getElementById('filterArchitects'),
     filterExperts: document.getElementById('filterExperts'),
     filterCertified: document.getElementById('filterCertified'),
+    filterStatements: document.getElementById('filterStatements'),
+    filterPendingStatements: document.getElementById('filterPendingStatements'),
+    statementsDate: document.getElementById('statementsDate'),
+    clearStatementsDate: document.getElementById('clearStatementsDate'),
     candidateResultsOverlay: document.getElementById('candidateResultsOverlay'),
     candidateResultsList: document.getElementById('candidateResultsList'),
     candidateResultsFullName: document.getElementById('candidateResultsFullName'),
@@ -485,7 +489,8 @@ document.addEventListener('DOMContentLoaded', () => {
     statementsEventHandlers.push((event) => {
       const detail = event.detail || {};
       if (detail.userId != null) {
-        usersModule.updateUserUnseenStatus?.(detail.userId, detail.hasUnseen, detail.remainingCount);
+        usersModule.updateUserUnseenStatus?.(detail.userId, detail.hasUnseen, detail.remainingCount, detail.hasPending, detail.pendingCount);
+        usersModule.refreshLiveUserStates?.({ force: true });
       }
       if (detail.refreshSummary !== false) {
         usersModule.refreshUnseenSummary?.();

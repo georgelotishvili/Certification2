@@ -246,6 +246,8 @@ class Statement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     seen_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    answered_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Attachment metadata (optional)
     attachment_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)

@@ -6,18 +6,29 @@ In production (EMAIL_MODE=smtp), codes are sent via email.
 """
 from __future__ import annotations
 
-import random
+import hmac
+import secrets
 import time
-from typing import Dict, Optional
+from threading import RLock
+from typing import Dict, Optional, Tuple
 from ..config import get_settings
 
 # In-memory storage for verification codes
 # Structure: {email: {"code": "1234", "expires_at": timestamp, "purpose": "register|update|password_reset"}}
 _verification_codes: Dict[str, dict] = {}
 
-# In-memory storage for verification attempts (brute force protection)
-# Structure: {email: {"count": int, "locked_until": timestamp or None}}
-_verification_attempts: Dict[str, dict] = {}
+# In-memory storage for verification attempts (brute force protection).
+# Attempts are isolated by email and purpose so one verification flow cannot
+# lock a different flow for the same address.
+# Structure: {(email, purpose): {"count": int, "locked_until": timestamp or None}}
+_verification_attempts: Dict[Tuple[str, str], dict] = {}
+_verification_lock = RLock()
+
+VALID_VERIFICATION_PURPOSES = frozenset(
+    {"register", "update", "password_reset"}
+)
+_ANY_PURPOSE = "*"
+_INVALID_PURPOSE = "__invalid__"
 
 # Code expires after 5 minutes
 CODE_EXPIRY_SECONDS = 300
@@ -28,12 +39,54 @@ LOCKOUT_DURATION_SECONDS = 900  # 15 minutes
 
 
 def _generate_code() -> str:
-    """Generate a random 4-digit code."""
-    return str(random.randint(1000, 9999))
+    """Generate a cryptographically secure 4-digit code."""
+    return str(1000 + secrets.randbelow(9000))
 
 
-def _cleanup_expired():
-    """Remove expired codes from storage."""
+def _normalize_purpose(purpose: Optional[str]) -> str:
+    if purpose is None:
+        return _ANY_PURPOSE
+    normalized = purpose.strip().lower()
+    if normalized in VALID_VERIFICATION_PURPOSES:
+        return normalized
+    return _INVALID_PURPOSE
+
+
+def _attempt_key(email: str, purpose: Optional[str]) -> Tuple[str, str]:
+    return (email.strip().lower(), _normalize_purpose(purpose))
+
+
+def _constant_time_equal(left: str, right: str) -> bool:
+    return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
+
+
+def _raise_locked(locked_until: float) -> None:
+    from fastapi import HTTPException, status
+
+    remaining = max(0, int(locked_until - time.time()))
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=f"ძალიან ბევრი მცდელობა. სცადეთ {remaining // 60 + 1} წუთის შემდეგ",
+    )
+
+
+def _record_failed_attempt_locked(key: Tuple[str, str]) -> None:
+    attempts = _verification_attempts.get(key, {"count": 0, "locked_until": None})
+    new_count = attempts.get("count", 0) + 1
+    locked_until = None
+    if new_count >= MAX_VERIFICATION_ATTEMPTS:
+        locked_until = time.time() + LOCKOUT_DURATION_SECONDS
+
+    _verification_attempts[key] = {
+        "count": new_count,
+        "locked_until": locked_until,
+    }
+    if locked_until:
+        _raise_locked(locked_until)
+
+
+def _cleanup_expired_locked() -> None:
+    """Remove expired state while ``_verification_lock`` is held."""
     now = time.time()
     expired = [email for email, data in _verification_codes.items() if data["expires_at"] < now]
     for email in expired:
@@ -41,17 +94,30 @@ def _cleanup_expired():
     
     # Clean up expired lockouts
     expired_lockouts = [
-        email for email, data in _verification_attempts.items()
+        key for key, data in _verification_attempts.items()
         if data.get("locked_until") and data["locked_until"] < now
     ]
-    for email in expired_lockouts:
-        _verification_attempts[email] = {"count": 0, "locked_until": None}
+    for key in expired_lockouts:
+        _verification_attempts[key] = {"count": 0, "locked_until": None}
+
+
+def _cleanup_expired() -> None:
+    """Thread-safe cleanup entry point retained for existing callers/tests."""
+    with _verification_lock:
+        _cleanup_expired_locked()
 
 
 def _is_smtp_mode(settings) -> bool:
     email_mode = (getattr(settings, "email_mode", "") or "").strip().lower()
     mail_mailer = (getattr(settings, "mail_mailer", "") or "").strip().lower()
     return email_mode == "smtp" or mail_mailer == "smtp"
+
+
+def _is_console_mode(settings) -> bool:
+    """Return True only for the explicitly configured development mode."""
+    email_mode = (getattr(settings, "email_mode", "") or "").strip().lower()
+    mail_mailer = (getattr(settings, "mail_mailer", "") or "").strip().lower()
+    return email_mode == "console" or mail_mailer == "console"
 
 
 def _get_smtp_config(settings) -> dict:
@@ -118,6 +184,19 @@ def _send_smtp_message(to_email: str, subject: str, body: str) -> bool:
         return False
 
 
+def _emit_console_code(email: str, purpose: str, code: str) -> None:
+    """Print a code only in the explicitly selected development mode."""
+    try:
+        print(f"\n{'='*50}")
+        print(f"VERIFICATION CODE for {email}")
+        print(f"   Purpose: {purpose}")
+        print(f"   Code: {code}")
+        print(f"   Expires in: {CODE_EXPIRY_SECONDS // 60} minutes")
+        print(f"{'='*50}\n")
+    except Exception:
+        pass
+
+
 def send_verification_code(email: str, purpose: str = "register") -> str:
     """
     Generate and 'send' a verification code.
@@ -133,12 +212,7 @@ def send_verification_code(email: str, purpose: str = "register") -> str:
     
     email_lower = email.strip().lower()
     code = _generate_code()
-    
-    _verification_codes[email_lower] = {
-        "code": code,
-        "expires_at": time.time() + CODE_EXPIRY_SECONDS,
-        "purpose": purpose,
-    }
+    normalized_purpose = _normalize_purpose(purpose)
     
     subject = "GIPC - ვერიფიკაციის კოდი"
     body = f"""გამარჯობა!
@@ -154,126 +228,91 @@ https://gipc.org.ge
 
     settings = get_settings()
     if _is_smtp_mode(settings):
-        if _send_smtp_message(email_lower, subject, body):
-            print(f"Email sent successfully to {email_lower}")
-            return code  # Return early if SMTP succeeded
-        # Fall through to console mode as backup.
-    
-    # Console mode (development) - print code to console and save to file
-    # NOTE: On some Windows setups the default console encoding can't render emoji,
-    # which can raise UnicodeEncodeError and break the endpoint. Keep output ASCII.
-    try:
-        print(f"\n{'='*50}")
-        print(f"VERIFICATION CODE for {email_lower}")
-        print(f"   Purpose: {purpose}")
-        print(f"   Code: {code}")
-        print(f"   Expires in: {CODE_EXPIRY_SECONDS // 60} minutes")
-        print(f"{'='*50}\n")
-    except Exception:
-        # Best-effort logging only; never fail the request because stdout can't render.
-        pass
-    
-    # Also save to file for easy access
-    try:
-        from pathlib import Path
-        log_file = Path(__file__).parent.parent.parent / "verification_codes.txt"
-        with open(log_file, "a", encoding="utf-8") as f:
-            from datetime import datetime
-            f.write(f"\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Email: {email_lower}\n")
-            f.write(f"Code: {code}\n")
-            f.write(f"Purpose: {purpose}\n")
-            f.write("-" * 30 + "\n")
-    except Exception:
-        pass
-    
+        if not _send_smtp_message(email_lower, subject, body):
+            # Never expose a production code through the development fallback.
+            raise RuntimeError("Failed to send verification email")
+    elif _is_console_mode(settings):
+        _emit_console_code(email_lower, purpose, code)
+    else:
+        raise RuntimeError("EMAIL_MODE must be either 'smtp' or 'console'")
+
+    # Store the code only after its configured delivery path succeeds. A failed
+    # SMTP resend therefore leaves any previously delivered code intact.
+    with _verification_lock:
+        _cleanup_expired_locked()
+        _verification_codes[email_lower] = {
+            "code": code,
+            "expires_at": time.time() + CODE_EXPIRY_SECONDS,
+            "purpose": normalized_purpose,
+        }
+
     return code
 
 
-def verify_code(email: str, code: str, purpose: Optional[str] = None) -> bool:
+def verify_code(
+    email: str,
+    code: str,
+    purpose: Optional[str] = None,
+    *,
+    consume: bool = True,
+) -> bool:
+    """Validate a code, enforcing a per-email-and-purpose attempt lockout.
+
+    Consuming verification remains the default for registration, profile
+    updates, and password resets. The public pre-check endpoint uses
+    ``consume=False`` so its existing response contract remains unchanged,
+    while failed pre-checks now count toward the same lockout.
     """
-    Verify a code for the given email.
-    
-    Args:
-        email: The email address
-        code: The code to verify
-        purpose: If provided, also checks that the purpose matches
-    
-    Returns:
-        True if the code is valid, False otherwise
-    """
-    from fastapi import HTTPException, status
-    
-    _cleanup_expired()
-    
     email_lower = email.strip().lower()
-    
-    # Check if account is locked due to too many attempts
-    attempts = _verification_attempts.get(email_lower, {"count": 0, "locked_until": None})
-    if attempts.get("locked_until") and attempts["locked_until"] > time.time():
-        remaining = int(attempts["locked_until"] - time.time())
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"ძალიან ბევრი მცდელობა. სცადეთ {remaining // 60 + 1} წუთის შემდეგ"
+    normalized_purpose = _normalize_purpose(purpose)
+    attempt_key = _attempt_key(email_lower, normalized_purpose)
+    with _verification_lock:
+        _cleanup_expired_locked()
+        attempts = _verification_attempts.get(
+            attempt_key,
+            {"count": 0, "locked_until": None},
         )
-    
-    stored = _verification_codes.get(email_lower)
-    
-    if not stored:
-        # Increment failed attempts
-        _verification_attempts[email_lower] = {
-            "count": attempts.get("count", 0) + 1,
-            "locked_until": None
-        }
-        return False
-    
-    if stored["code"] != code:
-        # Increment failed attempts
-        new_count = attempts.get("count", 0) + 1
-        locked_until = None
-        if new_count >= MAX_VERIFICATION_ATTEMPTS:
-            locked_until = time.time() + LOCKOUT_DURATION_SECONDS
-        
-        _verification_attempts[email_lower] = {
-            "count": new_count,
-            "locked_until": locked_until
-        }
-        
-        if locked_until:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"ძალიან ბევრი მცდელობა. სცადეთ {LOCKOUT_DURATION_SECONDS // 60} წუთის შემდეგ"
-            )
-        
-        return False
-    
-    if purpose and stored["purpose"] != purpose:
-        # Increment failed attempts
-        _verification_attempts[email_lower] = {
-            "count": attempts.get("count", 0) + 1,
-            "locked_until": None
-        }
-        return False
-    
-    # Code is valid - remove it (single use) and reset attempts
-    del _verification_codes[email_lower]
-    _verification_attempts[email_lower] = {"count": 0, "locked_until": None}
-    return True
+        locked_until = attempts.get("locked_until")
+        if locked_until and locked_until > time.time():
+            _raise_locked(locked_until)
+
+        stored = _verification_codes.get(email_lower)
+        candidate_code = str(code or "").strip()
+        stored_code = str(stored.get("code", "")) if stored else ""
+        stored_purpose = _normalize_purpose(stored.get("purpose")) if stored else ""
+
+        # Compare user-controlled values with constant-time comparisons. Unknown
+        # purposes always fail and share one bounded attempt bucket.
+        code_matches = _constant_time_equal(stored_code, candidate_code)
+        purpose_matches = purpose is None or (
+            normalized_purpose != _INVALID_PURPOSE
+            and _constant_time_equal(stored_purpose, normalized_purpose)
+        )
+        if not stored or not code_matches or not purpose_matches:
+            _record_failed_attempt_locked(attempt_key)
+            return False
+
+        if consume:
+            del _verification_codes[email_lower]
+        _verification_attempts[attempt_key] = {"count": 0, "locked_until": None}
+        return True
 
 
 def has_pending_code(email: str) -> bool:
     """Check if there's an unexpired code for this email."""
-    _cleanup_expired()
     email_lower = email.strip().lower()
-    return email_lower in _verification_codes
+    with _verification_lock:
+        _cleanup_expired_locked()
+        return email_lower in _verification_codes
 
 
 def get_remaining_time(email: str) -> int:
     """Get remaining seconds until code expires. Returns 0 if no code exists."""
-    _cleanup_expired()
     email_lower = email.strip().lower()
-    stored = _verification_codes.get(email_lower)
-    if not stored:
-        return 0
-    remaining = int(stored["expires_at"] - time.time())
-    return max(0, remaining)
+    with _verification_lock:
+        _cleanup_expired_locked()
+        stored = _verification_codes.get(email_lower)
+        if not stored:
+            return 0
+        remaining = int(stored["expires_at"] - time.time())
+        return max(0, remaining)

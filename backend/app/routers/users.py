@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Header, UploadFile, File, Request
 from fastapi.responses import FileResponse
@@ -18,12 +19,23 @@ from ..schemas import (
 from ..config import get_settings
 from ..security import hash_code, verify_code, validate_password_strength, get_current_user
 from ..services.media_storage import resolve_storage_path, relative_storage_path, certificate_file_path, delete_storage_file, ensure_media_root
+from ..services.expert_certificate_cleanup import delete_expert_certificate_files
+from ..services.bounded_upload import (
+    DEFAULT_UPLOAD_MAX_BYTES,
+    UploadTooLarge,
+    save_upload_stream,
+)
 from ..services import email_verification
 from ..services.exam_stage import exam_state_payload, expire_if_unused
-from ..rate_limiter import verification_limiter, code_verify_limiter
+from ..rate_limiter import (
+    code_verify_limiter,
+    verification_account_limiter,
+    verification_limiter,
+)
 
 
 router = APIRouter()
+CERTIFICATE_UPLOAD_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
 
 
 def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
@@ -103,53 +115,9 @@ def _delete_certificate_files(cert: Certificate, user_id: int) -> None:
         # Best-effort: continue even if directory deletion fails
         pass
 
-    # For expert certificates, also delete the expert directory if it exists
-    # Check if this is an expert certificate with EX-... unique_code
-    if cert.level and (cert.level.lower() == "expert") and cert.unique_code:
-        unique_code = cert.unique_code.strip()
-        # Check if unique_code matches EX-... pattern
-        if unique_code.startswith("EX-"):
-            try:
-                media_root = ensure_media_root()
-                expert_dir = media_root / "expert" / unique_code
-                if expert_dir.exists() and expert_dir.is_dir():
-                    # Delete all certificate PDF files in the expert directory
-                    # Look for files that start with "certificate" and end with ".pdf"
-                    for pdf_file in expert_dir.glob("certificate*.pdf"):
-                        try:
-                            if pdf_file.is_file():
-                                pdf_file.unlink()
-                        except OSError:
-                            # Best-effort: continue if file deletion fails
-                            pass
-                    
-                    # Try to remove the directory if it's now empty
-                    try:
-                        # Check if directory is empty (no files or only empty subdirectories)
-                        if not any(expert_dir.iterdir()):
-                            expert_dir.rmdir()
-                        else:
-                            # Directory still has files, try to remove empty subdirectories
-                            for item in expert_dir.iterdir():
-                                if item.is_dir():
-                                    try:
-                                        if not any(item.iterdir()):
-                                            item.rmdir()
-                                    except OSError:
-                                        pass
-                            # Try to remove the directory again if it's now empty
-                            try:
-                                if not any(expert_dir.iterdir()):
-                                    expert_dir.rmdir()
-                            except OSError:
-                                pass
-                    except OSError:
-                        # Directory not empty or other error, that's okay
-                        pass
-            except Exception:
-                # Best-effort: continue even if expert directory deletion fails
-                pass
-
+    # Expert certificate cleanup treats the persisted code as untrusted.
+    if cert.level and cert.level.lower() == "expert" and cert.unique_code:
+        delete_expert_certificate_files(cert.unique_code)
 
 # ============== Email Verification Endpoints ==============
 
@@ -161,14 +129,20 @@ def send_verification_code_endpoint(
 ):
     """
     Send a 4-digit verification code to the given email.
-    Purpose can be 'register' or 'update'.
-    Rate limited: 3 requests per minute per IP.
+    Purpose can be 'register', 'update', or 'password_reset'.
+    Rate limited per IP and per normalized email/purpose pair.
     """
     # Rate limiting: 3 codes per minute per IP
     verification_limiter.check(request)
     
     email_lower = payload.email.strip().lower()
-    purpose = payload.purpose
+    purpose = (payload.purpose or "").strip().lower()
+    if purpose not in {"register", "update", "password_reset"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="invalid verification purpose",
+        )
+    verification_account_limiter.check_key((email_lower, purpose))
     
     # For registration, check that email is not already taken
     if purpose == "register":
@@ -202,21 +176,15 @@ def verify_code_endpoint(request: Request, payload: VerifyCodeRequest):
     
     email_lower = payload.email.strip().lower()
     
-    # Just check if code exists and matches (peek, don't consume)
-    from ..services.email_verification import _verification_codes, _cleanup_expired
-    _cleanup_expired()
-    
-    stored = _verification_codes.get(email_lower)
-    if not stored:
-        return VerifyCodeResponse(valid=False)
-    
-    if stored["code"] != payload.code:
-        return VerifyCodeResponse(valid=False)
-    
-    if payload.purpose and stored["purpose"] != payload.purpose:
-        return VerifyCodeResponse(valid=False)
-    
-    return VerifyCodeResponse(valid=True)
+    # Preserve the existing non-consuming response contract, but use the same
+    # attempt tracking and lockout as the consuming verification flows.
+    valid = email_verification.verify_code(
+        email_lower,
+        payload.code,
+        payload.purpose,
+        consume=False,
+    )
+    return VerifyCodeResponse(valid=valid)
 
 
 # ============== Registration ==============
@@ -697,26 +665,56 @@ def upload_certificate_file(
     if content_type not in ("application/pdf", "application/x-pdf", "binary/octet-stream", "application/octet-stream"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ფაილი უნდა იყოს PDF")
 
-    target = certificate_file_path(user_id, "certificate.pdf")
-    tmp = target.with_suffix(".tmp")
+    # Keep the currently published file intact until the database accepts the
+    # replacement. A unique server-side name also avoids overwriting a legacy
+    # certificate.pdf before the commit succeeds.
+    previous_file_path = cert.file_path
+    target = certificate_file_path(user_id, f"certificate-{uuid4().hex}.pdf")
+    new_file_saved = False
 
-    with open(tmp, "wb") as out:
-        while True:
-            chunk = file.file.read(1024 * 1024)
-            if not chunk:
-                break
-            out.write(chunk)
-    tmp.replace(target)
-    size = target.stat().st_size
+    try:
+        size = save_upload_stream(
+            file.file,
+            target,
+            max_bytes=CERTIFICATE_UPLOAD_MAX_BYTES,
+        )
+        new_file_saved = True
 
-    # Update DB meta
-    cert.file_path = relative_storage_path(target)
-    cert.filename = "certificate.pdf"
-    cert.mime_type = "application/pdf"
-    cert.size_bytes = int(size)
-    cert.updated_at = datetime.utcnow()
-    db.add(cert)
-    db.commit()
+        # Update DB meta. The filename remains stable so downloads keep the
+        # existing public filename even though storage uses a unique name.
+        new_file_path = relative_storage_path(target)
+        cert.file_path = new_file_path
+        cert.filename = "certificate.pdf"
+        cert.mime_type = "application/pdf"
+        cert.size_bytes = int(size)
+        cert.updated_at = datetime.utcnow()
+        db.add(cert)
+        db.commit()
+    except UploadTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 100MB)",
+        ) from exc
+    except BaseException:
+        # A write/path/DB failure must leave the old certificate available and
+        # must not leave a partial or unreferenced replacement behind.
+        try:
+            db.rollback()
+        finally:
+            if new_file_saved:
+                try:
+                    target.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        raise
+
+    # Only after the new path is committed may the old file be removed. The
+    # storage helper rejects paths outside MEDIA_ROOT and supports legacy paths.
+    if previous_file_path and previous_file_path != new_file_path:
+        try:
+            delete_storage_file(previous_file_path)
+        except Exception:
+            pass
     return None
 
 

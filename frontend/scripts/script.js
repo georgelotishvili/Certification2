@@ -778,19 +778,39 @@ document.addEventListener('DOMContentLoaded', () => {
       if (fromDrawer) document.body.classList.remove('menu-open');
     }
 
+    async function revokeServerSession(token) {
+      if (!token) return;
+      try {
+        await fetch(`${API_BASE}/auth/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          credentials: 'same-origin',
+          keepalive: true,
+        });
+      } catch (error) {
+        console.warn('Server session revoke failed during logout', error);
+      }
+    }
+
+    function clearLocalSession() {
+      try { setLoggedIn(false); } catch {}
+      try { localStorage.removeItem('auth_token'); } catch {}
+      try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+    }
+
     function performLogout() {
       if (!isLoggedIn()) return;
       if (!confirm('ნამდვილად გსურთ გასვლა?')) return;
-      setLoggedIn(false);
-      try {
-        localStorage.removeItem(KEYS.CURRENT_USER);
-      } catch {}
+      let token = '';
+      try { token = localStorage.getItem('auth_token') || ''; } catch {}
+      clearLocalSession();
       updateAuthUI();
       updateBanner();
       updateAdminLinkVisibility();
       document.dispatchEvent(new CustomEvent('auth:logout'));
       notify('გასვლა შესრულებულია', 'success');
       closeModal();
+      void revokeServerSession(token);
     }
 
     function generateUniqueCode() {

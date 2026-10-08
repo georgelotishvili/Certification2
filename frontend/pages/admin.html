@@ -11,18 +11,18 @@
     <script src="../scripts/admin/blocks.js" defer></script>
     <script src="../scripts/admin/multi-apartment.js" defer></script>
     <script src="../scripts/admin/multi-functional.js" defer></script>
-    <script src="../scripts/admin/statements.js" defer></script>
+    <script src="../scripts/admin/statements.js?v=20261008-1" defer></script>
     <script src="../scripts/admin/results.js" defer></script>
     <script src="../scripts/admin/project-results.js" defer></script>
     <script src="../scripts/admin/certificate.js?v=4" defer></script>
-    <script src="../scripts/admin/users.js?v=20260605" defer></script>
+    <script src="../scripts/admin/users.js?v=20261008-4" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
     <script src="../vendor/mammoth.browser.min.js" defer></script>
     <script src="../scripts/admin/documents.js" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=2" />
+    <link rel="stylesheet" href="../styles/admin.css?v=5" />
   </head>
   <body>
     <header>
@@ -184,6 +184,18 @@
               <label class="users-filter-label">
                 <input id="filterCertified" type="checkbox" />
                 <span>სერტიფიცირებული პირები</span>
+              </label>
+              <div class="users-statements-filter">
+                <label class="users-filter-label" title="თარიღის გარეშე — მხოლოდ წაუკითხავი; თარიღით — იმ დღეს მიღებული ყველა განცხადება">
+                  <input id="filterStatements" type="checkbox" />
+                  <span>განცხადებები</span>
+                </label>
+                <input id="statementsDate" class="users-filter-date" type="date" aria-label="განცხადების მიღების თარიღი" title="არჩეული დღე თბილისის დროით, 00:00–24:00; წაკითხვის მიუხედავად" />
+                <button id="clearStatementsDate" class="users-filter-date-clear" type="button" aria-label="განცხადების თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
+              </div>
+              <label class="users-filter-label" title="პირები, რომლებსაც წაკითხული, მაგრამ ჯერ უპასუხო განცხადება აქვთ">
+                <input id="filterPendingStatements" type="checkbox" />
+                <span>უპასუხო განცხადებები</span>
               </label>
             </div>
           </div>
@@ -729,6 +741,6 @@
 
     <script src="../vendor/jspdf.umd.min.js"></script>
     <script src="../vendor/svg2pdf.min.js"></script>
-    <script src="../scripts/admin.js?v=6" defer></script>
+    <script src="../scripts/admin.js?v=10" defer></script>
   </body>
 </html>

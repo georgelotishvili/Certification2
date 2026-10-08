@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import List
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status, UploadFile, File, Path as FPath
 from fastapi.responses import FileResponse
@@ -11,6 +12,12 @@ from ..database import get_db
 from ..models import AppFile
 from ..schemas import AppFileOut
 from ..services.media_storage import ensure_media_root, resolve_storage_path, delete_storage_file, relative_storage_path
+from ..services.bounded_upload import (
+    APP_RELEASE_UPLOAD_MAX_BYTES,
+    DEFAULT_UPLOAD_MAX_BYTES,
+    UploadTooLarge,
+    save_async_upload,
+)
 from ..routers.admin import _require_admin
 
 
@@ -20,6 +27,7 @@ router = APIRouter()
 
 _APPLICATION_FORM_DIR = "application_form"
 _APPLICATION_FORM_EXTENSIONS = {".pdf", ".doc", ".docx"}
+APPLICATION_FORM_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
 
 
 def _ensure_application_form_dir():
@@ -32,7 +40,7 @@ def _ensure_application_form_dir():
 def _get_application_form_path():
     d = _ensure_application_form_dir()
     for f in d.iterdir():
-        if f.is_file():
+        if f.is_file() and not f.name.startswith(".upload-"):
             return f
     return None
 
@@ -72,19 +80,37 @@ async def admin_upload_application_form(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF or Word files allowed")
 
     d = _ensure_application_form_dir()
-    for existing in d.iterdir():
-        if existing.is_file():
-            existing.unlink()
-
+    previous_files = [
+        existing
+        for existing in d.iterdir()
+        if existing.is_file() and not existing.name.startswith(".upload-")
+    ]
     dest = d / os.path.basename(file.filename or f"form{ext}")
-    size = 0
-    with open(dest, "wb") as out:
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            out.write(chunk)
-            size += len(chunk)
+    temporary = d / f".upload-{uuid4().hex}"
+    try:
+        size = await save_async_upload(
+            file,
+            temporary,
+            max_bytes=APPLICATION_FORM_MAX_BYTES,
+        )
+        temporary.replace(dest)
+    except UploadTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 100MB)",
+        ) from exc
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    for existing in previous_files:
+        if existing != dest:
+            try:
+                existing.unlink()
+            except OSError:
+                pass
 
     return {"filename": dest.name, "size_bytes": size}
 
@@ -124,6 +150,7 @@ def _ensure_app_files_dir():
 
 
 ALLOWED_EXTENSIONS = {".zip", ".rar", ".7z", ".exe", ".msi"}
+APP_FILE_MAX_BYTES = APP_RELEASE_UPLOAD_MAX_BYTES
 
 
 def _validate_app_file(upload: UploadFile | None) -> None:
@@ -159,14 +186,11 @@ async def _save_app_file(upload: UploadFile) -> tuple[str, str, str, int | None]
         candidate = app_dir / f"{base}_{suffix}{ext}"
         suffix += 1
 
-    size = 0
-    with open(candidate, "wb") as out:
-        while True:
-            chunk = await upload.read(1024 * 1024)
-            if not chunk:
-                break
-            out.write(chunk)
-            size += len(chunk)
+    size = await save_async_upload(
+        upload,
+        candidate,
+        max_bytes=APP_FILE_MAX_BYTES,
+    )
 
     rel_path = relative_storage_path(candidate)
     mime_type = upload.content_type or "application/octet-stream"
@@ -195,7 +219,13 @@ async def admin_create_app_file(
     _require_admin(db, authorization)
     _validate_app_file(file)
 
-    storage_path, stored_filename, mime_type, size_bytes = await _save_app_file(file)
+    try:
+        storage_path, stored_filename, mime_type, size_bytes = await _save_app_file(file)
+    except UploadTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 1GB)",
+        ) from exc
 
     app_file = AppFile(
         storage_path=storage_path,
@@ -203,8 +233,16 @@ async def admin_create_app_file(
         mime_type=mime_type,
         size_bytes=size_bytes,
     )
-    db.add(app_file)
-    db.commit()
+    try:
+        db.add(app_file)
+        db.commit()
+    except BaseException:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        delete_storage_file(storage_path)
+        raise
     db.refresh(app_file)
 
     return _app_file_out(app_file)

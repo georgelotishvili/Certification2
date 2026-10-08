@@ -24,6 +24,7 @@ try:
     from backend.scripts.migrate_certificate_score import run as run_certificate_score_migration
     from backend.scripts.migrate_certificate_file_cols import run as run_certificate_file_cols_migration
     from backend.scripts.migrate_statements_attachment import run as run_statements_attachment_migration
+    from backend.scripts.migrate_statements_answered import run as run_statements_answered_migration
     from backend.scripts.migrate_exam_permission import run as run_exam_permission_migration
     from backend.scripts.migrate_multi_apartment import run as run_multi_apartment_migration
     from backend.scripts.migrate_multi_functional import run as run_multi_functional_migration
@@ -39,6 +40,7 @@ except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.
     from scripts.migrate_certificate_score import run as run_certificate_score_migration  # type: ignore
     from scripts.migrate_certificate_file_cols import run as run_certificate_file_cols_migration  # type: ignore
     from scripts.migrate_statements_attachment import run as run_statements_attachment_migration  # type: ignore
+    from scripts.migrate_statements_answered import run as run_statements_answered_migration  # type: ignore
     from scripts.migrate_exam_permission import run as run_exam_permission_migration  # type: ignore
     from scripts.migrate_multi_apartment import run as run_multi_apartment_migration  # type: ignore
     from scripts.migrate_multi_functional import run as run_multi_functional_migration  # type: ignore
@@ -75,6 +77,10 @@ def create_app() -> FastAPI:
             migrate()
         except Exception:
             pass
+
+    # Required by the Statement mapper: surface a migration failure instead of
+    # starting with missing columns and failing all statement operations later.
+    run_statements_answered_migration()
 
     ensure_media_root()
 
