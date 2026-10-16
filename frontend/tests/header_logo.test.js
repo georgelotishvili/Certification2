@@ -8,21 +8,20 @@ const read = (relative) => fs.readFileSync(path.join(frontend, relative), 'utf8'
 const svg = read('assets/svg/logo.svg');
 
 // Asset-only checks: no browser session, server request, or account mutation.
-test('header logo retains the supplied vector canvas and three paths', () => {
+test('header logo retains the supplied vector canvas and paths', () => {
   assert.match(svg, /<svg\b[^>]*xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
-  assert.match(svg, /\bviewBox="0 0 73\.74 24\.16"/);
+  assert.match(svg, /\bviewBox="0 0 37297\.05 12218\.61"/);
   const paths = [...svg.matchAll(/<path\b([^>]*)\/>/g)];
-  assert.equal(paths.length, 3);
+  assert.equal(paths.length, 8);
   assert.deepEqual(paths.map(([, attributes]) => attributes.match(/\bclass="([^"]+)"/)[1]),
-    ['fil0', 'fil1', 'fil2']);
+    ['fil0', 'fil1', 'fil1', 'fil1', 'fil1', 'fil1', 'fil0', 'fil1']);
   for (const [, attributes] of paths) assert.match(attributes, /\bd="M[^"]+"/);
   assert.match(svg, /<\/svg>\s*$/);
 });
 
-test('header logo preserves red, blue, white, and distinct fill rules', () => {
+test('header logo preserves red and blue brand fills and evenodd fill rules', () => {
   assert.match(svg, /\.fil0\s*\{\s*fill:\s*#EA1F27\s*\}/);
   assert.match(svg, /\.fil1\s*\{\s*fill:\s*#1C468C\s*\}/);
-  assert.match(svg, /\.fil2\s*\{\s*fill:\s*white;\s*fill-rule:\s*nonzero\s*\}/);
   assert.match(svg.match(/<svg\b[^>]*>/)[0], /fill-rule:evenodd;\s*clip-rule:evenodd/);
 });
 
@@ -45,7 +44,7 @@ test('shared header uses the versioned logo asset and meaningful alternative tex
   const header = read('partials/header.html');
   const logoContainer = header.match(/<div\s+class="logo">([\s\S]*?)<\/div>/);
   assert.ok(logoContainer);
-  assert.match(logoContainer[1], /<img\s+src="\.\.\/assets\/svg\/logo\.svg\?v=20261008-1"\s+alt="GIPC"\s*\/>/);
+  assert.match(logoContainer[1], /<img\s+src="\.\.\/assets\/svg\/logo\.svg\?v=20261016-1"\s+alt="GIPC"\s*\/>/);
   assert.equal((header.match(/assets\/svg\/logo\.svg/g) || []).length, 1);
 });
 

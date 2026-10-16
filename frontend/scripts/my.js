@@ -111,12 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else alert(String(message || ''));
   };
 
-  function attachCopyTargets() {
-    try {
-      if (!PUBLIC_VIEW) window.Utils?.attachCopyButton?.(DOM.pfCode);
-      window.Utils?.attachCopyButton?.(DOM.certCode);
-    } catch {}
-  }
+  function attachCopyTargets() {}
 
   function isLoggedIn() { try { return window.Auth?.isLoggedIn?.() === true; } catch { return false; } }
   function getCurrentUser() { try { return window.Auth?.getCurrentUser?.() || null; } catch { return null; } }

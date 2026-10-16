@@ -371,6 +371,20 @@
         const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
         li.innerHTML = li.innerHTML.replace(cleanBulletRegex, '').trim();
       });
+
+      // ცალკე მდგომი bold აბზაცების (მთავარი სათაურებისა და მუხლების) მონიშვნა
+      const topParagraphs = Array.from(container.children).filter(el => el.tagName === 'P');
+      topParagraphs.forEach((p, idx) => {
+        const fullText = (p.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!fullText) return;
+        const boldChild = p.querySelector(':scope > strong, :scope > b');
+        if (boldChild && p.children.length === 1) {
+          const boldText = (boldChild.textContent || '').replace(/\s+/g, ' ').trim();
+          if (boldText === fullText && !/^\d+\.\d+/.test(fullText)) {
+            p.classList.add(idx === 0 ? 'site-doc-lead-title' : 'site-doc-section-title');
+          }
+        }
+      });
     } catch (e) { console.error('sanitizeWordStyles error:', e); }
   }
 
@@ -379,7 +393,10 @@
       const els = getSiteInfoElements();
       if (!els) return;
 
-      if (els.body) els.body.innerHTML = '<p style="opacity:.7">იტვირთება...</p>';
+      if (els.body) {
+        els.body.dataset.infoMode = 'document';
+        els.body.innerHTML = '<p class="site-info-state">იტვირთება...</p>';
+      }
       els.modal.classList.add('show');
       els.modal.setAttribute('aria-hidden', 'false');
       document.body.classList.add('modal-open');
@@ -394,13 +411,16 @@
       
       if (els.title) els.title.textContent = doc.title || 'დოკუმენტი';
       if (els.body) {
-        renderSafeDocumentHtml(els.body, doc.content);
-        sanitizeWordStyles(els.body);
+        const sheet = document.createElement('article');
+        sheet.className = 'site-doc-sheet';
+        renderSafeDocumentHtml(sheet, doc.content);
+        sanitizeWordStyles(sheet);
+        els.body.replaceChildren(sheet);
       }
     } catch (err) {
       console.error('Failed to load document:', err);
       const els = getSiteInfoElements();
-      if (els?.body) els.body.innerHTML = '<p style="color:#b91c1c">დოკუმენტი ვერ ჩაიტვირთა.</p>';
+      if (els?.body) els.body.innerHTML = '<p class="site-info-state site-info-state--error">დოკუმენტი ვერ ჩაიტვირთა.</p>';
     }
   }
 
@@ -454,19 +474,19 @@
       if (!container) return;
       const listEl = container.querySelector('#guideVideosPublic') || container;
       const API_BASE = getApiBase();
-      listEl.innerHTML = '<p style="opacity:.7">ვიდეოები იტვირთება...</p>';
+      listEl.innerHTML = '<p class="site-info-state">ვიდეოები იტვირთება...</p>';
       const response = await fetch(`${API_BASE}/guide/videos`, { cache: 'no-cache' });
       if (!response.ok) {
-        listEl.innerHTML = '<p style="color:#b91c1c">ვიდეოების სია ვერ ჩაიტვირთა. სცადეთ მოგვიანებით.</p>';
+        listEl.innerHTML = '<p class="site-info-state site-info-state--error">ვიდეოების სია ვერ ჩაიტვირთა. სცადეთ მოგვიანებით.</p>';
         return;
       }
       const items = await response.json();
       if (!Array.isArray(items) || !items.length) {
-        listEl.innerHTML = '<p style="opacity:.8">ამ ეტაპზე გზამკვლევის ვიდეო არ არის დამატებული.</p>';
+        listEl.innerHTML = '<p class="site-info-state">ამ ეტაპზე გზამკვლევის ვიდეო არ არის დამატებული.</p>';
         return;
       }
       listEl.innerHTML = '';
-      items.forEach((video) => {
+      items.forEach((video, idx) => {
         const card = document.createElement('div');
         card.className = 'guide-video-public-card';
         const title = video.title || 'ვიდეო';
@@ -475,9 +495,13 @@
 
         const head = document.createElement('div');
         head.className = 'guide-video-public-head';
+        const badgeEl = document.createElement('span');
+        badgeEl.className = 'guide-video-index';
+        badgeEl.textContent = String(idx + 1).padStart(2, '0');
         const titleEl = document.createElement('div');
         titleEl.className = 'guide-video-public-title';
         titleEl.textContent = title;
+        head.appendChild(badgeEl);
         head.appendChild(titleEl);
 
         card.appendChild(head);
@@ -518,7 +542,7 @@
       try {
         if (container) {
           const listEl = container.querySelector('#guideVideosPublic') || container;
-          listEl.innerHTML = '<p style="color:#b91c1c">ვიდეოების ჩატვირთვა ვერ მოხერხდა.</p>';
+          listEl.innerHTML = '<p class="site-info-state site-info-state--error">ვიდეოების ჩატვირთვა ვერ მოხერხდა.</p>';
         }
       } catch {}
     }
@@ -539,7 +563,10 @@
       };
       if (els.title) els.title.textContent = titles[type] || 'ინფორმაცია';
 
-      if (els.body) els.body.innerHTML = '<p style="opacity:.7">იტვირთება...</p>';
+      if (els.body) {
+        els.body.dataset.infoMode = type === 'guide' ? 'guide' : 'document';
+        els.body.innerHTML = '<p class="site-info-state">იტვირთება...</p>';
+      }
       els.modal.classList.add('show');
       els.modal.setAttribute('aria-hidden', 'false');
       document.body.classList.add('modal-open');
@@ -558,7 +585,7 @@
       }
     } catch {
       const els = getSiteInfoElements();
-      if (els?.body) els.body.innerHTML = '<p style="color:#b91c1c">ვერ ჩაიტვირთა შიგთავსი. სცადეთ მოგვიანებით.</p>';
+      if (els?.body) els.body.innerHTML = '<p class="site-info-state site-info-state--error">ვერ ჩაიტვირთა შიგთავსი. სცადეთ მოგვიანებით.</p>';
     }
   }
 
@@ -802,9 +829,11 @@
       statementsOverlay: document.getElementById('userStatementsOverlay'),
       statementsClose: document.getElementById('userStatementsClose'),
       statementsList: document.getElementById('userStatementsList'),
+      statementsCount: document.getElementById('userStatementsCount'),
       statementsMeta: document.getElementById('userStatementsMeta'),
       statementsForm: document.getElementById('userStatementForm'),
       statementsTextarea: document.querySelector('#userStatementForm textarea[name="message"]'),
+      statementFileControls: document.getElementById('statementFileControls'),
       statementFileChoose: document.getElementById('statementFileChoose'),
       statementFileInput: document.getElementById('statementFileInput'),
       statementFileDisplay: document.getElementById('statementFileDisplay'),
@@ -856,8 +885,15 @@
       statementsDOM.body.classList.remove('modal-open');
     }
 
+    function updateCount(count) {
+      if (statementsDOM.statementsCount) {
+        statementsDOM.statementsCount.textContent = String(count);
+      }
+    }
+
     function renderPlaceholder(text, modifier) {
       if (!statementsDOM.statementsList) return;
+      if (modifier === 'statements-empty') updateCount(0);
       const placeholder = document.createElement('div');
       placeholder.className = `statements-placeholder${modifier ? ` ${modifier}` : ''}`;
       placeholder.textContent = text;
@@ -867,6 +903,7 @@
 
     function renderList(items) {
       if (!statementsDOM.statementsList) return;
+      updateCount(items.length);
       if (!items.length) {
         renderPlaceholder('განცხადებები ჯერ არ გაქვთ.', 'statements-empty');
         return;
@@ -882,6 +919,20 @@
         dateSpan.className = 'statement-date';
         dateSpan.textContent = window.Utils?.formatDateTime?.(item.created_at);
         summary.appendChild(dateSpan);
+
+        const rawPreview = (item.message || '').replace(/\s+/g, ' ').trim();
+        if (rawPreview) {
+          const previewSpan = document.createElement('span');
+          previewSpan.className = 'statement-preview';
+          previewSpan.textContent = rawPreview.length > 68 ? `${rawPreview.slice(0, 65)}…` : rawPreview;
+          summary.appendChild(previewSpan);
+        }
+
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = 'statement-sent-badge';
+        badgeSpan.textContent = 'მიღებულია';
+        summary.appendChild(badgeSpan);
+
         details.appendChild(summary);
         const message = document.createElement('div');
         message.className = 'statement-message';
@@ -1070,6 +1121,7 @@
       }
       if (statementsDOM.statementsList) statementsDOM.statementsList.innerHTML = '';
       if (statementsDOM.statementsMeta) statementsDOM.statementsMeta.textContent = '';
+      updateCount(0);
     }
 
     function updateFileDisplay() {
@@ -1077,8 +1129,10 @@
       const file = statementsDOM.statementFileInput.files && statementsDOM.statementFileInput.files[0];
       if (file) {
         statementsDOM.statementFileDisplay.value = file.name;
+        statementsDOM.statementFileControls?.classList?.add?.('has-file');
       } else {
         statementsDOM.statementFileDisplay.value = '';
+        statementsDOM.statementFileControls?.classList?.remove?.('has-file');
       }
     }
 
