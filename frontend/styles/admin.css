@@ -5100,8 +5100,52 @@ body.modal-open {
 }
 
 .user-name {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   flex: 1 1 auto;
   min-width: 150px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-strong, #1d2744);
+}
+
+.user-name-text {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-strong, #1d2744);
+}
+
+.user-cert-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.user-cert-dot[hidden] {
+  display: none !important;
+}
+
+.user-cert-dot.is-architect {
+  background: #1e40af;
+  box-shadow: 0 0 0 2.5px rgba(30, 64, 175, 0.18);
+}
+
+.user-cert-dot.is-expert {
+  background: #b91c1c;
+  box-shadow: 0 0 0 2.5px rgba(185, 28, 28, 0.18);
+}
+
+.user-cert-dot.is-municipal {
+  background: #047857;
+  box-shadow: 0 0 0 2.5px rgba(4, 120, 87, 0.18);
+}
+
+.user-cert-dot.is-suspended {
+  background: #6b7280;
+  box-shadow: 0 0 0 2.5px rgba(107, 114, 128, 0.18);
 }
 
 .user-controls {
