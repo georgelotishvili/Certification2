@@ -1,0 +1,25 @@
+{
+  "release": "admin-release-20261016-01",
+  "created_at": "2026-10-16T18:43:08.881293+00:00",
+  "host": "gipcadmin@148.251.167.229",
+  "files": [
+    {
+      "path": "frontend/pages/admin.html",
+      "before_sha256": "b33b1b3224a667290ede3109c3573984f2e72c913805d62b15cd0fcb18d29687",
+      "after_sha256": "f21af4f3091063baac33c0f161dff027a0a793895bc6b7a26a662372c75b1afa",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin/app-files.js",
+      "before_sha256": "3543eca48e00e02032a9cb48b0b0ccfe0718a842acf98efdaca921e7f62f99fa",
+      "after_sha256": "28414faff3244ad45e84eecdf73d96d0004e87b94f821493ad5f29e1c480bed0",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/styles/admin.css",
+      "before_sha256": "edbd43e2f8033c03cba3a8fa07c96ee58b2ee33d4ba8959610e89c3ee3e4838f",
+      "after_sha256": "cddeee7eceb7b5f5d03826212cac34a2dae5577a99aec8b67a4c097bfedf970f",
+      "existed_before": true
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "release": "admin-release-20261016-01",
+  "deployed_at": "2026-10-16T18:43:26.296821+00:00",
+  "remote": {
+    "ok": true,
+    "service": "active",
+    "openapi_status": 200,
+    "has_admin_users_route": true,
+    "has_planning_templates_route": true,
+    "verified_files": {
+      "frontend/pages/admin.html": true,
+      "frontend/scripts/admin/app-files.js": true,
+      "frontend/styles/admin.css": true
+    }
+  },
+  "public_checks": {
+    "https://gipc.org.ge/pages/admin.html": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "f21af4f3091063baac33c0f161dff027a0a793895bc6b7a26a662372c75b1afa"
+    },
+    "https://gipc.org.ge/scripts/admin/app-files.js": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "28414faff3244ad45e84eecdf73d96d0004e87b94f821493ad5f29e1c480bed0"
+    },
+    "https://gipc.org.ge/styles/admin.css": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "cddeee7eceb7b5f5d03826212cac34a2dae5577a99aec8b67a4c097bfedf970f"
+    }
+  }
+}

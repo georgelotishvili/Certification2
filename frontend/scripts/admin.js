@@ -194,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'მრავალფუნქციური': 'multiFunctional',
     'გზამკვლევი': 'guide',
     'დოკუმენტები': 'documents',
+    'დამატება': 'documents',
     'APP': 'app',
   };
 
@@ -257,6 +258,11 @@ document.addEventListener('DOMContentLoaded', () => {
         link.removeAttribute('aria-current');
       }
     });
+
+    const otherChildTargets = new Set(['guide', 'regulations', 'applicationForm']);
+    const isOtherChildActive = !!activeName && otherChildTargets.has(activeName);
+    document.querySelector('.other-trigger')?.classList.toggle('active', isOtherChildActive);
+    document.querySelector('.drawer-other-trigger')?.classList.toggle('active', isOtherChildActive);
   }
 
   function getCurrentUser() {
@@ -359,6 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
     on(DOM.drawerLoginBtn, 'click', goHome);
 
     // "სხვადასხვა" dropdown handling
+    const navOther = document.querySelector('.nav-other');
     const otherTrigger = document.querySelector('.other-trigger');
     const otherDropdown = document.querySelector('.other-dropdown');
     const drawerOtherTrigger = document.querySelector('.drawer-other-trigger');
@@ -366,11 +373,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeOtherDropdown() {
       otherDropdown?.classList.remove('show');
+      navOther?.classList.remove('open');
+      otherTrigger?.setAttribute('aria-expanded', 'false');
     }
     function toggleOtherDropdown(e) {
       e?.preventDefault();
       e?.stopPropagation();
-      otherDropdown?.classList.toggle('show');
+      const willOpen = !otherDropdown?.classList.contains('show');
+      otherDropdown?.classList.toggle('show', willOpen);
+      navOther?.classList.toggle('open', willOpen);
+      otherTrigger?.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      otherTrigger?.blur?.();
     }
     function closeDrawerOtherSubmenu() {
       if (drawerOtherSubmenu) drawerOtherSubmenu.hidden = true;
@@ -394,6 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetSection = getNavTarget(link);
         if (!targetSection) return;
         event.preventDefault();
+        link.blur?.();
         closeMenu();
         closeOtherDropdown();
         closeDrawerOtherSubmenu();

@@ -237,6 +237,26 @@
     return `${day}-${month}-${year} ${hours}:${mins}`;
   }
 
+  function parseTimestampMs(isoStr) {
+    if (!isoStr) return 0;
+    const d = new Date(String(isoStr).trim());
+    const ms = d.getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  }
+
+  function compareHistoryItemsChronologically(a, b) {
+    const msDiff = parseTimestampMs(b.sentAt) - parseTimestampMs(a.sentAt);
+    if (msDiff !== 0) return msDiff;
+    const sentStrDiff = String(b.sentAt || '').localeCompare(String(a.sentAt || ''));
+    if (sentStrDiff !== 0) return sentStrDiff;
+    const dateDiff = String(b.examDate || '').localeCompare(String(a.examDate || ''));
+    if (dateDiff !== 0) return dateDiff;
+    const timeDiff = String(b.eventTime || '').localeCompare(String(a.eventTime || ''));
+    if (timeDiff !== 0) return timeDiff;
+    return Number(b.statementId || b.letterId || b.scheduleId || 0)
+      - Number(a.statementId || a.letterId || a.scheduleId || 0);
+  }
+
   function extractIsoDateFromTimestamp(isoStr) {
     if (!isoStr) return '';
     const d = new Date(isoStr);
@@ -534,7 +554,7 @@
             ) || null;
           }
           if (letter) matchedLetterIds.add(letter.id);
-          const sentAtRaw = letter ? (letter.sent_at || letter.created_at || null) : (sched.created_at || null);
+          const sentAtRaw = letter ? (letter.sent_at || letter.created_at || sched.created_at || null) : (sched.created_at || null);
           combined.push({
             key: `sched-${sched.id}`,
             mode: 'exam',
@@ -553,7 +573,7 @@
             attachmentFilename: letter ? letter.attachment_filename : null,
             toEmail: (letter && letter.to_email) || user.email || '',
             sentAt: sentAtRaw,
-            sentAtDisplay: formatTimestampDisplay(letter?.sent_at || null),
+            sentAtDisplay: formatTimestampDisplay(sentAtRaw),
             sentDateIso: extractIsoDateFromTimestamp(sentAtRaw),
             isStandaloneLetter: false,
           });
@@ -592,12 +612,7 @@
           });
         }
 
-        combined.sort((a, b) => (
-          String(b.examDate || '').localeCompare(String(a.examDate || ''))
-          || String(b.eventTime || '').localeCompare(String(a.eventTime || ''))
-          || String(b.sentAt || '').localeCompare(String(a.sentAt || ''))
-          || Number(b.scheduleId || b.letterId || b.statementId || 0) - Number(a.scheduleId || a.letterId || a.statementId || 0)
-        ));
+        combined.sort(compareHistoryItemsChronologically);
         return combined;
       }
 
@@ -1511,7 +1526,7 @@
                     ${checkboxesHtml}
                   </div>
                   <div class="exam-list-utility-actions">
-                    <button type="button" class="exam-list-utility-btn exam-list-expand-all-btn">ყველა ტექსტის გაშლა</button>
+                    <button type="button" class="exam-list-utility-btn exam-list-expand-all-btn">ყველა ბარათის გაშლა</button>
                     <button type="button" class="exam-list-utility-btn exam-list-reset-filters-btn" hidden>ფილტრის გასუფთავება</button>
                   </div>
                 </div>
@@ -1791,12 +1806,7 @@
           });
 
           filtered.sort((a, b) => {
-            const cmp = (
-              String(b.examDate || '').localeCompare(String(a.examDate || ''))
-              || String(b.eventTime || '').localeCompare(String(a.eventTime || ''))
-              || String(b.sentAt || '').localeCompare(String(a.sentAt || ''))
-              || Number(b.scheduleId || b.letterId || b.statementId || 0) - Number(a.scheduleId || a.letterId || a.statementId || 0)
-            );
+            const cmp = compareHistoryItemsChronologically(a, b);
             return sortOrder === 'asc' ? -cmp : cmp;
           });
 
@@ -1820,7 +1830,7 @@
               : `სულ: ${allItems.length} ჩანაწერი`;
           }
           if (expandAllBtn) {
-            expandAllBtn.textContent = expandAllTexts ? 'ყველა ტექსტის დაკეცვა' : 'ყველა ტექსტის გაშლა';
+            expandAllBtn.textContent = expandAllTexts ? 'ყველა ბარათის დაკეცვა' : 'ყველა ბარათის გაშლა';
             expandAllBtn.classList.toggle('is-active', expandAllTexts);
             expandAllBtn.disabled = filtered.length === 0;
           }
@@ -1857,46 +1867,83 @@
             const row = document.createElement('div');
             row.className = `exam-schedule-row ${item.rowClass || meta.rowClass}`;
 
-            const topBar = document.createElement('div');
-            topBar.className = 'exam-schedule-row-top';
+            const summary = document.createElement('div');
+            summary.className = 'exam-schedule-row-head';
+            summary.setAttribute('role', 'button');
+            summary.setAttribute('tabindex', '0');
+            summary.setAttribute('aria-expanded', 'false');
 
-            const infoWrap = document.createElement('div');
-            infoWrap.className = 'exam-schedule-row-info';
+            const headLeft = document.createElement('div');
+            headLeft.className = 'exam-schedule-head-left';
 
             const typePill = document.createElement('span');
             typePill.className = `exam-schedule-type-pill type-${item.filterType}`;
-            typePill.textContent = item.typeLabel;
-            infoWrap.appendChild(typePill);
-
-            const description = document.createElement('span');
-            description.className = 'exam-schedule-row-main';
-            const dateLabel = formatDisplayDate(item.examDate);
-            const showTimeAndPeriod = !item.isIncomingStatement && meta.hasTimeAndPeriod && item.filterType !== 'cert_issued';
-            if (showTimeAndPeriod) {
-              const periodLabel = periodLabelText(item.period);
-              const timePart = item.eventTime ? ` — ${item.eventTime} სთ` : '';
-              description.textContent = `${dateLabel} — ${periodLabel}${timePart}`;
-            } else {
-              description.textContent = dateLabel;
-            }
-            infoWrap.appendChild(description);
+            typePill.textContent = item.isIncomingStatement ? item.typeLabel : `↗ ${item.typeLabel}`;
+            headLeft.appendChild(typePill);
 
             const badgeInfo = statusBadgeMeta(item);
             const badge = document.createElement('span');
             badge.className = `exam-schedule-badge ${badgeInfo.cls}`;
             badge.textContent = badgeInfo.label;
             if (item.error) badge.title = item.error;
-            infoWrap.appendChild(badge);
+            headLeft.appendChild(badge);
 
-            if (item.sentAtDisplay) {
+            const headRight = document.createElement('div');
+            headRight.className = 'exam-schedule-head-right';
+
+            const dateLabel = formatDisplayDate(item.examDate);
+            const timeDisplay = item.sentAtDisplay || dateLabel;
+            if (timeDisplay) {
               const sentSpan = document.createElement('span');
               sentSpan.className = 'exam-schedule-sent-time';
-              sentSpan.textContent = `🕒 ${item.sentAtDisplay}`;
+              sentSpan.textContent = timeDisplay;
               sentSpan.title = item.isIncomingStatement
-                ? `განცხადების შემოსვლის დრო: ${item.sentAtDisplay}`
-                : `გაგზავნის / შექმნის დრო: ${item.sentAtDisplay}`;
-              infoWrap.appendChild(sentSpan);
+                ? `განცხადების შემოსვლის დრო: ${timeDisplay}`
+                : `გაგზავნის / შექმნის დრო: ${timeDisplay}`;
+              headRight.appendChild(sentSpan);
             }
+
+            const chevron = document.createElement('span');
+            chevron.className = 'exam-schedule-chevron';
+            chevron.setAttribute('aria-hidden', 'true');
+            chevron.textContent = '▾';
+            headRight.appendChild(chevron);
+
+            summary.appendChild(headLeft);
+            summary.appendChild(headRight);
+            row.appendChild(summary);
+
+            const bodyWrap = document.createElement('div');
+            bodyWrap.className = 'exam-schedule-row-body';
+            bodyWrap.hidden = true;
+
+            const bodyBar = document.createElement('div');
+            bodyBar.className = 'exam-schedule-body-bar';
+
+            const bodyMeta = document.createElement('div');
+            bodyMeta.className = 'exam-schedule-body-meta';
+
+            const showTimeAndPeriod = !item.isIncomingStatement && meta.hasTimeAndPeriod && item.filterType !== 'cert_issued';
+            if (showTimeAndPeriod) {
+              const periodLabel = periodLabelText(item.period);
+              const timePart = item.eventTime ? ` — ${item.eventTime} სთ` : '';
+              const meetingBadge = document.createElement('span');
+              meetingBadge.className = 'exam-schedule-meeting-pill';
+              meetingBadge.textContent = `📅 შეხვედრა: ${dateLabel} — ${periodLabel}${timePart}`;
+              bodyMeta.appendChild(meetingBadge);
+            } else if (!item.isIncomingStatement && dateLabel) {
+              const dateMeta = document.createElement('span');
+              dateMeta.className = 'exam-schedule-meeting-pill';
+              dateMeta.textContent = `📅 თარიღი: ${dateLabel}`;
+              bodyMeta.appendChild(dateMeta);
+            }
+
+            const recipientEl = document.createElement('span');
+            recipientEl.className = 'exam-schedule-details-recipient';
+            recipientEl.textContent = item.isIncomingStatement
+              ? `გამომგზავნი: ${candidateName} (${item.toEmail || user.email || '—'})`
+              : `მიმღები: ${item.toEmail || user.email || '—'}`;
+            bodyMeta.appendChild(recipientEl);
 
             if (item.attachmentFilename) {
               const fileBtn = document.createElement('button');
@@ -1917,11 +1964,15 @@
                   void downloadLetterAttachment(item.letterId, item.attachmentFilename);
                 });
               }
-              infoWrap.appendChild(fileBtn);
+              bodyMeta.appendChild(fileBtn);
             }
 
             const actionsWrap = document.createElement('div');
             actionsWrap.className = 'exam-schedule-row-actions';
+
+            const fullText = item.isIncomingStatement
+              ? (item.body || '(ტექსტის გარეშე)')
+              : `${item.subject ? `სათაური: ${item.subject}\n\n` : ''}${item.body || ''}`;
 
             if (item.isIncomingStatement) {
               const answeredLabel = document.createElement('label');
@@ -1978,64 +2029,11 @@
               }
             }
 
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'exam-schedule-delete';
-            removeBtn.textContent = 'წაშლა';
-            removeBtn.addEventListener('click', () => deleteItem(item));
-            actionsWrap.appendChild(removeBtn);
-
-            topBar.appendChild(infoWrap);
-            topBar.appendChild(actionsWrap);
-            row.appendChild(topBar);
-
             if (item.isIncomingStatement || item.subject || item.body) {
-              const details = document.createElement('details');
-              details.className = 'exam-schedule-row-details';
-
-              const matchesInsideText = needle && (
-                String(item.subject || '').toLowerCase().includes(needle)
-                || String(item.body || '').toLowerCase().includes(needle)
-              );
-              if (expandAllTexts || matchesInsideText) {
-                details.open = true;
-                if (item.isIncomingStatement && item.seenAt == null) {
-                  void markStatementSeenInModal(item.statementId, item, row, badge);
-                }
-              }
-
-              const summary = document.createElement('summary');
-              const summaryLabel = document.createElement('span');
-              summaryLabel.textContent = item.isIncomingStatement
-                ? 'განცხადების ტექსტის ნახვა'
-                : 'წერილის ტექსტის ნახვა';
-              summary.appendChild(summaryLabel);
-
-              if (item.subject) {
-                const subjPreview = document.createElement('span');
-                subjPreview.className = 'exam-schedule-summary-subject';
-                subjPreview.textContent = ` — ${item.subject}`;
-                summary.appendChild(subjPreview);
-              }
-
-              const detailsToolbar = document.createElement('div');
-              detailsToolbar.className = 'exam-schedule-details-bar';
-
-              const recipientEl = document.createElement('span');
-              recipientEl.className = 'exam-schedule-details-recipient';
-              recipientEl.textContent = item.isIncomingStatement
-                ? `გამომგზავნი: ${candidateName} (${item.toEmail || user.email || '—'})`
-                : `მიმღები: ${item.toEmail || user.email || '—'}`;
-              detailsToolbar.appendChild(recipientEl);
-
-              const fullText = item.isIncomingStatement
-                ? (item.body || '(ტექსტის გარეშე)')
-                : `${item.subject ? `სათაური: ${item.subject}\n\n` : ''}${item.body || ''}`;
-
               const copyBtn = document.createElement('button');
               copyBtn.type = 'button';
               copyBtn.className = 'exam-schedule-copy-btn';
-              copyBtn.textContent = '📋 ტექსტის კოპირება';
+              copyBtn.textContent = '📋 კოპირება';
               copyBtn.addEventListener('click', async () => {
                 try {
                   await navigator.clipboard.writeText(item.body || fullText);
@@ -2044,31 +2042,67 @@
                   showToast('კოპირება ვერ მოხერხდა', 'error');
                 }
               });
-              detailsToolbar.appendChild(copyBtn);
+              actionsWrap.appendChild(copyBtn);
+            }
 
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'exam-schedule-delete';
+            removeBtn.textContent = 'წაშლა';
+            removeBtn.addEventListener('click', () => deleteItem(item));
+            actionsWrap.appendChild(removeBtn);
+
+            bodyBar.appendChild(bodyMeta);
+            bodyBar.appendChild(actionsWrap);
+            bodyWrap.appendChild(bodyBar);
+
+            if (!item.isIncomingStatement && item.subject) {
+              const subjectBar = document.createElement('div');
+              subjectBar.className = 'exam-schedule-body-subject';
+              const subjectStrong = document.createElement('strong');
+              subjectStrong.textContent = 'თემა: ';
+              const subjectSpan = document.createElement('span');
+              subjectSpan.textContent = item.subject;
+              subjectBar.appendChild(subjectStrong);
+              subjectBar.appendChild(subjectSpan);
+              bodyWrap.appendChild(subjectBar);
+            }
+
+            if (item.isIncomingStatement || item.body) {
               const pre = document.createElement('pre');
               pre.className = 'exam-schedule-confirm-preview-text';
-              pre.textContent = fullText;
+              pre.textContent = item.body || '(ტექსტის გარეშე)';
+              bodyWrap.appendChild(pre);
+            }
 
-              details.appendChild(summary);
-              details.appendChild(detailsToolbar);
-              details.appendChild(pre);
+            row.appendChild(bodyWrap);
 
-              if (item.isIncomingStatement) {
-                infoWrap.style.cursor = 'pointer';
-                infoWrap.title = 'დააკლიკეთ განცხადების გასახსნელად';
-                infoWrap.addEventListener('click', (ev) => {
-                  if (ev.target.closest('button, a, input, label')) return;
-                  details.open = !details.open;
-                });
-                details.addEventListener('toggle', () => {
-                  if (details.open && item.seenAt == null) {
-                    void markStatementSeenInModal(item.statementId, item, row, badge);
-                  }
-                });
+            const setRowOpen = (openState) => {
+              row.classList.toggle('is-open', openState);
+              bodyWrap.hidden = !openState;
+              summary.setAttribute('aria-expanded', openState ? 'true' : 'false');
+              if (openState && item.isIncomingStatement && item.seenAt == null) {
+                void markStatementSeenInModal(item.statementId, item, row, badge);
               }
+            };
 
-              row.appendChild(details);
+            summary.addEventListener('click', () => {
+              setRowOpen(!row.classList.contains('is-open'));
+            });
+
+            summary.addEventListener('keydown', (ev) => {
+              if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                setRowOpen(!row.classList.contains('is-open'));
+              }
+            });
+
+            const matchesInsideText = needle && (
+              String(item.subject || '').toLowerCase().includes(needle)
+              || String(item.body || '').toLowerCase().includes(needle)
+            );
+            if (expandAllTexts || matchesInsideText) {
+              setRowOpen(true);
             }
 
             historyContainer.appendChild(row);
