@@ -61,7 +61,7 @@ test('header logo is twenty percent wider without distorting its aspect ratio', 
 for (const page of ['index', 'my', 'registry']) {
   test(`${page} page refreshes the shared header stylesheet for the new logo`, () => {
     const html = read(`pages/${page}.html`);
-    assert.match(html, /href="\.\.\/styles\/header\.css\?v=20261008-perf1"/);
+    assert.match(html, /href="\.\.\/styles\/header\.css\?v=20261013-statements1"/);
     assert.equal((html.match(/styles\/header\.css/g) || []).length, 1);
   });
 }

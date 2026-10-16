@@ -27,6 +27,7 @@ try:
     from backend.scripts.migrate_statements_answered import run as run_statements_answered_migration
     from backend.scripts.migrate_user_code_reservations import run as run_user_code_reservations_migration
     from backend.scripts.migrate_exam_schedules import run as run_exam_schedules_migration
+    from backend.scripts.migrate_planning_letters import run as run_planning_letters_migration
     from backend.scripts.migrate_exam_permission import run as run_exam_permission_migration
     from backend.scripts.migrate_exam_stage_grants import run as run_exam_stage_grants_migration
     from backend.scripts.migrate_multi_apartment import run as run_multi_apartment_migration
@@ -46,6 +47,7 @@ except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.
     from scripts.migrate_statements_answered import run as run_statements_answered_migration  # type: ignore
     from scripts.migrate_user_code_reservations import run as run_user_code_reservations_migration  # type: ignore
     from scripts.migrate_exam_schedules import run as run_exam_schedules_migration  # type: ignore
+    from scripts.migrate_planning_letters import run as run_planning_letters_migration  # type: ignore
     from scripts.migrate_exam_permission import run as run_exam_permission_migration  # type: ignore
     from scripts.migrate_exam_stage_grants import run as run_exam_stage_grants_migration  # type: ignore
     from scripts.migrate_multi_apartment import run as run_multi_apartment_migration  # type: ignore
@@ -93,6 +95,7 @@ def create_app() -> FastAPI:
     # Scheduling is additive and independent of examination access/results.
     # Fail startup visibly if its required table/indexes cannot be created.
     run_exam_schedules_migration()
+    run_planning_letters_migration()
     # Independent stage grants are authoritative for every exam start/result.
     # Run after the legacy permission/project migrations and fail visibly if
     # the required columns, indexes, or lossless backfill cannot be created.
@@ -126,12 +129,13 @@ def create_app() -> FastAPI:
     )
 
     from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents, taxonomy
-    from .routers import exam_schedules
+    from .routers import exam_schedules, planning_letters
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
     app.include_router(exam_schedules.router, prefix="/admin", tags=["admin"])
+    app.include_router(planning_letters.router, prefix="/admin", tags=["admin"])
     app.include_router(taxonomy.router, prefix="/taxonomy", tags=["taxonomy"])
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])

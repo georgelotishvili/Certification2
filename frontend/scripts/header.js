@@ -14,6 +14,16 @@
   function isMyPage() {
     try { return window.location.pathname.includes('my.html'); } catch { return false; }
   }
+  function markCurrentPageLinks() {
+    const current = new URL(window.location.href);
+    const viewingPerson = current.searchParams.has('code') || current.searchParams.has('userId');
+    document.querySelectorAll('.nav-home, .drawer-home, .nav-registry, .drawer-registry, .nav-profile, .drawer-profile').forEach((link) => {
+      const target = new URL(link.getAttribute('href'), current);
+      const active = target.pathname === current.pathname && !(isMyPage() && viewingPerson);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+  }
   function isLoggedIn() {
     try { return window.Auth?.isLoggedIn?.() === true; } catch { return false; }
   }
@@ -730,28 +740,18 @@
         return;
       }
 
-      // Profile/main navigation with fade
+      // Keep normal link navigation (including opening in a new tab).
+      // Only intercept the private page when authentication is required.
       const profile = closest(el, '.nav-profile[data-page-link], .drawer-profile[data-page-link]');
       if (profile) {
-        const href = (profile.getAttribute('href') || '').trim();
         const fromDrawer = !!closest(el, '.drawer');
-        const targetIsMy = href.includes('my.html');
-        const targetIsIndex = href.includes('index.html');
-
-        if (targetIsMy && !isLoggedIn()) {
+        if (!isLoggedIn()) {
           event.preventDefault();
           if (fromDrawer) closeMenu();
-          alert('გთხოვთ გაიაროთ ავტორიზაცია');
           openAuthModal();
           return;
         }
-
-        if (targetIsMy || targetIsIndex) {
-          event.preventDefault();
-          if (fromDrawer) closeMenu();
-          transitionTo(href || (isMyPage() ? 'index.html' : 'my.html'));
-          return;
-        }
+        if (fromDrawer) closeMenu();
       }
     }, { capture: true });
 
@@ -774,17 +774,9 @@
       const html = await response.text();
       document.body.insertAdjacentHTML('afterbegin', html);
 
-      // Adjust profile link text/target based on page
+      // Home and personal page links keep the same label and destination everywhere.
       const profilePage = isMyPage();
-      const navProfile = document.querySelector('.nav-profile[data-page-link]');
-      const drawerProfile = document.querySelector('.drawer-profile[data-page-link]');
-      if (profilePage) {
-        if (navProfile) { navProfile.textContent = 'მთავარი გვერდი'; navProfile.href = 'index.html'; }
-        if (drawerProfile) { drawerProfile.textContent = 'მთავარი გვერდი'; drawerProfile.href = 'index.html'; }
-      } else {
-        if (navProfile) navProfile.href = 'my.html';
-        if (drawerProfile) drawerProfile.href = 'my.html';
-      }
+      markCurrentPageLinks();
 
       // Back-compat: notify others header is ready
       document.dispatchEvent(new CustomEvent('headerReady', { detail: { isProfilePage: profilePage } }));

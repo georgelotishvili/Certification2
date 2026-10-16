@@ -305,6 +305,9 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    planning_letters: Mapped[List["PlanningLetter"]] = relationship(
+        "PlanningLetter", back_populates="user", cascade="all, delete-orphan",
+    )
 
 
 class UserExamStageGrant(Base):
@@ -363,6 +366,58 @@ class ExamSchedule(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship("User", back_populates="exam_schedules")
+
+
+class PlanningTemplate(Base):
+    """Shared editable text; sent letters always contain an independent snapshot."""
+
+    __tablename__ = "planning_templates"
+    __table_args__ = (CheckConstraint("kind IN ('exam', 'certificate')", name="ck_planning_template_kind"),)
+
+    kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class PlanningLetter(Base):
+    """Immutable appointment/email snapshot, independent of exam permissions."""
+
+    __tablename__ = "planning_letters"
+    __table_args__ = (
+        CheckConstraint("kind IN ('exam', 'certificate')", name="ck_planning_letter_kind"),
+        CheckConstraint("status IN ('sending', 'sent', 'failed', 'simulated', 'uncertain')", name="ck_planning_letter_status"),
+        Index("ix_planning_letters_user_date", "user_id", "event_date", "id"),
+        {"sqlite_autoincrement": True},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    exam_schedule_id: Mapped[int | None] = mapped_column(ForeignKey("exam_schedules.id", ondelete="SET NULL"), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    event_date: Mapped[date] = mapped_column(Date)
+    event_time: Mapped[str] = mapped_column(String(5))
+    period: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    request_id: Mapped[str] = mapped_column(String(36), unique=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    to_email: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="sending")
+    error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by: Mapped[str] = mapped_column(String(255))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    attachment_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    user: Mapped["User"] = relationship("User", back_populates="planning_letters")
 
 
 class Statement(Base):
