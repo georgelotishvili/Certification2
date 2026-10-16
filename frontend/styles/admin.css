@@ -1059,10 +1059,53 @@ main {
   min-width: 0;
 }
 
+.exam-schedule-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
 .exam-schedule-title {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 16px;
+  font-weight: 700;
   color: var(--text-strong);
+}
+
+.exam-schedule-editing-banner {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1e40af;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.exam-schedule-editing-banner[hidden] {
+  display: none;
+}
+
+.exam-schedule-cancel-edit-btn {
+  padding: 3px 8px;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exam-schedule-cancel-edit-btn:hover:not(:disabled) {
+  background: #dbeafe;
 }
 
 .exam-schedule-controls {
@@ -1071,9 +1114,11 @@ main {
   align-items: center;
   gap: 12px 18px;
   min-width: 0;
+  margin-bottom: 12px;
 }
 
-.exam-schedule-date-label {
+.exam-schedule-date-label,
+.exam-schedule-time-label {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1081,11 +1126,233 @@ main {
   min-width: 0;
   max-width: 100%;
   font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.exam-schedule-time {
+  min-width: 110px;
+}
+
+.exam-schedule-letter-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.exam-schedule-letter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.exam-schedule-letter-title {
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.exam-schedule-letter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.exam-schedule-text-edit-btn,
+.exam-schedule-save-template-btn,
+.exam-schedule-reset-text-btn {
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.exam-schedule-text-edit-btn {
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.exam-schedule-text-edit-btn:hover:not(:disabled),
+.exam-schedule-text-edit-btn.is-active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+}
+
+.exam-schedule-save-template-btn {
+  border: 1px solid #86efac;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.exam-schedule-save-template-btn:hover:not(:disabled) {
+  background: #bbf7d0;
+}
+
+.exam-schedule-reset-text-btn {
+  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  color: var(--text-muted);
+}
+
+.exam-schedule-reset-text-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+
+.exam-schedule-save-template-btn[hidden],
+.exam-schedule-reset-text-btn[hidden] {
+  display: none;
+}
+
+.exam-schedule-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.exam-schedule-subject,
+.exam-schedule-body {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.exam-schedule-body {
+  resize: vertical;
+  min-height: 130px;
+}
+
+.exam-schedule-subject.is-editable,
+.exam-schedule-body.is-editable {
+  background: #ffffff;
+  border-color: var(--accent, #2f5ba8);
+  box-shadow: 0 0 0 2px rgba(47, 91, 168, 0.12);
+}
+
+.exam-schedule-subject:focus,
+.exam-schedule-body:focus {
+  outline: none;
+  border-color: var(--accent, #2f5ba8);
+}
+
+.exam-schedule-footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 8px;
+}
+
+.exam-schedule-attachment-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.exam-schedule-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #ffffff;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.exam-schedule-file-btn:hover {
+  border-color: var(--accent, #2f5ba8);
+  color: var(--accent, #2f5ba8);
+  background: #f8fafc;
+}
+
+.exam-schedule-file-name {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-schedule-file-clear {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exam-schedule-file-clear[hidden] {
+  display: none;
+}
+
+.exam-schedule-submit-wrap {
+  margin-left: auto;
+}
+
+.exam-schedule-next-btn {
+  padding: 8px 20px;
+  border: 1px solid var(--accent, #2f5ba8);
+  border-radius: 6px;
+  background: var(--accent, #2f5ba8);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(47, 91, 168, 0.18);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.exam-schedule-next-btn:hover:not(:disabled) {
+  background: #244a8b;
+  border-color: #244a8b;
+}
+
+.exam-schedule-next-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .exam-schedule-status {
   margin: 8px 0;
   font-size: 13px;
+  font-weight: 600;
   color: #065f46;
   overflow-wrap: anywhere;
 }
@@ -1101,8 +1368,9 @@ main {
 .exam-schedule-history {
   display: grid;
   gap: 6px;
-  max-height: 240px;
+  max-height: 260px;
   overflow-y: auto;
+  margin-top: 8px;
 }
 
 .exam-schedule-row {
@@ -1110,12 +1378,102 @@ main {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 8px 12px;
   border: 1px solid var(--border-soft);
-  border-radius: 4px;
-  padding: 8px;
+  border-radius: 5px;
+  padding: 8px 10px;
+  background: #ffffff;
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+.exam-schedule-row-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.exam-schedule-row-main {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.exam-schedule-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.exam-schedule-badge.is-sent {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.exam-schedule-badge.is-saved-only {
+  background: #e0f2fe;
+  color: #075985;
+  border-color: #7dd3fc;
+}
+
+.exam-schedule-badge.is-sent-only {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border-color: #d8b4fe;
+}
+
+.exam-schedule-badge.is-warning {
+  background: #fef9c3;
+  color: #854d0e;
+  border-color: #fde047;
+}
+
+.exam-schedule-badge.is-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.exam-schedule-attachment-link {
+  padding: 2px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #1e40af;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.exam-schedule-attachment-link:hover {
+  background: #e2e8f0;
+}
+
+.exam-schedule-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exam-schedule-edit {
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 5px 10px;
+  background: #eef2ff;
+  color: #3730a3;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exam-schedule-edit:hover:not(:disabled) {
+  background: #e0e7ff;
 }
 
 .exam-schedule-delete {
@@ -1125,18 +1483,224 @@ main {
   background: #fff;
   color: #b91c1c;
   font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
 }
 
+.exam-schedule-delete:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.exam-schedule-edit:disabled,
 .exam-schedule-delete:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
+.exam-schedule-edit:focus-visible,
 .exam-schedule-delete:focus-visible,
 .exam-schedule-controls input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Confirmation Modal for Exam Scheduling ("შემდეგი") */
+.exam-schedule-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.exam-schedule-confirm-modal {
+  width: min(620px, 96vw);
+  max-height: 90vh;
+  background: var(--surface-elevated, #ffffff);
+  border: 2px solid var(--border-strong, #cbd5e1);
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.exam-schedule-confirm-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--surface-muted, #f1f5f9);
+  border-bottom: 1px solid var(--border-soft, #e2e8f0);
+}
+
+.exam-schedule-confirm-modal .modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.exam-schedule-confirm-modal .modal-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text-strong);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.exam-schedule-confirm-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.exam-schedule-confirm-summary {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-strong);
+}
+
+.exam-schedule-confirm-preview {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.exam-schedule-confirm-preview-subject {
+  font-size: 13px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #e2e8f0;
+  color: var(--text-strong);
+}
+
+.exam-schedule-confirm-preview-text {
+  margin: 0;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+}
+
+.exam-schedule-mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exam-schedule-mode-heading {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.exam-schedule-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--border-soft, #e2e8f0);
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.exam-schedule-mode-option:hover {
+  border-color: #93c5fd;
+}
+
+.exam-schedule-mode-option.is-selected {
+  border-color: var(--accent, #2f5ba8);
+  background: #eff6ff;
+}
+
+.exam-schedule-mode-option input[type="radio"] {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent, #2f5ba8);
+  flex-shrink: 0;
+}
+
+.exam-schedule-mode-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exam-schedule-mode-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.exam-schedule-mode-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.exam-schedule-confirm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--surface-muted, #f1f5f9);
+  border-top: 1px solid var(--border-soft, #e2e8f0);
+}
+
+.exam-schedule-confirm-footer .btn-secondary {
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong, #cbd5e1);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exam-schedule-confirm-footer .btn-primary {
+  padding: 8px 18px;
+  border: 1px solid var(--accent, #2f5ba8);
+  border-radius: 6px;
+  background: var(--accent, #2f5ba8);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exam-schedule-confirm-footer .btn-primary:hover:not(:disabled) {
+  background: #244a8b;
+}
+
+.exam-schedule-confirm-footer button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .users-filter-date,

@@ -411,10 +411,11 @@
       
       if (els.title) els.title.textContent = doc.title || 'დოკუმენტი';
       if (els.body) {
+        renderSafeDocumentHtml(els.body, doc.content);
+        sanitizeWordStyles(els.body);
         const sheet = document.createElement('article');
         sheet.className = 'site-doc-sheet';
-        renderSafeDocumentHtml(sheet, doc.content);
-        sanitizeWordStyles(sheet);
+        sheet.replaceChildren(...els.body.childNodes);
         els.body.replaceChildren(sheet);
       }
     } catch (err) {

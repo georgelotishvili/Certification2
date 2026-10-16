@@ -6,8 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import ExamSchedule, User
+from ..models import ExamSchedule, PlanningLetter, User
 from ..schemas import ExamScheduleCreate, ExamScheduleOut, ExamSchedulesResponse
+from ..services.media_storage import delete_storage_file
 from .admin import _require_admin
 
 
@@ -73,6 +74,38 @@ def create_exam_schedule(
     return ExamScheduleOut.model_validate(entry)
 
 
+@router.put(
+    "/users/{user_id}/exam-schedules/{schedule_id}",
+    response_model=ExamScheduleOut,
+)
+def update_exam_schedule(
+    user_id: int,
+    schedule_id: int,
+    payload: ExamScheduleCreate,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    _require_user(db, user_id)
+    entry = db.scalar(select(ExamSchedule).where(
+        ExamSchedule.id == schedule_id, ExamSchedule.user_id == user_id,
+    ))
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam schedule not found")
+    entry.exam_date = payload.exam_date
+    entry.period = payload.period
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Exam already scheduled for this date and group",
+        )
+    db.refresh(entry)
+    return ExamScheduleOut.model_validate(entry)
+
+
 @router.delete(
     "/users/{user_id}/exam-schedules/{schedule_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -90,6 +123,17 @@ def delete_exam_schedule(
     ))
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam schedule not found")
+    linked_letters = db.scalars(select(PlanningLetter).where(
+        PlanningLetter.exam_schedule_id == schedule_id,
+        PlanningLetter.user_id == user_id,
+    )).all()
+    for letter in linked_letters:
+        if letter.attachment_path:
+            try:
+                delete_storage_file(letter.attachment_path)
+            except Exception:
+                pass
+        db.delete(letter)
     db.delete(entry)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

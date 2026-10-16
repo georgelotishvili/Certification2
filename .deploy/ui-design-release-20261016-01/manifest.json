@@ -1,0 +1,49 @@
+{
+  "pid": "65716",
+  "files": {
+    "frontend/pages/index.html": {
+      "before": "f2b5e3a94a1c7ba139f855fc31cb9627206e2a7f7eaad844dbe910f0f91f04e4",
+      "after": "49b86cb00db6f68ee54ec19d889f944abba98626aa1739504b9a3e722cce5ee8"
+    },
+    "frontend/pages/my.html": {
+      "before": "1b5510ab6bbd1cb6dbad9e979c7000468f0356650270fa75c4a8a4e4ad03543f",
+      "after": "8378036304dc43ae2f99bc21d722be53666bfb149ff15fc4e3c5de52bb3808d1"
+    },
+    "frontend/pages/registry.html": {
+      "before": "ec9d0038a343aeac25812b0adcd76cddbc9a5f5e1cb4de8a0d6487e0a2eaae2a",
+      "after": "8dd81d462e1c7ea11c00facb119dc9c17e6492b5aa135aaeff2617e7f0a28d0d"
+    },
+    "frontend/partials/header.html": {
+      "before": "262b54c59b585a05c80550b5b94274f7da7caa08e4f8ee41622826699e654db5",
+      "after": "2681a5e44de19a7e5a18cc988910bb10c5d40907bd2a3fd96f0c8599f96c7f7a"
+    },
+    "frontend/partials/site-info/guide.html": {
+      "before": "c4e6a092a30d74262dbddebe2bde74bec9d3041a2d5c53161a6a92dc7f333bb6",
+      "after": "775759e9c14ed25f3aadc15f3c648b938e7981f2c8e593d8adcbc94a16b01234"
+    },
+    "frontend/scripts/header.js": {
+      "before": "a00c7926ce71e8806237488d8c5feef31a9886d2b1dc020f52fb175c158fa00a",
+      "after": "391b0d9b29e0317e9fac771266703ed8b7ef0debc9da5a1d2c264f29b2d36a03"
+    },
+    "frontend/scripts/my.js": {
+      "before": "75a6665f69c56af476787d1e5b7489ae44dea530d4f4a5f8965f556333c08554",
+      "after": "eeeb536d67b2f72ab763bc9a8ca96fa0ba4103ec98ba996f6f975668a62fd3c6"
+    },
+    "frontend/styles/header.css": {
+      "before": "ecea4742bff2bd2e7f7cb4d4fbf376b12558752f2f8ccce1ab2784dcb1b93f60",
+      "after": "a1c0592de8d74ac617e7d8b66c2ea532fd3cc80df60a1449eec5f28b52849516"
+    },
+    "frontend/styles/my.css": {
+      "before": "2aeb578c0c0ea96cf0c14c3cb80f1dd78f8b295e3bddba6fd666d8fe4995058a",
+      "after": "394e0e3f5b9b8c5e5536647dfff6c4a570302116e26f38b895ca96b6605870e5"
+    },
+    "frontend/styles/registry.css": {
+      "before": "5a945418b2ce17c282a3014cc19703557fcb186611f60cd7d815191a2332feb7",
+      "after": "23a6f9574cb814f2d7b6e36461b334a5312c03d9a31a8d98706b412410e31256"
+    },
+    "frontend/styles/styles.css": {
+      "before": "f6454812da19935ec1d889b2a4e20354fce780d242144e7f6e6a333c4300ede3",
+      "after": "52240b6743f7e7dc1f471a2bcc54add27ec19ec2b1227d93838e53ec493f5c8f"
+    }
+  }
+}

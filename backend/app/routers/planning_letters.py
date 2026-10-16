@@ -23,11 +23,25 @@ from .admin import _require_admin
 
 router = APIRouter()
 Kind = Literal["exam", "certificate"]
+ActionMode = Literal["save_and_send", "save_only", "send_only"]
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png", ".zip", ".rar"}
 DEFAULT_TEMPLATES = {
     "exam": {
-        "subject": "გამოცდის დაგეგმვა — {date}, {time}",
-        "body": "გამარჯობა, {name},\n\nთქვენი გამოცდა დაგეგმილია {date}, {time} საათზე (თბილისის დროით).\n\nგამოცდაზე მოსვლამდე გთხოვთ:\n1. გაეცნოთ ჩვენს საიტზე განთავსებულ საგამოცდო ინფორმაციას: [შეავსეთ ინფორმაციის ბმული].\n2. გადაიხადოთ გამოცდის საფასური — 350 ლარი.\n\nმიმღები: [შეავსეთ ორგანიზაციის დასახელება]\nანგარიშის ნომერი: [შეავსეთ ანგარიშის ნომერი]\nგადახდის დანიშნულება: გამოცდის საფასური — {name}, კოდი {code}.\n\nგამოცდაზე დაშვებისთვის საფასური წინასწარ უნდა იყოს დაფარული.\n\nპატივისცემით,\nGIPC",
+        "subject": "სერტიფიცირების გამოცდის დაგეგმვა — {date}, {time}",
+        "body": (
+            "მოგესალმებით,\n\n"
+            "გაცნობებთ, რომ თქვენი სერტიფიცირების გამოცდა დაგეგმილია {date}-ში ({period}), {time} საათზე (თბილისის დროით).\n\n"
+            "კანდიდატის მონაცემები:\n"
+            "• სახელი, გვარი: {name}\n"
+            "• პირადი ნომერი: {personal_id}\n"
+            "• უნიკალური კოდი: {code}\n"
+            "• გამოცდის თარიღი და დრო: {date}, {time} სთ ({period})\n"
+            "• საგამოცდო ცენტრის მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6\n\n"
+            "გთხოვთ, საგამოცდო ცენტრში გამოცხადდეთ გამოცდის დაწყებამდე 30 წუთით ადრე და თან იქონიოთ პირადობის დამადასტურებელი მოქმედი დოკუმენტი.\n\n"
+            "პატივისცემით,\n"
+            "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)\n"
+            "https://gipc.org.ge"
+        ),
     },
     "certificate": {
         "subject": "სერტიფიკატის გადაცემა — {date}, {time}",
@@ -52,7 +66,7 @@ def _template_out(kind: str, template: PlanningTemplate | None):
 
 
 def _letter_out(letter: PlanningLetter):
-    return {
+    out = {
         key: _iso(getattr(letter, key)) if key in ("event_date", "created_at", "sent_at") else getattr(letter, key)
         for key in (
             "id", "user_id", "kind", "event_date", "event_time", "period", "exam_schedule_id",
@@ -60,6 +74,9 @@ def _letter_out(letter: PlanningLetter):
             "attachment_filename", "attachment_size_bytes", "attempts",
         )
     }
+    if letter.attempts == 0 and letter.sent_at is None:
+        out["status"] = "saved"
+    return out
 
 
 def _text(subject: str, body: str, *, final: bool):
@@ -69,7 +86,7 @@ def _text(subject: str, body: str, *, final: bool):
     if not body.strip() or len(body) > 10000 or "\x00" in body:
         raise HTTPException(422, "წერილის ტექსტი აუცილებელია (მაქსიმუმ 10000 სიმბოლო).")
     if final and re.search(
-        r"\{(?:name|date|time|code)\}|\[(?:სახელი და გვარი|გამოცდის თარიღი|საათი|უნიკალური კოდი|შეავსეთ[^\]]*|IBAN)\]",
+        r"\{(?:name|date|time|code|personal_id|period)\}|\[(?:სახელი და გვარი|გამოცდის თარიღი|საათი|უნიკალური კოდი|პირადი ნომერი|შეავსეთ[^\]]*|IBAN)\]",
         subject + "\n" + body,
         re.IGNORECASE,
     ):
@@ -244,11 +261,20 @@ def send_letter(
     expected_to_email: str = Form(...), confirmed: bool = Form(False),
     attachment: UploadFile | None = File(None), use_template_attachment: bool = Form(True),
     template_updated_at: str | None = Form(None),
+    period: str | None = Form(None),
+    action_mode: str = Form("save_and_send"),
+    schedule_id: int | None = Form(None),
+    edit_letter_id: int | None = Form(None),
+    keep_existing_attachment: bool = Form(False),
     authorization: str | None = Header(None), db: Session = Depends(get_db),
 ):
     actor = _require_admin(db, authorization)
     if not confirmed:
         raise HTTPException(422, "გაგზავნის დასადასტურებლად ჯერ გადაამოწმეთ წერილი.")
+    if action_mode not in ("save_and_send", "save_only", "send_only"):
+        raise HTTPException(422, "მოქმედების რეჟიმი არასწორია.")
+    if period is not None and period not in ("morning", "evening"):
+        raise HTTPException(422, "ცვლა (დილით/საღამოს) არასწორია.")
     _text(subject, body, final=True)
     try:
         request_id = str(UUID(request_id))
@@ -263,6 +289,8 @@ def send_letter(
         "subject": subject, "body": body, "to": expected_to_email, "file": digest,
         "filename": _filename(attachment) if attachment else None,
         "template_file": use_template_attachment, "template_version": template_updated_at,
+        "period": period, "action_mode": action_mode,
+        "schedule_id": schedule_id, "edit_letter_id": edit_letter_id,
     }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
     prior = db.scalar(select(PlanningLetter).where(PlanningLetter.request_id == request_id))
     if prior:
@@ -275,34 +303,79 @@ def send_letter(
     if user.email != expected_to_email:
         raise HTTPException(409, "მიმღების ელფოსტა შეიცვალა. თავიდან გადაამოწმეთ წერილი.")
     template = db.get(PlanningTemplate, kind)
-    if use_template_attachment and not attachment:
+    if use_template_attachment and not attachment and not keep_existing_attachment:
         if template_updated_at != (_iso(template.updated_at) if template else None):
             raise HTTPException(409, "შაბლონი შეიცვალა. თავიდან გადაამოწმეთ წერილი და დანართი.")
-    period = ("morning" if event_time < "12:00" else "evening") if kind == "exam" else None
+    resolved_period = (period or ("morning" if event_time < "12:00" else "evening")) if kind == "exam" else None
+    is_save_only = action_mode == "save_only"
     letter = PlanningLetter(
-        user_id=user_id, kind=kind, event_date=day, event_time=event_time, period=period,
+        user_id=user_id, kind=kind, event_date=day, event_time=event_time, period=resolved_period,
         request_id=request_id, request_fingerprint=fingerprint, to_email=user.email,
-        subject=subject, body=body, status="sending", attempts=1, created_by=actor.email,
+        subject=subject, body=body,
+        status="simulated" if is_save_only else "sending",
+        attempts=0 if is_save_only else 1,
+        created_by=actor.email,
     )
     namespace = f"letters/{user_id}"
     new_path = None
     try:
         if kind == "exam":
-            schedule = db.scalar(select(ExamSchedule).where(
-                ExamSchedule.user_id == user_id, ExamSchedule.exam_date == day, ExamSchedule.period == period,
+            if action_mode in ("save_and_send", "save_only"):
+                target_schedule = None
+                if schedule_id is not None:
+                    target_schedule = db.scalar(select(ExamSchedule).where(
+                        ExamSchedule.id == schedule_id, ExamSchedule.user_id == user_id,
+                    ))
+                conflict_schedule = db.scalar(select(ExamSchedule).where(
+                    ExamSchedule.user_id == user_id,
+                    ExamSchedule.exam_date == day,
+                    ExamSchedule.period == resolved_period,
+                ))
+                if target_schedule is not None:
+                    if conflict_schedule is not None and conflict_schedule.id != target_schedule.id:
+                        db.execute(
+                            update(PlanningLetter)
+                            .where(PlanningLetter.exam_schedule_id == target_schedule.id)
+                            .values(exam_schedule_id=conflict_schedule.id)
+                        )
+                        db.delete(target_schedule)
+                        db.flush()
+                        schedule = conflict_schedule
+                    else:
+                        target_schedule.exam_date = day
+                        target_schedule.period = resolved_period
+                        db.add(target_schedule)
+                        db.flush()
+                        schedule = target_schedule
+                elif conflict_schedule is not None:
+                    schedule = conflict_schedule
+                else:
+                    schedule = ExamSchedule(user_id=user_id, exam_date=day, period=resolved_period)
+                    db.add(schedule)
+                    db.flush()
+                letter.exam_schedule_id = schedule.id
+            elif action_mode == "send_only" and schedule_id is not None:
+                existing_sched = db.scalar(select(ExamSchedule).where(
+                    ExamSchedule.id == schedule_id, ExamSchedule.user_id == user_id,
+                ))
+                if existing_sched is not None and existing_sched.exam_date == day and existing_sched.period == resolved_period:
+                    letter.exam_schedule_id = existing_sched.id
+
+        prior_edit_letter = None
+        if edit_letter_id is not None:
+            prior_edit_letter = db.scalar(select(PlanningLetter).where(
+                PlanningLetter.id == edit_letter_id, PlanningLetter.user_id == user_id,
             ))
-            if schedule:
-                existing_letter = db.scalar(select(PlanningLetter).where(PlanningLetter.exam_schedule_id == schedule.id))
-                if existing_letter:
-                    raise HTTPException(409, "ამ თარიღისა და ჯგუფისთვის წერილი უკვე არსებობს. გამოიყენეთ ისტორია.")
-            else:
-                schedule = ExamSchedule(user_id=user_id, exam_date=day, period=period)
-                db.add(schedule)
-                db.flush()
-            letter.exam_schedule_id = schedule.id
+
         if attachment:
             new_path, name, size = _store(attachment.file, _filename(attachment), namespace)
             letter.attachment_path, letter.attachment_filename, letter.attachment_size_bytes = new_path, name, size
+        elif keep_existing_attachment and prior_edit_letter and prior_edit_letter.attachment_path:
+            source = _checked_path(prior_edit_letter.attachment_path, namespace)
+            if source.is_file():
+                with source.open("rb") as stream:
+                    new_path, name, size = _store(stream, prior_edit_letter.attachment_filename or source.name, namespace)
+                letter.attachment_path, letter.attachment_filename, letter.attachment_size_bytes = new_path, name, size
         elif use_template_attachment and template and template.attachment_path:
             source = _checked_path(template.attachment_path, f"templates/{kind}")
             if not source.is_file():
@@ -310,12 +383,27 @@ def send_letter(
             with source.open("rb") as stream:
                 new_path, name, size = _store(stream, template.attachment_filename, namespace)
             letter.attachment_path, letter.attachment_filename, letter.attachment_size_bytes = new_path, name, size
+
+        # If editing an existing record in save_only or save_and_send mode, remove superseded draft/letter
+        if prior_edit_letter is not None and (
+            prior_edit_letter.exam_schedule_id is None
+            or prior_edit_letter.exam_schedule_id == letter.exam_schedule_id
+            or (prior_edit_letter.attempts == 0 and prior_edit_letter.sent_at is None)
+        ):
+            old_letter_path = prior_edit_letter.attachment_path
+            db.delete(prior_edit_letter)
+            db.flush()
+            if old_letter_path and old_letter_path != new_path:
+                _remove_file(old_letter_path, namespace)
+
         db.add(letter)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         _remove_file(new_path, namespace)
         prior = db.scalar(select(PlanningLetter).where(PlanningLetter.request_id == request_id))
+        if prior and prior.user_id == user_id and prior.request_fingerprint != fingerprint:
+            raise HTTPException(409, "ამ მოთხოვნის კოდით სხვა წერილი უკვე არსებობს. თავიდან გადაამოწმეთ.") from exc
         if prior and prior.user_id == user_id and prior.request_fingerprint == fingerprint:
             return _letter_out(prior)
         raise HTTPException(409, "დაგეგმვა უკვე შეიცვალა. განაახლეთ ისტორია და გადაამოწმეთ.") from exc
@@ -324,6 +412,8 @@ def send_letter(
         _remove_file(new_path, namespace)
         raise
     db.refresh(letter)
+    if is_save_only:
+        return _letter_out(letter)
     return _deliver(db, letter)
 
 
@@ -339,6 +429,18 @@ def letter_attachment(user_id: int, letter_id: int, authorization: str | None = 
     _require_admin(db, authorization)
     letter = _user_letter(db, user_id, letter_id)
     return _download(letter.attachment_path, letter.attachment_filename, f"letters/{user_id}")
+
+
+@router.delete("/users/{user_id}/planning-letters/{letter_id}", status_code=204)
+def delete_letter(user_id: int, letter_id: int, authorization: str | None = Header(None), db: Session = Depends(get_db)):
+    _require_admin(db, authorization)
+    letter = _user_letter(db, user_id, letter_id)
+    old_path = letter.attachment_path
+    db.delete(letter)
+    db.commit()
+    if old_path:
+        _remove_file(old_path, f"letters/{user_id}")
+    return None
 
 
 @router.post("/users/{user_id}/planning-letters/{letter_id}/retry")

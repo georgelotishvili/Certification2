@@ -131,7 +131,11 @@ def _get_smtp_config(settings) -> dict:
         or ("ssl" if int(smtp_port) == 465 else "tls")
     )
     from_address = getattr(settings, "mail_from_address", None) or smtp_user
-    from_name = getattr(settings, "mail_from_name", None) or "GIPC"
+    raw_from_name = str(getattr(settings, "mail_from_name", None) or "").strip()
+    if not raw_from_name or raw_from_name in ("${APP_NAME}", "Exam Backend"):
+        from_name = "GIPC"
+    else:
+        from_name = raw_from_name
 
     return {
         "host": smtp_host,

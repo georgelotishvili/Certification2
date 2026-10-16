@@ -299,6 +299,79 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(response.content, document)
         self.assertIn("attachment", response.headers["content-disposition"])
 
+    def test_save_only_creates_schedule_and_saved_letter_without_smtp(self):
+        response = self.send(self.form(
+            action_mode="save_only",
+            event_date="2027-04-10",
+            event_time="11:30",
+            period="morning",
+        ))
+        letter = self.saved(response)
+        self.assertEqual(letter["status"], "saved")
+        self.assertIsNotNone(letter["exam_schedule_id"])
+        self.assertEqual(letter["period"], "morning")
+        self.delivery.assert_not_called()
+        schedule = self.db.get(ExamSchedule, letter["exam_schedule_id"])
+        self.assertIsNotNone(schedule)
+        self.assertEqual(str(schedule.exam_date), "2027-04-10")
+        self.assertEqual(schedule.period, "morning")
+
+    def test_send_only_sends_email_without_creating_exam_schedule(self):
+        self.delivery.return_value = ("sent", None)
+        response = self.send(self.form(
+            action_mode="send_only",
+            event_date="2027-04-12",
+            event_time="15:00",
+            period="evening",
+        ))
+        letter = self.saved(response)
+        self.assertEqual(letter["status"], "sent")
+        self.assertIsNone(letter["exam_schedule_id"])
+        self.delivery.assert_called_once()
+        self.assertEqual(self.db.scalars(select(ExamSchedule)).all(), [])
+        # Can also delete standalone letter
+        del_res = self.client.delete(
+            f"/admin/users/1/planning-letters/{letter['id']}", headers=self.auth
+        )
+        self.assertEqual(del_res.status_code, 204, del_res.text)
+        self.assertEqual(self.history(), [])
+
+    def test_edit_existing_schedule_with_save_only_and_save_and_send(self):
+        self.delivery.return_value = ("sent", None)
+        first = self.saved(self.send(self.form(
+            action_mode="save_only",
+            event_date="2027-05-01",
+            event_time="10:00",
+            period="morning",
+        )))
+        schedule_id = first["exam_schedule_id"]
+        letter_id = first["id"]
+        self.delivery.assert_not_called()
+
+        # Edit date, period, time and choose save_and_send
+        edited = self.saved(self.send(self.form(
+            action_mode="save_and_send",
+            schedule_id=str(schedule_id),
+            edit_letter_id=str(letter_id),
+            event_date="2027-05-02",
+            event_time="16:30",
+            period="evening",
+            subject="განახლებული სათაური",
+            body="განახლებული ტექსტი 02.05.2027 16:30",
+        )))
+        self.assertEqual(len(self.history()), 1)
+        self.assertEqual(edited["exam_schedule_id"], schedule_id)
+        self.assertEqual(edited["status"], "sent")
+        self.assertEqual(edited["event_date"], "2027-05-02")
+        self.assertEqual(edited["event_time"], "16:30")
+        self.assertEqual(edited["period"], "evening")
+        self.delivery.assert_called_once()
+        self.db.expire_all()
+        schedule = self.db.get(ExamSchedule, schedule_id)
+        self.assertEqual(str(schedule.exam_date), "2027-05-02")
+        self.assertEqual(schedule.period, "evening")
+
 
 if __name__ == "__main__":
     unittest.main()
+

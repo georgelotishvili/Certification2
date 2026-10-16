@@ -213,7 +213,7 @@
         const date = card.querySelector('.exam-schedule-date');
         const morning = card.querySelector('.exam-schedule-morning');
         const evening = card.querySelector('.exam-schedule-evening');
-        return panel?.getAttribute?.('aria-busy') === 'true'
+        return panel?.getAttribute?.('aria-busy') === 'true' || panel?.dataset?.dirty === 'true'
           || (!!date?.value && !morning?.checked && !evening?.checked);
       });
     }
