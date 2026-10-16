@@ -45,6 +45,7 @@
     let totalUsers = 0;
     let paginatedList = false;
     let globalUnseenUsers = null;
+    let globalPendingUsers = null;
     let searchTimer = null;
     let renderController = null;
     let renderInFlight = false;
@@ -166,15 +167,79 @@
       if (DOM.clearStatementsDate) {
         DOM.clearStatementsDate.disabled = !selectedStatementsDate();
       }
+      syncResetFiltersButton();
     }
 
     function hasExamScheduleFilter() {
-      return !!(DOM.examScheduleDate?.value || DOM.filterExamMorning?.checked || DOM.filterExamEvening?.checked);
+      return !!(
+        DOM.examScheduleDate?.value
+        || DOM.filterExamMorning?.checked
+        || DOM.filterExamEvening?.checked
+        || DOM.filterCertificateHandover?.checked
+      );
     }
 
     function syncExamScheduleFilterControls() {
       if (DOM.clearExamScheduleDate) {
         DOM.clearExamScheduleDate.disabled = !DOM.examScheduleDate?.value;
+      }
+      syncResetFiltersButton();
+    }
+
+    function hasAnyActiveUsersFilter() {
+      return !!(
+        String(DOM.usersSearch?.value || '').trim()
+        || (DOM.usersSort?.value && DOM.usersSort.value !== 'date_desc')
+        || DOM.onlyAdmins?.checked
+        || DOM.filterArchitects?.checked
+        || DOM.filterExperts?.checked
+        || DOM.filterMunicipal?.checked
+        || DOM.filterCertified?.checked
+        || DOM.filterSuspendedExpired?.checked
+        || DOM.filterStatements?.checked
+        || DOM.filterPendingStatements?.checked
+        || selectedStatementsDate()
+        || hasExamScheduleFilter()
+      );
+    }
+
+    function syncResetFiltersButton() {
+      if (!DOM.resetUsersFilters) return;
+      DOM.resetUsersFilters.hidden = !hasAnyActiveUsersFilter();
+    }
+
+    function resetAllUsersFilters() {
+      if (DOM.usersSearch) DOM.usersSearch.value = '';
+      if (DOM.usersSort) DOM.usersSort.value = 'date_desc';
+      if (DOM.onlyAdmins) DOM.onlyAdmins.checked = false;
+      if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
+      if (DOM.filterExperts) DOM.filterExperts.checked = false;
+      if (DOM.filterMunicipal) DOM.filterMunicipal.checked = false;
+      if (DOM.filterCertified) DOM.filterCertified.checked = false;
+      if (DOM.filterSuspendedExpired) DOM.filterSuspendedExpired.checked = false;
+      if (DOM.filterStatements) DOM.filterStatements.checked = false;
+      if (DOM.filterPendingStatements) DOM.filterPendingStatements.checked = false;
+      if (DOM.statementsDate) DOM.statementsDate.value = '';
+      if (DOM.filterExamMorning) DOM.filterExamMorning.checked = false;
+      if (DOM.filterExamEvening) DOM.filterExamEvening.checked = false;
+      if (DOM.filterCertificateHandover) DOM.filterCertificateHandover.checked = false;
+      if (DOM.examScheduleDate) DOM.examScheduleDate.value = '';
+      syncStatementFilterControls();
+      syncExamScheduleFilterControls();
+      syncResetFiltersButton();
+      return render();
+    }
+
+    function updateStatementFilterBadges(unseenUsersCount, pendingUsersCount) {
+      if (DOM.filterStatementsBadge) {
+        const n = Math.max(0, Number(unseenUsersCount) || 0);
+        DOM.filterStatementsBadge.textContent = String(n);
+        DOM.filterStatementsBadge.hidden = n === 0;
+      }
+      if (DOM.filterPendingStatementsBadge) {
+        const m = Math.max(0, Number(pendingUsersCount) || 0);
+        DOM.filterPendingStatementsBadge.textContent = String(m);
+        DOM.filterPendingStatementsBadge.hidden = m === 0;
       }
     }
 
@@ -245,14 +310,16 @@
       if (live) params.set('live', 'true');
       if (DOM.filterStatements?.checked) params.set('new_statements', 'true');
       if (DOM.filterPendingStatements?.checked) params.set('pending_statements', 'true');
-      const qualification = DOM.filterCertified?.checked ? 'certified'
-        : DOM.filterArchitects?.checked ? 'architect'
-          : DOM.filterExperts?.checked ? 'expert' : DOM.filterMunicipal?.checked ? 'municipal' : '';
+      const qualification = DOM.filterSuspendedExpired?.checked ? 'suspended_expired'
+        : DOM.filterCertified?.checked ? 'certified'
+          : DOM.filterArchitects?.checked ? 'architect'
+            : DOM.filterExperts?.checked ? 'expert' : DOM.filterMunicipal?.checked ? 'municipal' : '';
       if (qualification) params.set('qualification', qualification);
       const statementDate = selectedStatementsDate();
       if (statementDate) params.set('statement_date', statementDate);
       if (DOM.filterExamMorning?.checked) params.set('exam_morning', 'true');
       if (DOM.filterExamEvening?.checked) params.set('exam_evening', 'true');
+      if (DOM.filterCertificateHandover?.checked) params.set('certificate_handover', 'true');
       if (DOM.examScheduleDate?.value) params.set('exam_date', DOM.examScheduleDate.value);
       params.set('sort', DOM.usersSort?.value || 'date_desc');
       const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, {
@@ -275,9 +342,13 @@
 
     function mergeCachedUser(user) {
       if (!user || user.id == null) return;
-      const existing = cachedUsersById.get(String(user.id));
+      const existing = cachedUsersById.get(String(userIdOf(user)));
       // Card callbacks retain the same object and always see the newest data.
       if (existing) mergeUserState(existing, user);
+    }
+
+    function userIdOf(user) {
+      return user?.id;
     }
 
     function applyLiveUserState(user) {
@@ -303,7 +374,11 @@
         displayedPage = data.page;
         totalUsers = data.total;
         globalUnseenUsers = data.global_unseen_users;
+        if (data.global_pending_users != null) {
+          globalPendingUsers = data.global_pending_users;
+        }
         updateNavBadge(globalUnseenUsers > 0);
+        updateStatementFilterBadges(globalUnseenUsers, globalPendingUsers);
       }
       const pages = Math.max(1, Math.ceil(totalUsers / PAGE_SIZE));
       if (pagination.container) pagination.container.hidden = !paginatedList;
@@ -385,6 +460,26 @@
       });
     }
 
+    function certificateDotMeta(certificateData) {
+      const certificate = certificateData || {};
+      const certLevel = certificate.level || '';
+      const certStatus = certificate.status || '';
+      if (!certLevel && !certStatus) return null;
+      if (certStatus === 'suspended' || certStatus === 'expired') {
+        return { cls: 'is-suspended', title: 'შეჩერებული / ვადაგასული სერტიფიკატი' };
+      }
+      if (certLevel === 'architect' || certLevel === 'architect_expert') {
+        return { cls: 'is-architect', title: 'შენობა-ნაგებობის არქიტექტორი' };
+      }
+      if (certLevel === 'expert') {
+        return { cls: 'is-expert', title: 'არქიტექტურული პროექტის ექსპერტი' };
+      }
+      if (certLevel === 'municipal') {
+        return { cls: 'is-municipal', title: 'მუნიციპალიტეტის სპეციალისტი' };
+      }
+      return null;
+    }
+
     function userRowHTML(user) {
       const fullNameRaw = `${(user.first_name || '').trim()} ${(user.last_name || '').trim()}`.trim() || '(უსახელო)';
       const founderRow = !!user.is_founder;
@@ -413,75 +508,76 @@
       const safeCode = escapeHtml(user.code || '');
       const safeEmail = escapeHtml(user.email || '');
       const safeRegistered = escapeHtml(formatDateTime(user.created_at));
-      
-      // Determine certificate level color
-      const certificate = user.certificate || user.certificate_info || {};
-      const certLevel = certificate.level || '';
-      const certStatus = certificate.status || '';
-      let nameColor = '#0f172a'; // default
-      
-      // გაუქმებული ან ვადაგასული სერტიფიკატი - ნაცრისფერი
-      if (certStatus === 'suspended' || certStatus === 'expired') {
-        nameColor = '#6b7280'; // ნაცრისფერი
-      } else if (certLevel === 'architect' || certLevel === 'architect_expert') {
-        nameColor = '#1e40af'; // დაბალანსებული ლურჯი
-      } else if (certLevel === 'expert') {
-        nameColor = '#991b1b'; // დაბალანსებული წითელი
-      } else if (certLevel === 'municipal') {
-        nameColor = '#065f46'; // დაბალანსებული მწვანე
-      }
+      const dotMeta = certificateDotMeta(user.certificate || user.certificate_info);
       
       return `
         <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : (user.has_pending_statements ? ' has-pending-statements' : '')}" data-id="${safeId}">
           <div class="block-head user-block-head">
-            <div class="user-name" style="font-size:16px;font-weight:700;color:${nameColor};">${safeFullName}</div>
+            <div class="user-name"><span class="user-cert-dot${dotMeta ? ` ${dotMeta.cls}` : ''}"${dotMeta ? ` title="${dotMeta.title}"` : ' hidden'}></span><span class="user-name-text">${safeFullName}</span></div>
             <div class="user-controls">
-              <label class="user-checkbox-label" title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}">
+              <label class="user-checkbox-label user-admin-check-label" title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}">
                 <input type="checkbox" class="chk-admin" ${checked} ${disabled} />
                 <span>ადმინი</span>
               </label>
               <div class="user-exam-stage-controls" role="group" aria-label="გამოცდის ეტაპებზე დაშვება">${examControls}</div>
             </div>
             <div class="user-actions">
-              <button class="head-toggle" type="button" aria-expanded="false">▾</button>
+              <button class="head-toggle" type="button" aria-expanded="false" title="ბარათის გახსნა / დახურვა">▾</button>
               <button class="head-delete" type="button" aria-label="წაშლა" title="წაშლა" ${founderRow || !isFounderActor() ? 'disabled' : ''} style="${founderRow ? 'display:none;' : ''}">×</button>
             </div>
           </div>
           <div class="block-questions" aria-hidden="true">
             <div class="questions-list">
-              <div class="question-card open">
-                <div class="user-details-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:12px;">
-                  <div>
-                    <div style="font-weight:700;color:#065f46;margin-bottom:8px;">ფოტო</div>
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-                      <label class="photo-upload-btn" title="ფოტოს ატვირთვა" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <input type="file" class="photo-upload-input" accept=".jpg,.jpeg,.png,.webp" style="display:none;" />
-                      </label>
-                      <button type="button" class="photo-delete-btn" title="ფოტოს წაშლა" style="display:${user.photo_filename ? 'inline-flex' : 'none'};align-items:center;justify-content:center;width:32px;height:32px;border:2px solid #fca5a5;border-radius:6px;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:16px;font-weight:bold;">×</button>
-                      <span class="photo-filename" style="font-size:13px;color:#525252;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.photo_filename ? escapeHtml(user.photo_filename) : '—'}</span>
-                    </div>
-                    <div style="color:#525252;font-size:13px;line-height:1.8;">
-                      <div>პირადი №: <strong data-user-field="personal_id">${safePersonalId}</strong></div>
-                      <div>ტელეფონი: <strong data-user-field="phone">${safePhone}</strong></div>
-                      <div>კოდი: <strong data-user-field="code" style="color:#6d28d9;">${safeCode}</strong></div>
-                      <div>მაილი: <strong data-user-field="email" style="color:#065f46;">${safeEmail}</strong></div>
-                      <div>რეგისტრაცია: <strong data-user-field="created_at">${safeRegistered}</strong></div>
+              <div class="question-card user-detail-card open">
+                <div class="user-details-grid">
+                  <div class="user-details-column user-info-column">
+                    <div class="user-section-title">პირადი მონაცემები</div>
+                    <div class="user-info-grid">
+                      <div class="user-info-item">
+                        <span class="user-info-label">პირადი №:</span>
+                        <strong class="user-info-value" data-user-field="personal_id">${safePersonalId || '—'}</strong>
+                      </div>
+                      <div class="user-info-item">
+                        <span class="user-info-label">ტელეფონი:</span>
+                        <strong class="user-info-value" data-user-field="phone">${safePhone || '—'}</strong>
+                      </div>
+                      <div class="user-info-item">
+                        <span class="user-info-label">კოდი:</span>
+                        <strong class="user-info-value is-code" data-user-field="code">${safeCode || '—'}</strong>
+                      </div>
+                      <div class="user-info-item">
+                        <span class="user-info-label">მაილი:</span>
+                        <strong class="user-info-value is-email" data-user-field="email" title="${safeEmail}">${safeEmail || '—'}</strong>
+                      </div>
+                      <div class="user-info-item">
+                        <span class="user-info-label">რეგისტრაცია:</span>
+                        <strong class="user-info-value" data-user-field="created_at">${safeRegistered || '—'}</strong>
+                      </div>
+                      <div class="user-info-item user-photo-item">
+                        <span class="user-info-label">ფოტო:</span>
+                        <div class="user-photo-controls">
+                          <label class="photo-upload-btn" title="ფოტოს ატვირთვა">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <input type="file" class="photo-upload-input" accept=".jpg,.jpeg,.png,.webp" style="display:none;" />
+                          </label>
+                          <button type="button" class="photo-delete-btn" title="ფოტოს წაშლა" style="display:${user.photo_filename ? '' : 'none'};">×</button>
+                          <span class="photo-filename" title="${user.photo_filename ? escapeHtml(user.photo_filename) : ''}">${user.photo_filename ? escapeHtml(user.photo_filename) : '—'}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div style="font-weight:700;color:#065f46;margin-bottom:8px;">ქმედებები</div>
-                    <div class="user-action-buttons" style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;">
-                      <div style="display:flex;flex-direction:column;gap:6px;">
-                        <button class="btn-user-announcements" type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">განცხადებები</button>
-                        <button class="btn-user-certificate" type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">სერტიფიკატი</button>
-                        <button class="btn-user-edit"${canEdit ? '' : ' disabled'} type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;${canEdit ? '' : 'opacity:0.6;cursor:not-allowed;'}">რედაქტირება</button>
-                      </div>
-                      <div style="display:flex;flex-direction:column;gap:6px;">
-                        <button class="btn-user-results" type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">გამოცდის შედეგები</button>
-                        <button class="btn-user-multi-apartment" type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">მრავალბინიანის შეფ: შედეგები</button>
-                        <button class="btn-user-multi-functional" type="button" style="width:100%;padding:6px 12px;border:2px solid #c7d2fe;border-radius:6px;background:#eef2ff;cursor:pointer;font-size:13px;">მრავალფუნქციურის შეფ: შედეგები</button>
-                      </div>
+                  <div class="user-details-column user-actions-column">
+                    <div class="user-section-title">ქმედებები</div>
+                    <div class="user-action-buttons">
+                      <button class="user-action-btn btn-user-announcements${user.has_unseen_statements ? ' has-new-statements' : (user.has_pending_statements ? ' has-pending-statements' : '')}" type="button">
+                        <span>განცხადებები / წერილები</span>
+                        <span class="btn-scheduled-exams-badge" hidden>0</span>
+                      </button>
+                      <button class="user-action-btn btn-user-results" type="button">გამოცდის შედეგები</button>
+                      <button class="user-action-btn btn-user-certificate" type="button">სერტიფიკატი</button>
+                      <button class="user-action-btn btn-user-multi-apartment" type="button">მრავალბინიანის შეფ: შედეგები</button>
+                      <button class="user-action-btn btn-user-edit"${canEdit ? '' : ' disabled'} type="button">რედაქტირება</button>
+                      <button class="user-action-btn btn-user-multi-functional" type="button">მრავალფუნქციურის შეფ: შედეგები</button>
                     </div>
                   </div>
                 </div>
@@ -634,10 +730,10 @@
       const multiFunctionalBtns = card.querySelectorAll('.btn-user-multi-functional');
       
       announcementsBtn?.addEventListener('click', () => {
-        if (typeof onShowStatements === 'function') {
+        if (typeof schedulesController?.openHistoryModal === 'function') {
+          schedulesController.openHistoryModal();
+        } else if (typeof onShowStatements === 'function') {
           onShowStatements(user);
-        } else {
-          alert('განცხადებები — მალე დაემატება');
         }
       });
       resultsBtns?.forEach((btn) => btn.addEventListener('click', () => {
@@ -773,13 +869,18 @@
       const filterExperts = DOM.filterExperts?.checked;
       const filterMunicipal = DOM.filterMunicipal?.checked;
       const filterCertified = DOM.filterCertified?.checked;
+      const filterSuspendedExpired = DOM.filterSuspendedExpired?.checked;
       
-      if (!paginatedList && (filterArchitects || filterExperts || filterMunicipal || filterCertified)) {
+      if (!paginatedList && (filterArchitects || filterExperts || filterMunicipal || filterCertified || filterSuspendedExpired)) {
         filteredItems = filteredItems.filter((user) => {
           const certificate = user.certificate || user.certificate_info || {};
           const certLevel = certificate.level || '';
+          const certStatus = certificate.status || '';
           const hasCertificate = !!certificate.level;
           
+          if (filterSuspendedExpired) {
+            return certStatus === 'suspended' || certStatus === 'expired';
+          }
           if (filterCertified) {
             return hasCertificate && (certLevel === 'architect' || certLevel === 'expert' || certLevel === 'municipal');
           }
@@ -821,16 +922,22 @@
         card.remove();
         cardsById.delete(id);
       });
-      updateNavBadge(globalUnseenUsers == null
-        ? cachedItems.some((user) => user.has_unseen_statements) : globalUnseenUsers > 0);
+      const computedUnseen = globalUnseenUsers == null
+        ? cachedItems.filter((user) => user.has_unseen_statements).length
+        : globalUnseenUsers;
+      const computedPending = globalPendingUsers == null
+        ? cachedItems.filter((user) => !user.has_unseen_statements && user.has_pending_statements).length
+        : globalPendingUsers;
+      updateNavBadge(computedUnseen > 0);
+      updateStatementFilterBadges(computedUnseen, computedPending);
     }
 
     function updateUserDisplay(card, user) {
-      const name = card.querySelector('.user-name');
-      if (name) name.textContent = `${user.first_name || ''} ${user.last_name || ''}`.trim() || '(უსახელო)';
+      const nameText = card.querySelector('.user-name-text') || card.querySelector('.user-name');
+      if (nameText) nameText.textContent = `${user.first_name || ''} ${user.last_name || ''}`.trim() || '(უსახელო)';
       for (const field of ['personal_id', 'phone', 'code', 'email', 'created_at']) {
         const node = card.querySelector(`[data-user-field="${field}"]`);
-        if (node) node.textContent = field === 'created_at' ? formatDateTime(user[field]) : user[field] || '';
+        if (node) node.textContent = field === 'created_at' ? formatDateTime(user[field]) : user[field] || '—';
       }
       const admin = card.querySelector('.chk-admin');
       if (admin && !adminRoleSavingIds.has(String(user.id))) admin.checked = !!(user.is_admin || user.is_founder);
@@ -1021,6 +1128,7 @@
 
     async function render({ preserveExisting = false, keepPage = false } = {}) {
       if (!DOM.usersGrid) return;
+      syncResetFiltersButton();
       if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
       if (!keepPage) currentPage = 1;
       renderController?.abort();
@@ -1069,6 +1177,7 @@
 
     function init() {
       on(DOM.usersSearch, 'input', () => {
+        syncResetFiltersButton();
         // Invalidate old responses immediately, not only after the debounce.
         ++usersRenderVersion;
         renderController?.abort();
@@ -1080,6 +1189,7 @@
         if (searchTimer) clearTimeout(searchTimer);
         searchTimer = setTimeout(() => { searchTimer = null; void render(); }, SEARCH_DELAY_MS);
       });
+      on(DOM.resetUsersFilters, 'click', resetAllUsersFilters);
       on(listNotice.retry, 'click', () => render({ preserveExisting: true, keepPage: true }));
       on(pagination.previous, 'click', () => {
         if (renderInFlight || searchTimer || currentPage <= 1) return;
@@ -1107,6 +1217,7 @@
       syncStatementFilterControls();
       on(DOM.filterExamMorning, 'change', render);
       on(DOM.filterExamEvening, 'change', render);
+      on(DOM.filterCertificateHandover, 'change', render);
       on(DOM.examScheduleDate, 'change', () => {
         syncExamScheduleFilterControls();
         return render();
@@ -1123,6 +1234,7 @@
           if (DOM.filterExperts) DOM.filterExperts.checked = false;
           if (DOM.filterMunicipal) DOM.filterMunicipal.checked = false;
           if (DOM.filterCertified) DOM.filterCertified.checked = false;
+          if (DOM.filterSuspendedExpired) DOM.filterSuspendedExpired.checked = false;
         }
         return render();
       });
@@ -1131,6 +1243,7 @@
           if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
           if (DOM.filterMunicipal) DOM.filterMunicipal.checked = false;
           if (DOM.filterCertified) DOM.filterCertified.checked = false;
+          if (DOM.filterSuspendedExpired) DOM.filterSuspendedExpired.checked = false;
         }
         return render();
       });
@@ -1139,6 +1252,7 @@
           if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
           if (DOM.filterExperts) DOM.filterExperts.checked = false;
           if (DOM.filterCertified) DOM.filterCertified.checked = false;
+          if (DOM.filterSuspendedExpired) DOM.filterSuspendedExpired.checked = false;
         }
         return render();
       });
@@ -1147,9 +1261,20 @@
           if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
           if (DOM.filterExperts) DOM.filterExperts.checked = false;
           if (DOM.filterMunicipal) DOM.filterMunicipal.checked = false;
+          if (DOM.filterSuspendedExpired) DOM.filterSuspendedExpired.checked = false;
         }
         return render();
       });
+      on(DOM.filterSuspendedExpired, 'change', () => {
+        if (DOM.filterSuspendedExpired?.checked) {
+          if (DOM.filterArchitects) DOM.filterArchitects.checked = false;
+          if (DOM.filterExperts) DOM.filterExperts.checked = false;
+          if (DOM.filterMunicipal) DOM.filterMunicipal.checked = false;
+          if (DOM.filterCertified) DOM.filterCertified.checked = false;
+        }
+        return render();
+      });
+      syncResetFiltersButton();
       setupEditModal();
       startLiveRefresh();
     }
@@ -1163,8 +1288,16 @@
       else if (hasPending === false) pendingChanges.pending_statement_count = 0;
       const existing = cachedUsersById.get(String(userId));
       if (existing) {
+        const wasRed = !!existing.has_unseen_statements;
+        const wasBlue = !wasRed && !!existing.has_pending_statements;
+        const nextRed = !!hasUnseen;
+        const nextPending = hasPending != null ? !!hasPending : !!existing.has_pending_statements;
+        const nextBlue = !nextRed && nextPending;
         if (globalUnseenUsers != null) {
-          globalUnseenUsers = Math.max(0, globalUnseenUsers + Number(!!hasUnseen) - Number(!!existing.has_unseen_statements));
+          globalUnseenUsers = Math.max(0, globalUnseenUsers + Number(nextRed) - Number(wasRed));
+        }
+        if (globalPendingUsers != null) {
+          globalPendingUsers = Math.max(0, globalPendingUsers + Number(nextBlue) - Number(wasBlue));
         }
         Object.assign(existing, {
           has_unseen_statements: !!hasUnseen,
@@ -1180,8 +1313,14 @@
           card.dataset.pendingCount = String(pendingChanges.pending_statement_count);
         }
       }
-      updateNavBadge(globalUnseenUsers == null
-        ? cachedItems.some((item) => item.has_unseen_statements) : globalUnseenUsers > 0);
+      const computedUnseen = globalUnseenUsers == null
+        ? cachedItems.filter((item) => item.has_unseen_statements).length
+        : globalUnseenUsers;
+      const computedPending = globalPendingUsers == null
+        ? cachedItems.filter((item) => !item.has_unseen_statements && item.has_pending_statements).length
+        : globalPendingUsers;
+      updateNavBadge(computedUnseen > 0);
+      updateStatementFilterBadges(computedUnseen, computedPending);
       if (paginatedList) void render({ preserveExisting: true, keepPage: true });
     }
 
@@ -1194,26 +1333,25 @@
       
       const nameElement = card.querySelector('.user-name');
       if (!nameElement) return;
-      
-      // Determine color based on certificate level
-      const certificate = certificateData || {};
-      const certLevel = certificate.level || '';
-      const certStatus = certificate.status || '';
-      let nameColor = '#0f172a'; // default
-      
-      // გაუქმებული ან ვადაგასული სერტიფიკატი - ნაცრისფერი
-      if (certStatus === 'suspended' || certStatus === 'expired') {
-        nameColor = '#6b7280'; // ნაცრისფერი
-      } else if (certLevel === 'architect' || certLevel === 'architect_expert') {
-        nameColor = '#1e40af'; // დაბალანსებული ლურჯი
-      } else if (certLevel === 'expert') {
-        nameColor = '#991b1b'; // დაბალანსებული წითელი
-      } else if (certLevel === 'municipal') {
-        nameColor = '#065f46'; // დაბალანსებული მწვანე
+      nameElement.style.color = '';
+
+      let dotEl = nameElement.querySelector('.user-cert-dot');
+      if (!dotEl) {
+        dotEl = document.createElement('span');
+        dotEl.className = 'user-cert-dot';
+        nameElement.prepend(dotEl);
       }
-      
-      nameElement.style.color = nameColor;
-      
+
+      const dotMeta = certificateDotMeta(certificateData);
+      if (dotMeta) {
+        dotEl.className = `user-cert-dot ${dotMeta.cls}`;
+        dotEl.title = dotMeta.title;
+        dotEl.hidden = false;
+      } else {
+        dotEl.className = 'user-cert-dot';
+        dotEl.removeAttribute('title');
+        dotEl.hidden = true;
+      }
     }
 
     function updateNavBadge(hasAny) {
@@ -1235,7 +1373,13 @@
         if (!response.ok) throw new Error('summary failed');
         const data = await response.json();
         if (statementVersion !== statementsStateVersion || requestVersion !== usersRenderVersion) return;
+        if (data?.unseen_users != null) globalUnseenUsers = Number(data.unseen_users) || 0;
+        if (data?.pending_users != null) globalPendingUsers = Number(data.pending_users) || 0;
         updateNavBadge(!!data?.has_unseen);
+        updateStatementFilterBadges(
+          globalUnseenUsers ?? (data?.has_unseen ? 1 : 0),
+          globalPendingUsers ?? 0
+        );
       } catch {}
     }
 

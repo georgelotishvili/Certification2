@@ -75,17 +75,22 @@ document.addEventListener('DOMContentLoaded', () => {
     usersGrid: document.getElementById('usersGrid'),
     usersSearch: document.getElementById('usersSearch'),
     usersSort: document.getElementById('usersSort'),
+    resetUsersFilters: document.getElementById('resetUsersFilters'),
     onlyAdmins: document.getElementById('onlyAdmins'),
     filterArchitects: document.getElementById('filterArchitects'),
     filterExperts: document.getElementById('filterExperts'),
     filterMunicipal: document.getElementById('filterMunicipal'),
     filterCertified: document.getElementById('filterCertified'),
+    filterSuspendedExpired: document.getElementById('filterSuspendedExpired'),
     filterStatements: document.getElementById('filterStatements'),
+    filterStatementsBadge: document.getElementById('filterStatementsBadge'),
     filterPendingStatements: document.getElementById('filterPendingStatements'),
+    filterPendingStatementsBadge: document.getElementById('filterPendingStatementsBadge'),
     statementsDate: document.getElementById('statementsDate'),
     clearStatementsDate: document.getElementById('clearStatementsDate'),
     filterExamMorning: document.getElementById('filterExamMorning'),
     filterExamEvening: document.getElementById('filterExamEvening'),
+    filterCertificateHandover: document.getElementById('filterCertificateHandover'),
     examScheduleDate: document.getElementById('examScheduleDate'),
     clearExamScheduleDate: document.getElementById('clearExamScheduleDate'),
     candidateResultsOverlay: document.getElementById('candidateResultsOverlay'),
@@ -116,6 +121,13 @@ document.addEventListener('DOMContentLoaded', () => {
     certificateFormValidityTerm: document.getElementById('certificateFormValidityTerm'),
     certificateFormValidUntil: document.getElementById('certificateFormValidUntil'),
     certificateFormValidUntilDisplay: document.getElementById('certificateFormValidUntilDisplay'),
+    certificateFormNotifyEditor: document.getElementById('certificateFormNotifyEditor'),
+    certificateFormNotifyEditBtn: document.getElementById('certificateFormNotifyEditBtn'),
+    certificateFormNotifyReset: document.getElementById('certificateFormNotifyReset'),
+    certificateFormNotifySaveTemplate: document.getElementById('certificateFormNotifySaveTemplate'),
+    certificateFormNotifySubject: document.getElementById('certificateFormNotifySubject'),
+    certificateFormNotifyBody: document.getElementById('certificateFormNotifyBody'),
+    certificateFormSendNotification: document.getElementById('certificateFormSendNotification'),
     certificateFormSubmit: document.getElementById('certificateFormSubmit'),
     certificateFormName: document.getElementById('certificateFormName'),
     certificateFormPhone: document.getElementById('certificateFormPhone'),
@@ -452,7 +464,10 @@ document.addEventListener('DOMContentLoaded', () => {
       },
     }, { init: noop, open: noop, close: noop });
 
-    const examSchedulesModule = createModule(modules.createExamSchedulesModule, { mount: noop });
+    const examSchedulesModule = createModuleWithContext(modules.createExamSchedulesModule, {
+      ...moduleContextBase,
+      downloadStatementPdf: statementsModule.downloadStatementPdf,
+    }, { mount: noop });
     const usersModule = createModuleWithContext(modules.createUsersModule, {
       ...moduleContextBase,
       examSchedules: examSchedulesModule,

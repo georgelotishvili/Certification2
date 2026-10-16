@@ -433,7 +433,8 @@
     }
 
     async function downloadStatementPdf(statement, options = {}) {
-      if (!statement || !activeUser) throw new Error('Statement context missing');
+      const targetUser = options.user || activeUser;
+      if (!statement || !targetUser) throw new Error('Statement context missing');
       const jsPDF = await ensureJsPdf();
       const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
       const fontName = await ensurePdfFont(doc);
@@ -488,11 +489,11 @@
         });
       };
 
-      const fullName = `${(activeUser.first_name || '').trim()} ${(activeUser.last_name || '').trim()}`.trim();
-      const personalId = activeUser.personal_id || '';
-      const phone = activeUser.phone || '';
-      const email = activeUser.email || '';
-      const code = activeUser.code || '';
+      const fullName = `${(targetUser.first_name || '').trim()} ${(targetUser.last_name || '').trim()}`.trim();
+      const personalId = targetUser.personal_id || '';
+      const phone = targetUser.phone || '';
+      const email = targetUser.email || '';
+      const code = targetUser.code || '';
       const createdAt = formatDateTime(statement.created_at);
 
       writeHeading('განცხადება');
@@ -507,9 +508,13 @@
 
       writeParagraph('განცხადების ტექსტი', statement.message || '');
 
-      const safeCode = code || `user-${activeUser.id || 'unknown'}`;
+      const safeCode = (code || `user-${targetUser.id || 'unknown'}`).toString().trim().replace(/\s+/g, '_');
       const fileName = options.filename || `statement_${safeCode}_${statement.id}.pdf`;
-      await deliverPdf(doc, fileName, { showToast, handle: options.saveHandle || null });
+      const prep = options.saveHandle !== undefined
+        ? { handle: options.saveHandle, aborted: false }
+        : await preparePdfSaveHandle(fileName, { showToast });
+      if (prep?.aborted) return;
+      await deliverPdf(doc, fileName, { showToast, handle: prep?.handle || null });
     }
 
     function init() {

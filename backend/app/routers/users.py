@@ -1,20 +1,23 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import json
 from pathlib import Path
+import shutil
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Header, UploadFile, File, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, Header, UploadFile, File, Request
 from fastapi.responses import FileResponse
 from sqlalchemy import select, or_, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession
+from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter
 from ..schemas import (
     UserCreate, UserOut, PublicUserOut, PublicPersonPageOut, PublicCertificateOut,
-    UserProfileUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate,
+    UserProfileUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate, CertificateNotifyRequest,
     SendVerificationCodeRequest, SendVerificationCodeResponse, VerifyCodeRequest, VerifyCodeResponse,
     UserCreateWithVerification,
 )
@@ -28,6 +31,7 @@ from ..services.bounded_upload import (
     save_upload_stream,
 )
 from ..services import email_verification
+from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
 from ..services.exam_stage_grants import (
     exam_state_with_permissions,
     expire_unused_stage_permissions,
@@ -599,6 +603,193 @@ def update_profile(
     )
 
 
+CERTIFICATE_LEVEL_LABELS = {
+    "architect": "შენობა-ნაგებობის არქიტექტორი",
+    "municipal": "პროექტის შემსწავლელი სპეციალისტი",
+    "expert": "არქიტექტურული პროექტის ექსპერტი",
+}
+
+CERTIFICATE_STATUS_LABELS = {
+    "active": "მოქმედი",
+    "suspended": "შეჩერებული",
+    "expired": "ვადაგასული",
+}
+
+
+def _format_cert_date(dt: datetime | None) -> str:
+    if not dt:
+        return "—"
+    return dt.strftime("%d-%m-%Y")
+
+
+DEFAULT_CERT_ISSUED_SUBJECT = "სერტიფიკატის გაცემა და საჯარო რეესტრში ასახვა"
+DEFAULT_CERT_ISSUED_BODY = (
+    "ბატონო/ქალბატონო {name},\n"
+    "გაცნობებთ, რომ თქვენზე გაიცა შესაბამისობის სერტიფიკატი და მონაცემები აისახა ინსტიტუტის სერტიფიცირებულ პირთა საჯარო რეესტრში.\n\n"
+    "• სერტიფიკატის ნომერი: {code}\n"
+    "• სერტიფიცირების კატეგორია: {qualification}\n"
+    "• გაცემის თარიღი: {issue_date}\n"
+    "• მოქმედების ბოლო თარიღი: {valid_until}\n"
+    "• საჯარო რეესტრის ბმული: https://gipc.org.ge\n\n"
+    "შეტყობინებას თან ერთვის ელექტრონული სერტიფიკატი (PDF). სერტიფიკატისა და სერტიფიცირების სტატუსის გამოყენება დასაშვებია მხოლოდ მინიჭებული კატეგორიის, მოქმედების ვადისა და სასერტიფიკაციო ხელშეკრულებით განსაზღვრული პირობების ფარგლებში (GIPC-PRO-006).\n\n"
+    "პატივისცემით,\n"
+    "შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“"
+)
+
+
+def _load_saved_cert_issued_template() -> tuple[str, str]:
+    try:
+        root = ensure_media_root().resolve()
+        meta_path = (root / "planning" / "templates" / "cert_issued" / "template.json").resolve()
+        if meta_path.is_file():
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                subj = (data.get("subject") or "").strip() or DEFAULT_CERT_ISSUED_SUBJECT
+                body = (data.get("body") or "").strip() or DEFAULT_CERT_ISSUED_BODY
+                return subj, body
+    except Exception:
+        pass
+    return DEFAULT_CERT_ISSUED_SUBJECT, DEFAULT_CERT_ISSUED_BODY
+
+
+def _render_cert_tokens(text: str, tokens: dict[str, str]) -> str:
+    result = text or ""
+    for key, val in tokens.items():
+        result = result.replace(f"{{{key}}}", val)
+    return result
+
+
+def _build_certificate_activation_email(
+    user: User,
+    cert: Certificate,
+    custom_subject: str | None = None,
+    custom_body: str | None = None,
+) -> tuple[str, str]:
+    full_name = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip() or "—"
+    unique_code = (cert.unique_code or user.code or "—").strip()
+    level_key = (cert.level or "architect").strip().lower()
+    qualification_label = CERTIFICATE_LEVEL_LABELS.get(level_key, cert.level or "—")
+    status_key = (cert.status or "active").strip().lower()
+    status_label = CERTIFICATE_STATUS_LABELS.get(status_key, cert.status or "მოქმედი")
+    issue_date_str = _format_cert_date(cert.issue_date or cert.created_at or datetime.utcnow())
+    valid_until_str = _format_cert_date(cert.valid_until)
+
+    tokens = {
+        "name": full_name,
+        "personal_id": user.personal_id or "—",
+        "code": unique_code,
+        "qualification": qualification_label,
+        "status": status_label,
+        "issue_date": issue_date_str,
+        "valid_until": valid_until_str,
+        "date": issue_date_str,
+    }
+
+    tmpl_subject, tmpl_body = _load_saved_cert_issued_template()
+    raw_subject = (custom_subject or "").strip() or tmpl_subject
+    raw_body = (custom_body or "").strip() or tmpl_body
+
+    return _render_cert_tokens(raw_subject, tokens), _render_cert_tokens(raw_body, tokens)
+
+
+def _send_certificate_activation_notification(
+    db: Session,
+    user: User,
+    cert: Certificate,
+    actor_email: str,
+    custom_subject: str | None = None,
+    custom_body: str | None = None,
+) -> tuple[str, str | None]:
+    subject, body = _build_certificate_activation_email(user, cert, custom_subject, custom_body)
+    now = datetime.utcnow()
+    req_id = str(uuid4())
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            {
+                "user_id": user.id,
+                "cert_id": cert.id,
+                "unique_code": cert.unique_code,
+                "status": cert.status,
+                "req_id": req_id,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    attachment_path_rel: str | None = None
+    attachment_filename: str | None = None
+    attachment_size: int | None = None
+
+    if cert.file_path:
+        try:
+            src_path = resolve_storage_path(cert.file_path)
+            if src_path.is_file():
+                size = src_path.stat().st_size
+                if 0 < size <= ATTACHMENT_MAX_BYTES:
+                    root = ensure_media_root().resolve()
+                    dest_dir = (root / "planning" / f"letters/{user.id}").resolve()
+                    if dest_dir.is_relative_to(root / "planning"):
+                        dest_dir.mkdir(parents=True, exist_ok=True)
+                        dest_path = dest_dir / f"{uuid4().hex}.pdf"
+                        shutil.copyfile(src_path, dest_path)
+                        attachment_path_rel = relative_storage_path(dest_path)
+                        code_label = (cert.unique_code or user.code or "certificate").strip()
+                        attachment_filename = f"certificate-{code_label}.pdf"
+                        attachment_size = int(size)
+        except Exception:
+            attachment_path_rel = None
+            attachment_filename = None
+            attachment_size = None
+
+    letter = PlanningLetter(
+        user_id=user.id,
+        kind="certificate",
+        event_date=(cert.issue_date or now).date(),
+        event_time=now.strftime("%H:%M"),
+        period="cert_issued",
+        request_id=req_id,
+        request_fingerprint=fingerprint,
+        to_email=user.email,
+        subject=subject,
+        body=body,
+        attachment_filename=attachment_filename,
+        attachment_path=attachment_path_rel,
+        attachment_size_bytes=attachment_size,
+        status="sending",
+        attempts=1,
+        created_by=actor_email,
+    )
+    db.add(letter)
+    db.commit()
+    db.refresh(letter)
+
+    try:
+        delivery_status, error = deliver_letter(letter)
+        if delivery_status not in ("sent", "failed", "simulated", "uncertain"):
+            raise ValueError("Invalid delivery result")
+    except Exception:
+        delivery_status, error = "uncertain", "გაგზავნის შედეგი დაუდასტურებელია. გადაამოწმეთ ოფიციალური ელფოსტა."
+    letter.status, letter.error = delivery_status, error
+    if delivery_status == "sent":
+        letter.sent_at = datetime.utcnow()
+    db.add(letter)
+    db.commit()
+    db.refresh(letter)
+    return letter.status, letter.error
+
+
+def _certificate_out_with_notification(
+    cert: Certificate,
+    notification_status: str | None = None,
+    notification_error: str | None = None,
+) -> CertificateOut:
+    out = CertificateOut.model_validate(cert)
+    out.notification_status = notification_status
+    out.notification_error = notification_error
+    return out
+
+
 @router.get("/{user_id}/certificate", response_model=CertificateOut)
 def get_certificate(
     user_id: int,
@@ -631,7 +822,7 @@ def create_certificate(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     # Only admin/founder can create
-    _require_admin(db, authorization)
+    actor = _require_admin(db, authorization)
     
     existing = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if existing:
@@ -651,7 +842,14 @@ def create_certificate(
     db.commit()
     db.refresh(cert)
     
-    return CertificateOut.model_validate(cert)
+    notif_status = None
+    notif_error = None
+    if payload.send_notification:
+        notif_status, notif_error = _send_certificate_activation_notification(
+            db, user, cert, actor.email, payload.notification_subject, payload.notification_body
+        )
+    
+    return _certificate_out_with_notification(cert, notif_status, notif_error)
 
 
 @router.put("/{user_id}/certificate", response_model=CertificateOut)
@@ -666,7 +864,7 @@ def update_certificate(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     # Only admin/founder can update
-    _require_admin(db, authorization)
+    actor = _require_admin(db, authorization)
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
@@ -690,7 +888,40 @@ def update_certificate(
     db.commit()
     db.refresh(cert)
     
-    return CertificateOut.model_validate(cert)
+    notif_status = None
+    notif_error = None
+    if payload.send_notification:
+        notif_status, notif_error = _send_certificate_activation_notification(
+            db, user, cert, actor.email, payload.notification_subject, payload.notification_body
+        )
+    
+    return _certificate_out_with_notification(cert, notif_status, notif_error)
+
+
+@router.post("/{user_id}/certificate/notify", response_model=CertificateOut)
+def notify_certificate_activation(
+    user_id: int,
+    payload: CertificateNotifyRequest | None = Body(None),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """Send official §3.11 certificate issuance & public registry activation notification."""
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    actor = _require_admin(db, authorization)
+    cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
+    if not cert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
+    notif_status, notif_error = _send_certificate_activation_notification(
+        db,
+        user,
+        cert,
+        actor.email,
+        payload.subject if payload else None,
+        payload.body if payload else None,
+    )
+    return _certificate_out_with_notification(cert, notif_status, notif_error)
 
 
 @router.delete("/{user_id}/certificate", status_code=status.HTTP_204_NO_CONTENT)

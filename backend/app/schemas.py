@@ -613,6 +613,8 @@ class CertificateOut(BaseModel):
     size_bytes: int | None = None
     created_at: datetime
     updated_at: datetime
+    notification_status: str | None = None
+    notification_error: str | None = None
 
 
 class CertificateCreate(BaseModel):
@@ -622,6 +624,9 @@ class CertificateCreate(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
+    send_notification: bool = False
+    notification_subject: str | None = None
+    notification_body: str | None = None
 
 
 class CertificateUpdate(CamelModel):
@@ -631,6 +636,14 @@ class CertificateUpdate(CamelModel):
     issue_date: Optional[datetime] = None
     validity_term: Optional[int] = None
     valid_until: Optional[datetime] = None
+    send_notification: Optional[bool] = False
+    notification_subject: Optional[str] = None
+    notification_body: Optional[str] = None
+
+
+class CertificateNotifyRequest(BaseModel):
+    subject: str | None = None
+    body: str | None = None
 
 
 class RegistryPersonOut(BaseModel):

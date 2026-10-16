@@ -11,20 +11,20 @@
     <script src="../scripts/admin/blocks.js" defer></script>
     <script src="../scripts/admin/multi-apartment.js" defer></script>
     <script src="../scripts/admin/multi-functional.js" defer></script>
-    <script src="../scripts/admin/statements.js?v=20261008-perf1" defer></script>
+    <script src="../scripts/admin/statements.js?v=20261016-unified1" defer></script>
     <script src="../scripts/admin/results.js?v=20261008-perf1" defer></script>
     <script src="../scripts/admin/project-results.js?v=20261008-perf1" defer></script>
     <script src="../scripts/vendor/qrcode-generator.js?v=1" defer></script>
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
-    <script src="../scripts/admin/certificate.js?v=20261008-perf1" defer></script>
-    <script src="../scripts/admin/exam-schedules.js?v=20261016-exam-sched2" defer></script>
-    <script src="../scripts/admin/users.js?v=20261016-exam-sched1" defer></script>
+    <script src="../scripts/admin/certificate.js?v=20261016-cert-notify3" defer></script>
+    <script src="../scripts/admin/exam-schedules.js?v=20261016-exam-sched13" defer></script>
+    <script src="../scripts/admin/users.js?v=20261016-card6" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
     <script src="../scripts/admin/documents.js?v=20261008-perf1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261016-exam-sched1" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261016-card12" />
   </head>
   <body>
     <header>
@@ -161,65 +161,99 @@
             <div class="users-filters-header">
               <h2 class="exam-blocks-title">რეგისტრირებული პირები</h2>
               <div class="users-filters-controls">
-                <input id="usersSearch" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი/გვარი/ელფოსტა/ტელეფონი/კოდი/პირადი)" />
-                <select id="usersSort" class="users-sort-select">
+                <input id="usersSearch" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი, გვარი, ელფოსტა, ტელეფონი, კოდი, პირადი №)" />
+                <label class="users-filter-label users-admin-role-chip" title="მხოლოდ ადმინისტრატორის სტატუსის მქონე პირების ჩვენება">
+                  <input id="onlyAdmins" type="checkbox" />
+                  <span>მხოლოდ ადმინისტრატორები</span>
+                </label>
+                <select id="usersSort" class="users-sort-select" aria-label="სორტირება">
                   <option value="date_desc">თარიღი ↓ (ნაგულისხმევი)</option>
-                  <option value="date_asc">თარიღი ↑</option>
-                  <option value="name_asc">სახელი/გვარი ა-ჰ</option>
-                  <option value="name_desc">სახელი/გვარი ჰ-ა</option>
+                  <option value="date_asc">თარიღი ↑ (ძველიდან ახლისკენ)</option>
+                  <option value="name_asc">სახელი/გვარი (ა–ჰ)</option>
+                  <option value="name_desc">სახელი/გვარი (ჰ–ა)</option>
                 </select>
+                <button id="resetUsersFilters" class="users-reset-filters-btn" type="button" hidden title="ყველა ჩართული ფილტრისა და ძებნის გასუფთავება">ფილტრის გასუფთავება ×</button>
               </div>
             </div>
-            <div class="users-filters-checkboxes">
-              <label class="users-filter-label">
-                <input id="onlyAdmins" type="checkbox" />
-                <span>მხოლოდ ადმინისტრატორები</span>
-              </label>
-              <label class="users-filter-label">
-                <input id="filterArchitects" type="checkbox" />
-                <span>არქიტექტორები</span>
-              </label>
-              <label class="users-filter-label">
-                <input id="filterExperts" type="checkbox" />
-                <span>არქიტექტორი ექსპერტები</span>
-              </label>
-              <label class="users-filter-label" title="მუნიციპალიტეტის სპეციალისტები">
-                <input id="filterMunicipal" type="checkbox" />
-                <span>მუნიციპალიტეტის სპეციალისტები</span>
-              </label>
-              <label class="users-filter-label">
-                <input id="filterCertified" type="checkbox" />
-                <span>სერტიფიცირებული პირები</span>
-              </label>
-              <label class="users-filter-label" title="გაუხსნელი განცხადებების მქონე პირები — წითელი კონტურით">
-                <input id="filterStatements" type="checkbox" />
-                <span>ახალი განცხადებები</span>
-              </label>
-              <label class="users-filter-label" title="მხოლოდ ლურჯკონტურიანი პირები — წაკითხული, მაგრამ ჯერ უპასუხო განცხადებებით">
-                <input id="filterPendingStatements" type="checkbox" />
-                <span>უპასუხო განცხადებები</span>
-              </label>
+
+            <!-- რიგი 1: კვალიფიკაცია და სერტიფიკატის სტატუსი -->
+            <div class="users-filters-checkboxes users-qualification-filters">
+              <span class="users-filter-group-title">კვალიფიკაცია:</span>
+              <div class="users-filter-chips-group">
+                <label class="users-filter-label" title="შენობა-ნაგებობის არქიტექტორები (ლურჯი სახელით)">
+                  <input id="filterArchitects" type="checkbox" />
+                  <span class="filter-color-dot is-architect" aria-hidden="true"></span>
+                  <span>არქიტექტორები</span>
+                </label>
+                <label class="users-filter-label" title="არქიტექტურული პროექტის ექსპერტები (წითელი სახელით)">
+                  <input id="filterExperts" type="checkbox" />
+                  <span class="filter-color-dot is-expert" aria-hidden="true"></span>
+                  <span>არქიტექტორი ექსპერტები</span>
+                </label>
+                <label class="users-filter-label" title="მუნიციპალიტეტის სპეციალისტები (მწვანე სახელით)">
+                  <input id="filterMunicipal" type="checkbox" />
+                  <span class="filter-color-dot is-municipal" aria-hidden="true"></span>
+                  <span>მუნიციპალიტეტის სპეციალისტები</span>
+                </label>
+                <label class="users-filter-label" title="ყველა სერტიფიცირებული პირი">
+                  <input id="filterCertified" type="checkbox" />
+                  <span>სერტიფიცირებული პირები</span>
+                </label>
+                <label class="users-filter-label is-muted-chip" title="შეჩერებული ან ვადაგასული სერტიფიკატის მქონე პირები (ნაცრისფერი სახელით)">
+                  <input id="filterSuspendedExpired" type="checkbox" />
+                  <span class="filter-color-dot is-suspended" aria-hidden="true"></span>
+                  <span>შეჩერებული / ვადაგასული</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- რიგი 2: შემოსული განცხადებები -->
+            <div class="users-filters-checkboxes users-statements-row">
+              <span class="users-filter-group-title">განცხადებები:</span>
+              <div class="users-filter-chips-group">
+                <label class="users-filter-label is-danger-chip" title="გაუხსნელი განცხადებების მქონე პირები — წითელი კონტურით">
+                  <input id="filterStatements" type="checkbox" />
+                  <span class="filter-color-dot is-unseen-stmt" aria-hidden="true"></span>
+                  <span>ახალი განცხადებები</span>
+                  <span id="filterStatementsBadge" class="users-filter-count-badge is-unseen" hidden>0</span>
+                </label>
+                <label class="users-filter-label is-info-chip" title="მხოლოდ ლურჯკონტურიანი პირები — წაკითხული, მაგრამ ჯერ უპასუხო განცხადებებით">
+                  <input id="filterPendingStatements" type="checkbox" />
+                  <span class="filter-color-dot is-pending-stmt" aria-hidden="true"></span>
+                  <span>უპასუხო განცხადებები</span>
+                  <span id="filterPendingStatementsBadge" class="users-filter-count-badge is-pending" hidden>0</span>
+                </label>
+              </div>
               <div class="users-statements-filter">
-                <label class="users-filter-label" for="statementsDate">განცხადების მიღების თარიღი</label>
+                <label class="users-date-field-label" for="statementsDate">მიღების თარიღი:</label>
                 <input id="statementsDate" class="users-filter-date" type="date" aria-label="განცხადების მიღების თარიღი" title="არჩეული დღე თბილისის დროით, 00:00–24:00; ჩანს იმ დღეს მიღებული ყველა განცხადების გამომგზავნი, სტატუსის ფილტრების მიუხედავად" />
                 <button id="clearStatementsDate" class="users-filter-date-clear" type="button" aria-label="განცხადების თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
             </div>
+
+            <!-- რიგი 3: დაგეგმილი გამოცდები და სერტიფიკატის გადაცემა -->
             <div class="users-filters-checkboxes users-exam-filters">
-              <label class="users-filter-label">
-                <input id="filterExamMorning" type="checkbox" />
-                <span>გამოცდა დილით</span>
-              </label>
-              <label class="users-filter-label">
-                <input id="filterExamEvening" type="checkbox" />
-                <span>გამოცდა საღამოს</span>
-              </label>
+              <span class="users-filter-group-title">დაგეგმვა:</span>
+              <div class="users-filter-chips-group">
+                <label class="users-filter-label" title="დილის ნაკადში დაგეგმილი გამოცდა">
+                  <input id="filterExamMorning" type="checkbox" />
+                  <span>გამოცდა დილით</span>
+                </label>
+                <label class="users-filter-label" title="საღამოს ნაკადში დაგეგმილი გამოცდა">
+                  <input id="filterExamEvening" type="checkbox" />
+                  <span>გამოცდა საღამოს</span>
+                </label>
+                <label class="users-filter-label is-success-chip" title="დაგეგმილი სერტიფიკატის გადაცემა არჩეულ თარიღზე (ან დღევანდელ დღეზე)">
+                  <input id="filterCertificateHandover" type="checkbox" />
+                  <span class="filter-color-dot is-handover" aria-hidden="true"></span>
+                  <span>სერტიფიკატის გადაცემა</span>
+                </label>
+              </div>
               <div class="users-exam-date-filter">
-                <label class="users-filter-label" for="examScheduleDate">გამოცდის თარიღი</label>
+                <label class="users-date-field-label" for="examScheduleDate">დაგეგმვის თარიღი:</label>
                 <input id="examScheduleDate" class="users-filter-date" type="date" aria-label="გამოცდის თარიღი" title="აირჩიეთ წარსული ან მომავალი დღე; თარიღის გარეშე ჯგუფი დღევანდელი დღის მიხედვით იფილტრება თბილისის დროით" />
                 <button id="clearExamScheduleDate" class="users-filter-date-clear" type="button" aria-label="გამოცდის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
-              <span class="users-exam-filter-hint">თარიღის გარეშე — დღევანდელი ჯგუფი</span>
             </div>
           </div>
           <div id="usersListNotice" class="users-list-notice" role="status" hidden>
@@ -492,7 +526,29 @@
               <div class="certificate-form__meta-label">მოქმედების საბოლოო თარიღი</div>
               <div class="certificate-form__meta-value" id="certificateFormValidUntilDisplay">—</div>
             </div>
+            <div class="certificate-form__notify-editor hidden" id="certificateFormNotifyEditor">
+              <div class="certificate-form__notify-head">
+                <span class="certificate-form__notify-title">სერტიფიკატის გააქტიურების შეტყობინების ტექსტი</span>
+                <div class="certificate-form__notify-head-actions">
+                  <button type="button" class="secondary-btn certificate-notify-sub-btn" id="certificateFormNotifyReset">სტანდარტულ ტექსტზე დაბრუნება</button>
+                  <button type="button" class="secondary-btn certificate-notify-sub-btn" id="certificateFormNotifySaveTemplate">შაბლონად შენახვა</button>
+                </div>
+              </div>
+              <label class="certificate-form__field">
+                <span class="certificate-form__label">წერილის სათაური</span>
+                <input type="text" id="certificateFormNotifySubject" name="notifySubject" autocomplete="off" />
+              </label>
+              <label class="certificate-form__field">
+                <span class="certificate-form__label">წერილის ტექსტი</span>
+                <textarea id="certificateFormNotifyBody" name="notifyBody" rows="11"></textarea>
+              </label>
+            </div>
             <div class="certificate-form__actions">
+              <button type="button" class="secondary-btn certificate-action-btn" id="certificateFormNotifyEditBtn">შეტყობინების ტექსტის რედაქტირება</button>
+              <label class="certificate-form__notify-toggle" for="certificateFormSendNotification">
+                <input type="checkbox" id="certificateFormSendNotification" name="sendNotification" checked />
+                <span>შეტყობინების გაგზავნა</span>
+              </label>
               <button type="submit" class="primary-btn certificate-action-btn" id="certificateFormSubmit">შენახვა</button>
             </div>
           </form>
@@ -771,6 +827,6 @@
       </div>
     </footer>
 
-    <script src="../scripts/admin.js?v=12" defer></script>
+    <script src="../scripts/admin.js?v=16" defer></script>
   </body>
 </html>

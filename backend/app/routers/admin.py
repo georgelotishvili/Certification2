@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..config import get_settings
 from ..database import get_db
 from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
-from ..models import ExamSchedule
+from ..models import ExamSchedule, PlanningLetter
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -964,6 +964,7 @@ def admin_users(
     exam_date: date | None = None,
     exam_morning: bool = False,
     exam_evening: bool = False,
+    certificate_handover: bool = False,
     paginated: bool = False,
     live: bool = False,
     new_statements: bool = False,
@@ -998,11 +999,16 @@ def admin_users(
         "certified": ("architect", "expert", "municipal"),
     }
     if qualification:
-        if qualification not in qualification_levels:
+        if qualification == "suspended_expired":
+            stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
+                Certificate.status.in_(("suspended", "expired"))
+            )))
+        elif qualification in qualification_levels:
+            stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
+                Certificate.level.in_(qualification_levels[qualification])
+            )))
+        else:
             raise HTTPException(status_code=422, detail="Unknown qualification filter")
-        stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
-            Certificate.level.in_(qualification_levels[qualification])
-        )))
 
     if statement_date is None and (new_statements or pending_statements):
         has_new = select(Statement.id).where(
@@ -1019,16 +1025,30 @@ def admin_users(
             colors.append(~has_new & has_pending)
         stmt = stmt.where(or_(*colors))
 
-    if exam_date is not None or exam_morning or exam_evening:
-        schedule_query = select(ExamSchedule.user_id).where(
-            ExamSchedule.exam_date == (exam_date if exam_date is not None else _today_in_tbilisi())
-        )
-        # Both selected, or a date alone, includes both groups without duplicates.
-        if exam_morning and not exam_evening:
-            schedule_query = schedule_query.where(ExamSchedule.period == "morning")
-        elif exam_evening and not exam_morning:
-            schedule_query = schedule_query.where(ExamSchedule.period == "evening")
-        stmt = stmt.where(User.id.in_(schedule_query))
+    if exam_date is not None or exam_morning or exam_evening or certificate_handover:
+        target_schedule_date = exam_date if exam_date is not None else _today_in_tbilisi()
+        schedule_conditions = []
+        if exam_morning or exam_evening or not certificate_handover:
+            schedule_query = select(ExamSchedule.user_id).where(
+                ExamSchedule.exam_date == target_schedule_date
+            )
+            # Both selected, or a date alone, includes both groups without duplicates.
+            if exam_morning and not exam_evening:
+                schedule_query = schedule_query.where(ExamSchedule.period == "morning")
+            elif exam_evening and not exam_morning:
+                schedule_query = schedule_query.where(ExamSchedule.period == "evening")
+            schedule_conditions.append(User.id.in_(schedule_query))
+        if certificate_handover:
+            cert_handover_query = select(PlanningLetter.user_id).where(
+                PlanningLetter.kind == "certificate",
+                PlanningLetter.event_date == target_schedule_date,
+                or_(
+                    PlanningLetter.period.is_(None),
+                    PlanningLetter.period.in_(("morning", "evening", "cert_am_send", "cert_pm_send")),
+                ),
+            )
+            schedule_conditions.append(User.id.in_(cert_handover_query))
+        stmt = stmt.where(or_(*schedule_conditions))
 
     if statement_date is not None:
         # Statements are stored in naive UTC; the selected day is in Georgia.
@@ -1155,10 +1175,19 @@ def admin_users(
     if stage_expired_changed:
         db.commit()
     if paginated:
+        has_unseen_stmt = select(Statement.id).where(
+            Statement.user_id == User.id, Statement.seen_at.is_(None)
+        ).exists()
+        has_pending_stmt = select(Statement.id).where(
+            Statement.user_id == User.id,
+            Statement.seen_at.is_not(None),
+            Statement.answered_at.is_(None),
+        ).exists()
         global_unseen_users = int(db.scalar(
-            select(func.count(func.distinct(Statement.user_id)))
-            .join(User, User.id == Statement.user_id)
-            .where(Statement.seen_at.is_(None))
+            select(func.count(User.id)).where(has_unseen_stmt)
+        ) or 0)
+        global_pending_users = int(db.scalar(
+            select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
         ) or 0)
         page_items = []
         for item in items:
@@ -1185,6 +1214,7 @@ def admin_users(
             "items": page_items, "total": total, "page": page, "size": size,
             "paginated": True, "live": live,
             "global_unseen_users": global_unseen_users,
+            "global_pending_users": global_pending_users,
         }
     return UsersListResponse(items=items, total=len(items))
 
@@ -1776,7 +1806,26 @@ def admin_statements_summary(
     total_unseen = db.scalar(
         select(func.count()).select_from(Statement).where(Statement.seen_at.is_(None))
     ) or 0
-    return {"has_unseen": total_unseen > 0, "unseen_total": total_unseen}
+    has_unseen_stmt = select(Statement.id).where(
+        Statement.user_id == User.id, Statement.seen_at.is_(None)
+    ).exists()
+    has_pending_stmt = select(Statement.id).where(
+        Statement.user_id == User.id,
+        Statement.seen_at.is_not(None),
+        Statement.answered_at.is_(None),
+    ).exists()
+    unseen_users = int(db.scalar(
+        select(func.count(User.id)).where(has_unseen_stmt)
+    ) or 0)
+    pending_users = int(db.scalar(
+        select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
+    ) or 0)
+    return {
+        "has_unseen": total_unseen > 0,
+        "unseen_total": total_unseen,
+        "unseen_users": unseen_users,
+        "pending_users": pending_users,
+    }
 
 
 @router.post("/statements/mark-seen", status_code=status.HTTP_204_NO_CONTENT)
