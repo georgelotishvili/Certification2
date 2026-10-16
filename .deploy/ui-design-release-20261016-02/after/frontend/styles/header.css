@@ -641,6 +641,7 @@ body.modal-open {
 .field input,
 .field textarea {
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   font-size: 13px;
   border: 1px solid #94a3b8;
@@ -648,6 +649,10 @@ body.modal-open {
   color: #0f172a;
   border-radius: var(--radius-sm);
   transition: border-color var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
+}
+
+.field textarea {
+  resize: vertical;
 }
 
 .field input::placeholder,
@@ -1500,6 +1505,10 @@ body.modal-open {
 
 #userStatementsOverlay textarea {
   display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
   min-height: 140px;
   margin-top: 10px;
   padding: 12px 14px;

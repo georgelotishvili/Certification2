@@ -21,10 +21,10 @@
     </script>
     <meta name="api-base" content="" />
     <script src="../scripts/config.js?v=4" defer></script>
-    <script src="../scripts/header.js?v=20261008-2" defer></script>
-    <link rel="stylesheet" href="../styles/styles.css?v=20261008-perf1" />
-    <link rel="stylesheet" href="../styles/header.css?v=20261008-perf1" />
-    <link rel="stylesheet" href="../styles/my.css?v=6" />
+    <script src="../scripts/header.js?v=20261013-nav1" defer></script>
+    <link rel="stylesheet" href="../styles/styles.css?v=20261016-1" />
+    <link rel="stylesheet" href="../styles/header.css?v=20261013-statements1" />
+    <link rel="stylesheet" href="../styles/my.css?v=20261016-my4" />
   </head>
   <body>
     <!-- Header will be loaded dynamically by header.js -->
@@ -45,7 +45,12 @@
       <div class="my-grid">
         <section class="profile-section" aria-labelledby="profileTitle">
           <div class="profile-card">
-            <h2 id="profileTitle">პირადი ინფორმაცია</h2>
+            <div class="profile-head">
+              <h2 id="profileTitle">პირადი ინფორმაცია</h2>
+              <div class="profile-actions">
+                <button type="button" class="profile-edit-btn" id="profileEditBtn" style="display:none;">რედაქტირება</button>
+              </div>
+            </div>
             <div class="profile-grid">
               <div class="profile-row">
                 <span class="profile-label">სახელი</span>
@@ -55,7 +60,7 @@
                 <span class="profile-label">გვარი</span>
                 <span class="profile-value" id="myLastName">—</span>
               </div>
-              <div class="profile-row">
+              <div class="profile-row" hidden>
                 <span class="profile-label">პირადი ნომერი</span>
                 <span class="profile-value" id="myPersonalId">—</span>
               </div>
@@ -75,9 +80,6 @@
                 <span class="profile-label">რეგისტრაციის დრო</span>
                 <span class="profile-value" id="myCreatedAt">—</span>
               </div>
-            </div>
-            <div class="profile-actions">
-              <button type="button" class="profile-edit-btn" id="profileEditBtn" style="display:none;">რედაქტირება</button>
             </div>
           </div>
         </section>
@@ -192,6 +194,31 @@
       </div>
     </main>
 
+    <footer>
+      <div class="footer-content footer-only-contact">
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/E-mail.svg" alt="" aria-hidden="true" />
+          <a href="mailto:info@gipc.ge" aria-label="ელფოსტა">info@gipc.ge</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/phone.svg" alt="" aria-hidden="true" />
+          <a href="tel:+995593222033" aria-label="ტელეფონი">+995 593 222 033</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/location.svg" alt="" aria-hidden="true" />
+          <a href="https://maps.app.goo.gl/MbTQmmvtGZBNgCEj9" target="_blank" rel="noopener noreferrer" aria-label="მისამართი">თბილისი, მირიან მეფის 98</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/world.svg" alt="" aria-hidden="true" />
+          <a href="https://gipc.ge/" aria-label="ვებსაიტი">gipc.ge</a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია <a href="admin.html" class="admin-link" style="display:none">/ ადმინ გვერდი</a></p>
+      </div>
+    </footer>
+
     <!-- Ratings criteria overlay -->
     <div class="ratings-overlay" id="ratingsOverlay" aria-hidden="true">
       <div class="ratings-modal" role="dialog" aria-modal="true" aria-labelledby="ratingsTitle">
@@ -274,7 +301,7 @@
 
     <script src="../scripts/registry.mini.js?v=20261008-perf1" defer></script>
     <script src="../scripts/script.js?v=6" defer></script>
-    <script src="../scripts/my.js?v=20261008-perf1" defer></script>
+    <script src="../scripts/my.js?v=20261008-perf1-2" defer></script>
   </body>
   </html>
 

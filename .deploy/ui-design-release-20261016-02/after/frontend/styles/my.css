@@ -361,6 +361,9 @@ main {
 .comment-form { display: flex; flex-direction: column; gap: 8px; }
 .comment-form textarea {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
   padding: 10px 12px;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -1442,6 +1445,10 @@ main {
 }
 
 .my-grid .comment-form textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
   min-height: 86px;
   padding: 10px 12px;
   border-radius: 0;

@@ -1,52 +1,52 @@
 {
-  "pid": "65716",
+  "pid": "102422",
   "files": {
     "frontend/assets/svg/logo.svg": {
-      "before": "200ca49d50c8fe80ed50d7d77f99a765556f1ecb7bcd3ff45262c777e4f5fece",
+      "before": "725d3fd89dc478a5b1850f7ca532ced2627bc6794f0239eff4fd2dffa7e85db6",
       "after": "725d3fd89dc478a5b1850f7ca532ced2627bc6794f0239eff4fd2dffa7e85db6"
     },
     "frontend/pages/index.html": {
-      "before": "f2b5e3a94a1c7ba139f855fc31cb9627206e2a7f7eaad844dbe910f0f91f04e4",
+      "before": "49b86cb00db6f68ee54ec19d889f944abba98626aa1739504b9a3e722cce5ee8",
       "after": "49b86cb00db6f68ee54ec19d889f944abba98626aa1739504b9a3e722cce5ee8"
     },
     "frontend/pages/my.html": {
-      "before": "1b5510ab6bbd1cb6dbad9e979c7000468f0356650270fa75c4a8a4e4ad03543f",
-      "after": "2c647d184498fbbc825337f97c71b4a1646d29d88597de32a85e145e58b63968"
+      "before": "2c647d184498fbbc825337f97c71b4a1646d29d88597de32a85e145e58b63968",
+      "after": "0fd4405ffb0320690ee5204c9f33637aa3212f9766aaef2e152db32026bfdfc6"
     },
     "frontend/pages/registry.html": {
-      "before": "ec9d0038a343aeac25812b0adcd76cddbc9a5f5e1cb4de8a0d6487e0a2eaae2a",
+      "before": "e3ba9250219baccaf75871c1ab3f24e329a56610e49bcf0383035d2cdbee7c55",
       "after": "e3ba9250219baccaf75871c1ab3f24e329a56610e49bcf0383035d2cdbee7c55"
     },
     "frontend/partials/header.html": {
-      "before": "262b54c59b585a05c80550b5b94274f7da7caa08e4f8ee41622826699e654db5",
+      "before": "2681a5e44de19a7e5a18cc988910bb10c5d40907bd2a3fd96f0c8599f96c7f7a",
       "after": "2681a5e44de19a7e5a18cc988910bb10c5d40907bd2a3fd96f0c8599f96c7f7a"
     },
     "frontend/partials/site-info/guide.html": {
-      "before": "c4e6a092a30d74262dbddebe2bde74bec9d3041a2d5c53161a6a92dc7f333bb6",
+      "before": "775759e9c14ed25f3aadc15f3c648b938e7981f2c8e593d8adcbc94a16b01234",
       "after": "775759e9c14ed25f3aadc15f3c648b938e7981f2c8e593d8adcbc94a16b01234"
     },
     "frontend/scripts/header.js": {
-      "before": "a00c7926ce71e8806237488d8c5feef31a9886d2b1dc020f52fb175c158fa00a",
+      "before": "f4308536322ae9cdf86c1d2921ab61e9ac123ef2cb354f8a485313bf77d02347",
       "after": "f4308536322ae9cdf86c1d2921ab61e9ac123ef2cb354f8a485313bf77d02347"
     },
     "frontend/scripts/my.js": {
-      "before": "75a6665f69c56af476787d1e5b7489ae44dea530d4f4a5f8965f556333c08554",
+      "before": "eeeb536d67b2f72ab763bc9a8ca96fa0ba4103ec98ba996f6f975668a62fd3c6",
       "after": "eeeb536d67b2f72ab763bc9a8ca96fa0ba4103ec98ba996f6f975668a62fd3c6"
     },
     "frontend/styles/header.css": {
-      "before": "ecea4742bff2bd2e7f7cb4d4fbf376b12558752f2f8ccce1ab2784dcb1b93f60",
-      "after": "a1c0592de8d74ac617e7d8b66c2ea532fd3cc80df60a1449eec5f28b52849516"
+      "before": "a1c0592de8d74ac617e7d8b66c2ea532fd3cc80df60a1449eec5f28b52849516",
+      "after": "b594422134cce44e722b0b36e2c03d60d800529d345be1ae2bc8f390be324603"
     },
     "frontend/styles/my.css": {
-      "before": "2aeb578c0c0ea96cf0c14c3cb80f1dd78f8b295e3bddba6fd666d8fe4995058a",
-      "after": "394e0e3f5b9b8c5e5536647dfff6c4a570302116e26f38b895ca96b6605870e5"
+      "before": "394e0e3f5b9b8c5e5536647dfff6c4a570302116e26f38b895ca96b6605870e5",
+      "after": "603cac6e59ded81659abad6db79fb321fbb90693ce41c08f73c3374cc19baa65"
     },
     "frontend/styles/registry.css": {
-      "before": "5a945418b2ce17c282a3014cc19703557fcb186611f60cd7d815191a2332feb7",
+      "before": "23a6f9574cb814f2d7b6e36461b334a5312c03d9a31a8d98706b412410e31256",
       "after": "23a6f9574cb814f2d7b6e36461b334a5312c03d9a31a8d98706b412410e31256"
     },
     "frontend/styles/styles.css": {
-      "before": "f6454812da19935ec1d889b2a4e20354fce780d242144e7f6e6a333c4300ede3",
+      "before": "52240b6743f7e7dc1f471a2bcc54add27ec19ec2b1227d93838e53ec493f5c8f",
       "after": "52240b6743f7e7dc1f471a2bcc54add27ec19ec2b1227d93838e53ec493f5c8f"
     }
   }

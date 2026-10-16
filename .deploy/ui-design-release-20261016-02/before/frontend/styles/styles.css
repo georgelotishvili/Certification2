@@ -117,21 +117,50 @@ padding-top: 180px;
 }
 
 .main-hero .main-registry-link {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 10px;
   max-width: 100%;
-  margin-top: 16px;
-  padding: 8px 0;
-  color: #244a80;
+  margin-top: 20px;
+  padding: 9px 18px;
+  color: #1e293b;
   font-size: 13px;
-  line-height: 1.65;
-  border-bottom: 1px solid #aabccf;
+  font-weight: 600;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.main-hero .main-registry-link span { font-size: 18px; }
-.main-hero .main-registry-link:hover { color: #173457; border-bottom-color: #244a80; }
-.main-hero .main-registry-link:focus-visible { outline: 2px solid #244a80; outline-offset: 5px; }
+.main-hero .main-registry-link span {
+  font-size: 16px;
+  display: inline-block;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.main-hero .main-registry-link:hover,
+.main-hero .main-registry-link:focus-visible {
+  color: #1C468C;
+  background: #ffffff;
+  border-color: rgba(28, 70, 140, 0.28);
+}
+
+.main-hero .main-registry-link:hover span,
+.main-hero .main-registry-link:focus-visible span {
+  transform: translateX(4px);
+}
+
+.main-hero .main-registry-link:active {
+  transform: translateY(0);
+}
+
+.main-hero .main-registry-link:focus-visible {
+  outline: 2px solid #1C468C;
+  outline-offset: 2px;
+}
 
 footer {
   background-color: white;
@@ -269,7 +298,7 @@ footer {
 .footer-contact-item a,
 .footer-contact-item span {
   color: #111111;
-  font-size: 14px;
+  font-size: 13px;
 }
 .footer-contact-item a:hover {
   color: #0a0a0a;
@@ -914,7 +943,7 @@ body.registry-open {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: #475569;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -937,7 +966,7 @@ body.registry-open {
   border-radius: 4px;
   background: #dbeafe;
   color: #1d4ed8;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.03em;
 }
@@ -1124,7 +1153,7 @@ body.registry-open {
   gap: 2px;
 }
 .registry-code {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
   font-variant-numeric: tabular-nums;
 }
@@ -1218,7 +1247,7 @@ body.registry-open {
   }
 
   .footer-bottom p {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.5;
   }
 }
