@@ -496,7 +496,17 @@
 
     function isLegacyTemplateBody(body) {
       const raw = String(body || '').trim();
-      return !raw || raw.startsWith('ბატონო/ქალბატონო') || raw.startsWith('გამარჯობა,') || /\[შეავსეთ/.test(raw);
+      return (
+        !raw ||
+        raw.startsWith('ბატონო/ქალბატონო') ||
+        raw.startsWith('გამარჯობა,') ||
+        /\[შეავსეთ/.test(raw) ||
+        raw.includes('GIPC-PRO-') ||
+        raw.includes('GIPC-CON-') ||
+        raw.includes('GIPC-FRM-') ||
+        raw.includes('შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“') ||
+        raw.includes('შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"')
+      );
     }
 
     function normalizeGreeting(body, fallback) {

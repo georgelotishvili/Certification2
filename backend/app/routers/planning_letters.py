@@ -148,7 +148,16 @@ def _save_schedule_times(*, morning: str | None = None, evening: str | None = No
 
 def _is_legacy_body(body: str | None) -> bool:
     raw = str(body or "").strip()
-    return not raw or raw.startswith("ბატონო/ქალბატონო") or raw.startswith("გამარჯობა,")
+    return (
+        not raw
+        or raw.startswith("ბატონო/ქალბატონო")
+        or raw.startswith("გამარჯობა,")
+        or "GIPC-PRO-" in raw
+        or "GIPC-CON-" in raw
+        or "GIPC-FRM-" in raw
+        or "შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“" in raw
+        or 'შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"' in raw
+    )
 
 
 def _template_out(kind: str, template: PlanningTemplate | None):
