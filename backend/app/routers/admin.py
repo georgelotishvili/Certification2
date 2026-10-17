@@ -1240,6 +1240,187 @@ def _compute_exam_outcomes_for_users(db: Session, users: list[User]) -> dict[int
     }
 
 
+def _exam_dt_to_tbilisi_date(dt: datetime) -> date:
+    return (dt + timedelta(hours=4)).date()
+
+
+def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
+    s1_rows = db.scalars(
+        select(ExamSession)
+        .where(ExamSession.finished_at.is_not(None))
+        .order_by(ExamSession.finished_at.asc(), ExamSession.id.asc())
+    ).all()
+    s2_rows = db.scalars(
+        select(MultiApartmentEvaluation)
+        .order_by(MultiApartmentEvaluation.finished_at.asc(), MultiApartmentEvaluation.id.asc())
+    ).all()
+    s3_rows = db.scalars(
+        select(MultiFunctionalEvaluation)
+        .order_by(MultiFunctionalEvaluation.finished_at.asc(), MultiFunctionalEvaluation.id.asc())
+    ).all()
+
+    if not s1_rows and not s2_rows and not s3_rows:
+        return {}
+
+    all_s1_codes = {
+        s.candidate_code.strip().lower()
+        for s in s1_rows
+        if s.candidate_code and s.candidate_code.strip()
+    }
+    code_to_user_id: dict[str, int] = {}
+    if all_s1_codes:
+        for uid, code in db.execute(
+            select(User.id, User.code).where(func.lower(User.code).in_(list(all_s1_codes)))
+        ).all():
+            if code:
+                code_to_user_id[code.strip().lower()] = int(uid)
+
+    attempts_by_user: dict[int, list[tuple[str, dict]]] = {}
+    latest_s1_by_user: dict[int, dict] = {}
+    latest_s2_by_user: dict[int, dict] = {}
+    latest_s3_by_user: dict[int, dict] = {}
+
+    for s in s1_rows:
+        uid = s.user_id
+        if s.candidate_code:
+            code_uid = code_to_user_id.get(s.candidate_code.strip().lower())
+            if uid is None or (code_uid is not None and uid != code_uid):
+                uid = code_uid
+        if uid is not None:
+            summary = _extract_theory_stage_summary(s)
+            latest_s1_by_user[uid] = summary
+            attempts_by_user.setdefault(uid, []).append(("stage1", summary))
+
+    for e2 in s2_rows:
+        if e2.user_id is not None:
+            summary = _extract_practical_stage_summary(e2)
+            latest_s2_by_user[e2.user_id] = summary
+            attempts_by_user.setdefault(e2.user_id, []).append(("stage2", summary))
+
+    for e3 in s3_rows:
+        if e3.user_id is not None:
+            summary = _extract_practical_stage_summary(e3)
+            latest_s3_by_user[e3.user_id] = summary
+            attempts_by_user.setdefault(e3.user_id, []).append(("stage3", summary))
+
+    if not attempts_by_user:
+        return {}
+
+    candidate_uids = list(attempts_by_user.keys())
+    existing_uids = {
+        int(uid)
+        for uid in db.scalars(select(User.id).where(User.id.in_(candidate_uids))).all()
+    }
+    if not existing_uids:
+        return {}
+
+    letter_dts_by_user: dict[int, list[datetime]] = {}
+    last_letter_by_user: dict[int, datetime] = {}
+    letter_rows = db.execute(
+        select(
+            PlanningLetter.user_id,
+            func.coalesce(PlanningLetter.sent_at, PlanningLetter.created_at),
+        ).where(
+            PlanningLetter.user_id.in_(list(existing_uids)),
+            or_(
+                PlanningLetter.kind == "certificate",
+                PlanningLetter.period.in_(("exam_fail", "fail_send_only")),
+            ),
+        )
+    ).all()
+    for uid, raw_dt in letter_rows:
+        if raw_dt is None:
+            continue
+        dt = raw_dt
+        if isinstance(dt, str):
+            try:
+                dt = datetime.fromisoformat(dt.replace("Z", ""))
+            except Exception:
+                dt = None
+        if dt is not None:
+            uid_int = int(uid)
+            letter_dts_by_user.setdefault(uid_int, []).append(dt)
+            if uid_int not in last_letter_by_user or dt > last_letter_by_user[uid_int]:
+                last_letter_by_user[uid_int] = dt
+
+    stage_order = {"stage1": 1, "stage2": 2, "stage3": 3}
+    histories: dict[int, dict] = {}
+    for uid in existing_uids:
+        user_attempts = attempts_by_user.get(uid, [])
+        user_attempts.sort(
+            key=lambda pair: (
+                pair[1].get("finished_at") or datetime.min,
+                stage_order.get(pair[0], 9),
+            )
+        )
+        letter_dts = sorted(letter_dts_by_user.get(uid, []))
+        sittings: list[dict] = []
+        for stage_key, summary in user_attempts:
+            dt = summary.get("finished_at")
+            if sittings:
+                curr = sittings[-1]
+                prev_dt = curr["latest_at"]
+                same_window = (
+                    dt is None
+                    or prev_dt is None
+                    or (dt - prev_dt) <= timedelta(days=2)
+                )
+                letter_between = (
+                    dt is not None
+                    and prev_dt is not None
+                    and any(prev_dt <= l_dt < dt for l_dt in letter_dts)
+                )
+                stage_already_in_sitting = stage_key in curr["stages"]
+                same_day = (
+                    dt is not None
+                    and prev_dt is not None
+                    and _exam_dt_to_tbilisi_date(dt) == _exam_dt_to_tbilisi_date(prev_dt)
+                )
+                if same_window and not letter_between and (not stage_already_in_sitting or same_day):
+                    curr["stages"][stage_key] = summary
+                    if dt is not None:
+                        if curr["latest_at"] is None or dt > curr["latest_at"]:
+                            curr["latest_at"] = dt
+                        curr["dates"].add(_exam_dt_to_tbilisi_date(dt))
+                        curr["dates"].add(dt.date())
+                    continue
+            new_dates: set[date] = set()
+            if dt is not None:
+                new_dates.add(_exam_dt_to_tbilisi_date(dt))
+                new_dates.add(dt.date())
+            sittings.append({
+                "stages": {stage_key: summary},
+                "latest_at": dt,
+                "dates": new_dates,
+            })
+
+        for sitting in sittings:
+            st1 = sitting["stages"].get("stage1")
+            st2 = sitting["stages"].get("stage2")
+            st3 = sitting["stages"].get("stage3")
+            all_three = st1 is not None and st2 is not None and st3 is not None
+            levels = [st["level"] for st in (st1, st2, st3) if st is not None]
+            if not all_three or any(lv == "fail" for lv in levels):
+                sitting["outcome"] = "fail"
+            elif all(lv == "bc" for lv in levels):
+                sitting["outcome"] = "pass_bc"
+            else:
+                sitting["outcome"] = "pass_a"
+
+        latest_outcome = _build_exam_outcome_payload(
+            latest_s1_by_user.get(uid),
+            latest_s2_by_user.get(uid),
+            latest_s3_by_user.get(uid),
+            last_letter_by_user.get(uid),
+        )
+        histories[uid] = {
+            "latest_outcome": latest_outcome,
+            "sittings": sittings,
+        }
+
+    return histories
+
+
 @router.get("/users/{user_id}/exam-outcome")
 def admin_user_exam_outcome(
     user_id: int,
@@ -1274,6 +1455,11 @@ def admin_users(
     new_statements: bool = False,
     pending_statements: bool = False,
     qualification: str | None = None,
+    exam_passed: bool = False,
+    exam_failed: bool = False,
+    exam_result_date: date | None = None,
+    pending_pass_letter: bool = False,
+    pending_fail_letter: bool = False,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
@@ -1375,6 +1561,70 @@ def admin_users(
             )
         )
 
+    exam_histories = _compute_all_exam_histories(db)
+    global_pending_pass_users = sum(
+        1
+        for h in exam_histories.values()
+        if h["latest_outcome"].get("unacknowledged")
+        and h["latest_outcome"].get("outcome") in ("pass_bc", "pass_a")
+    )
+    global_pending_fail_users = sum(
+        1
+        for h in exam_histories.values()
+        if h["latest_outcome"].get("unacknowledged")
+        and h["latest_outcome"].get("outcome") == "fail"
+    )
+
+    if (
+        exam_passed
+        or exam_failed
+        or exam_result_date is not None
+        or pending_pass_letter
+        or pending_fail_letter
+    ):
+        matching_uids: list[int] = []
+        has_outcome_filter = exam_passed or exam_failed
+        has_pending_filter = pending_pass_letter or pending_fail_letter
+        for uid, h in exam_histories.items():
+            sittings = h.get("sittings") or []
+            latest = h.get("latest_outcome") or {}
+            if not sittings:
+                continue
+            outcome_ok = True
+            if has_outcome_filter:
+                outcome_ok = False
+                for sitting in sittings:
+                    if exam_result_date is not None and exam_result_date not in sitting["dates"]:
+                        continue
+                    if exam_passed and sitting["outcome"] in ("pass_bc", "pass_a"):
+                        outcome_ok = True
+                        break
+                    if exam_failed and sitting["outcome"] == "fail":
+                        outcome_ok = True
+                        break
+            elif exam_result_date is not None and not has_pending_filter:
+                outcome_ok = any(exam_result_date in sitting["dates"] for sitting in sittings)
+
+            pending_ok = True
+            if has_pending_filter:
+                pending_ok = False
+                if latest.get("unacknowledged"):
+                    latest_sitting = sittings[-1]
+                    date_ok = exam_result_date is None or exam_result_date in latest_sitting["dates"]
+                    if date_ok:
+                        if pending_pass_letter and latest.get("outcome") in ("pass_bc", "pass_a"):
+                            pending_ok = True
+                        if pending_fail_letter and latest.get("outcome") == "fail":
+                            pending_ok = True
+
+            if outcome_ok and pending_ok:
+                matching_uids.append(uid)
+
+        if matching_uids:
+            stmt = stmt.where(User.id.in_(matching_uids))
+        else:
+            stmt = stmt.where(User.id == -1)
+
     if sort == "date_asc":
         stmt = stmt.order_by(User.created_at.asc())
     elif sort == "name_asc":
@@ -1418,7 +1668,15 @@ def admin_users(
             unseen_counts[int(user_id)] = int(unseen_count)
             pending_counts[int(user_id)] = int(pending_count)
 
-    exam_outcomes = _compute_exam_outcomes_for_users(db, users)
+    empty_outcome = _build_exam_outcome_payload(None, None, None, None)
+    exam_outcomes = {
+        u.id: (
+            exam_histories[u.id]["latest_outcome"]
+            if u.id in exam_histories
+            else empty_outcome
+        )
+        for u in users
+    }
     items = []
     stage_expired_changed = False
     for u in users:
@@ -1521,6 +1779,8 @@ def admin_users(
             "paginated": True, "live": live,
             "global_unseen_users": global_unseen_users,
             "global_pending_users": global_pending_users,
+            "global_pending_pass_users": global_pending_pass_users,
+            "global_pending_fail_users": global_pending_fail_users,
         }
     return UsersListResponse(items=items, total=len(items))
 
@@ -2126,11 +2386,26 @@ def admin_statements_summary(
     pending_users = int(db.scalar(
         select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
     ) or 0)
+    exam_histories = _compute_all_exam_histories(db)
+    pending_pass_users = sum(
+        1
+        for h in exam_histories.values()
+        if h["latest_outcome"].get("unacknowledged")
+        and h["latest_outcome"].get("outcome") in ("pass_bc", "pass_a")
+    )
+    pending_fail_users = sum(
+        1
+        for h in exam_histories.values()
+        if h["latest_outcome"].get("unacknowledged")
+        and h["latest_outcome"].get("outcome") == "fail"
+    )
     return {
         "has_unseen": total_unseen > 0,
         "unseen_total": total_unseen,
         "unseen_users": unseen_users,
         "pending_users": pending_users,
+        "pending_pass_users": pending_pass_users,
+        "pending_fail_users": pending_fail_users,
     }
 
 

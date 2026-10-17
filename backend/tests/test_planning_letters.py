@@ -651,10 +651,130 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(res_ack.status_code, 200, res_ack.text)
         self.assertFalse(res_ack.json()["unacknowledged"])
 
+    def test_admin_users_exam_outcome_filters_and_pending_letter_badges(self):
+        import json as _json
+        exam = Exam(title="Filter Exam", duration_minutes=60)
+        p2 = MultiApartmentProject(number=2, code="MA-2")
+        p3 = MultiFunctionalProject(number=2, code="MF-2")
+        self.db.add_all([exam, p2, p3])
+        self.db.commit()
+
+        # Sitting 1 on 2026-10-10: candidate 1 fails (skips stages 2 & 3)
+        dt_fail = datetime(2026, 10, 10, 9, 0, 0)
+        s_fail = ExamSession(
+            exam_id=exam.id,
+            token="fail-sitting-token",
+            user_id=1,
+            candidate_code="1000000001",
+            started_at=dt_fail,
+            ends_at=dt_fail + timedelta(minutes=60),
+            finished_at=dt_fail + timedelta(minutes=30),
+            score_percent=60.0,
+            exam_snapshot=_json.dumps({
+                "chapters": [
+                    {"name": "თავი I", "stats": {"total": 10, "correct": 6, "percent": 60.0}},
+                ]
+            }),
+        )
+        self.db.add(s_fail)
+        self.db.commit()
+
+        # Check pending_fail_letter and exam_failed
+        r1 = self.client.get("/admin/users?paginated=true&pending_fail_letter=true", headers=self.auth).json()
+        self.assertEqual(r1["total"], 1)
+        self.assertEqual(r1["global_pending_fail_users"], 1)
+        self.assertEqual(r1["global_pending_pass_users"], 0)
+
+        # Acknowledge fail sitting via fail_send_only letter at 2026-10-10 12:00
+        fail_letter = PlanningLetter(
+            user_id=1,
+            kind="exam",
+            event_date=dt_fail.date(),
+            event_time="12:00",
+            period="fail_send_only",
+            request_id="req-fail-ack-1",
+            request_fingerprint="fp-fail-ack-1",
+            to_email="person1@example.com",
+            subject="გამოცდის შედეგები",
+            body="სამწუხაროდ ვერ გადალახეთ",
+            status="sent",
+            created_by="g.berb@yahoo.com",
+            created_at=datetime(2026, 10, 10, 12, 0, 0),
+            sent_at=datetime(2026, 10, 10, 12, 0, 0),
+        )
+        self.db.add(fail_letter)
+        self.db.commit()
+
+        r2 = self.client.get("/admin/users?paginated=true&pending_fail_letter=true", headers=self.auth).json()
+        self.assertEqual(r2["total"], 0)
+        self.assertEqual(r2["global_pending_fail_users"], 0)
+
+        # Historical fail is still found via exam_failed and exam_result_date=2026-10-10
+        r_hist_fail = self.client.get("/admin/users?paginated=true&exam_failed=true&exam_result_date=2026-10-10", headers=self.auth).json()
+        self.assertEqual(r_hist_fail["total"], 1)
+        r_hist_wrong_date = self.client.get("/admin/users?paginated=true&exam_failed=true&exam_result_date=2026-10-11", headers=self.auth).json()
+        self.assertEqual(r_hist_wrong_date["total"], 0)
+
+        # Sitting 2 on 2026-10-15: candidate 1 passes all 3 stages
+        dt_pass = datetime(2026, 10, 15, 10, 0, 0)
+        s_pass = ExamSession(
+            exam_id=exam.id,
+            token="pass-sitting-token",
+            user_id=1,
+            candidate_code="1000000001",
+            started_at=dt_pass,
+            ends_at=dt_pass + timedelta(minutes=60),
+            finished_at=dt_pass + timedelta(minutes=25),
+            score_percent=85.0,
+            exam_snapshot=_json.dumps({
+                "chapters": [
+                    {"name": "თავი I", "stats": {"total": 10, "correct": 8, "percent": 80.0}},
+                    {"name": "თავი II", "stats": {"total": 10, "correct": 9, "percent": 90.0}},
+                ]
+            }),
+        )
+        e2_pass = MultiApartmentEvaluation(
+            user_id=1,
+            project_id=p2.id,
+            project_code="MA-2",
+            project_name="MA Project 2",
+            percentage=100.0,
+            correct_count=5,
+            wrong_count=0,
+            total_correct_answers=5,
+            started_at=dt_pass + timedelta(minutes=30),
+            finished_at=dt_pass + timedelta(minutes=40),
+        )
+        e3_pass = MultiFunctionalEvaluation(
+            user_id=1,
+            project_id=p3.id,
+            project_code="MF-2",
+            project_name="MF Project 2",
+            percentage=90.0,
+            correct_count=4,
+            wrong_count=1,
+            total_correct_answers=5,
+            started_at=dt_pass + timedelta(minutes=45),
+            finished_at=dt_pass + timedelta(minutes=55),
+        )
+        self.db.add_all([s_pass, e2_pass, e3_pass])
+        self.db.commit()
+
+        # Now candidate 1 has pending pass letter AND matches both exam_passed (on 2026-10-15) and exam_failed (on 2026-10-10)
+        r_pass_pending = self.client.get("/admin/users?paginated=true&pending_pass_letter=true", headers=self.auth).json()
+        self.assertEqual(r_pass_pending["total"], 1)
+        self.assertEqual(r_pass_pending["global_pending_pass_users"], 1)
+
+        r_pass_date = self.client.get("/admin/users?paginated=true&exam_passed=true&exam_result_date=2026-10-15", headers=self.auth).json()
+        self.assertEqual(r_pass_date["total"], 1)
+
+        r_pass_wrong_date = self.client.get("/admin/users?paginated=true&exam_passed=true&exam_result_date=2026-10-10", headers=self.auth).json()
+        self.assertEqual(r_pass_wrong_date["total"], 0)
+
+        r_fail_still = self.client.get("/admin/users?paginated=true&exam_failed=true&exam_result_date=2026-10-10", headers=self.auth).json()
+        self.assertEqual(r_fail_still["total"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
-
-
-
 

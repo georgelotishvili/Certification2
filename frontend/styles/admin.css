@@ -1231,6 +1231,43 @@ main {
   background: #16a34a;
 }
 
+.filter-color-dot.is-exam-passed {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.filter-color-dot.is-exam-failed {
+  background: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+
+.users-filter-label.has-unseen-alert {
+  border-color: var(--danger, #c73631);
+  background: #fef2f2;
+  color: #991b1b;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.16);
+}
+
+.users-filter-label.has-pending-alert {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.users-filter-label.has-pending-pass-alert {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  color: #166534;
+  box-shadow: 0 0 0 2.5px rgba(22, 163, 74, 0.22);
+}
+
+.users-filter-label.has-pending-fail-alert {
+  border-color: var(--danger, #c73631);
+  background: #fef2f2;
+  color: #991b1b;
+  box-shadow: 0 0 0 2.5px rgba(220, 38, 38, 0.22);
+}
+
 .users-filter-count-badge {
   display: inline-flex;
   align-items: center;
@@ -1259,6 +1296,18 @@ main {
   background: #dbeafe;
   color: #1e40af;
   border: 1px solid #93c5fd;
+}
+
+.users-filter-count-badge.is-pass-alert {
+  background: #16a34a;
+  color: #ffffff;
+  border: 1px solid #15803d;
+}
+
+.users-filter-count-badge.is-fail-alert {
+  background: #dc2626;
+  color: #ffffff;
+  border: 1px solid #b91c1c;
 }
 
 .users-pagination {
@@ -1311,7 +1360,8 @@ main {
 .users-page-status { color: var(--text-strong); font-size: 13px; text-align: center; }
 
 .users-statements-filter,
-.users-exam-date-filter {
+.users-exam-date-filter,
+.users-exam-results-date-filter {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
