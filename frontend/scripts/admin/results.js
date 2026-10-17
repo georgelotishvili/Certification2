@@ -40,10 +40,62 @@
       text: '#0f172a',
       muted: '#64748b',
       success: '#1f8a4d',
+      warning: '#b45309',
       danger: '#c73631',
       cardBackground: '#f8fafc',
       cardBorder: '#d0d8ea',
     };
+
+    function getPercentColorClass(percent) {
+      const pct = Number(percent) || 0;
+      if (pct >= 75) return 'is-green';
+      if (pct >= 70) return 'is-yellow';
+      return 'is-red';
+    }
+
+    function getPercentPdfColor(percent) {
+      const pct = Number(percent) || 0;
+      if (pct >= 75) return PDF_COLORS.success;
+      if (pct >= 70) return PDF_COLORS.warning;
+      return PDF_COLORS.danger;
+    }
+
+    function getTheoryStatusMeta(chapterItems) {
+      const items = Array.isArray(chapterItems)
+        ? chapterItems.filter((item) => statNumber(item?.stats || item, 'total') > 0)
+        : [];
+      if (!items.length) {
+        return {
+          level: 'red',
+          className: 'is-red',
+          text: 'სამწუხაროდ, ამ ეტაპზე მინიმალური გამსვლელი ზღვარი ვერ გადაილახა. გისურვებთ წარმატებას შემდეგ მცდელობაზე!',
+        };
+      }
+      const hasRed = items.some((item) => statNumber(item?.stats || item, 'percent') < 70);
+      const hasYellow = items.some((item) => {
+        const pct = statNumber(item?.stats || item, 'percent');
+        return pct >= 70 && pct < 75;
+      });
+      if (hasRed) {
+        return {
+          level: 'red',
+          className: 'is-red',
+          text: 'სამწუხაროდ, ამ ეტაპზე მინიმალური გამსვლელი ზღვარი ვერ გადაილახა. გისურვებთ წარმატებას შემდეგ მცდელობაზე!',
+        };
+      }
+      if (hasYellow) {
+        return {
+          level: 'yellow',
+          className: 'is-yellow',
+          text: 'გილოცავთ! თქვენ წარმატებით გადალახეთ A კატეგორიის დონე.',
+        };
+      }
+      return {
+        level: 'green',
+        className: 'is-green',
+        text: 'გილოცავთ! თქვენ წარმატებით გადალახეთ B/C კატეგორიის დონე.',
+      };
+    }
 
     function statusMeta(status) {
       return STATUS_MAP[status] || { label: 'უცნობია', tag: 'neutral' };
@@ -142,7 +194,7 @@
       const total = statNumber(stats, 'total');
       const correct = statNumber(stats, 'correct');
       const percent = statNumber(stats, 'percent');
-      return `სწორი პასუხები ${correct}/${total}. ${formatPercent(percent)}%`;
+      return `${total} კითხვიდან ${correct} სწორი — ${formatPercent(percent)}%`;
     }
 
     function statText(stats) {
@@ -181,7 +233,7 @@
       name.textContent = label;
 
       const value = document.createElement('span');
-      value.className = 'admin-result-board-value';
+      value.className = `admin-result-board-value ${getPercentColorClass(statNumber(stats, 'percent'))}`;
       value.textContent = correctAnswerText(stats || {});
 
       row.append(name, value);
@@ -190,7 +242,7 @@
 
     function appendOverallResultRow(list, stats) {
       const row = document.createElement('div');
-      row.className = 'admin-result-board-row admin-result-board-row--single';
+      row.className = `admin-result-board-row admin-result-board-row--single ${getPercentColorClass(statNumber(stats, 'percent'))}`;
       row.textContent = correctAnswerText(stats || {});
       list.appendChild(row);
     }
@@ -483,6 +535,11 @@
       if (DOM.resultDetailDuration) DOM.resultDetailDuration.textContent = '';
       if (DOM.resultDetailScore) DOM.resultDetailScore.textContent = '';
       if (DOM.resultDetailSummary) DOM.resultDetailSummary.textContent = '';
+      if (DOM.resultDetailStatusBanner) {
+        DOM.resultDetailStatusBanner.hidden = true;
+        DOM.resultDetailStatusBanner.textContent = '';
+        DOM.resultDetailStatusBanner.className = 'admin-result-status-banner';
+      }
       if (DOM.resultBlockStats) {
         DOM.resultBlockStats.classList.remove('result-summary-boards');
         DOM.resultBlockStats.innerHTML = '';
@@ -518,6 +575,16 @@
       }
       if (DOM.resultDetailSummary) {
         DOM.resultDetailSummary.textContent = '';
+      }
+
+      if (DOM.resultDetailStatusBanner) {
+        const chaptersForStatus = snapshot
+          ? (Array.isArray(snapshot.chapters) ? snapshot.chapters : [])
+          : (Array.isArray(detail.block_stats) ? detail.block_stats : []);
+        const statusBannerMeta = getTheoryStatusMeta(chaptersForStatus);
+        DOM.resultDetailStatusBanner.className = `admin-result-status-banner ${statusBannerMeta.className}`;
+        DOM.resultDetailStatusBanner.textContent = statusBannerMeta.text;
+        DOM.resultDetailStatusBanner.hidden = false;
       }
 
       if (DOM.resultBlockStats) {
@@ -605,6 +672,7 @@
         if (state.detail?.session?.session_id === sessionId) {
           closeDetail();
         }
+        try { global.dispatchEvent(new CustomEvent('admin:examResultsChanged', { detail: { userId: state.currentUser?.id } })); } catch {}
         showToast('შედეგი წაიშალა');
       } catch {
         showToast('შედეგის წაშლა ვერ მოხერხდა', 'error');
@@ -662,17 +730,28 @@
       return global.jspdf.jsPDF;
     }
 
+    async function downloadCurrentShortPdf() {
+      if (!state.detail) return;
+      const session = state.detail.session || {};
+      const code = session.candidate_code ? String(session.candidate_code).replace(/\s+/g, '_') : 'result';
+      const filename = `shedegis_cnoba_stage1_${code}_${session.session_id || ''}.pdf`;
+      const prep = await preparePdfSaveHandle(filename, { showToast });
+      if (prep?.aborted) return;
+      await downloadPdf(state.detail, { mode: 'short', saveHandle: prep?.handle || null, filename });
+    }
+
     async function downloadCurrentPdf() {
       if (!state.detail) return;
       const session = state.detail.session || {};
       const code = session.candidate_code ? String(session.candidate_code).replace(/\s+/g, '_') : 'result';
-      const filename = `result_${code}_${session.session_id || ''}.pdf`;
+      const filename = `sruli_angarishi_stage1_${code}_${session.session_id || ''}.pdf`;
       const prep = await preparePdfSaveHandle(filename, { showToast });
       if (prep?.aborted) return;
-      await downloadPdf(state.detail, { saveHandle: prep?.handle || null, filename });
+      await downloadPdf(state.detail, { mode: 'detailed', saveHandle: prep?.handle || null, filename });
     }
 
     async function downloadPdf(detail, options = {}) {
+      const isShort = options.mode === 'short';
       try {
         const jsPDF = await ensureJsPdf();
         const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
@@ -907,6 +986,41 @@
           cursorY += rightHeight + 18;
         };
 
+        const drawStatusBanner = (statusMetaInfo) => {
+          const text = String(statusMetaInfo?.text || '');
+          if (!text) return;
+          const level = statusMetaInfo?.level || 'red';
+          const palette = level === 'green'
+            ? { fill: '#edf7ee', border: '#2e7d32', text: '#1b5e20' }
+            : level === 'yellow'
+              ? { fill: '#fffbeb', border: '#d97706', text: '#92400e' }
+              : { fill: '#fef2f2', border: '#c73631', text: '#991b1b' };
+
+          const paddingX = 14;
+          const paddingY = 12;
+          doc.setFont(fontName, 'bold');
+          doc.setFontSize(11.5);
+          const lines = doc.splitTextToSize(text, usableWidth - paddingX * 2);
+          const boxHeight = Math.max(38, lines.length * 16 + paddingY * 2 - 4);
+          ensureSpace(boxHeight + 16);
+
+          const { r: fillR, g: fillG, b: fillB } = hexToRgb(palette.fill);
+          const { r: borderR, g: borderG, b: borderB } = hexToRgb(palette.border);
+          doc.setFillColor(fillR, fillG, fillB);
+          doc.setDrawColor(borderR, borderG, borderB);
+          doc.setLineWidth(1);
+          doc.rect(margin, cursorY, usableWidth, boxHeight, 'FD');
+
+          setTextColor(palette.text);
+          lines.forEach((line, idx) => {
+            doc.text(line, margin + paddingX, cursorY + paddingY + 10 + idx * 16);
+          });
+          resetTextColor();
+          doc.setFont(fontName, 'normal');
+          doc.setFontSize(12);
+          cursorY += boxHeight + 16;
+        };
+
         const writeResultTable = (title, rows) => {
           writeSectionTitle(title, 2);
           if (!rows.length) {
@@ -914,16 +1028,15 @@
             return;
           }
 
-          const nameWidth = usableWidth - 156;
-          const scoreWidth = 86;
-          const percentWidth = 70;
+          const valueColWidth = 190;
+          const nameWidth = usableWidth - valueColWidth;
           const rowPadding = 7;
           const drawRow = ({ label, stats }, isHeader = false) => {
             const name = isHeader ? 'დასახელება' : String(label || '—');
-            const score = isHeader ? 'სწორი პასუხები' : `${statNumber(stats, 'correct')}/${statNumber(stats, 'total')}`;
-            const percent = isHeader ? 'პროცენტი' : `${formatPercent(statNumber(stats, 'percent'))}%`;
+            const valueText = isHeader ? 'შედეგი' : correctAnswerText(stats || {});
+            const valueColor = isHeader ? PDF_COLORS.text : getPercentPdfColor(statNumber(stats, 'percent'));
             const nameLines = doc.splitTextToSize(name, nameWidth - rowPadding * 2);
-            const rowHeight = Math.max(22, nameLines.length * 13 + rowPadding * 2);
+            const rowHeight = Math.max(24, nameLines.length * 13 + rowPadding * 2);
             ensureSpace(rowHeight);
 
             const { r: borderR, g: borderG, b: borderB } = hexToRgb(PDF_COLORS.cardBorder);
@@ -939,19 +1052,21 @@
 
             doc.setFont(fontName, isHeader ? 'bold' : 'normal');
             doc.setFontSize(isHeader ? 10.5 : 10);
-            setTextColor(isHeader ? PDF_COLORS.text : PDF_COLORS.muted);
+            setTextColor(isHeader ? PDF_COLORS.text : PDF_COLORS.text);
             nameLines.forEach((line, index) => {
               doc.text(line, margin + rowPadding, cursorY + rowPadding + 10 + index * 13);
             });
-            doc.text(score, margin + nameWidth + rowPadding, cursorY + rowPadding + 10);
-            doc.text(percent, margin + nameWidth + scoreWidth + rowPadding, cursorY + rowPadding + 10);
+            doc.setFont(fontName, 'bold');
+            setTextColor(valueColor);
+            doc.text(valueText, margin + nameWidth + rowPadding, cursorY + rowPadding + 10);
             resetTextColor();
+            doc.setFont(fontName, 'normal');
             cursorY += rowHeight;
           };
 
           drawRow({}, true);
           rows.forEach((row) => drawRow(row));
-          cursorY += 28;
+          cursorY += 24;
         };
 
         const writeChapterHeader = (text) => {
@@ -1122,7 +1237,44 @@
           const candidateName = `${candidate.first_name || session.candidate_first_name || ''} ${candidate.last_name || session.candidate_last_name || ''}`.trim();
           const statusLabel = snapshot?.auto_closed ? 'ავტომატურად დახურული' : status.label;
 
-          writeDocumentTitle('გამოცდის შედეგების ანგარიში', 'საგამოცდო შედეგების ოფიციალური ჩანაწერი');
+          const chapters = Array.isArray(snapshot?.chapters) ? snapshot.chapters : [];
+          const untaggedBlocks = Array.isArray(snapshot?.untagged_blocks) ? snapshot.untagged_blocks : [];
+          const hasQuestions = (block) => Array.isArray(block?.questions) && block.questions.length > 0;
+          const hasStatTotal = (item) => statNumber(item?.stats || {}, 'total') > 0;
+          const resultChapters = chapters.filter(hasStatTotal);
+          const resultUntaggedBlocks = untaggedBlocks.filter(hasStatTotal);
+          const theoryStatusMeta = getTheoryStatusMeta(resultChapters);
+
+          if (isShort) {
+            writeDocumentTitle('გამოცდის შედეგის ცნობა', 'I ეტაპი — თეორიული გამოცდა (ტესტირება)');
+            writeInfoColumns(
+              'კანდიდატი',
+              [
+                ['სახელი და გვარი', candidateName || 'უცნობი'],
+                ['პირადი №', candidate.personal_id || session.personal_id || '—'],
+                ['კოდი', candidate.code || session.candidate_code || '—'],
+              ],
+              'გამოცდა',
+              [
+                ['ეტაპი', 'I ეტაპი — თეორიული გამოცდა'],
+                ['სტატუსი', statusLabel],
+                ['დაწყება', formatDateTime(snapshotSession.started_at || session.started_at)],
+                ['დასრულება', formatDateTime(snapshotSession.finished_at || session.finished_at)],
+                ['ხანგრძლივობა', formatDuration(snapshotSession.started_at || session.started_at, snapshotSession.finished_at || session.finished_at || session.ends_at)],
+              ]
+            );
+            drawStatusBanner(theoryStatusMeta);
+            writeResultTable(
+              'თავების შედეგები',
+              resultChapters.map((chapter) => ({
+                label: chapter?.name || 'თავი',
+                stats: chapter?.stats || {},
+              }))
+            );
+            return;
+          }
+
+          writeDocumentTitle('გამოცდის შედეგების დეტალური ანგარიში', 'I ეტაპი — თეორიული გამოცდა (სააპელაციო / შიდა დოკუმენტი)');
           writeInfoColumns(
             'კანდიდატი',
             [
@@ -1149,12 +1301,7 @@
             });
           }
 
-          const chapters = Array.isArray(snapshot?.chapters) ? snapshot.chapters : [];
-          const untaggedBlocks = Array.isArray(snapshot?.untagged_blocks) ? snapshot.untagged_blocks : [];
-          const hasQuestions = (block) => Array.isArray(block?.questions) && block.questions.length > 0;
-          const hasStatTotal = (item) => statNumber(item?.stats || {}, 'total') > 0;
-          const resultChapters = chapters.filter(hasStatTotal);
-          const resultUntaggedBlocks = untaggedBlocks.filter(hasStatTotal);
+          drawStatusBanner(theoryStatusMeta);
 
           doc.addPage();
           cursorY = margin;
@@ -1230,36 +1377,65 @@
           addPageNumbers();
           const filename = options.filename || (() => {
             const code = session.candidate_code ? session.candidate_code.replace(/\s+/g, '_') : 'result';
-            return `result_${code}_${session.session_id || ''}.pdf`;
+            return `${isShort ? 'shedegis_cnoba_stage1' : 'sruli_angarishi_stage1'}_${code}_${session.session_id || ''}.pdf`;
           })();
+          await deliverPdf(doc, filename, { showToast, handle: options.saveHandle || null });
+          return;
+        }
+
+        const fallbackStatusMeta = getTheoryStatusMeta(detail.block_stats || []);
+        if (isShort) {
+          const candidateName = `${(session.candidate_first_name || '')} ${(session.candidate_last_name || '')}`.trim();
+          writeDocumentTitle('გამოცდის შედეგის ცნობა', 'I ეტაპი — თეორიული გამოცდა (ტესტირება)');
+          writeInfoColumns(
+            'კანდიდატი',
+            [
+              ['სახელი და გვარი', candidateName || 'უცნობი'],
+              ['პირადი №', session.personal_id || '—'],
+              ['კოდი', session.candidate_code || '—'],
+            ],
+            'გამოცდა',
+            [
+              ['ეტაპი', 'I ეტაპი — თეორიული გამოცდა'],
+              ['სტატუსი', status.label],
+              ['დაწყება', formatDateTime(session.started_at)],
+              ['დასრულება', session.finished_at ? formatDateTime(session.finished_at) : 'არ დასრულებულა'],
+              ['ხანგრძლივობა', formatDuration(session.started_at, durationBase)],
+            ]
+          );
+          drawStatusBanner(fallbackStatusMeta);
+          writeResultTable(
+            'თავების შედეგები',
+            (detail.block_stats || []).map((stat) => ({
+              label: stat.block_title || `ბლოკი ${stat.block_id}`,
+              stats: stat,
+            }))
+          );
+          addPageNumbers();
+          const filename = options.filename || `shedegis_cnoba_stage1_${session.session_id || ''}.pdf`;
           await deliverPdf(doc, filename, { showToast, handle: options.saveHandle || null });
           return;
         }
 
         doc.setFont(fontName, 'bold');
         doc.setFontSize(18);
-        doc.text('გამოცდის შედეგების ანგარიში', margin, cursorY);
+        doc.text('გამოცდის შედეგების დეტალური ანგარიში', margin, cursorY);
         cursorY += lineHeight * 1.5;
         doc.setFontSize(12);
         doc.setFont(fontName, 'normal');
 
         infoLines.forEach((line) => splitAndWrite(line));
         cursorY += lineHeight / 2;
+        drawStatusBanner(fallbackStatusMeta);
 
         if (detail.block_stats?.length) {
-          if (cursorY > pageHeight - margin - lineHeight) {
-            doc.addPage();
-            cursorY = margin;
-          }
-          doc.setFont(fontName, 'bold');
-          doc.text('ბლოკების შედეგები', margin, cursorY);
-          cursorY += lineHeight;
-          doc.setFont(fontName, 'normal');
-          detail.block_stats.forEach((stat) => {
-            const title = stat.block_title || `ბლოკი ${stat.block_id}`;
-            splitAndWrite(`${title}: ${stat.correct}/${stat.total} (${Number(stat.percent || 0).toFixed(2)}%)`);
-          });
-          cursorY += lineHeight / 2;
+          writeResultTable(
+            'თავების / ბლოკების შედეგები',
+            detail.block_stats.map((stat) => ({
+              label: stat.block_title || `ბლოკი ${stat.block_id}`,
+              stats: stat,
+            }))
+          );
         }
 
         if (detail.answers?.length) {
@@ -1423,6 +1599,9 @@
       DOM.resultDetailOverlay?.addEventListener('click', (event) => {
         if (event.target === DOM.resultDetailOverlay) closeDetail();
       });
+      on(DOM.resultDetailDownloadShort, 'click', () => {
+        void downloadCurrentShortPdf();
+      });
       on(DOM.resultDetailDownload, 'click', () => {
         void downloadCurrentPdf();
       });
@@ -1432,6 +1611,8 @@
       open,
       close: closeList,
       init,
+      downloadPdf,
+      fetchResultDetail,
     };
   }
 

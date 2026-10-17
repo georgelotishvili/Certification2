@@ -458,6 +458,64 @@
       on(document, 'visibilitychange', () => {
         if (!document.hidden) refreshLiveUserStates({ force: true });
       });
+      on(window, 'admin:examResultsChanged', () => {
+        schedulesStateVersion += 1;
+        void render({ preserveExisting: true, keepPage: true });
+      });
+    }
+
+    function examOutcomeBadgeMeta(examOutcome) {
+      if (!examOutcome || !examOutcome.unacknowledged) return null;
+      if (examOutcome.outcome === 'pass_bc') {
+        return {
+          cls: 'is-pass-bc',
+          label: '✓ ჩააბარა (B/C)',
+          title: 'გამოცდა ჩაბარებულია (B/C კატეგორია) — სერტიფიკატის გადაცემის შეტყობინება გასაგზავნია',
+        };
+      }
+      if (examOutcome.outcome === 'pass_a') {
+        return {
+          cls: 'is-pass-a',
+          label: '✓ ჩააბარა (A)',
+          title: 'გამოცდა ჩაბარებულია (A კატეგორია) — სერტიფიკატის გადაცემის შეტყობინება გასაგზავნია',
+        };
+      }
+      if (examOutcome.outcome === 'fail') {
+        return {
+          cls: 'is-fail',
+          label: '✕ ჩაიჭრა',
+          title: 'გამოცდა ვერ ჩააბარა — ჩაჭრის შეტყობინება გასაგზავნია',
+        };
+      }
+      return null;
+    }
+
+    function syncExamOutcomeUI(card, user) {
+      if (!card || !user) return;
+      const meta = examOutcomeBadgeMeta(user.exam_outcome);
+      const badge = card.querySelector('.user-exam-outcome-badge');
+      if (badge) {
+        badge.classList.remove('is-pass-bc', 'is-pass-a', 'is-fail');
+        if (meta) {
+          badge.textContent = meta.label;
+          badge.title = meta.title;
+          badge.classList.add(meta.cls);
+          badge.hidden = false;
+        } else {
+          badge.textContent = '';
+          badge.removeAttribute('title');
+          badge.hidden = true;
+        }
+      }
+      const isPendingPass = Boolean(
+        user.exam_outcome?.unacknowledged &&
+          (user.exam_outcome.outcome === 'pass_bc' || user.exam_outcome.outcome === 'pass_a')
+      );
+      const isPendingFail = Boolean(
+        user.exam_outcome?.unacknowledged && user.exam_outcome.outcome === 'fail'
+      );
+      card.querySelector('.btn-certificate-handover')?.classList.toggle('has-pending-exam-pass', isPendingPass);
+      card.querySelector('.btn-exam-fail-letter')?.classList.toggle('has-pending-exam-fail', isPendingFail);
     }
 
     function certificateDotMeta(certificateData) {
@@ -509,11 +567,12 @@
       const safeEmail = escapeHtml(user.email || '');
       const safeRegistered = escapeHtml(formatDateTime(user.created_at));
       const dotMeta = certificateDotMeta(user.certificate || user.certificate_info);
+      const outcomeMeta = examOutcomeBadgeMeta(user.exam_outcome);
       
       return `
         <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : (user.has_pending_statements ? ' has-pending-statements' : '')}" data-id="${safeId}">
           <div class="block-head user-block-head">
-            <div class="user-name"><span class="user-cert-dot${dotMeta ? ` ${dotMeta.cls}` : ''}"${dotMeta ? ` title="${dotMeta.title}"` : ' hidden'}></span><span class="user-name-text">${safeFullName}</span></div>
+            <div class="user-name"><span class="user-cert-dot${dotMeta ? ` ${dotMeta.cls}` : ''}"${dotMeta ? ` title="${dotMeta.title}"` : ' hidden'}></span><span class="user-name-text">${safeFullName}</span><span class="user-exam-outcome-badge${outcomeMeta ? ` ${outcomeMeta.cls}` : ''}"${outcomeMeta ? ` title="${escapeHtml(outcomeMeta.title)}"` : ' hidden'}>${outcomeMeta ? escapeHtml(outcomeMeta.label) : ''}</span></div>
             <div class="user-controls">
               <label class="user-checkbox-label user-admin-check-label" title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}">
                 <input type="checkbox" class="chk-admin" ${checked} ${disabled} />
@@ -947,6 +1006,7 @@
       const deletePhoto = card.querySelector('.photo-delete-btn');
       if (deletePhoto) deletePhoto.style.display = user.photo_filename ? 'inline-flex' : 'none';
       updateUserCardColor(user.id, user.certificate || user.certificate_info, false);
+      syncExamOutcomeUI(card, user);
     }
 
     function normalizeUserValue(value) {

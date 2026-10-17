@@ -1,93 +1,68 @@
 (function (global) {
-  const DEFAULT_EXAM_SUBJECT = 'გამოცდაზე დაშვება და საგამოცდო დეტალები';
+  const DEFAULT_EXAM_SUBJECT = 'გამოცდაზე დაშვება';
   const DEFAULT_EXAM_BODY = [
-    'ბატონო/ქალბატონო {name},',
-    'გაცნობებთ, რომ თქვენი განაცხადი დადასტურდა და დაშვებული ხართ სერტიფიცირების გამოცდაზე.',
+    'ადრესატი: {name}',
     '',
-    '• კანდიდატი: {name}',
-    '• განაცხადის ნომერი: {code}',
-    '• გამოცდის თარიღი და დაწყების დრო: {date}, {time}',
-    '• გამოცხადების დრო (რეგისტრაცია და ხელშეკრულების ხელმოწერა): გამოცდის დაწყებამდე 30 წუთით ადრე',
-    '• საგამოცდო ცენტრის მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6',
-    '• საგამოცდო საფასური: 350 ლარი',
-    '• გადახდის ვადა: საგამოცდო ხელშეკრულების (GIPC-CON-004) გაფორმებამდე (ხელმოწერამდე — წინა დღეებში ან ადგილზევე ხელმოწერის წინ უნაღდო ანგარიშსწორებით / ინტერნეტბანკით)',
-    '• საბანკო ანგარიში: GE33TB7313736080100014',
-    '• გადახდის დანიშნულება: საგამოცდო საფასური, {name}, {code}',
+    'მოგესალმებით,',
     '',
-    'შეტყობინებას გასაცნობად თან ერთვის საგამოცდო მომსახურების ხელშეკრულება (GIPC-CON-004, რომელიც ასევე საჯაროდ ხელმისაწვდომია ვებგვერდზე gipc.org.ge). გამოცდაზე დასაშვებად აუცილებელია საგამოცდო საფასურის (350 ლარი) გადახდა საგამოცდო ხელშეკრულების გაფორმებამდე (ხელმოწერამდე — წინა დღეებში ან ადგილზევე ხელმოწერის წინ უნაღდო ანგარიშსწორებით / ინტერნეტბანკით) და საგამოცდო ცენტრში გამოცდის დაწყებამდე 30 წუთით ადრე გამოცხადება პირადობის დამადასტურებელი მოქმედი დოკუმენტით, საგამოცდო მომსახურების ხელშეკრულების (GIPC-CON-004) ადგილზე ხელმოწერისა და რეგისტრაციის გავლის მიზნით (GIPC-PRO-002 §10.1).',
+    'გაცნობებთ, რომ თქვენი განაცხადი დადასტურდა და დაშვებული ხართ სერტიფიცირების გამოცდაზე. თქვენი გამოცდა დაიგეგმა {date}, {time}-ზე, მისამართზე: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6.',
+    '',
+    'გამოცდაზე დასაშვებად აუცილებელია:',
+    '- საგამოცდო მომსახურების ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});',
+    '- საგამოცდო ცენტრში გამოცხადდეთ გამოცდის დაწყებამდე 30 წუთით ადრე პირადობის დამადასტურებელი მოქმედი დოკუმენტით, ხელშეკრულებაზე ხელმოწერისა და რეგისტრაციის გავლის მიზნით.',
+    '',
+    'გთხოვთ წინასწარ გაეცნოთ შესაბამისი მომსახურების ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.',
     '',
     'პატივისცემით,',
-    'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
   ].join('\n');
 
-  const DEFAULT_REJECTION_SUBJECT = 'სერტიფიცირების განაცხადის უარყოფა';
+  const DEFAULT_REJECTION_SUBJECT = 'განაცხადის უარყოფა';
   const DEFAULT_REJECTION_BODY = [
-    'ბატონო/ქალბატონო {name},',
-    'გაცნობებთ, რომ თქვენი სერტიფიცირების განაცხადი არ დაკმაყოფილდა.',
+    'ადრესატი: {name}',
     '',
-    '• განაცხადის ნომერი: {code}',
-    '• მოთხოვნილი კატეგორია: [A / B / C]',
-    '• გადაწყვეტილების თარიღი: {date}',
-    '• უარის საფუძველი: [სქემის/პროცედურის შესაბამისი პუნქტი]',
+    'მოგესალმებით,',
     '',
-    'გადაწყვეტილების დასაბუთება:',
-    '1. [ფაქტობრივი და ნორმატიული დასაბუთება];',
-    '2. [ფაქტობრივი და ნორმატიული დასაბუთება].',
+    'გაცნობებთ, რომ თქვენი განაცხადი არ დაკმაყოფილდა, ვინაიდან ვერ აკმაყოფილებთ საქართველოს მთავრობის №134 დადგენილებითა და სერტიფიკაციის სქემით განსაზღვრულ სასერტიფიკაციო მოთხოვნებს.',
     '',
-    'აღნიშნული გადაწყვეტილება შეგიძლიათ გაასაჩივროთ ინსტიტუტის დამოუკიდებელ სააპელაციო რგოლში შეტყობინების ჩაბარებიდან 20 სამუშაო დღის ვადაში, საჩივრებისა და აპელაციების პროცედურის (GIPC-PRO-003 §6) შესაბამისად.',
+    'გადაწყვეტილების გასაჩივრების წესი და ვადები იხილეთ საიტზე gipc.org.ge-ზე გამოქვეყნებულ შესაბამის ოფიციალურ დოკუმენტებში.',
     '',
     'პატივისცემით,',
-    'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
   ].join('\n');
 
-  const DEFAULT_CERTIFICATE_SUBJECT = 'სერტიფიცირების გამოცდის წარმატებით ჩაბარება და სერტიფიკატის გაცემის პირობები';
+  const DEFAULT_CERTIFICATE_SUBJECT = 'სერტიფიცირების გამოცდის წარმატებით ჩაბარება';
   const DEFAULT_CERTIFICATE_BODY = [
-    'ბატონო/ქალბატონო {name},',
-    'გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და თქვენი სერტიფიცირების განაცხადისა (GIPC-FRM-001) და საქმის მასალების საფუძველზე მიღებულია დადებითი გადაწყვეტილება თქვენთვის სერტიფიკატის მინიჭების შესახებ.',
+    'ადრესატი: {name}',
     '',
-    '• განაცხადის ნომერი და თარიღი: {code} / {date}',
-    '• საგამოცდო მცდელობის ნომერი და თარიღი: {code} / {date}',
-    '• ეტაპი I (თეორიული ტესტირება): [თითოეულ თავში/ქვეთავში ≥X% — ბარიერი: ≥70% (A) / ≥75% (B/C)]',
-    '• ეტაპი II (მრავალბინიანი საცხოვრებელი სახლის პროექტი): [ნაპოვნი ხარვეზების %; არასწორი მონიშვნა: X — ბარიერი: ≥70%, ≤2 (A) / ≥75%, ≤1 (B/C)]',
-    '• ეტაპი III (საჯარო/საზოგადოებრივი შენობის პროექტი): [ნაპოვნი ხარვეზების %; არასწორი მონიშვნა: X — ბარიერი: ≥70%, ≤2 (A) / ≥75%, ≤1 (B/C)]',
-    '• დაკმაყოფილებული საგამოცდო ბარიერი: [კატეგორია A დონე (≥70%, ≤2) / კატეგორია B და C დონე (≥75%, ≤1)]',
-    '• მინიჭებული სერტიფიკატის კატეგორია: [კატეგორია A — შენობა-ნაგებობის არქიტექტორი / კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი / კატეგორია C — არქიტექტურული პროექტის ექსპერტი] (შენიშვნა: თუ განაცხადი წარდგენილი გქონდათ B ან C კატეგორიაზე და გამოცდაზე დაძლიეთ A კატეგორიის ≥70%-იანი ბარიერი, GIPC-FRM-001 §3-ში დაფიქსირებული თქვენი თანხმობის შესაბამისად გენიჭებათ A კატეგორიის სერტიფიკატი)',
-    '• საგამოცდო შედეგის მოქმედების ვადა (1 წელი): {date}',
-    '• სერტიფიკატის გაცემის საფასური: 3 000 ლარი (ერთჯერადად, სრულად)',
-    '• საბანკო ანგარიში: GE33TB7313736080100014',
-    '• გადახდის დანიშნულება: სერტიფიკატის გაცემის საფასური, {name}, {code}',
-    '• ხელშეკრულების ხელმოწერის დღეები და საათები: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6; {date}, {time} ({period}) / ან კვალიფიციური ელექტრონული ხელმოწერით',
+    'მოგესალმებით,',
     '',
-    'შეტყობინებას თან ერთვის უკვე გამზადებული შესაბამისი კატეგორიის სასერტიფიკაციო ხელშეკრულება (GIPC-CON-001 / GIPC-CON-002 / GIPC-CON-003) (საჭიროების შემთხვევაში, შეტყობინებას ასევე შეიძლება დაერთოს ინდივიდუალური საგამოცდო ანგარიში PDF ფორმატში, თუ შედეგების დეტალიზაცია სრულად არ არის ასახული წერილის ცხრილში ან საგამოცდო პლატფორმაში).',
+    'გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და მიღებულია გადაწყვეტილება თქვენთვის [კატეგორია] სერტიფიკატის მინიჭების შესახებ.',
     '',
-    'სერტიფიკატის გაცემისა და გააქტიურების წესი:',
-    '1. საფასურის გადახდა და ხელშეკრულების ხელმოწერა: სერტიფიკატის მისაღებად გთხოვთ საგამოცდო შედეგის მოქმედების 1 (ერთი) წლის ვადაში (GIPC-PRO-001 §5.6.3) გადაიხადოთ სერტიფიკატის გაცემის ერთჯერადი საფასური (3 000 ლარი) და მობრძანდეთ ინსტიტუტის ოფისში ზემოთ მითითებულ მიღების დღეებსა და საათებში უკვე გამზადებულ სასერტიფიკაციო ხელშეკრულებაზე ხელმოსაწერად (ან დაადასტუროთ ხელშეკრულება კვალიფიციური ელექტრონული ხელმოწერით).',
-    '2. სერტიფიკატის გააქტიურება: საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 (ათი) სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და იგი გააქტიურდება ინსტიტუტის ვებგვერდზე (gipc.org.ge) განთავსებულ საჯარო რეესტრში (GIPC-PRO-001 §§5.7.2, 5.9).',
-    '3. შედეგის გაუმჯობესება ან გასაჩივრება: თუ დააკმაყოფილეთ მხოლოდ A კატეგორიის ბარიერი და გსურთ B ან C კატეგორიის ბარიერის (≥75%, თითოეულ პროექტში არაუმეტეს 1 არასწორი მონიშვნისა) დაძლევა, უფლება გაქვთ ნებისმიერ დროს განმეორებით ჩააბაროთ სრული გამოცდა (სტანდარტული საგამოცდო საფასური — 350 ლარი; GIPC-PRO-001 §10.1). საგამოცდო შედეგის გასაჩივრება შეგიძლიათ დამოუკიდებელ სააპელაციო რგოლში შეტყობინების მიღებიდან 20 სამუშაო დღის ვადაში (GIPC-PRO-003 §6).',
+    'სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში:',
+    '- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});',
+    '- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.',
+    '',
+    'საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.',
+    '',
+    'გთხოვთ წინასწარ გაეცნოთ შესაბამის სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.',
     '',
     'პატივისცემით,',
-    'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
   ].join('\n');
 
   const DEFAULT_EXAM_FAIL_SUBJECT = 'სერტიფიცირების გამოცდის შედეგი';
   const DEFAULT_EXAM_FAIL_BODY = [
-    'ბატონო/ქალბატონო {name},',
+    'ადრესატი: {name}',
+    '',
+    'მოგესალმებით,',
+    '',
     'გაცნობებთ, რომ სერტიფიცირების გამოცდაზე ვერ დააკმაყოფილეთ სერტიფიცირების სქემით დადგენილი გამსვლელი ბარიერი.',
     '',
-    '• საგამოცდო მცდელობის ნომერი და თარიღი: {code} / {date}',
-    '• ეტაპი I (თეორიული ტესტირება): [ქულა / % თეორიული თავებისა და ქვეთავების მიხედვით]',
-    '• ეტაპი II (მრავალბინიანი საცხოვრებელი სახლის პროექტი): [ნაპოვნი ხარვეზების %; არასწორი მონიშვნა: X]',
-    '• ეტაპი III (საჯარო/საზოგადოებრივი შენობის პროექტი): [ნაპოვნი ხარვეზების %; არასწორი მონიშვნა: X]',
-    '• შეუსრულებელი კრიტერიუმი: [კონკრეტული ეტაპი და ზღვარი, რომელიც ვერ დაკმაყოფილდა]',
-    '',
-    'ზემოთ მოცემულ ცხრილში (ან საჭიროების შემთხვევაში — შეტყობინებაზე თანდართულ ინდივიდუალურ საგამოცდო ანგარიშში / საგამოცდო პლატფორმის პირად კაბინეტში) მოცემულია I ეტაპის შედეგები თეორიული თავებისა და ქვეთავების მიხედვით, აგრეთვე II და III ეტაპების თითოეულ პროექტში ნაპოვნი ხარვეზების პროცენტული მაჩვენებელი და არასწორი/ზედმეტი მონიშვნების რაოდენობა (GIPC-PRO-002 §12.2; წერილში მოცემული ცხრილის გარდა ცალკე დამატებითი PDF-ანგარიშის მიბმა სავალდებულო არ არის და გამოიყენება მხოლოდ საჭიროების შემთხვევაში). საგამოცდო მასალების კონფიდენციალურობის დაცვის მიზნით ტესტური კითხვების ტექსტი, სწორი პასუხების დამტკიცებული ჩამონათვალი, დავალების შეფასების დოკუმენტები და საგამოცდო პროექტების ასლები არ გაიცემა (GIPC-POL-002 §7).',
-    '',
-    'განმეორებითი გამოცდა და გასაჩივრება:',
-    '1. განმეორებითი გამოცდა: უფლება გაქვთ სრული გამოცდა ჩააბაროთ განმეორებით, მცდელობათა რაოდენობის შეზღუდვისა და სავალდებულო მოცდის პერიოდის გარეშე (GIPC-PRO-001 §10.1). ახალი გამოცდის თარიღი და დრო განისაზღვრება თქვენთან შეთანხმებით; თითოეული სტანდარტული საგამოცდო მცდელობის საფასურია 350 ლარი (გამოცდის ვერ ჩაბარებისას სერტიფიკატის გაცემის 3 000-ლარიანი საფასური არ გადაიხდება).',
-    '2. გასაჩივრების უფლება: საგამოცდო შედეგის გასაჩივრება შეგიძლიათ ინსტიტუტის დამოუკიდებელ სააპელაციო რგოლში შეტყობინების მიღებიდან 20 სამუშაო დღის ვადაში, საჩივრებისა და აპელაციების პროცედურის (GIPC-PRO-003 §6) შესაბამისად. თუ აპელაციის შედეგად დადგინდება ინსტიტუტის პასუხისმგებლობით გამოწვეული ტექნიკური ან პროცედურული ხარვეზი, ჩაინიშნება განმეორებითი საგამოცდო სესია დამატებითი საფასურის გარეშე (ხოლო გადახდილი საგამოცდო საფასურის დაბრუნება განხორციელდება იმ შემთხვევაში, თუ ინსტიტუტი 30 კალენდარული დღის ვადაში ვერ უზრუნველყოფს განმეორებითი სესიის ჩატარებას — GIPC-PRO-003 §6.5.1, GIPC-CON-004 §9.5).',
+    'განმეორებით გამოცდაზე გასვლისა და შედეგის გასაჩივრების (აპელაციის) წესი განთავსებულია საიტზე gipc.org.ge.',
     '',
     'პატივისცემით,',
-    'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
   ].join('\n');
 
   const MODE_META = {
@@ -431,6 +406,8 @@
       const dateStr = isValidDate(examDate) ? formatDisplayDate(examDate) : '[თარიღი]';
       const timeStr = isValidTime(examTime) ? String(examTime).trim() : '[საათი]';
       const periodStr = periodLabelText(period) || '[დილით/საღამოს]';
+      const categoryStr = String(user?.exam_outcome?.category_label || 'შესაბამისი კატეგორიის').trim();
+      const examResultsStr = String(user?.exam_outcome?.results_text || '').trim();
       return {
         name: fullName,
         personal_id: personalId,
@@ -438,6 +415,8 @@
         date: dateStr,
         time: timeStr,
         period: periodStr,
+        category: categoryStr,
+        exam_results: examResultsStr,
       };
     }
 
@@ -450,6 +429,9 @@
         [/\{date\}|\[გამოცდის თარიღი\]|\[თარიღი\]/gi, tokens.date],
         [/\{time\}|\[საათი\]/gi, tokens.time],
         [/\{period\}|\[ცვლა\]|\[დილით\/საღამოს\]/gi, tokens.period],
+        [/\[კატეგორია\]\s*კატეგორიის/gi, tokens.category || 'შესაბამისი კატეგორიის'],
+        [/\{category\}|\[კატეგორია\]/gi, tokens.category || 'შესაბამისი კატეგორიის'],
+        [/\{exam_results\}|\[გამოცდის შედეგები\]/gi, tokens.exam_results || ''],
       ];
       for (const [pattern, val] of replacements) {
         result = result.replace(pattern, () => val);
@@ -457,8 +439,40 @@
       return result;
     }
 
+    function injectExamResultsIntoBody(bodyText, examOutcome, mode) {
+      let text = String(bodyText || '');
+      const resultsBlock = String(examOutcome?.results_text || '').trim();
+      if (!resultsBlock) return text;
+      const outcome = examOutcome?.outcome;
+      const shouldInject =
+        (mode === 'certificate' && (outcome === 'pass_bc' || outcome === 'pass_a')) ||
+        (mode === 'exam_fail' && outcome === 'fail');
+      if (!shouldInject) return text;
+      if (text.includes(resultsBlock) || text.includes('თქვენი გამოცდის შედეგები:')) {
+        return text;
+      }
+      const certAnchor = 'სერტიფიკატის მისაღებად აუცილებელია';
+      const failAnchor = 'განმეორებით გამოცდაზე გასვლისა';
+      const signoffAnchor = 'პატივისცემით,';
+      if (mode === 'certificate' && text.includes(certAnchor)) {
+        return text.replace(certAnchor, `${resultsBlock}\n\n${certAnchor}`);
+      }
+      if (mode === 'exam_fail' && text.includes(failAnchor)) {
+        return text.replace(failAnchor, `${resultsBlock}\n\n${failAnchor}`);
+      }
+      if (text.includes(signoffAnchor)) {
+        return text.replace(signoffAnchor, `${resultsBlock}\n\n${signoffAnchor}`);
+      }
+      return `${text.trimEnd()}\n\n${resultsBlock}`;
+    }
+
     function convertRenderedToTemplate(renderedText, tokens) {
       let result = String(renderedText || '');
+      if (tokens.exam_results) {
+        result = result.split(`\n\n${tokens.exam_results}`).join('');
+        result = result.split(`${tokens.exam_results}\n\n`).join('');
+        result = result.split(tokens.exam_results).join('');
+      }
       const pairs = [
         [tokens.name, '{name}'],
         [tokens.personal_id, '{personal_id}'],
@@ -473,15 +487,21 @@
         }
       }
       result = result
+        .replace(/B\/C კატეგორიის|A კატეგორიის|შესაბამისი კატეგორიის/g, '[კატეგორია]')
         .replace(/\[თარიღი\]|\[გამოცდის თარიღი\]/g, '{date}')
         .replace(/\[საათი\]/g, '{time}')
         .replace(/\[დილით\/საღამოს\]|\[ცვლა\]/g, '{period}');
       return result;
     }
 
+    function isLegacyTemplateBody(body) {
+      const raw = String(body || '').trim();
+      return !raw || raw.startsWith('ბატონო/ქალბატონო') || raw.startsWith('გამარჯობა,') || /\[შეავსეთ/.test(raw);
+    }
+
     function normalizeGreeting(body, fallback) {
       const raw = String(body || '').trim();
-      if (!raw || raw.startsWith('მოგესალმებით,') || raw.startsWith('გამარჯობა,')) {
+      if (isLegacyTemplateBody(raw)) {
         return fallback;
       }
       return raw;
@@ -515,11 +535,13 @@
       const schedulesEndpoint = `${API_BASE}/admin/users/${encodeURIComponent(user.id)}/exam-schedules`;
       const lettersEndpoint = `${API_BASE}/admin/users/${encodeURIComponent(user.id)}/planning-letters`;
       const statementsEndpoint = `${API_BASE}/admin/users/${encodeURIComponent(user.id)}/statements`;
+      const examOutcomeEndpoint = `${API_BASE}/admin/users/${encodeURIComponent(user.id)}/exam-outcome`;
       const templatesEndpoint = `${API_BASE}/admin/planning-templates`;
 
       let scheduleItems = [];
       let letterItems = [];
       let statementItems = [];
+      let examOutcome = user.exam_outcome || null;
       let loadingData = false;
       const seenInFlight = new Set();
 
@@ -709,6 +731,37 @@
           'has-custom-record',
           combined.some((item) => item.mode === 'custom')
         );
+
+        const isPendingPass = Boolean(
+          examOutcome?.unacknowledged &&
+            (examOutcome.outcome === 'pass_bc' || examOutcome.outcome === 'pass_a')
+        );
+        const isPendingFail = Boolean(
+          examOutcome?.unacknowledged && examOutcome.outcome === 'fail'
+        );
+        openCertificateModalBtn?.classList.toggle('has-pending-exam-pass', isPendingPass);
+        openExamFailModalBtn?.classList.toggle('has-pending-exam-fail', isPendingFail);
+
+        const outcomeBadgeEl = cardEl?.querySelector('.user-exam-outcome-badge');
+        if (outcomeBadgeEl) {
+          outcomeBadgeEl.classList.remove('is-pass-bc', 'is-pass-a', 'is-fail');
+          if (examOutcome?.unacknowledged && examOutcome.outcome === 'pass_bc') {
+            outcomeBadgeEl.textContent = '✓ ჩააბარა (B/C)';
+            outcomeBadgeEl.classList.add('is-pass-bc');
+            outcomeBadgeEl.hidden = false;
+          } else if (examOutcome?.unacknowledged && examOutcome.outcome === 'pass_a') {
+            outcomeBadgeEl.textContent = '✓ ჩააბარა (A)';
+            outcomeBadgeEl.classList.add('is-pass-a');
+            outcomeBadgeEl.hidden = false;
+          } else if (examOutcome?.unacknowledged && examOutcome.outcome === 'fail') {
+            outcomeBadgeEl.textContent = '✕ ჩაიჭრა';
+            outcomeBadgeEl.classList.add('is-fail');
+            outcomeBadgeEl.hidden = false;
+          } else {
+            outcomeBadgeEl.textContent = '';
+            outcomeBadgeEl.hidden = true;
+          }
+        }
       }
 
       function notifyStatementState(serverState = null) {
@@ -740,13 +793,14 @@
             fetch(schedulesEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }),
             fetch(lettersEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }).catch(() => null),
             fetch(statementsEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }).catch(() => null),
+            fetch(examOutcomeEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }).catch(() => null),
           ];
           if (!sharedTemplatesLoaded) {
             requests.push(
               fetch(templatesEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }).catch(() => null)
             );
           }
-          const [schedRes, lettersRes, stmtRes, tmplRes] = await Promise.all(requests);
+          const [schedRes, lettersRes, stmtRes, outcomeRes, tmplRes] = await Promise.all(requests);
           if (!isCurrent()) return;
 
           if (tmplRes && tmplRes.ok) {
@@ -754,35 +808,37 @@
             const items = Array.isArray(tmplData?.items) ? tmplData.items : [];
             const examTmpl = items.find((t) => t.kind === 'exam');
             if (examTmpl) {
-              const hasBlocked = /\[შეავსეთ/.test(String(examTmpl.body || ''));
+              const legacy = isLegacyTemplateBody(examTmpl.body);
               sharedTemplates.exam = {
                 ...examTmpl,
-                subject: hasBlocked ? DEFAULT_EXAM_SUBJECT : (examTmpl.subject || DEFAULT_EXAM_SUBJECT),
-                body: normalizeGreeting(hasBlocked ? DEFAULT_EXAM_BODY : examTmpl.body, DEFAULT_EXAM_BODY),
+                subject: legacy ? DEFAULT_EXAM_SUBJECT : (examTmpl.subject || DEFAULT_EXAM_SUBJECT),
+                body: normalizeGreeting(examTmpl.body, DEFAULT_EXAM_BODY),
               };
             }
             const certTmpl = items.find((t) => t.kind === 'certificate');
             if (certTmpl) {
-              const isOldDefault = String(certTmpl.body || '').startsWith('გამარჯობა, {name}');
+              const legacy = isLegacyTemplateBody(certTmpl.body);
               sharedTemplates.certificate = {
                 ...certTmpl,
-                subject: isOldDefault ? DEFAULT_CERTIFICATE_SUBJECT : (certTmpl.subject || DEFAULT_CERTIFICATE_SUBJECT),
-                body: normalizeGreeting(isOldDefault ? DEFAULT_CERTIFICATE_BODY : certTmpl.body, DEFAULT_CERTIFICATE_BODY),
+                subject: legacy ? DEFAULT_CERTIFICATE_SUBJECT : (certTmpl.subject || DEFAULT_CERTIFICATE_SUBJECT),
+                body: normalizeGreeting(certTmpl.body, DEFAULT_CERTIFICATE_BODY),
               };
             }
             if (tmplData?.rejection_template) {
               const rejTmpl = tmplData.rejection_template;
+              const legacy = isLegacyTemplateBody(rejTmpl.body);
               sharedTemplates.rejection = {
                 ...rejTmpl,
-                subject: rejTmpl.subject || DEFAULT_REJECTION_SUBJECT,
+                subject: legacy ? DEFAULT_REJECTION_SUBJECT : (rejTmpl.subject || DEFAULT_REJECTION_SUBJECT),
                 body: normalizeGreeting(rejTmpl.body, DEFAULT_REJECTION_BODY),
               };
             }
             if (tmplData?.exam_fail_template) {
               const failTmpl = tmplData.exam_fail_template;
+              const legacy = isLegacyTemplateBody(failTmpl.body);
               sharedTemplates.exam_fail = {
                 ...failTmpl,
-                subject: failTmpl.subject || DEFAULT_EXAM_FAIL_SUBJECT,
+                subject: legacy ? DEFAULT_EXAM_FAIL_SUBJECT : (failTmpl.subject || DEFAULT_EXAM_FAIL_SUBJECT),
                 body: normalizeGreeting(failTmpl.body, DEFAULT_EXAM_FAIL_BODY),
               };
             }
@@ -804,6 +860,13 @@
             const stmtData = await stmtRes.json().catch(() => null);
             statementItems = Array.isArray(stmtData?.items) ? stmtData.items : [];
             notifyStatementState();
+          }
+          if (outcomeRes && outcomeRes.ok) {
+            const outcomeData = await outcomeRes.json().catch(() => null);
+            if (outcomeData) {
+              examOutcome = outcomeData;
+              user.exam_outcome = outcomeData;
+            }
           }
           updateCardButtonBadge();
         } catch {
@@ -1232,7 +1295,8 @@
           const nextTokens = candidateTokens(user, dateInput.value, currentTimeValue(), currentPeriod());
           if (forceTemplate || !textCustomized) {
             subjectInput.value = applyTemplateTokens(tmpl.subject || meta.defaultSubject, nextTokens);
-            bodyInput.value = applyTemplateTokens(tmpl.body || meta.defaultBody, nextTokens);
+            const rawBody = applyTemplateTokens(tmpl.body || meta.defaultBody, nextTokens);
+            bodyInput.value = injectExamResultsIntoBody(rawBody, examOutcome, resolvedMode);
           } else {
             let nextSubject = subjectInput.value;
             let nextBody = bodyInput.value;
@@ -2500,6 +2564,14 @@
           void load();
         }
       });
+
+      global.addEventListener('admin:examResultsChanged', (ev) => {
+        if ((!ev?.detail?.userId || Number(ev.detail.userId) === Number(user.id)) && isCurrent()) {
+          void load();
+        }
+      });
+
+      updateCardButtonBadge();
 
       return { load, openHistoryModal: openScheduledExamsListModal };
     }

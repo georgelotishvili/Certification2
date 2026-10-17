@@ -17,12 +17,22 @@ from sqlalchemy.pool import StaticPool
 
 try:
     from backend.app.database import get_db
-    from backend.app.models import Base, ExamSchedule, PlanningLetter, User, UserSession
+    from backend.app.models import (
+        Base, Exam, ExamSchedule, Session as ExamSession,
+        MultiApartmentEvaluation, MultiApartmentProject,
+        MultiFunctionalEvaluation, MultiFunctionalProject,
+        PlanningLetter, User, UserSession,
+    )
     from backend.app.routers import admin, exam_schedules, planning_letters, users
     from backend.app.services import media_storage, planning_email
 except ModuleNotFoundError:
     from app.database import get_db
-    from app.models import Base, ExamSchedule, PlanningLetter, User, UserSession
+    from app.models import (
+        Base, Exam, ExamSchedule, Session as ExamSession,
+        MultiApartmentEvaluation, MultiApartmentProject,
+        MultiFunctionalEvaluation, MultiFunctionalProject,
+        PlanningLetter, User, UserSession,
+    )
     from app.routers import admin, exam_schedules, planning_letters, users
     from app.services import media_storage, planning_email
 
@@ -72,6 +82,7 @@ class PlanningLetterTests(unittest.TestCase):
         app = FastAPI()
         app.include_router(planning_letters.router, prefix="/admin")
         app.include_router(exam_schedules.router, prefix="/admin")
+        app.include_router(admin.router, prefix="/admin")
         app.include_router(users.router, prefix="/users")
         app.dependency_overrides[get_db] = lambda: self.db
         self.client = TestClient(app)
@@ -387,7 +398,7 @@ class PlanningLetterTests(unittest.TestCase):
         rej = tmpl_res.json().get("rejection_template")
         self.assertIsNotNone(rej)
         self.assertEqual(rej["kind"], "rejection")
-        self.assertTrue(rej["body"].startswith("ბატონო/ქალბატონო {name},"))
+        self.assertTrue(rej["body"].startswith("ადრესატი: "))
 
         # 2. PUT /admin/planning-templates/rejection updates standard negative response template
         put_res = self.client.put(
@@ -418,7 +429,7 @@ class PlanningLetterTests(unittest.TestCase):
         fail_tmpl = tmpl_res.json().get("exam_fail_template")
         self.assertIsNotNone(fail_tmpl)
         self.assertEqual(fail_tmpl["kind"], "exam_fail")
-        self.assertTrue(fail_tmpl["body"].startswith("ბატონო/ქალბატონო {name},"))
+        self.assertTrue(fail_tmpl["body"].startswith("ადრესატი: "))
 
         put_fail = self.client.put(
             "/admin/planning-templates/exam_fail",
@@ -498,9 +509,9 @@ class PlanningLetterTests(unittest.TestCase):
         letters = self.db.scalars(select(PlanningLetter)).all()
         self.assertEqual(len(letters), 1)
         self.assertEqual(letters[0].period, "cert_issued")
-        self.assertTrue(letters[0].body.startswith("ბატონო/ქალბატონო "))
-        self.assertIn("არქიტექტურული პროექტის ექსპერტი", letters[0].body)
-        self.assertIn("1000000001", letters[0].body)
+        self.assertTrue(letters[0].body.startswith("ადრესატი: "))
+        self.assertIn("გილოცავთ! თქვენზე გაიცა სერტიფიკატი.", letters[0].body)
+        self.assertIn("gipc.org.ge", letters[0].body)
         self.assertEqual(letters[0].subject, "სერტიფიკატის გაცემა და საჯარო რეესტრში ასახვა")
 
         # 3. Upload PDF and call POST /users/1/certificate/notify -> attaches PDF to §3.11 email
@@ -558,6 +569,87 @@ class PlanningLetterTests(unittest.TestCase):
         res2 = self.client.get("/admin/planning-templates", headers=self.auth)
         self.assertEqual(res2.status_code, 200, res2.text)
         self.assertEqual(res2.json().get("schedule_times"), {"morning": "11:15", "evening": "16:45"})
+
+    def test_exam_outcome_all_three_pass_vs_skipped_or_failed(self):
+        import json as _json
+        now = datetime.utcnow()
+        exam = Exam(title="Test Exam", duration_minutes=60)
+        p2 = MultiApartmentProject(number=1, code="MA-1")
+        p3 = MultiFunctionalProject(number=1, code="MF-1")
+        self.db.add_all([exam, p2, p3])
+        self.db.commit()
+
+        # 1. Candidate takes Stage 1 (80% in both chapters) and Stage 2 (100%, 0 wrong), skips Stage 3 -> outcome is 'fail'
+        s1 = ExamSession(
+            exam_id=exam.id,
+            token="test-session-token-1",
+            user_id=1,
+            candidate_code="1000000001",
+            started_at=now - timedelta(minutes=50),
+            ends_at=now + timedelta(minutes=10),
+            finished_at=now - timedelta(minutes=30),
+            score_percent=80.0,
+            exam_snapshot=_json.dumps({
+                "chapters": [
+                    {"name": "თავი I", "stats": {"total": 10, "correct": 8, "percent": 80.0}},
+                    {"name": "თავი II", "stats": {"total": 10, "correct": 8, "percent": 80.0}},
+                ]
+            }),
+        )
+        e2 = MultiApartmentEvaluation(
+            user_id=1,
+            project_id=p2.id,
+            project_code="MA-1",
+            project_name="MA Project 1",
+            percentage=100.0,
+            correct_count=5,
+            wrong_count=0,
+            total_correct_answers=5,
+            started_at=now - timedelta(minutes=25),
+            finished_at=now - timedelta(minutes=15),
+        )
+        self.db.add_all([s1, e2])
+        self.db.commit()
+
+        res_skip = self.client.get("/admin/users/1/exam-outcome", headers=self.auth)
+        self.assertEqual(res_skip.status_code, 200, res_skip.text)
+        data_skip = res_skip.json()
+        self.assertTrue(data_skip["has_results"])
+        self.assertTrue(data_skip["unacknowledged"])
+        self.assertEqual(data_skip["outcome"], "fail")
+        self.assertIn("• ეტაპი 3 — მრავალფუნქციური შენობის პროექტის შეფასება: გამოტოვებულია", data_skip["results_text"])
+
+        # 2. Candidate completes Stage 3 (90%, 1 wrong) -> all 3 passed with B/C -> outcome is 'pass_bc'
+        e3 = MultiFunctionalEvaluation(
+            user_id=1,
+            project_id=p3.id,
+            project_code="MF-1",
+            project_name="MF Project 1",
+            percentage=90.0,
+            correct_count=4,
+            wrong_count=1,
+            total_correct_answers=5,
+            started_at=now - timedelta(minutes=12),
+            finished_at=now - timedelta(minutes=5),
+        )
+        self.db.add(e3)
+        self.db.commit()
+
+        res_pass = self.client.get("/admin/users/1/exam-outcome", headers=self.auth)
+        self.assertEqual(res_pass.status_code, 200, res_pass.text)
+        data_pass = res_pass.json()
+        self.assertEqual(data_pass["outcome"], "pass_bc")
+        self.assertEqual(data_pass["category_label"], "B/C კატეგორიის")
+        self.assertTrue(data_pass["unacknowledged"])
+        self.assertIn("10 კითხვიდან 8 სწორი — 80%", data_pass["results_text"])
+        self.assertIn("• ეტაპი 2 — მრავალბინიანი შენობის პროექტის შეფასება: 100%, არასწორი პასუხები: 0", data_pass["results_text"])
+        self.assertIn("• ეტაპი 3 — მრავალფუნქციური შენობის პროექტის შეფასება: 90%, არასწორი პასუხები: 1", data_pass["results_text"])
+
+        # 3. Saving a certificate handover letter acknowledges the exam outcome automatically
+        self.saved(self.send(self.form(kind="certificate", action_mode="save_only", period="morning")))
+        res_ack = self.client.get("/admin/users/1/exam-outcome", headers=self.auth)
+        self.assertEqual(res_ack.status_code, 200, res_ack.text)
+        self.assertFalse(res_ack.json()["unacknowledged"])
 
 
 if __name__ == "__main__":

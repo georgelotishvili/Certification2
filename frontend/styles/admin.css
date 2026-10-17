@@ -4156,6 +4156,49 @@ body.modal-open {
   white-space: nowrap;
 }
 
+.admin-result-board-value.is-green,
+.admin-result-board-row--single.is-green {
+  color: #1f8a4d;
+}
+
+.admin-result-board-value.is-yellow,
+.admin-result-board-row--single.is-yellow {
+  color: #b45309;
+}
+
+.admin-result-board-value.is-red,
+.admin-result-board-row--single.is-red {
+  color: #c73631;
+}
+
+.admin-result-status-banner {
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin-bottom: 12px;
+  border: 1.5px solid transparent;
+}
+
+.admin-result-status-banner.is-green {
+  background: #edf7ee;
+  border-color: #2e7d32;
+  color: #1b5e20;
+}
+
+.admin-result-status-banner.is-yellow {
+  background: #fffbeb;
+  border-color: #d97706;
+  color: #92400e;
+}
+
+.admin-result-status-banner.is-red {
+  background: #fef2f2;
+  border-color: #c73631;
+  color: #991b1b;
+}
+
 @media (max-width: 920px) {
   .result-summary-boards {
     grid-template-columns: 1fr;
@@ -4449,6 +4492,12 @@ body.modal-open {
   background: var(--surface-muted);
   color: var(--text-muted);
   border: 1px solid var(--border-soft);
+}
+
+.result-tag.warning {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid rgba(217, 119, 6, 0.35);
 }
 
 .danger-btn {
@@ -6805,3 +6854,68 @@ body.modal-open {
     order: 1;
   }
 }
+
+/* Candidate exam outcome badge & pending notification button highlights */
+.user-exam-outcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.user-exam-outcome-badge[hidden] {
+  display: none !important;
+}
+
+.user-exam-outcome-badge.is-pass-bc {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #22c55e;
+}
+
+.user-exam-outcome-badge.is-pass-a {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.user-exam-outcome-badge.is-fail {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
+}
+
+.btn-certificate-handover.has-pending-exam-pass {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border-color: #15803d !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.28);
+  font-weight: 800;
+}
+
+.btn-certificate-handover.has-pending-exam-pass:hover {
+  background: #15803d !important;
+  border-color: #166534 !important;
+}
+
+.btn-exam-fail-letter.has-pending-exam-fail {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28);
+  font-weight: 800;
+}
+
+.btn-exam-fail-letter.has-pending-exam-fail:hover {
+  background: #b91c1c !important;
+  border-color: #991b1b !important;
+}
+

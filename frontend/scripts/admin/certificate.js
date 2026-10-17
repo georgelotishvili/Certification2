@@ -45,19 +45,16 @@
 
     const DEFAULT_CERT_ISSUED_SUBJECT = 'სერტიფიკატის გაცემა და საჯარო რეესტრში ასახვა';
     const DEFAULT_CERT_ISSUED_BODY = [
-      'ბატონო/ქალბატონო {name},',
-      'გაცნობებთ, რომ თქვენზე გაიცა შესაბამისობის სერტიფიკატი და მონაცემები აისახა ინსტიტუტის სერტიფიცირებულ პირთა საჯარო რეესტრში.',
+      'ადრესატი: {name}',
       '',
-      '• სერტიფიკატის ნომერი: {code}',
-      '• სერტიფიცირების კატეგორია: {qualification}',
-      '• გაცემის თარიღი: {issue_date}',
-      '• მოქმედების ბოლო თარიღი: {valid_until}',
-      '• საჯარო რეესტრის ბმული: https://gipc.org.ge',
+      'მოგესალმებით,',
       '',
-      'შეტყობინებას თან ერთვის ელექტრონული სერტიფიკატი (PDF). სერტიფიკატისა და სერტიფიცირების სტატუსის გამოყენება დასაშვებია მხოლოდ მინიჭებული კატეგორიის, მოქმედების ვადისა და სასერტიფიკაციო ხელშეკრულებით განსაზღვრული პირობების ფარგლებში (GIPC-PRO-006).',
+      'გილოცავთ! თქვენზე გაიცა სერტიფიკატი.',
+      '',
+      'თქვენი სერტიფიკატი უკვე აისახა საიტზე gipc.org.ge-ზე არსებულ სერტიფიცირებულ პირთა საჯარო რეესტრში, ხოლო ელექტრონული სერტიფიკატი (PDF) ხელმისაწვდომია და შეგიძლიათ ჩამოტვირთოთ საიტზე თქვენს პირად გვერდზე („ჩემი გვერდი“).',
       '',
       'პატივისცემით,',
-      'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+      'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
     ].join('\n');
 
     let certIssuedTemplate = {
@@ -1133,9 +1130,11 @@
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data?.cert_issued_template) {
+            const rawBody = String(data.cert_issued_template.body || '').trim();
+            const isLegacy = !rawBody || rawBody.startsWith('ბატონო/ქალბატონო') || rawBody.startsWith('გამარჯობა,');
             certIssuedTemplate = {
-              subject: data.cert_issued_template.subject || DEFAULT_CERT_ISSUED_SUBJECT,
-              body: data.cert_issued_template.body || DEFAULT_CERT_ISSUED_BODY,
+              subject: isLegacy ? DEFAULT_CERT_ISSUED_SUBJECT : (data.cert_issued_template.subject || DEFAULT_CERT_ISSUED_SUBJECT),
+              body: isLegacy ? DEFAULT_CERT_ISSUED_BODY : rawBody,
               updated_at: data.cert_issued_template.updated_at || null,
             };
             certIssuedTemplateLoaded = true;

@@ -320,3 +320,61 @@ def get_remaining_time(email: str) -> int:
             return 0
         remaining = int(stored["expires_at"] - time.time())
         return max(0, remaining)
+
+
+STATEMENT_CONFIRMATION_SUBJECT = "განაცხადის მიღების დადასტურება"
+
+
+def build_statement_confirmation_body(full_name: str) -> str:
+    recipient = " ".join(str(full_name or "").split()).strip()
+    return (
+        f"ადრესატი: {recipient}\n\n"
+        "მოგესალმებით,\n\n"
+        "გიდასტურებთ, რომ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტმა მიიღო თქვენი განაცხადი.\n\n"
+        "განხილვის ვადა იხილეთ საიტზე gipc.org.ge-ზე გამოქვეყნებულ შესაბამის ოფიციალურ დოკუმენტებში.\n\n"
+        "პატივისცემით,\n"
+        "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
+    )
+
+
+def send_statement_confirmation_email(
+    to_email: str,
+    full_name: str,
+    *,
+    async_smtp: bool = True,
+) -> bool:
+    """Send automatic confirmation email to the user after statement submission."""
+    recipient_email = (to_email or "").strip()
+    if not recipient_email:
+        return False
+
+    subject = STATEMENT_CONFIRMATION_SUBJECT
+    body = build_statement_confirmation_body(full_name)
+
+    try:
+        settings = get_settings()
+        if _is_smtp_mode(settings):
+            if async_smtp:
+                from threading import Thread
+                Thread(
+                    target=_send_smtp_message,
+                    args=(recipient_email, subject, body),
+                    daemon=True,
+                ).start()
+                return True
+            return _send_smtp_message(recipient_email, subject, body)
+        if _is_console_mode(settings):
+            try:
+                print(f"\n{'='*50}")
+                print(f"STATEMENT CONFIRMATION EMAIL for {recipient_email}")
+                print(f"Subject: {subject}")
+                print(body)
+                print(f"{'='*50}\n")
+            except Exception:
+                pass
+            return True
+    except Exception as e:
+        print(f"Failed to send statement confirmation email: {e}")
+    return False
+
+

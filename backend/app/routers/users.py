@@ -649,16 +649,12 @@ def _format_cert_date(dt: datetime | None) -> str:
 
 DEFAULT_CERT_ISSUED_SUBJECT = "სერტიფიკატის გაცემა და საჯარო რეესტრში ასახვა"
 DEFAULT_CERT_ISSUED_BODY = (
-    "ბატონო/ქალბატონო {name},\n"
-    "გაცნობებთ, რომ თქვენზე გაიცა შესაბამისობის სერტიფიკატი და მონაცემები აისახა ინსტიტუტის სერტიფიცირებულ პირთა საჯარო რეესტრში.\n\n"
-    "• სერტიფიკატის ნომერი: {code}\n"
-    "• სერტიფიცირების კატეგორია: {qualification}\n"
-    "• გაცემის თარიღი: {issue_date}\n"
-    "• მოქმედების ბოლო თარიღი: {valid_until}\n"
-    "• საჯარო რეესტრის ბმული: https://gipc.org.ge\n\n"
-    "შეტყობინებას თან ერთვის ელექტრონული სერტიფიკატი (PDF). სერტიფიკატისა და სერტიფიცირების სტატუსის გამოყენება დასაშვებია მხოლოდ მინიჭებული კატეგორიის, მოქმედების ვადისა და სასერტიფიკაციო ხელშეკრულებით განსაზღვრული პირობების ფარგლებში (GIPC-PRO-006).\n\n"
+    "ადრესატი: {name}\n\n"
+    "მოგესალმებით,\n\n"
+    "გილოცავთ! თქვენზე გაიცა სერტიფიკატი.\n\n"
+    "თქვენი სერტიფიკატი უკვე აისახა საიტზე gipc.org.ge-ზე არსებულ სერტიფიცირებულ პირთა საჯარო რეესტრში, ხოლო ელექტრონული სერტიფიკატი (PDF) ხელმისაწვდომია და შეგიძლიათ ჩამოტვირთოთ საიტზე თქვენს პირად გვერდზე („ჩემი გვერდი“).\n\n"
     "პატივისცემით,\n"
-    "შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“"
+    "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
 )
 
 
@@ -669,9 +665,10 @@ def _load_saved_cert_issued_template() -> tuple[str, str]:
         if meta_path.is_file():
             data = json.loads(meta_path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                subj = (data.get("subject") or "").strip() or DEFAULT_CERT_ISSUED_SUBJECT
-                body = (data.get("body") or "").strip() or DEFAULT_CERT_ISSUED_BODY
-                return subj, body
+                raw_body = (data.get("body") or "").strip()
+                if raw_body and not raw_body.startswith("ბატონო/ქალბატონო") and not raw_body.startswith("გამარჯობა,"):
+                    subj = (data.get("subject") or "").strip() or DEFAULT_CERT_ISSUED_SUBJECT
+                    return subj, raw_body
     except Exception:
         pass
     return DEFAULT_CERT_ISSUED_SUBJECT, DEFAULT_CERT_ISSUED_BODY

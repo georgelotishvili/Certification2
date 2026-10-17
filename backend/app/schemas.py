@@ -439,6 +439,7 @@ class UserOut(BaseModel):
     certificate: dict | None = None
     certificate_info: dict | None = None
     photo_filename: str | None = None
+    exam_outcome: dict[str, Any] | None = None
 
 
 class PublicUserOut(BaseModel):

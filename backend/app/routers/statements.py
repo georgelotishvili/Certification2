@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Statement, User, UserSession
 from ..schemas import StatementOut
+from ..services.email_verification import send_statement_confirmation_email
 from ..services.media_storage import ensure_statement_dir, relative_storage_path, resolve_storage_path, delete_storage_file
 from ..services.bounded_upload import (
     DEFAULT_UPLOAD_MAX_BYTES,
@@ -109,6 +110,11 @@ def create_statement(
         db.commit()
         committed = True
         db.refresh(st)
+
+        user_email = (getattr(user, "email", None) or "").strip()
+        full_name = f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
+        if user_email:
+            send_statement_confirmation_email(user_email, full_name)
 
         return StatementOut(
             id=st.id,
@@ -207,4 +213,3 @@ def download_statement_attachment(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error: {str(e)}")
-
