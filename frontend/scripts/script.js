@@ -666,10 +666,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateBanner() {
       const user = getCurrentUser();
-      let text = DEFAULT_BANNER_TEXT;
-      if (isLoggedIn() && user) text = `${user.firstName} ${user.lastName} — ${user.code}`;
-      if (DOM.authBanner) DOM.authBanner.textContent = text;
-      if (DOM.drawerAuthBanner) DOM.drawerAuthBanner.textContent = text;
+      const logged = isLoggedIn() && !!user;
+      const namePart = logged ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : '';
+      const text = logged
+        ? ((namePart && user.code) ? `${namePart} — ${user.code}` : (namePart || user.code || ''))
+        : '';
+      const authBanner = DOM.authBanner || document.querySelector('.auth-banner');
+      const drawerAuthBanner = DOM.drawerAuthBanner || document.querySelector('.drawer-auth-banner');
+      if (authBanner) {
+        authBanner.textContent = text;
+        authBanner.hidden = !text;
+      }
+      if (drawerAuthBanner) {
+        drawerAuthBanner.textContent = text;
+        drawerAuthBanner.hidden = !text;
+      }
     }
 
     function removeGeorgianNameOverlay() {

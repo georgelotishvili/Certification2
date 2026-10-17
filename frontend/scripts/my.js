@@ -462,9 +462,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function setAuthBannerText(firstName, lastName, code) {
     const text = `${String(firstName || '').trim()} ${String(lastName || '').trim()}`.trim();
-    const banner = (text && code) ? `${text} — ${code}` : (text || code || 'გთხოვთ შეხვიდეთ სისტემაში');
-    if (DOM.authBanner) DOM.authBanner.textContent = banner;
-    if (DOM.drawerAuthBanner) DOM.drawerAuthBanner.textContent = banner;
+    const banner = (text && code) ? `${text} — ${code}` : (text || code || '');
+    const authBanner = DOM.authBanner || document.querySelector('.auth-banner');
+    const drawerAuthBanner = DOM.drawerAuthBanner || document.querySelector('.drawer-auth-banner');
+    if (authBanner) {
+      authBanner.textContent = banner;
+      authBanner.hidden = !banner;
+    }
+    if (drawerAuthBanner) {
+      drawerAuthBanner.textContent = banner;
+      drawerAuthBanner.hidden = !banner;
+    }
   }
 
   function setLocalAuthUser(updatedUser) {

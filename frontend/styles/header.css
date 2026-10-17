@@ -65,14 +65,30 @@ header {
 .logo:active img { transform: none; box-shadow: none; }
 
 .auth-banner {
-  color: #0f172a;
-  margin-left: 10px;
-  font-size: 13px;
-  font-weight: 400;
+  position: absolute;
+  top: -4px;
+  right: 0;
+  margin: 0;
+  padding: 2px 10px;
+  background: #f8fafc;
+  border: 1px solid rgba(28, 70, 140, 0.22);
+  color: #1C468C;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 26vw;
+  max-width: min(460px, 55vw);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.auth-banner:empty,
+.auth-banner[hidden],
+.drawer-auth-banner:empty,
+.drawer-auth-banner[hidden] {
+  display: none !important;
 }
 
 .nav {
@@ -81,6 +97,7 @@ header {
   top: auto;
   transform: none;
   margin-left: auto;
+  margin-top: 6px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -214,6 +231,7 @@ header {
   width: auto;
   height: 34px;
   margin-left: 4px;
+  margin-top: 6px;
   background: #ffffff;
   color: #0f172a;
   font-size: 13px;

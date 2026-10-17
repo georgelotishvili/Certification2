@@ -1220,8 +1220,8 @@
     sanitizeWordStyles,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-docs1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_docs1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-auth1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_auth1';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1233,12 +1233,28 @@
       if (loginBtn) loginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
       if (drawerLoginBtn) drawerLoginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
 
+      const authBanner = document.querySelector('.auth-banner');
+      const drawerAuthBanner = document.querySelector('.drawer-auth-banner');
       if (logged && user && (user.firstName || user.lastName || user.code)) {
-        const text = `${user.firstName || ''} ${user.lastName || ''} — ${user.code || ''}`.trim();
-        const authBanner = document.querySelector('.auth-banner');
-        const drawerAuthBanner = document.querySelector('.drawer-auth-banner');
-        if (authBanner) authBanner.textContent = text;
-        if (drawerAuthBanner) drawerAuthBanner.textContent = text;
+        const namePart = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        const text = (namePart && user.code) ? `${namePart} — ${user.code}` : (namePart || user.code || '');
+        if (authBanner) {
+          authBanner.textContent = text;
+          authBanner.hidden = !text;
+        }
+        if (drawerAuthBanner) {
+          drawerAuthBanner.textContent = text;
+          drawerAuthBanner.hidden = !text;
+        }
+      } else {
+        if (authBanner) {
+          authBanner.textContent = '';
+          authBanner.hidden = true;
+        }
+        if (drawerAuthBanner) {
+          drawerAuthBanner.textContent = '';
+          drawerAuthBanner.hidden = true;
+        }
       }
     } catch {}
   }
