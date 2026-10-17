@@ -17,7 +17,7 @@
   function markCurrentPageLinks() {
     const current = new URL(window.location.href);
     const viewingPerson = current.searchParams.has('code') || current.searchParams.has('userId');
-    document.querySelectorAll('.nav-home, .drawer-home, .nav-registry, .drawer-registry, .nav-profile, .drawer-profile').forEach((link) => {
+    document.querySelectorAll('.nav-home, .drawer-home, .nav-registry, .drawer-registry, .nav-documents, .drawer-documents, .nav-profile, .drawer-profile').forEach((link) => {
       const target = new URL(link.getAttribute('href'), current);
       const active = target.pathname === current.pathname && !(isMyPage() && viewingPerson);
       if (active) link.setAttribute('aria-current', 'page');
@@ -77,6 +77,7 @@
         modal,
         title: modal.querySelector('#siteInfoTitle'),
         body: modal.querySelector('#siteInfoBody'),
+        downloadPdfBtn: modal.querySelector('#siteInfoDownloadPdfBtn'),
         closeBtn: modal.querySelector('.modal-close'),
       };
     } catch {
@@ -112,23 +113,26 @@
 
   // Site Documents - dynamic loading from API with sessionStorage cache
   let cachedDocuments = null;
+  let currentModalDoc = null;
   const SITE_DOCS_CACHE_KEY = 'gipc_site_docs_v1';
 
-  async function fetchSiteDocuments() {
-    if (cachedDocuments) return cachedDocuments;
-    try {
-      const stored = sessionStorage.getItem(SITE_DOCS_CACHE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          cachedDocuments = parsed;
-          return cachedDocuments;
+  async function fetchSiteDocuments(forceRefresh = false) {
+    if (!forceRefresh && cachedDocuments) return cachedDocuments;
+    if (!forceRefresh) {
+      try {
+        const stored = sessionStorage.getItem(SITE_DOCS_CACHE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            cachedDocuments = parsed;
+            return cachedDocuments;
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
     try {
       const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/documents`);
+      const response = await fetch(`${API_BASE}/documents`, { cache: forceRefresh ? 'no-cache' : 'default' });
       if (!response.ok) return [];
       const data = await response.json();
       cachedDocuments = data.items || [];
@@ -269,35 +273,8 @@
   }
 
   async function populateInfoDropdowns() {
-    try {
-      const documents = await fetchSiteDocuments();
-      
-      // Desktop dropdown
-      const desktopContainer = document.querySelector('.about-dropdown .dropdown-dynamic');
-      if (desktopContainer) {
-        if (documents.length === 0) {
-          desktopContainer.innerHTML = '';
-        } else {
-          desktopContainer.innerHTML = documents.map(doc => 
-            `<button type="button" class="dropdown-item" data-doc-id="${escapeHtml(String(doc.id))}">${escapeHtml(doc.title)}</button>`
-          ).join('');
-        }
-      }
-      
-      // Mobile drawer submenu
-      const mobileContainer = document.querySelector('.drawer-about-submenu .drawer-submenu-dynamic');
-      if (mobileContainer) {
-        if (documents.length === 0) {
-          mobileContainer.innerHTML = '';
-        } else {
-          mobileContainer.innerHTML = documents.map(doc => 
-            `<button type="button" class="drawer-submenu-item" data-doc-id="${escapeHtml(String(doc.id))}">${escapeHtml(doc.title)}</button>`
-          ).join('');
-        }
-      }
-    } catch (err) {
-      console.error('Failed to populate info dropdowns:', err);
-    }
+    // Documents are now displayed on the dedicated ../pages/documents.html page;
+    // the "ინფორმაცია" menu contains only "გზამკვლევი".
   }
 
   // Word inline სტილების გასუფთავება და ბულეტების კონვერტაცია
@@ -375,10 +352,416 @@
     } catch (e) { console.error('sanitizeWordStyles error:', e); }
   }
 
+  let jsPdfScriptPromise = null;
+  let pdfFontBase64Promise = null;
+
+  function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return window.btoa(binary);
+  }
+
+  function loadExternalScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-dynamic-src="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === 'true') return resolve();
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.dataset.dynamicSrc = src;
+      script.onload = () => {
+        script.dataset.loaded = 'true';
+        resolve();
+      };
+      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensureJsPdfLibrary() {
+    if (window.jspdf?.jsPDF) return window.jspdf.jsPDF;
+    if (!jsPdfScriptPromise) {
+      const url = new URL('../vendor/jspdf.umd.min.js', window.location.href).toString();
+      jsPdfScriptPromise = loadExternalScriptOnce(url).catch((err) => {
+        jsPdfScriptPromise = null;
+        throw err;
+      });
+    }
+    await jsPdfScriptPromise;
+    if (!window.jspdf?.jsPDF) throw new Error('jsPDF unavailable');
+    return window.jspdf.jsPDF;
+  }
+
+  async function ensureGeorgianPdfFont(pdfDoc) {
+    const fontName = 'DejaVuSansUnicode';
+    if (pdfDoc.getFontList?.()?.[fontName]) {
+      pdfDoc.setFont(fontName, 'normal');
+      return fontName;
+    }
+    if (!pdfFontBase64Promise) {
+      const fontUrl = new URL('../assets/fonts/dejavu-sans.ttf', window.location.href).toString();
+      pdfFontBase64Promise = fetch(fontUrl)
+        .then((res) => {
+          if (!res.ok) throw new Error('Font download failed');
+          return res.arrayBuffer();
+        })
+        .then((buf) => arrayBufferToBase64(buf))
+        .catch((err) => {
+          pdfFontBase64Promise = null;
+          throw err;
+        });
+    }
+    const base64 = await pdfFontBase64Promise;
+    pdfDoc.addFileToVFS('DejaVuSans.ttf', base64);
+    pdfDoc.addFont('DejaVuSans.ttf', fontName, 'normal');
+    pdfDoc.addFont('DejaVuSans.ttf', fontName, 'bold');
+    pdfDoc.addFont('DejaVuSans.ttf', fontName, 'italic');
+    pdfDoc.addFont('DejaVuSans.ttf', fontName, 'bolditalic');
+    pdfDoc.setFont(fontName, 'normal');
+    return fontName;
+  }
+
+  function sanitizePdfFilename(title) {
+    const cleaned = String(title || 'დოკუმენტი')
+      .replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120);
+    return `${cleaned || 'დოკუმენტი'}.pdf`;
+  }
+
+  async function generateDocumentPdfFromHtml(doc) {
+    const jsPDF = await ensureJsPdfLibrary();
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+    const fontName = await ensureGeorgianPdfFont(pdf);
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const marginX = 48;
+    const marginTop = 52;
+    const marginBottom = 54;
+    const usableWidth = pageWidth - marginX * 2;
+    let cursorY = marginTop;
+
+    const ensureSpace = (neededHeight) => {
+      if (cursorY + neededHeight > pageHeight - marginBottom) {
+        pdf.addPage();
+        cursorY = marginTop;
+      }
+    };
+
+    const tempContainer = document.createElement('div');
+    renderSafeDocumentHtml(tempContainer, doc.content || '');
+    sanitizeWordStyles(tempContainer);
+
+    const docTitle = String(doc.title || 'დოკუმენტი').replace(/\s+/g, ' ').trim();
+
+    // Kicker header
+    pdf.setFont(fontName, 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text('საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)', marginX, cursorY);
+    cursorY += 18;
+
+    // Document main title
+    pdf.setFont(fontName, 'bold');
+    pdf.setFontSize(15);
+    pdf.setTextColor(28, 70, 140);
+    const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
+    titleLines.forEach((line) => {
+      ensureSpace(20);
+      pdf.text(line, marginX, cursorY);
+      cursorY += 20;
+    });
+
+    cursorY += 4;
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.75);
+    pdf.line(marginX, cursorY, pageWidth - marginX, cursorY);
+    cursorY += 18;
+
+    const writeWrappedBlock = (text, opts = {}) => {
+      const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+      if (!normalized) return;
+      const {
+        x = marginX,
+        width = usableWidth,
+        fontStyle = 'normal',
+        fontSize = 10.5,
+        lineHeight = 16,
+        color = [30, 41, 59],
+        spaceBefore = 0,
+        spaceAfter = 8,
+        prefix = '',
+        prefixX = marginX,
+      } = opts;
+
+      if (spaceBefore > 0 && cursorY > marginTop + 10) {
+        cursorY += spaceBefore;
+      }
+
+      pdf.setFont(fontName, fontStyle);
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(color[0], color[1], color[2]);
+
+      const lines = pdf.splitTextToSize(normalized, width);
+      if (!lines.length) return;
+
+      // Prevent orphaned single heading line at page bottom
+      if (fontStyle === 'bold' && spaceBefore >= 8) {
+        ensureSpace(Math.min(lines.length * lineHeight + 24, 90));
+      }
+
+      lines.forEach((line, idx) => {
+        ensureSpace(lineHeight);
+        if (idx === 0 && prefix) {
+          pdf.text(prefix, prefixX, cursorY);
+        }
+        pdf.text(line, x, cursorY);
+        cursorY += lineHeight;
+      });
+
+      cursorY += spaceAfter;
+    };
+
+    const renderTableNode = (tableEl) => {
+      const rows = Array.from(tableEl.querySelectorAll('tr'));
+      if (!rows.length) return;
+      let maxCols = 0;
+      const parsedRows = rows.map((tr) => {
+        const cells = Array.from(tr.querySelectorAll('th, td'));
+        if (cells.length > maxCols) maxCols = cells.length;
+        const isHeader = cells.some((c) => c.tagName === 'TH');
+        return {
+          isHeader,
+          texts: cells.map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()),
+        };
+      });
+      if (!maxCols) return;
+
+      const colWidth = usableWidth / maxCols;
+      const cellPadX = 6;
+      const cellPadY = 6;
+      const lineH = 13.5;
+
+      if (cursorY > marginTop + 10) cursorY += 6;
+
+      parsedRows.forEach((row) => {
+        pdf.setFont(fontName, row.isHeader ? 'bold' : 'normal');
+        pdf.setFontSize(9.5);
+        const cellLines = [];
+        let maxLines = 1;
+        for (let c = 0; c < maxCols; c++) {
+          const txt = row.texts[c] || '';
+          const wrapped = pdf.splitTextToSize(txt, Math.max(24, colWidth - cellPadX * 2));
+          cellLines.push(wrapped);
+          if (wrapped.length > maxLines) maxLines = wrapped.length;
+        }
+        const rowHeight = maxLines * lineH + cellPadY * 2;
+        ensureSpace(rowHeight + 4);
+
+        for (let c = 0; c < maxCols; c++) {
+          const cellX = marginX + c * colWidth;
+          if (row.isHeader) {
+            pdf.setFillColor(248, 250, 252);
+            pdf.setDrawColor(203, 213, 225);
+            pdf.setLineWidth(0.5);
+            pdf.rect(cellX, cursorY, colWidth, rowHeight, 'FD');
+            pdf.setTextColor(28, 70, 140);
+          } else {
+            pdf.setDrawColor(203, 213, 225);
+            pdf.setLineWidth(0.5);
+            pdf.rect(cellX, cursorY, colWidth, rowHeight, 'S');
+            pdf.setTextColor(30, 41, 59);
+          }
+          const lines = cellLines[c] || [];
+          lines.forEach((ln, idx) => {
+            pdf.text(ln, cellX + cellPadX, cursorY + cellPadY + 9.5 + idx * lineH);
+          });
+        }
+        cursorY += rowHeight;
+      });
+      cursorY += 10;
+    };
+
+    let skippedDuplicateLeadTitle = false;
+
+    const renderDomNodes = (parent) => {
+      Array.from(parent.childNodes).forEach((node) => {
+        if (node.nodeType === 3) {
+          const txt = (node.nodeValue || '').replace(/\s+/g, ' ').trim();
+          if (txt) writeWrappedBlock(txt);
+          return;
+        }
+        if (node.nodeType !== 1) return;
+
+        const tag = (node.tagName || '').toUpperCase();
+        const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!text && tag !== 'TABLE') return;
+
+        if (!skippedDuplicateLeadTitle && text === docTitle) {
+          skippedDuplicateLeadTitle = true;
+          return;
+        }
+
+        if (tag === 'H1' || tag === 'H2' || node.classList.contains('site-doc-lead-title')) {
+          writeWrappedBlock(text, {
+            fontStyle: 'bold',
+            fontSize: 12.5,
+            lineHeight: 17.5,
+            color: [28, 70, 140],
+            spaceBefore: 10,
+            spaceAfter: 7,
+          });
+          return;
+        }
+
+        if (tag === 'H3' || tag === 'H4' || tag === 'H5' || tag === 'H6' || node.classList.contains('site-doc-section-title')) {
+          writeWrappedBlock(text, {
+            fontStyle: 'bold',
+            fontSize: 11.5,
+            lineHeight: 16.5,
+            color: [15, 23, 42],
+            spaceBefore: 9,
+            spaceAfter: 6,
+          });
+          return;
+        }
+
+        if (tag === 'UL' || tag === 'OL') {
+          const items = Array.from(node.children).filter((el) => el.tagName === 'LI');
+          items.forEach((li, idx) => {
+            const liText = (li.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!liText) return;
+            const prefix = tag === 'OL' ? `${idx + 1}.` : '•';
+            writeWrappedBlock(liText, {
+              x: marginX + 20,
+              width: usableWidth - 20,
+              prefix,
+              prefixX: marginX + 4,
+              fontSize: 10.5,
+              lineHeight: 15.5,
+              spaceAfter: 5,
+            });
+          });
+          cursorY += 4;
+          return;
+        }
+
+        if (tag === 'TABLE') {
+          renderTableNode(node);
+          return;
+        }
+
+        if (tag === 'P' || tag === 'BLOCKQUOTE') {
+          const onlyBold = node.children.length === 1 && (node.children[0].tagName === 'STRONG' || node.children[0].tagName === 'B') &&
+            (node.children[0].textContent || '').replace(/\s+/g, ' ').trim() === text;
+          writeWrappedBlock(text, {
+            fontStyle: onlyBold ? 'bold' : 'normal',
+            fontSize: 10.5,
+            lineHeight: 16,
+            color: onlyBold ? [15, 23, 42] : [30, 41, 59],
+            spaceBefore: onlyBold ? 6 : 0,
+            spaceAfter: 8,
+          });
+          return;
+        }
+
+        if (node.children && node.children.length > 0) {
+          renderDomNodes(node);
+        } else {
+          writeWrappedBlock(text);
+        }
+      });
+    };
+
+    renderDomNodes(tempContainer);
+
+    // Footer with page numbers on every page
+    const totalPages = pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      const footerY = pageHeight - 26;
+      pdf.setDrawColor(226, 232, 240);
+      pdf.setLineWidth(0.5);
+      pdf.line(marginX, footerY - 12, pageWidth - marginX, footerY - 12);
+
+      pdf.setFont(fontName, 'normal');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('gipc.org.ge', marginX, footerY);
+      const pageLabel = `გვერდი ${i} / ${totalPages}`;
+      const pageLabelWidth = pdf.getTextWidth(pageLabel);
+      pdf.text(pageLabel, pageWidth - marginX - pageLabelWidth, footerY);
+    }
+
+    pdf.save(sanitizePdfFilename(docTitle));
+  }
+
+  async function downloadDocumentPdf(docOrId, triggerBtn = null) {
+    if (triggerBtn) triggerBtn.disabled = true;
+    try {
+      const API_BASE = getApiBase();
+      let doc = null;
+
+      if (typeof docOrId === 'object' && docOrId !== null && docOrId.id) {
+        doc = docOrId;
+        // If content wasn't loaded or we want fresh details, fetch by id when needed
+        if (!doc.content && !(doc.download_url && String(doc.filename || '').toLowerCase().endsWith('.pdf'))) {
+          const resp = await fetch(`${API_BASE}/documents/${doc.id}`, { cache: 'no-cache' });
+          if (resp.ok) doc = await resp.json();
+        }
+      } else if (docOrId) {
+        const resp = await fetch(`${API_BASE}/documents/${docOrId}`, { cache: 'no-cache' });
+        if (!resp.ok) throw new Error('Document not found');
+        doc = await resp.json();
+      }
+
+      if (!doc) throw new Error('Document not found');
+
+      // Option B: If a ready-made .pdf file is attached, download it directly
+      const hasDirectPdf = Boolean(
+        doc.download_url && String(doc.filename || '').toLowerCase().endsWith('.pdf')
+      );
+      if (hasDirectPdf) {
+        const link = document.createElement('a');
+        link.href = `${API_BASE}${doc.download_url}`;
+        link.download = doc.filename || sanitizePdfFilename(doc.title);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // Option A: Auto-generate clean vector A4 PDF from the document HTML content
+      await generateDocumentPdfFromHtml(doc);
+    } catch (err) {
+      console.error('Failed to download document PDF:', err);
+      alert('PDF ფაილის ჩამოტვირთვა ვერ მოხერხდა.');
+    } finally {
+      if (triggerBtn) triggerBtn.disabled = false;
+    }
+  }
+
   async function openDocumentById(docId) {
     try {
       const els = getSiteInfoElements();
       if (!els) return;
+
+      currentModalDoc = null;
+      if (els.downloadPdfBtn) {
+        els.downloadPdfBtn.hidden = true;
+        els.downloadPdfBtn.disabled = false;
+      }
 
       if (els.body) {
         els.body.dataset.infoMode = 'document';
@@ -395,15 +778,32 @@
       const response = await fetch(`${API_BASE}/documents/${docId}`, { cache: 'no-cache' });
       if (!response.ok) throw new Error('Document not found');
       const doc = await response.json();
-      
+      currentModalDoc = doc;
+
       if (els.title) els.title.textContent = doc.title || 'დოკუმენტი';
+      if (els.downloadPdfBtn) {
+        els.downloadPdfBtn.hidden = false;
+      }
+
       if (els.body) {
-        renderSafeDocumentHtml(els.body, doc.content);
-        sanitizeWordStyles(els.body);
-        const sheet = document.createElement('article');
-        sheet.className = 'site-doc-sheet';
-        sheet.replaceChildren(...els.body.childNodes);
-        els.body.replaceChildren(sheet);
+        const hasHtmlContent = Boolean((doc.content || '').replace(/<[^>]*>/g, '').trim());
+        const hasDirectPdf = Boolean(
+          doc.download_url && String(doc.filename || '').toLowerCase().endsWith('.pdf')
+        );
+        if (!hasHtmlContent && hasDirectPdf) {
+          const iframe = document.createElement('iframe');
+          iframe.className = 'site-doc-pdf-frame';
+          iframe.src = `${API_BASE}${doc.download_url}`;
+          iframe.title = doc.title || 'დოკუმენტი';
+          els.body.replaceChildren(iframe);
+        } else {
+          renderSafeDocumentHtml(els.body, doc.content);
+          sanitizeWordStyles(els.body);
+          const sheet = document.createElement('article');
+          sheet.className = 'site-doc-sheet';
+          sheet.replaceChildren(...els.body.childNodes);
+          els.body.replaceChildren(sheet);
+        }
       }
     } catch (err) {
       console.error('Failed to load document:', err);
@@ -540,6 +940,10 @@
     try {
       const els = getSiteInfoElements();
       if (!els) return;
+      currentModalDoc = null;
+      if (els.downloadPdfBtn) {
+        els.downloadPdfBtn.hidden = true;
+      }
       const titles = {
         about: 'ჩვენს შესახებ',
         terms: 'წესები და პირობები',
@@ -581,6 +985,10 @@
     try {
       const els = getSiteInfoElements();
       if (!els) return;
+      currentModalDoc = null;
+      if (els.downloadPdfBtn) {
+        els.downloadPdfBtn.hidden = true;
+      }
       els.modal.classList.remove('show');
       els.modal.setAttribute('aria-hidden', 'true');
       document.body.classList.remove('modal-open');
@@ -770,7 +1178,7 @@
       }
 
       // Prevent redundant full-page reload when clicking the nav link for the current page
-      const pageLink = closest(el, '.nav-home[data-page-link], .drawer-home[data-page-link], .nav-registry[data-page-link], .drawer-registry[data-page-link], .nav-profile[data-page-link], .drawer-profile[data-page-link]');
+      const pageLink = closest(el, '.nav-home[data-page-link], .drawer-home[data-page-link], .nav-registry[data-page-link], .drawer-registry[data-page-link], .nav-documents[data-page-link], .drawer-documents[data-page-link], .nav-profile[data-page-link], .drawer-profile[data-page-link]');
       if (pageLink && !event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
         try {
           const current = new URL(window.location.href);
@@ -785,10 +1193,17 @@
       }
     }, { capture: true });
 
-    // Site Info Modal close bindings
+    // Site Info Modal close & PDF download bindings
     try {
       const els = getSiteInfoElements();
       if (els?.closeBtn) on(els.closeBtn, 'click', closeSiteInfo);
+      if (els?.downloadPdfBtn) {
+        on(els.downloadPdfBtn, 'click', () => {
+          if (currentModalDoc) {
+            void downloadDocumentPdf(currentModalDoc, els.downloadPdfBtn);
+          }
+        });
+      }
       if (els?.modal) {
         on(els.modal, 'click', (e) => {
           if (e && e.target === els.modal) closeSiteInfo();
@@ -797,8 +1212,16 @@
     } catch {}
   }
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261017-smooth1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261017_smooth1';
+  window.SiteDocuments = {
+    fetchSiteDocuments,
+    openDocumentById,
+    downloadDocumentPdf,
+    renderSafeDocumentHtml,
+    sanitizeWordStyles,
+  };
+
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-docs1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_docs1';
 
   function syncHeaderInitialAuthUI() {
     try {

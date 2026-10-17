@@ -229,6 +229,12 @@
       els.titleInput?.focus();
     }
 
+    function clearPublicDocsCache() {
+      try {
+        sessionStorage.removeItem('gipc_site_docs_v1');
+      } catch {}
+    }
+
     async function handleAddOrUpdate() {
       if (fileImportPending) {
         showToast('გთხოვთ, დაელოდოთ ფაილის დამუშავებას', 'error');
@@ -252,6 +258,7 @@
           await createDocument(title, content, state.selectedFile);
           showToast('დოკუმენტი დაემატა');
         }
+        clearPublicDocsCache();
         clearForm();
         await loadAndRender();
       } catch (err) {
@@ -267,6 +274,7 @@
 
       try {
         await deleteDocument(docId);
+        clearPublicDocsCache();
         showToast('დოკუმენტი წაიშალა');
         if (state.editingId === docId) {
           clearForm();
@@ -280,6 +288,7 @@
     async function handleOrderChange(docId, direction) {
       try {
         await changeOrder(docId, direction);
+        clearPublicDocsCache();
         await loadAndRender();
       } catch (err) {
         showToast('შეცდომა რიგითობის შეცვლისას', 'error');
@@ -349,18 +358,28 @@
         return;
       }
 
-      if (!file.name.toLowerCase().endsWith('.docx')) {
-        showToast('მხოლოდ .docx ფაილებია დაშვებული', 'error');
+      const lowerName = file.name.toLowerCase();
+      const isDocx = lowerName.endsWith('.docx');
+      const isPdf = lowerName.endsWith('.pdf');
+
+      if (!isDocx && !isPdf) {
+        showToast('მხოლოდ .docx და .pdf ფაილებია დაშვებული', 'error');
         els.fileInput.value = '';
         state.selectedFile = null;
         return;
       }
 
       state.selectedFile = file;
-      fileImportPending = true;
       if (els.fileNameDisplay) els.fileNameDisplay.textContent = file.name;
 
-      // კონვერტაცია HTML-ად
+      if (isPdf) {
+        showToast('PDF ფაილი არჩეულია');
+        return;
+      }
+
+      fileImportPending = true;
+
+      // კონვერტაცია HTML-ად (.docx)
       try {
         if (els.contentEditor) {
           els.contentEditor.innerHTML = '<p style="opacity:0.5">იტვირთება...</p>';

@@ -72,7 +72,7 @@ header {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 34vw;
+  max-width: 26vw;
 }
 
 .nav {
@@ -975,6 +975,49 @@ body.modal-open {
   min-width: 0;
 }
 
+.site-info-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.site-info-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid #1C468C;
+  border-radius: 0;
+  background: #ffffff;
+  color: #1C468C;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.site-info-download-btn[hidden] {
+  display: none !important;
+}
+
+.site-info-download-btn:hover:not(:disabled),
+.site-info-download-btn:focus-visible:not(:disabled) {
+  background: #1C468C;
+  color: #ffffff;
+  border-color: #15356b;
+  box-shadow: 0 4px 10px rgba(28, 70, 140, 0.18);
+  outline: none;
+}
+
+.site-info-download-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .site-info-close {
   margin: 0;
   flex-shrink: 0;
@@ -1003,6 +1046,14 @@ body.modal-open {
   background: #ffffff;
   color: #0f172a;
   overscroll-behavior: contain;
+}
+
+.site-doc-pdf-frame {
+  display: block;
+  width: 100%;
+  height: min(72vh, 760px);
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
 }
 
 .site-info-state {

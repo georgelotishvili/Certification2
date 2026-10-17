@@ -306,6 +306,34 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(documents._resolve_document_path(stored_path).exists())
 
+    async def test_create_and_download_pdf_document(self) -> None:
+        db = _FakeDb()
+        pdf_upload = UploadFile(
+            BytesIO(b"%PDF-1.4 sample content"),
+            filename="official_contract.pdf",
+            headers=Headers({"content-type": "application/pdf"}),
+        )
+
+        with (
+            patch.object(documents, "_require_admin"),
+            patch.object(documents, "_document_out", side_effect=lambda doc: doc),
+        ):
+            created = await documents.admin_create_document(
+                title="ხელშეკრულება",
+                content="<p>ხელშეკრულების ტექსტი</p>",
+                file=pdf_upload,
+                authorization=None,
+                db=db,
+            )
+
+        stored_path = documents._resolve_document_path(created.file_path)
+        self.assertRegex(stored_path.name, re.compile(r"^[0-9a-f]{32}\.pdf$"))
+        self.assertEqual(created.filename, "official_contract.pdf")
+
+        created.id = 99
+        response = documents.download_document_file(doc_id=99, db=_FakeDb(created))
+        self.assertEqual(response.media_type, "application/pdf")
+
 
 if __name__ == "__main__":
     unittest.main()

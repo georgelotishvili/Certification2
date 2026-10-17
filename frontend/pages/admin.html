@@ -23,7 +23,7 @@
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
-    <script src="../scripts/admin/documents.js?v=20261008-perf1" defer></script>
+    <script src="../scripts/admin/documents.js?v=20261018-docs1" defer></script>
     <link rel="stylesheet" href="../styles/admin.css?v=20261018-filters1" />
   </head>
   <body>
@@ -393,7 +393,7 @@
       <section id="documents-section" class="exam-settings" style="display:none;">
         <div class="exam-content">
           <div class="exam-blocks-header" aria-label="დოკუმენტები">
-            <h2 class="exam-blocks-title">საიტის დოკუმენტები (ინფორმაცია)</h2>
+            <h2 class="exam-blocks-title">საიტის დოკუმენტები (დოკუმენტების გვერდი)</h2>
           </div>
           <!-- დოკუმენტის დამატების ფორმა -->
           <div class="document-add-form">
@@ -402,9 +402,9 @@
               <input type="text" id="documentTitle" class="document-input" placeholder="დოკუმენტის სათაური" />
             </div>
             <div class="document-form-row">
-              <label class="document-label">Word ფაილი (.docx):</label>
+              <label class="document-label">ფაილი (.docx ან .pdf):</label>
               <div class="document-file-upload">
-                <input type="file" id="documentFile" accept=".docx" style="display:none;" />
+                <input type="file" id="documentFile" accept=".docx,.pdf" style="display:none;" />
                 <button type="button" id="documentFileChoose" class="file-choose-btn">ფაილის არჩევა</button>
                 <span id="documentFileName" class="file-name-display">ფაილი არჩეული არ არის</span>
               </div>

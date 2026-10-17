@@ -61,13 +61,29 @@ def _safe_document_display_filename(filename: str | None) -> str:
         return "document.docx"
 
     if len(candidate) > 255:
-        suffix = ".docx" if candidate.lower().endswith(".docx") else ""
+        lower = candidate.lower()
+        if lower.endswith(".docx"):
+            suffix = ".docx"
+        elif lower.endswith(".pdf"):
+            suffix = ".pdf"
+        else:
+            suffix = ""
         candidate = candidate[: 255 - len(suffix)].rstrip() + suffix
     return candidate or "document.docx"
 
 
-def _new_document_storage_path() -> tuple[str, Path]:
-    stored_path = DOCUMENTS_UPLOAD_DIR / f"{uuid.uuid4().hex}.docx"
+def _allowed_document_suffix(filename: str) -> str | None:
+    lower = (filename or "").lower()
+    if lower.endswith(".docx"):
+        return ".docx"
+    if lower.endswith(".pdf"):
+        return ".pdf"
+    return None
+
+
+def _new_document_storage_path(suffix: str = ".docx") -> tuple[str, Path]:
+    safe_suffix = ".pdf" if suffix == ".pdf" else ".docx"
+    stored_path = DOCUMENTS_UPLOAD_DIR / f"{uuid.uuid4().hex}{safe_suffix}"
     resolved_path = _resolve_document_path(stored_path)
     return str(stored_path).replace("\\", "/"), resolved_path
 
@@ -150,7 +166,7 @@ async def admin_create_document(
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    """ახალი დოკუმენტის შექმნა Word ფაილით"""
+    """ახალი დოკუმენტის შექმნა Word ან PDF ფაილით"""
     _require_admin(db, authorization)
 
     # Get max order_index
@@ -162,16 +178,16 @@ async def admin_create_document(
 
     # თუ ფაილი ატვირთულია
     if file and file.filename:
-        # შევამოწმოთ რომ .docx არის
         display_filename = _safe_document_display_filename(file.filename)
-        if not display_filename.lower().endswith('.docx'):
+        allowed_suffix = _allowed_document_suffix(display_filename)
+        if not allowed_suffix:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="მხოლოდ .docx ფაილებია დაშვებული"
+                detail="მხოლოდ .docx და .pdf ფაილებია დაშვებული"
             )
         
         # უნიკალური სახელი
-        file_path, resolved_file_path = _new_document_storage_path()
+        file_path, resolved_file_path = _new_document_storage_path(allowed_suffix)
         filename = display_filename
         
         # შევინახოთ ფაილი
@@ -226,17 +242,17 @@ async def admin_update_document(
 
     # თუ ახალი ფაილი ატვირთულია
     if file and file.filename:
-        # შევამოწმოთ რომ .docx არის
         display_filename = _safe_document_display_filename(file.filename)
-        if not display_filename.lower().endswith('.docx'):
+        allowed_suffix = _allowed_document_suffix(display_filename)
+        if not allowed_suffix:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="მხოლოდ .docx ფაილებია დაშვებული"
+                detail="მხოლოდ .docx და .pdf ფაილებია დაშვებული"
             )
         
         # Keep the previous file until the new database state commits.
         # უნიკალური სახელი
-        new_file_path, resolved_file_path = _new_document_storage_path()
+        new_file_path, resolved_file_path = _new_document_storage_path(allowed_suffix)
         
         # შევინახოთ ფაილი
         try:
@@ -352,7 +368,7 @@ def download_document_file(
     doc_id: int = FPath(..., ge=1),
     db: Session = Depends(get_db),
 ):
-    """Word ფაილის ჩამოტვირთვა"""
+    """Word ან PDF ფაილის ჩამოტვირთვა"""
     doc = db.get(SiteDocument, doc_id)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
@@ -368,10 +384,17 @@ def download_document_file(
     if not document_path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     
+    safe_filename = _safe_document_display_filename(doc.filename)
+    is_pdf = safe_filename.lower().endswith(".pdf") or str(document_path).lower().endswith(".pdf")
+    media_type = (
+        "application/pdf"
+        if is_pdf
+        else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
     return FileResponse(
         path=document_path,
-        filename=_safe_document_display_filename(doc.filename),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        filename=safe_filename,
+        media_type=media_type
     )
 
 

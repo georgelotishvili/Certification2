@@ -103,7 +103,13 @@
     <div class="site-info-content" role="document" aria-labelledby="siteInfoTitle">
       <div class="site-info-head">
         <h3 id="siteInfoTitle">ინფორმაცია</h3>
-        <button class="modal-close site-info-close" aria-label="დახურვა" type="button">&times;</button>
+        <div class="site-info-head-actions">
+          <button type="button" class="site-info-download-btn" id="siteInfoDownloadPdfBtn" hidden aria-label="დოკუმენტის ჩამოტვირთვა PDF ფორმატში">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>PDF ჩამოტვირთვა</span>
+          </button>
+          <button class="modal-close site-info-close" aria-label="დახურვა" type="button">&times;</button>
+        </div>
       </div>
       <div class="site-info-body" id="siteInfoBody"></div>
     </div>
@@ -114,14 +120,13 @@
     <button class="drawer-close" aria-label="დახურვა" type="button"></button>
     <div class="drawer-auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
     <nav class="drawer-nav">
-      <a href="../pages/index.html" class="drawer-home">მთავარი</a>
-      <a href="../pages/registry.html" class="drawer-registry">რეესტრი</a>
+      <a href="../pages/index.html" class="drawer-home" data-page-link>მთავარი</a>
+      <a href="../pages/registry.html" class="drawer-registry" data-page-link>რეესტრი</a>
+      <a href="../pages/documents.html" class="drawer-documents" data-page-link>დოკუმენტები</a>
       <a href="#" class="drawer-statements">განცხადებები</a>
       <div class="drawer-item drawer-about">
         <a href="#" class="drawer-about-trigger" aria-haspopup="true" aria-expanded="false">ინფორმაცია</a>
         <div class="drawer-about-submenu drawer-submenu" role="menu" hidden>
-          <!-- დინამიური დოკუმენტები იტვირთება JS-ით -->
-          <div class="drawer-submenu-dynamic"></div>
           <!-- ფიქსირებული პუნქტები -->
           <button type="button" class="drawer-submenu-item guide">გზამკვლევი</button>
         </div>
@@ -137,14 +142,13 @@
     </div>
     <div class="auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
     <nav class="nav">
-      <a href="../pages/index.html" class="nav-home">მთავარი</a>
-      <a href="../pages/registry.html" class="nav-registry">რეესტრი</a>
+      <a href="../pages/index.html" class="nav-home" data-page-link>მთავარი</a>
+      <a href="../pages/registry.html" class="nav-registry" data-page-link>რეესტრი</a>
+      <a href="../pages/documents.html" class="nav-documents" data-page-link>დოკუმენტები</a>
       <a href="#" class="nav-statements">განცხადებები</a>
       <div class="nav-item nav-about">
         <a href="#" class="about-trigger" aria-haspopup="true" aria-expanded="false">ინფორმაცია</a>
         <div class="dropdown about-dropdown" role="menu" aria-hidden="true">
-          <!-- დინამიური დოკუმენტები იტვირთება JS-ით -->
-          <div class="dropdown-dynamic"></div>
           <!-- ფიქსირებული პუნქტები -->
           <button type="button" class="dropdown-item guide">გზამკვლევი</button>
         </div>
