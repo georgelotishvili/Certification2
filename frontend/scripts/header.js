@@ -25,7 +25,12 @@
     });
   }
   function isLoggedIn() {
-    try { return window.Auth?.isLoggedIn?.() === true; } catch { return false; }
+    try {
+      if (typeof window.Auth?.isLoggedIn === 'function') {
+        return window.Auth.isLoggedIn() === true;
+      }
+      return localStorage.getItem('authLoggedIn') === 'true' && !!localStorage.getItem('currentUser');
+    } catch { return false; }
   }
   function openAuthModal() {
     try { return window.Auth?.openModal?.(); } catch {}
@@ -1111,6 +1116,15 @@
         if (docId) openDocumentById(docId);
         return;
       }
+
+      // Page links inside about dropdown / mobile submenu (e.g. დოკუმენტები)
+      const dropdownPageLink = closest(el, '.about-dropdown a[data-page-link], .drawer-about-submenu a[data-page-link]');
+      if (dropdownPageLink) {
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        return;
+      }
       
       // Fixed items: guide
       if (closest(el, '.dropdown-item.guide, .drawer-submenu-item.guide')) {
@@ -1220,8 +1234,8 @@
     sanitizeWordStyles,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-auth1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_auth1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-auth2';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_auth2';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1236,25 +1250,12 @@
       const authBanner = document.querySelector('.auth-banner');
       const drawerAuthBanner = document.querySelector('.drawer-auth-banner');
       if (logged && user && (user.firstName || user.lastName || user.code)) {
-        const namePart = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-        const text = (namePart && user.code) ? `${namePart} — ${user.code}` : (namePart || user.code || '');
-        if (authBanner) {
-          authBanner.textContent = text;
-          authBanner.hidden = !text;
-        }
-        if (drawerAuthBanner) {
-          drawerAuthBanner.textContent = text;
-          drawerAuthBanner.hidden = !text;
-        }
+        const text = `${user.firstName || ''} ${user.lastName || ''} — ${user.code || ''}`.trim();
+        if (authBanner) authBanner.textContent = text;
+        if (drawerAuthBanner) drawerAuthBanner.textContent = text;
       } else {
-        if (authBanner) {
-          authBanner.textContent = '';
-          authBanner.hidden = true;
-        }
-        if (drawerAuthBanner) {
-          drawerAuthBanner.textContent = '';
-          drawerAuthBanner.hidden = true;
-        }
+        if (authBanner) authBanner.textContent = 'გთხოვთ შეხვიდეთ სისტემაში';
+        if (drawerAuthBanner) drawerAuthBanner.textContent = 'გთხოვთ შეხვიდეთ სისტემაში';
       }
     } catch {}
   }
@@ -1337,11 +1338,36 @@
     let isLoading = false;
     let cache = [];
 
-    function isLoggedIn() { try { return window.Auth?.isLoggedIn?.() === true; } catch { return false; } }
-    function getCurrentUser() { try { return window.Auth?.getCurrentUser?.() || null; } catch { return null; } }
-    function getActorEmail() { return (window.Auth?.getSavedEmail?.() || '').trim(); }
+    function isLoggedIn() {
+      try {
+        if (typeof window.Auth?.isLoggedIn === 'function') {
+          return window.Auth.isLoggedIn() === true;
+        }
+        return localStorage.getItem('authLoggedIn') === 'true' && !!localStorage.getItem('currentUser');
+      } catch { return false; }
+    }
+    function getCurrentUser() {
+      try {
+        if (typeof window.Auth?.getCurrentUser === 'function') {
+          return window.Auth.getCurrentUser() || null;
+        }
+        const raw = localStorage.getItem('currentUser');
+        return raw ? JSON.parse(raw) : null;
+      } catch { return null; }
+    }
+    function getActorEmail() {
+      try {
+        return (window.Auth?.getSavedEmail?.() || localStorage.getItem('savedEmail') || '').trim();
+      } catch { return ''; }
+    }
     function getActorHeaders() {
-      return window.Auth?.getAuthHeaders?.() || {};
+      try {
+        if (typeof window.Auth?.getAuthHeaders === 'function') {
+          return window.Auth.getAuthHeaders() || {};
+        }
+        const token = localStorage.getItem('auth_token');
+        return token ? { 'Authorization': 'Bearer ' + token } : {};
+      } catch { return {}; }
     }
 
     function ensureAuthForCompose(event) {

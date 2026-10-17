@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const fullscreenModule = createFullscreenModule();
   const authModule = createAuthModule();
-  const registryModule = window.Registry.init({
+  const registryModule = window.Registry?.init ? window.Registry.init({
     api: API_BASE,
     triggers: ['.nav-registry', '.drawer-registry'],
     beforeOpen: (el) => {
@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch {}
     },
     refreshRating: true,
-  });
+  }) : { isOpen: () => false, close: () => {} };
   const footerFormModule = createFooterFormModule();
 
   function createPasswordIcon(visible) {
@@ -666,21 +666,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateBanner() {
       const user = getCurrentUser();
-      const logged = isLoggedIn() && !!user;
-      const namePart = logged ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : '';
-      const text = logged
-        ? ((namePart && user.code) ? `${namePart} — ${user.code}` : (namePart || user.code || ''))
-        : '';
+      let text = DEFAULT_BANNER_TEXT;
+      if (isLoggedIn() && user) text = `${user.firstName} ${user.lastName} — ${user.code}`;
       const authBanner = DOM.authBanner || document.querySelector('.auth-banner');
       const drawerAuthBanner = DOM.drawerAuthBanner || document.querySelector('.drawer-auth-banner');
-      if (authBanner) {
-        authBanner.textContent = text;
-        authBanner.hidden = !text;
-      }
-      if (drawerAuthBanner) {
-        drawerAuthBanner.textContent = text;
-        drawerAuthBanner.hidden = !text;
-      }
+      if (authBanner) authBanner.textContent = text;
+      if (drawerAuthBanner) drawerAuthBanner.textContent = text;
     }
 
     function removeGeorgianNameOverlay() {
