@@ -443,11 +443,7 @@
       let text = String(bodyText || '');
       const resultsBlock = String(examOutcome?.results_text || '').trim();
       if (!resultsBlock) return text;
-      const outcome = examOutcome?.outcome;
-      const shouldInject =
-        (mode === 'certificate' && (outcome === 'pass_bc' || outcome === 'pass_a')) ||
-        (mode === 'exam_fail' && outcome === 'fail');
-      if (!shouldInject) return text;
+      if (mode !== 'certificate' && mode !== 'exam_fail') return text;
       if (text.includes(resultsBlock) || text.includes('თქვენი გამოცდის შედეგები:')) {
         return text;
       }
