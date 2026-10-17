@@ -126,10 +126,57 @@ CUSTOM_FILE_TEMPLATES = {
     },
 }
 DEFAULT_REJECTION_TEMPLATE = CUSTOM_FILE_TEMPLATES["rejection"]
+DEFAULT_SCHEDULE_TIMES = {
+    "morning": "10:00",
+    "evening": "14:00",
+}
+_TIME_RE = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 
 
 def _iso(value):
     return value.isoformat() if value is not None else None
+
+
+def _schedule_times_path() -> Path:
+    return _directory("templates") / "schedule_times.json"
+
+
+def _load_schedule_times() -> dict[str, str]:
+    result = dict(DEFAULT_SCHEDULE_TIMES)
+    path = _schedule_times_path()
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                for key in ("morning", "evening"):
+                    val = str(data.get(key) or "").strip()
+                    if _TIME_RE.fullmatch(val):
+                        result[key] = val
+        except Exception:
+            pass
+    return result
+
+
+def _save_schedule_times(*, morning: str | None = None, evening: str | None = None) -> dict[str, str]:
+    current = _load_schedule_times()
+    if morning is not None:
+        m_val = str(morning).strip()
+        if not _TIME_RE.fullmatch(m_val):
+            raise HTTPException(422, "დილის საათის ფორმატი არასწორია (მაგ.: 10:00).")
+        current["morning"] = m_val
+    if evening is not None:
+        e_val = str(evening).strip()
+        if not _TIME_RE.fullmatch(e_val):
+            raise HTTPException(422, "საღამოს საათის ფორმატი არასწორია (მაგ.: 14:00).")
+        current["evening"] = e_val
+    try:
+        _schedule_times_path().write_text(
+            json.dumps(current, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return current
 
 
 def _template_out(kind: str, template: PlanningTemplate | None):
@@ -289,7 +336,20 @@ def list_templates(authorization: str | None = Header(None), db: Session = Depen
         "rejection_template": _custom_template_out("rejection"),
         "exam_fail_template": _custom_template_out("exam_fail"),
         "cert_issued_template": _custom_template_out("cert_issued"),
+        "schedule_times": _load_schedule_times(),
     }
+
+
+@router.put("/planning-schedule-times")
+def update_schedule_times(
+    morning: str | None = Form(None),
+    evening: str | None = Form(None),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    saved = _save_schedule_times(morning=morning, evening=evening)
+    return {"schedule_times": saved}
 
 
 @router.put("/planning-templates/{kind}")

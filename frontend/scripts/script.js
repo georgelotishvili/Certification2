@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const utils = {
     on: (element, event, handler) => element && element.addEventListener(event, handler),
     isValidEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+    isValidGeorgianName: (value) => /^[ა-ჰ]+(?:[-\s][ა-ჰ]+)*$/.test(String(value || '').trim().replace(/\s+/g, ' ')),
     getTrimmed: (formData, name) => (formData.get(name) || '').toString().trim(),
     validatePassword: (password) => {
       // Backend-თან თანმიმდევრული ვალიდაცია
@@ -403,6 +404,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Global escape handling (modal first, then menu)
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
+    if (document.getElementById('georgianNameForceOverlay')) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (authModule.isModalOpen()) {
       authModule.closeModal();
       return;
@@ -427,6 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.Utils.formatDateTime = utils.formatDateTime;
   window.Utils.parseUtcDate = parseUtcDate;
   window.Utils.validatePassword = utils.validatePassword;
+  window.Utils.isValidGeorgianName = utils.isValidGeorgianName;
   window.Utils.setupPasswordToggles = setupPasswordToggles;
   window.Utils.resetPasswordToggles = resetPasswordToggles;
   window.Utils.setupPasswordStrength = setupPasswordStrength;
@@ -459,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Optional modal controls for independent header module
   window.Auth.openModal = () => authModule.openModal?.();
   window.Auth.closeModal = () => authModule.closeModal?.();
+  window.Auth.checkGeorgianName = (user) => authModule.checkAndEnforceGeorgianName?.(user);
 
   // contact scroll: no contact links in header
 
@@ -664,6 +672,201 @@ document.addEventListener('DOMContentLoaded', () => {
       if (DOM.drawerAuthBanner) DOM.drawerAuthBanner.textContent = text;
     }
 
+    function removeGeorgianNameOverlay() {
+      const existing = document.getElementById('georgianNameForceOverlay');
+      if (existing) existing.remove();
+      document.body.classList.remove('georgian-name-lock');
+    }
+
+    function checkAndEnforceGeorgianName(userOverride = null) {
+      if (!isLoggedIn()) {
+        removeGeorgianNameOverlay();
+        return;
+      }
+      const user = userOverride || getCurrentUser();
+      if (!user) return;
+
+      const currentFirst = String(user.firstName ?? user.first_name ?? '').trim().replace(/\s+/g, ' ');
+      const currentLast = String(user.lastName ?? user.last_name ?? '').trim().replace(/\s+/g, ' ');
+
+      if (utils.isValidGeorgianName(currentFirst) && utils.isValidGeorgianName(currentLast)) {
+        removeGeorgianNameOverlay();
+        return;
+      }
+
+      // Close login modal or drawer if open so only the mandatory modal is focused
+      try { closeModal(); } catch {}
+      try { document.body.classList.remove('menu-open'); } catch {}
+
+      document.body.classList.add('georgian-name-lock');
+
+      let overlay = document.getElementById('georgianNameForceOverlay');
+      if (overlay) {
+        const currentRecordEl = overlay.querySelector('[data-current-name]');
+        if (currentRecordEl) {
+          currentRecordEl.textContent = `${currentFirst || '—'} ${currentLast || '—'}`.trim();
+        }
+        return;
+      }
+
+      overlay = document.createElement('div');
+      overlay.id = 'georgianNameForceOverlay';
+      overlay.className = 'georgian-name-force-overlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', 'georgianNameForceTitle');
+
+      const prefillFirst = utils.isValidGeorgianName(currentFirst) ? currentFirst : '';
+      const prefillLast = utils.isValidGeorgianName(currentLast) ? currentLast : '';
+
+      overlay.innerHTML = `
+        <div class="georgian-name-force-card" role="document">
+          <div class="georgian-name-force-badge" aria-hidden="true">!</div>
+          <h3 id="georgianNameForceTitle" class="georgian-name-force-title">სახელისა და გვარის გასწორება სავალდებულოა</h3>
+          <p class="georgian-name-force-desc">
+            სერტიფიცირების პროცესისა და ოფიციალური დოკუმენტების წარმოებისთვის აუცილებელია, თქვენი <strong>სახელი და გვარი</strong> მითითებული იყოს <strong>ქართულ ენაზე</strong>, ზუსტად ისე, როგორც გიწერიათ ოფიციალურ პირადობის დამადასტურებელ დოკუმენტში.
+          </p>
+          <p class="georgian-name-force-subdesc">
+            გთხოვთ, გაასწოროთ მონაცემები საიტით სარგებლობის გასაგრძელებლად.
+          </p>
+          <div class="georgian-name-force-current">
+            <span>მიმდინარე ჩანაწერი:</span>
+            <strong data-current-name></strong>
+          </div>
+          <form class="georgian-name-force-form" id="georgianNameForceForm" novalidate>
+            <div class="field">
+              <label for="forceGeoFirstName" class="georgian-name-force-label">სახელი (ქართულად, პირადობის დოკუმენტის შესაბამისად)</label>
+              <input type="text" id="forceGeoFirstName" name="firstName" placeholder="მაგ: გიორგი" autocomplete="given-name" required />
+            </div>
+            <div class="field">
+              <label for="forceGeoLastName" class="georgian-name-force-label">გვარი (ქართულად, პირადობის დოკუმენტის შესაბამისად)</label>
+              <input type="text" id="forceGeoLastName" name="lastName" placeholder="მაგ: ბერიძე" autocomplete="family-name" required />
+            </div>
+            <div class="georgian-name-force-error" id="georgianNameForceError" role="alert" hidden></div>
+            <button type="submit" class="modal-btn submit georgian-name-force-submit" id="georgianNameForceSubmit">გასწორება და შენახვა</button>
+          </form>
+        </div>
+      `;
+
+      const currentNameStrong = overlay.querySelector('[data-current-name]');
+      if (currentNameStrong) {
+        currentNameStrong.textContent = `${currentFirst || '—'} ${currentLast || '—'}`.trim();
+      }
+      const firstInput = overlay.querySelector('#forceGeoFirstName');
+      const lastInput = overlay.querySelector('#forceGeoLastName');
+      if (firstInput && prefillFirst) firstInput.value = prefillFirst;
+      if (lastInput && prefillLast) lastInput.value = prefillLast;
+
+      const errorBox = overlay.querySelector('#georgianNameForceError');
+      const showError = (msg) => {
+        if (!errorBox) return;
+        if (!msg) {
+          errorBox.textContent = '';
+          errorBox.hidden = true;
+        } else {
+          errorBox.textContent = msg;
+          errorBox.hidden = false;
+        }
+      };
+
+      [firstInput, lastInput].forEach((inp) => {
+        inp?.addEventListener('input', () => showError(''));
+      });
+
+      const form = overlay.querySelector('#georgianNameForceForm');
+      const submitBtn = overlay.querySelector('#georgianNameForceSubmit');
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newFirst = String(firstInput?.value || '').trim().replace(/\s+/g, ' ');
+        const newLast = String(lastInput?.value || '').trim().replace(/\s+/g, ' ');
+
+        if (!newFirst || !newLast) {
+          showError('გთხოვთ, შეავსოთ სახელი და გვარი.');
+          return;
+        }
+        if (!utils.isValidGeorgianName(newFirst) || !utils.isValidGeorgianName(newLast)) {
+          showError('გთხოვთ, სახელი და გვარი შეიყვანოთ მხოლოდ ქართული ასოებით (ა–ჰ), ოფიციალური პირადობის დოკუმენტის შესაბამისად.');
+          return;
+        }
+
+        const token = localStorage.getItem('auth_token') || '';
+        if (!token) {
+          showError('ავტორიზაციის სესია ვერ მოიძებნა. გთხოვთ, თავიდან გაიაროთ ავტორიზაცია.');
+          return;
+        }
+
+        setButtonLoading(submitBtn, true, 'ინახება...');
+        showError('');
+        try {
+          const response = await fetch(`${API_BASE}/users/me/georgian-name`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              first_name: newFirst,
+              last_name: newLast,
+            }),
+          });
+
+          if (!response.ok) {
+            let detail = '';
+            try {
+              const errData = await response.json();
+              detail = errData?.detail || '';
+            } catch {}
+            showError(detail || 'მონაცემების შენახვა ვერ მოხერხდა. სცადეთ თავიდან.');
+            return;
+          }
+
+          const updated = await response.json();
+          const existingUser = getCurrentUser() || {};
+          const normalizedUser = {
+            ...existingUser,
+            id: updated.id ?? existingUser.id,
+            firstName: updated.first_name || newFirst,
+            lastName: updated.last_name || newLast,
+            code: updated.code ?? existingUser.code,
+            isAdmin: updated.is_admin !== undefined ? !!updated.is_admin : !!existingUser.isAdmin,
+            email: updated.email ?? existingUser.email,
+          };
+          saveCurrentUser(normalizedUser);
+          updateBanner();
+
+          // Update personal page DOM elements if currently on my.html (self view)
+          const params = new URLSearchParams(window.location.search);
+          const isPublicProfileView = params.has('code') || params.has('userId');
+          if (!isPublicProfileView) {
+            const pfFirst = document.getElementById('myFirstName');
+            const pfLast = document.getElementById('myLastName');
+            const pageTitle = document.getElementById('pageTitle');
+            if (pfFirst) pfFirst.textContent = normalizedUser.firstName;
+            if (pfLast) pfLast.textContent = normalizedUser.lastName;
+            if (pageTitle && window.location.pathname.includes('my.html')) {
+              pageTitle.textContent = `${normalizedUser.firstName} ${normalizedUser.lastName}`.trim();
+            }
+          }
+
+          document.dispatchEvent(new CustomEvent('user:georgian-name-updated', { detail: { user: normalizedUser, raw: updated } }));
+          removeGeorgianNameOverlay();
+          notify('სახელი და გვარი წარმატებით გასწორდა!', 'success');
+        } catch (err) {
+          showError('ქსელური შეცდომა. გთხოვთ, სცადოთ თავიდან.');
+        } finally {
+          setButtonLoading(submitBtn, false);
+        }
+      });
+
+      document.body.appendChild(overlay);
+      setTimeout(() => {
+        if (firstInput && !firstInput.value) firstInput.focus();
+        else if (lastInput && !lastInput.value) lastInput.focus();
+        else firstInput?.focus();
+      }, 50);
+    }
+
     async function refreshUserFromServer() {
       if (!isLoggedIn()) return;
       const token = localStorage.getItem('auth_token');
@@ -681,6 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (response.status === 401) {
             setLoggedIn(false);
             try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+            removeGeorgianNameOverlay();
             updateAuthUI();
             updateBanner();
             updateAdminLinkVisibility();
@@ -701,6 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveCurrentUser(normalizedUser);
         updateBanner();
         updateAdminLinkVisibility();
+        checkAndEnforceGeorgianName(normalizedUser);
       } catch (error) {
         console.error('Failed to refresh user data:', error);
       }
@@ -796,6 +1001,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try { setLoggedIn(false); } catch {}
       try { localStorage.removeItem('auth_token'); } catch {}
       try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+      removeGeorgianNameOverlay();
     }
 
     function performLogout() {
@@ -880,6 +1086,7 @@ document.addEventListener('DOMContentLoaded', () => {
           DOM.loginForm?.reset?.();
           showOptions();
           notify('ავტორიზაცია შესრულებულია', 'success');
+          checkAndEnforceGeorgianName(normalizedUser);
           return;
         }
       } catch (error) {
@@ -1106,8 +1313,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!DOM.registerForm) return;
       const formData = new FormData(DOM.registerForm);
       const personalId = utils.getTrimmed(formData, 'personalId');
-      const firstName = utils.getTrimmed(formData, 'firstName');
-      const lastName = utils.getTrimmed(formData, 'lastName');
+      const firstName = utils.getTrimmed(formData, 'firstName').replace(/\s+/g, ' ');
+      const lastName = utils.getTrimmed(formData, 'lastName').replace(/\s+/g, ' ');
       const phone = utils.getTrimmed(formData, 'phone');
       const email = utils.getTrimmed(formData, 'email');
       const password = utils.getTrimmed(formData, 'password');
@@ -1115,6 +1322,9 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (personalId.length !== 11 || !/^[0-9]{11}$/.test(personalId)) return notify('პირადი ნომერი უნდა იყოს 11 ციფრი', 'error');
       if (!firstName || !lastName) return notify('გთხოვთ შეიყვანოთ სახელი და გვარი', 'error');
+      if (!utils.isValidGeorgianName(firstName) || !utils.isValidGeorgianName(lastName)) {
+        return notify('გთხოვთ, სახელი და გვარი შეიყვანოთ მხოლოდ ქართული ასოებით, ოფიციალური პირადობის დოკუმენტის შესაბამისად', 'error');
+      }
       if (!/^[0-9]{9}$/.test(phone)) return notify('ტელეფონი უნდა იყოს 9 ციფრი (მაგ: 599123456)', 'error');
       if (!utils.isValidEmail(email)) return notify('ელფოსტა არასწორია', 'error');
       const passwordCheck = utils.validatePassword(password);
@@ -1224,38 +1434,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function init() {
-      utils.on(DOM.loginBtn, 'click', () => handleAuthButtonClick(false));
-      utils.on(DOM.drawerLoginBtn, 'click', () => handleAuthButtonClick(true));
-      utils.on(DOM.modalClose, 'click', closeModal);
-      // Removed overlay click handler - modal should only close via close button
-      utils.on(DOM.loginOption, 'click', showLogin);
-      utils.on(DOM.registerOption, 'click', showRegister);
-      utils.on(DOM.forgotPasswordLink, 'click', (event) => { event.preventDefault(); showForgot(); });
-      utils.on(DOM.loginForm, 'submit', handleLoginSubmit);
-      utils.on(DOM.forgotPasswordForm, 'submit', handleForgotSubmit);
-      const backToLoginBtn = DOM.forgotPasswordForm?.querySelector('.back-to-login');
-      utils.on(backToLoginBtn, 'click', () => {
-        resetForgotFlow();
-        showLogin();
-      });
-      const forgotBackBtn = document.getElementById('forgotBackBtn');
-      utils.on(forgotBackBtn, 'click', () => {
-        resetForgotFlow();
-      });
-      utils.on(DOM.registerForm, 'submit', handleRegisterSubmit);
-      
-      // Registration verification flow
-      const registerSendCodeBtn = document.getElementById('registerSendCodeBtn');
-      const registerBackBtn = document.getElementById('registerBackBtn');
-      utils.on(registerSendCodeBtn, 'click', handleRegisterSendCode);
-      utils.on(registerBackBtn, 'click', handleRegisterBack);
+      if (DOM.loginModal && DOM.loginModal.dataset.authBound !== 'true') {
+        DOM.loginModal.dataset.authBound = 'true';
+        utils.on(DOM.loginBtn, 'click', () => handleAuthButtonClick(false));
+        utils.on(DOM.drawerLoginBtn, 'click', () => handleAuthButtonClick(true));
+        utils.on(DOM.modalClose, 'click', closeModal);
+        // Removed overlay click handler - modal should only close via close button
+        utils.on(DOM.loginOption, 'click', showLogin);
+        utils.on(DOM.registerOption, 'click', showRegister);
+        utils.on(DOM.forgotPasswordLink, 'click', (event) => { event.preventDefault(); showForgot(); });
+        utils.on(DOM.loginForm, 'submit', handleLoginSubmit);
+        utils.on(DOM.forgotPasswordForm, 'submit', handleForgotSubmit);
+        const backToLoginBtn = DOM.forgotPasswordForm?.querySelector('.back-to-login');
+        utils.on(backToLoginBtn, 'click', () => {
+          resetForgotFlow();
+          showLogin();
+        });
+        const forgotBackBtn = document.getElementById('forgotBackBtn');
+        utils.on(forgotBackBtn, 'click', () => {
+          resetForgotFlow();
+        });
+        utils.on(DOM.registerForm, 'submit', handleRegisterSubmit);
+        
+        // Registration verification flow
+        const registerSendCodeBtn = document.getElementById('registerSendCodeBtn');
+        const registerBackBtn = document.getElementById('registerBackBtn');
+        utils.on(registerSendCodeBtn, 'click', handleRegisterSendCode);
+        utils.on(registerBackBtn, 'click', handleRegisterBack);
+      }
 
       normalizeAuthState();
       updateAuthUI();
       ensureProfileConsistency();
       updateBanner();
       updateAdminLinkVisibility();
-      refreshUserFromServer();
+      checkAndEnforceGeorgianName();
+      if (!init._refreshedOnce) {
+        init._refreshedOnce = true;
+        refreshUserFromServer();
+      }
     }
 
     return {
@@ -1273,6 +1490,7 @@ document.addEventListener('DOMContentLoaded', () => {
       generateUniqueCode,
       getUsedCodes,
       saveUsedCodes,
+      checkAndEnforceGeorgianName,
     };
   }
 

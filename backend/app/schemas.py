@@ -500,6 +500,11 @@ class UserProfileUpdateRequest(BaseModel):
     email_verification_code: str | None = None  # Required when changing email
 
 
+class GeorgianNameUpdateRequest(CamelModel):
+    first_name: str
+    last_name: str
+
+
 class UsersListResponse(BaseModel):
     items: List[UserOut]
     total: int

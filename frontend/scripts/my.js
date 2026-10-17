@@ -303,8 +303,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (data.id) {
         loadHeaderPhoto(data.id);
       }
+      window.Auth?.checkGeorgianName?.(data);
     } catch {}
   }
+  document.addEventListener('user:georgian-name-updated', (event) => {
+    const updatedUser = event?.detail?.user;
+    if (updatedUser && selfProfileData) {
+      selfProfileData.first_name = updatedUser.firstName || selfProfileData.first_name;
+      selfProfileData.last_name = updatedUser.lastName || selfProfileData.last_name;
+      updatePageTitleFrom(selfProfileData);
+    }
+  });
   if (PUBLIC_VIEW) {
     await loadProfile();
     if (!publicProfileData) return;

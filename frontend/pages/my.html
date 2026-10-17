@@ -4,27 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ჩემი გვერდი</title>
-    <!-- instant black cover between pages -->
-    <script>
-      (function(){
-        try {
-          if (sessionStorage.getItem('pageCover') === '1') {
-            var s = document.createElement('style');
-            s.textContent = '#pageCover{position:fixed;inset:0;background:#fff;z-index:2147483647;opacity:1;pointer-events:none;}';
-            document.head.appendChild(s);
-            var d = document.createElement('div');
-            d.id = 'pageCover';
-            document.documentElement.appendChild(d);
-          }
-        } catch(e) {}
-      })();
-    </script>
+    <link rel="preload" as="image" href="../assets/svg/header.svg" />
     <meta name="api-base" content="" />
     <script src="../scripts/config.js?v=4" defer></script>
-    <script src="../scripts/header.js?v=20261013-nav1" defer></script>
-    <link rel="stylesheet" href="../styles/styles.css?v=20261016-1" />
-    <link rel="stylesheet" href="../styles/header.css?v=20261013-statements1" />
-    <link rel="stylesheet" href="../styles/my.css?v=20261017-my5" />
+    <script src="../scripts/header.js?v=20261017-smooth1" defer></script>
+    <link rel="stylesheet" href="../styles/styles.css?v=20261017-smooth1" />
+    <link rel="stylesheet" href="../styles/header.css?v=20261017-smooth1" />
+    <link rel="stylesheet" href="../styles/my.css?v=20261017-blue1" />
   </head>
   <body>
     <!-- Header will be loaded dynamically by header.js -->
@@ -300,8 +286,8 @@
 
 
     <script src="../scripts/registry.mini.js?v=20261008-perf1" defer></script>
-    <script src="../scripts/script.js?v=6" defer></script>
-    <script src="../scripts/my.js?v=20261008-perf1-2" defer></script>
+    <script src="../scripts/script.js?v=20261017-smooth1" defer></script>
+    <script src="../scripts/my.js?v=20261017-geoname1" defer></script>
   </body>
   </html>
 

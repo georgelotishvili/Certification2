@@ -10,7 +10,7 @@ from sqlalchemy import select, func, exists
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, MultiApartmentSettings, MultiApartmentEvaluation, User, UserSession
+from ..models import MultiApartmentProject, MultiApartmentAnswer, MultiApartmentSubmission, MultiApartmentSettings, MultiApartmentEvaluation, OfflineExamAttempt, User, UserSession
 from ..schemas import (
     MultiApartmentProjectsResponse,
     MultiApartmentProjectsUpdateRequest,
@@ -117,7 +117,8 @@ def _safe_public_pdf_url(project: MultiApartmentProject | None) -> str | None:
     except Exception:
         # ნებისმიერი სხვა დაუდასტურებელი შეცდომა – სჯობს ჩავთვალოთ, რომ PDF არ არის
         return None
-    return f"/public/multi-apartment/projects/{project.code}/pdf"
+    stat = pdf_path.stat()
+    return f"/public/multi-apartment/projects/{project.code}/pdf?v={stat.st_mtime_ns}_{stat.st_size}"
 
 
 def _get_or_create_settings(db: Session) -> MultiApartmentSettings:
@@ -564,6 +565,7 @@ def download_pdf(
             media_type="application/pdf",
             filename=safe_pdf_display_filename(project.pdf_filename),
             content_disposition_type="inline",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
         )
     except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
@@ -640,23 +642,73 @@ def get_random_project(
     projects_with_answers = [p for p in all_projects if p.answers]
     available_projects = projects_with_answers or all_projects
     
-    # Get all project IDs this user has already completed
-    completed_project_ids = set(
-        db.scalars(
-            select(MultiApartmentEvaluation.project_id)
-            .where(MultiApartmentEvaluation.user_id == user.id)
-        ).all()
+    attempt_rows = db.execute(
+        select(
+            OfflineExamAttempt.started_at,
+            OfflineExamAttempt.id,
+            OfflineExamAttempt.project_id,
+            OfflineExamAttempt.stage_grant_id,
+        ).where(
+            OfflineExamAttempt.user_id == user.id,
+            OfflineExamAttempt.stage == STAGE_PROJECT_1,
+            OfflineExamAttempt.project_id.is_not(None),
+        )
+    ).all()
+    eval_rows = db.execute(
+        select(
+            MultiApartmentEvaluation.started_at,
+            MultiApartmentEvaluation.id,
+            MultiApartmentEvaluation.project_id,
+            MultiApartmentEvaluation.stage_grant_id,
+        ).where(
+            MultiApartmentEvaluation.user_id == user.id,
+            MultiApartmentEvaluation.project_id.is_not(None),
+        )
+    ).all()
+
+    available_ids = {p.id for p in available_projects}
+    ordered_events = sorted(
+        [
+            (started_at, 0, row_id, int(project_id), grant_id)
+            for started_at, row_id, project_id, grant_id in attempt_rows
+            if project_id is not None
+        ]
+        + [
+            (started_at, 1, row_id, int(project_id), grant_id)
+            for started_at, row_id, project_id, grant_id in eval_rows
+            if project_id is not None
+        ],
+        key=lambda item: (naive_utc(item[0]) if item[0] is not None else datetime.min, item[1], item[2]),
     )
 
-    # Filter out completed projects
-    not_completed = [p for p in available_projects if p.id not in completed_project_ids]
+    seen_history: list[int] = []
+    seen_grants: set[int] = set()
+    for _ts, _kind, _rid, pid, grant_id in ordered_events:
+        if pid not in available_ids:
+            continue
+        if grant_id is not None:
+            if grant_id in seen_grants:
+                continue
+            seen_grants.add(grant_id)
+        elif seen_history and seen_history[-1] == pid:
+            continue
+        seen_history.append(pid)
 
-    if not_completed:
-        # Random from not-yet-completed projects
-        project = random.choice(not_completed)
-    else:
-        # All projects completed - restart cycle (random from all)
-        project = random.choice(available_projects)
+    cycle_seen: set[int] = set()
+    last_seen_id: int | None = None
+    for pid in seen_history:
+        last_seen_id = pid
+        cycle_seen.add(pid)
+        if cycle_seen >= available_ids:
+            cycle_seen = set()
+
+    candidates = [p for p in available_projects if p.id not in cycle_seen] or list(available_projects)
+    if last_seen_id is not None and len(candidates) > 1:
+        non_repeating = [p for p in candidates if p.id != last_seen_id]
+        if non_repeating:
+            candidates = non_repeating
+
+    project = random.SystemRandom().choice(candidates)
 
     answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
     pdf_url = _safe_public_pdf_url(project)
@@ -771,6 +823,7 @@ def get_public_pdf(
             media_type="application/pdf",
             filename=safe_pdf_display_filename(project.pdf_filename),
             content_disposition_type="inline",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
         )
     except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")

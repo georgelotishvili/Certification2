@@ -50,49 +50,22 @@
 
   function setupPageCoverOnLoad() {
     try {
-      if (sessionStorage.getItem('pageCover') === '1') {
-        const el = mountPageCover(true);
-        requestAnimationFrame(() => {
-          if (!el) return;
-          el.style.transition = 'opacity 0.3s ease';
-          el.style.opacity = '0';
-          setTimeout(() => { try { el.remove(); } catch {}; sessionStorage.removeItem('pageCover'); }, 300);
-        });
-      }
+      const existing = document.getElementById('pageCover');
+      if (existing) existing.remove();
+      sessionStorage.removeItem('pageCover');
     } catch {}
   }
 
   function transitionTo(url) {
     try {
-      // Ensure URL doesn't have hash to scroll to top
       const cleanUrl = url.split('#')[0];
-      // Skip transition for admin page
-      if (cleanUrl.includes('admin.html')) {
-        window.location.href = cleanUrl;
-        return;
-      }
-      const el = mountPageCover(false);
-      if (!el) { 
-        window.location.href = cleanUrl;
-        return; 
-      }
-      void el.offsetWidth; // reflow to ensure transition applies
-      el.style.transition = 'opacity 0.3s ease';
-      el.style.opacity = '1';
-      sessionStorage.setItem('pageCover', '1');
-      setTimeout(() => { window.location.href = cleanUrl; }, 300);
-    } catch {
-      const cleanUrl = url.split('#')[0];
-      // Skip transition for admin page
-      if (cleanUrl.includes('admin.html')) {
-        window.location.href = cleanUrl;
-        return;
-      }
       window.location.href = cleanUrl;
+    } catch {
+      window.location.href = url;
     }
   }
 
-  // Initialize cover fade on page load if requested
+  // Clean up any legacy page cover on load
   setupPageCoverOnLoad();
 
   // Site Info Modal helpers (About / Terms)
@@ -137,17 +110,31 @@
     return 'http://127.0.0.1:8000';
   }
 
-  // Site Documents - dynamic loading from API
+  // Site Documents - dynamic loading from API with sessionStorage cache
   let cachedDocuments = null;
+  const SITE_DOCS_CACHE_KEY = 'gipc_site_docs_v1';
 
   async function fetchSiteDocuments() {
     if (cachedDocuments) return cachedDocuments;
     try {
+      const stored = sessionStorage.getItem(SITE_DOCS_CACHE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          cachedDocuments = parsed;
+          return cachedDocuments;
+        }
+      }
+    } catch {}
+    try {
       const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/documents`, { cache: 'no-cache' });
+      const response = await fetch(`${API_BASE}/documents`);
       if (!response.ok) return [];
       const data = await response.json();
       cachedDocuments = data.items || [];
+      try {
+        sessionStorage.setItem(SITE_DOCS_CACHE_KEY, JSON.stringify(cachedDocuments));
+      } catch {}
       return cachedDocuments;
     } catch (err) {
       console.error('Failed to fetch site documents:', err);
@@ -781,6 +768,21 @@
         }
         if (fromDrawer) closeMenu();
       }
+
+      // Prevent redundant full-page reload when clicking the nav link for the current page
+      const pageLink = closest(el, '.nav-home[data-page-link], .drawer-home[data-page-link], .nav-registry[data-page-link], .drawer-registry[data-page-link], .nav-profile[data-page-link], .drawer-profile[data-page-link]');
+      if (pageLink && !event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+        try {
+          const current = new URL(window.location.href);
+          const target = new URL(pageLink.getAttribute('href'), current);
+          if (target.pathname === current.pathname && target.search === current.search) {
+            event.preventDefault();
+            if (closest(el, '.drawer')) closeMenu();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+        } catch {}
+      }
     }, { capture: true });
 
     // Site Info Modal close bindings
@@ -795,28 +797,80 @@
     } catch {}
   }
 
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261017-smooth1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261017_smooth1';
+
+  function syncHeaderInitialAuthUI() {
+    try {
+      const logged = localStorage.getItem('authLoggedIn') === 'true';
+      const rawUser = localStorage.getItem('currentUser');
+      const user = rawUser ? JSON.parse(rawUser) : null;
+      const loginBtn = document.querySelector('.login-btn');
+      const drawerLoginBtn = document.querySelector('.drawer-login');
+      if (loginBtn) loginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
+      if (drawerLoginBtn) drawerLoginBtn.textContent = logged ? 'გასვლა' : 'შესვლა';
+
+      if (logged && user && (user.firstName || user.lastName || user.code)) {
+        const text = `${user.firstName || ''} ${user.lastName || ''} — ${user.code || ''}`.trim();
+        const authBanner = document.querySelector('.auth-banner');
+        const drawerAuthBanner = document.querySelector('.drawer-auth-banner');
+        if (authBanner) authBanner.textContent = text;
+        if (drawerAuthBanner) drawerAuthBanner.textContent = text;
+      }
+    } catch {}
+  }
+
+  function mountHeaderHtml(html) {
+    if (!document.body || !html) return;
+    if (!document.querySelector('header')) {
+      document.body.insertAdjacentHTML('afterbegin', html);
+    }
+
+    // Home and personal page links keep the same label and destination everywhere.
+    const profilePage = isMyPage();
+    markCurrentPageLinks();
+    syncHeaderInitialAuthUI();
+
+    const dispatchReady = () => {
+      document.dispatchEvent(new CustomEvent('headerReady', { detail: { isProfilePage: profilePage } }));
+    };
+
+    // Notify listeners both immediately and after DOMContentLoaded so deferred page scripts always catch it
+    dispatchReady();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => setTimeout(dispatchReady, 0), { once: true });
+    } else {
+      setTimeout(dispatchReady, 0);
+    }
+
+    // Bind behaviors
+    bindHeader();
+
+    // Populate dynamic documents in info dropdown
+    populateInfoDropdowns();
+
+    // Initialize statements module after header is loaded
+    initStatementsModule();
+  }
+
   async function loadHeader() {
     try {
-      const response = await fetch('../partials/header.html', { cache: 'no-cache' });
+      let cached = null;
+      try {
+        cached = sessionStorage.getItem(HEADER_CACHE_KEY);
+      } catch {}
+      if (cached) {
+        mountHeaderHtml(cached);
+        return;
+      }
+
+      const response = await fetch(HEADER_PARTIAL_URL);
       if (!response.ok) return;
       const html = await response.text();
-      document.body.insertAdjacentHTML('afterbegin', html);
-
-      // Home and personal page links keep the same label and destination everywhere.
-      const profilePage = isMyPage();
-      markCurrentPageLinks();
-
-      // Back-compat: notify others header is ready
-      document.dispatchEvent(new CustomEvent('headerReady', { detail: { isProfilePage: profilePage } }));
-
-      // Bind behaviors
-      bindHeader();
-      
-      // Populate dynamic documents in info dropdown
-      populateInfoDropdowns();
-      
-      // Initialize statements module after header is loaded
-      initStatementsModule();
+      try {
+        sessionStorage.setItem(HEADER_CACHE_KEY, html);
+      } catch {}
+      mountHeaderHtml(html);
     } catch {}
   }
 
@@ -1186,10 +1240,10 @@
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadHeader);
-  } else {
+  if (document.body) {
     loadHeader();
+  } else {
+    document.addEventListener('DOMContentLoaded', loadHeader, { once: true });
   }
 })();
 

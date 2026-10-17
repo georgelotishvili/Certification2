@@ -536,6 +536,29 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(put_cert_tmpl.status_code, 200, put_cert_tmpl.text)
         self.assertEqual(put_cert_tmpl.json()["subject"], "ახალი შაბლონი — {code}")
 
+    def test_schedule_times_persist_via_endpoint_and_one_time_letter_preserves_defaults(self):
+        # 1. Default times returned in GET /admin/planning-templates
+        res = self.client.get("/admin/planning-templates", headers=self.auth)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json().get("schedule_times"), {"morning": "10:00", "evening": "14:00"})
+
+        # 2. PUT /admin/planning-schedule-times updates morning/evening defaults
+        put_res = self.client.put(
+            "/admin/planning-schedule-times",
+            headers=self.auth,
+            data={"morning": "11:15", "evening": "16:45"},
+        )
+        self.assertEqual(put_res.status_code, 200, put_res.text)
+        self.assertEqual(put_res.json().get("schedule_times"), {"morning": "11:15", "evening": "16:45"})
+
+        # 3. Sending an exam or certificate letter with a one-time time does NOT overwrite standard defaults
+        self.saved(self.send(self.form(kind="exam", period="morning", event_time="09:30")))
+        self.saved(self.send(self.form(kind="certificate", period="evening", event_time="17:00")))
+
+        res2 = self.client.get("/admin/planning-templates", headers=self.auth)
+        self.assertEqual(res2.status_code, 200, res2.text)
+        self.assertEqual(res2.json().get("schedule_times"), {"morning": "11:15", "evening": "16:45"})
+
 
 if __name__ == "__main__":
     unittest.main()

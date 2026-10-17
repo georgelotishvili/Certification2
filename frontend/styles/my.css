@@ -961,21 +961,21 @@ main {
   margin-top: 8px;
 }
 .profile-edit-submit {
-  background: #2563eb;
+  background: #1C468C;
   color: #ffffff;
-  border: 1px solid rgba(37, 99, 235, 0.45);
+  border: 1px solid #15356b;
   padding: 12px;
   cursor: pointer;
   width: 100%;
   border-radius: 4px;
   transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+  box-shadow: 0 4px 12px rgba(28, 70, 140, 0.22);
 }
 .profile-edit-submit:hover,
 .profile-edit-submit:focus-visible {
-  background: #1d4ed8;
-  border-color: rgba(29, 78, 216, 0.6);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.45);
+  background: #14356b;
+  border-color: #0f2752;
+  box-shadow: 0 8px 20px rgba(28, 70, 140, 0.32);
   transform: translateY(-1px);
   color: #ffffff;
 }
@@ -1009,21 +1009,22 @@ main {
 }
 
 .profile-edit-send-code {
-  background: #2563eb;
+  background: #1C468C;
   color: #ffffff;
-  border: 1px solid rgba(37, 99, 235, 0.45);
+  border: 1px solid #15356b;
   padding: 10px 12px;
   cursor: pointer;
   border-radius: 4px;
-  transition: background 0.3s ease, box-shadow 0.3s ease;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+  transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  box-shadow: 0 4px 12px rgba(28, 70, 140, 0.22);
   flex-shrink: 0;
   white-space: nowrap;
 }
 .profile-edit-send-code:hover,
 .profile-edit-send-code:focus-visible {
-  background: #1d4ed8;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.45);
+  background: #14356b;
+  border-color: #0f2752;
+  box-shadow: 0 8px 20px rgba(28, 70, 140, 0.32);
 }
 
 @media (max-width: 540px) {

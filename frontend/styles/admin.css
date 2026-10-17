@@ -1679,8 +1679,212 @@ main {
   color: var(--text-strong);
 }
 
-.exam-schedule-time {
-  min-width: 110px;
+.exam-schedule-period-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft, #e2e8f0);
+  background: #f8fafc;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.exam-schedule-period-group.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.exam-schedule-period-check {
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exam-schedule-time-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.exam-schedule-time-trigger:hover,
+.exam-schedule-time-trigger.is-open {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.exam-schedule-clock-icon {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.exam-schedule-time-trigger-text {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.exam-schedule-time-trigger-badge {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.exam-schedule-time-trigger-pill {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.exam-schedule-time-trigger:hover .exam-schedule-time-trigger-pill,
+.exam-schedule-time-trigger.is-open .exam-schedule-time-trigger-pill {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.exam-schedule-time-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: 280px;
+  max-width: calc(100vw - 48px);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.exam-schedule-time-popover[hidden] {
+  display: none !important;
+}
+
+.exam-schedule-time-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.exam-schedule-time-popover-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.exam-schedule-time-popover-close {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.exam-schedule-time-popover-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.exam-schedule-time-popover-meta {
+  font-size: 12px;
+  color: #475569;
+  background: #f8fafc;
+  padding: 5px 8px;
+  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+}
+
+.exam-schedule-time-popover-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.exam-schedule-time,
+.exam-schedule-morning-time,
+.exam-schedule-evening-time {
+  min-width: 118px;
+  height: 34px;
+  padding: 2px 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.exam-schedule-time-popover-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.exam-schedule-time-once-btn,
+.exam-schedule-time-default-btn {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.exam-schedule-time-once-btn {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.exam-schedule-time-once-btn:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+}
+
+.exam-schedule-time-default-btn {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.exam-schedule-time-default-btn:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.exam-schedule-time-default-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .exam-schedule-letter-box {

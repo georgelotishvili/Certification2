@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 from uuid import uuid4
 
@@ -17,7 +18,7 @@ from ..database import get_db
 from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter
 from ..schemas import (
     UserCreate, UserOut, PublicUserOut, PublicPersonPageOut, PublicCertificateOut,
-    UserProfileUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate, CertificateNotifyRequest,
+    UserProfileUpdateRequest, GeorgianNameUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate, CertificateNotifyRequest,
     SendVerificationCodeRequest, SendVerificationCodeResponse, VerifyCodeRequest, VerifyCodeResponse,
     UserCreateWithVerification,
 )
@@ -51,6 +52,30 @@ from ..rate_limiter import (
 
 router = APIRouter()
 CERTIFICATE_UPLOAD_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
+
+_GEORGIAN_NAME_RE = re.compile(r"^[ა-ჰ]+(?:[-\s][ა-ჰ]+)*$")
+GEORGIAN_NAME_ERROR_MSG = (
+    "გთხოვთ, სახელი და გვარი შეიყვანოთ მხოლოდ ქართული ასოებით, ოფიციალური პირადობის დოკუმენტის შესაბამისად"
+)
+
+
+def _is_valid_georgian_name(value: str | None) -> bool:
+    cleaned = re.sub(r"\s+", " ", (value or "").strip())
+    return bool(cleaned and _GEORGIAN_NAME_RE.fullmatch(cleaned))
+
+
+def _validate_georgian_name(first_name: str | None = None, last_name: str | None = None) -> None:
+    if first_name is not None and not _is_valid_georgian_name(first_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=GEORGIAN_NAME_ERROR_MSG,
+        )
+    if last_name is not None and not _is_valid_georgian_name(last_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=GEORGIAN_NAME_ERROR_MSG,
+        )
+
 
 
 def _get_user_from_token(db: Session, authorization: str | None) -> User | None:
@@ -205,10 +230,12 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
     validate_password_strength(password_trimmed)
 
     personal_id_norm = payload.personal_id.strip()
-    first_name_norm = payload.first_name.strip()
-    last_name_norm = payload.last_name.strip()
+    first_name_norm = re.sub(r"\s+", " ", payload.first_name.strip())
+    last_name_norm = re.sub(r"\s+", " ", payload.last_name.strip())
     phone_norm = payload.phone.strip()
     email_norm = payload.email.strip().lower()
+
+    _validate_georgian_name(first_name_norm, last_name_norm)
 
     # Verify the email verification code
     if not email_verification.verify_code(email_norm, payload.verification_code, "register"):
@@ -222,7 +249,6 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
             or_(
                 User.personal_id == personal_id_norm,
                 func.lower(User.email) == email_norm,
-                User.phone == phone_norm,
             )
         )
     )
@@ -265,7 +291,6 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
             conflict = db.scalar(select(User.id).where(or_(
                 User.personal_id == personal_id_norm,
                 func.lower(User.email) == email_norm,
-                User.phone == phone_norm,
             )))
             if conflict is not None:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ეს მონაცემები სისტემაში უკვე რეგისტრირებულია")
@@ -465,8 +490,8 @@ def update_profile(
     user = current_user
 
     # Normalize incoming values
-    first_name = (payload.first_name or "").strip() if payload.first_name is not None else None
-    last_name = (payload.last_name or "").strip() if payload.last_name is not None else None
+    first_name = re.sub(r"\s+", " ", (payload.first_name or "").strip()) if payload.first_name is not None else None
+    last_name = re.sub(r"\s+", " ", (payload.last_name or "").strip()) if payload.last_name is not None else None
     phone = (payload.phone or "").strip() if payload.phone is not None else None
 
     personal_id = (payload.personal_id or "").strip() if payload.personal_id is not None else None
@@ -1182,3 +1207,36 @@ def get_current_user_info(
         exam_stage_permissions=exam_state.get("exam_stage_permissions", {}),
         created_at=user.created_at,
     )
+
+
+@router.patch("/me/georgian-name", response_model=UserOut)
+def update_current_user_georgian_name(
+    payload: GeorgianNameUpdateRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """
+    Allow an authenticated user to fix/update their first_name and last_name
+    to Georgian script (matching their official ID document) without requiring
+    current password.
+    """
+    user = _require_auth(db, authorization)
+
+    first_name = re.sub(r"\s+", " ", (payload.first_name or "").strip())
+    last_name = re.sub(r"\s+", " ", (payload.last_name or "").strip())
+
+    if not first_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="სახელი ცარიელი არ უნდა იყოს")
+    if not last_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="გვარი ცარიელი არ უნდა იყოს")
+
+    _validate_georgian_name(first_name, last_name)
+
+    user.first_name = first_name
+    user.last_name = last_name
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return get_current_user_info(authorization=authorization, db=db)
+
