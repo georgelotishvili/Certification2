@@ -255,8 +255,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  const FOUNDER_ONLY_SECTIONS = new Set(['exam', 'multiApartment', 'multiFunctional']);
+  let verifiedIsFounder = null;
+
   function showSection(name) {
     const activeName = typeof name === 'string' ? name : null;
+    if (activeName && FOUNDER_ONLY_SECTIONS.has(activeName) && !isFounderActor()) {
+      return;
+    }
     Object.entries(DOM.sections).forEach(([key, el]) => {
       if (!el) return;
       el.style.display = activeName && key === activeName ? 'block' : 'none';
@@ -297,8 +303,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function isFounderActor() {
+    if (typeof verifiedIsFounder === 'boolean') return verifiedIsFounder;
     try {
       if (window.Auth?.isFounder?.()) return true;
+      const cur = getCurrentUser();
+      if (cur && (cur.isFounder === true || cur.is_founder === true)) return true;
       return getSavedEmail().toLowerCase() === FOUNDER_EMAIL.toLowerCase();
     } catch {
       return false;
@@ -345,7 +354,13 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { ...getAdminHeaders(), ...getActorHeaders(), 'Cache-Control': 'no-cache' },
         credentials: 'include',
       });
-      if (response.ok) return true;
+      if (response.ok) {
+        const founderHdr = (response.headers?.get?.('X-Is-Founder') || '').toLowerCase();
+        if (founderHdr === 'true' || founderHdr === 'false') {
+          verifiedIsFounder = founderHdr === 'true';
+        }
+        return true;
+      }
       if (response.status === 401) return redirectToHome();
     } catch {}
 
@@ -364,7 +379,16 @@ document.addEventListener('DOMContentLoaded', () => {
     on(DOM.burger, 'click', toggleMenu);
     on(DOM.overlay, 'click', closeMenu);
     on(DOM.drawerClose, 'click', closeMenu);
-    DOM.drawerLinks.forEach((link) => on(link, 'click', closeMenu));
+    DOM.drawerLinks.forEach((link) => {
+      on(link, 'click', (event) => {
+        const targetSection = getNavTarget(link);
+        if (targetSection && FOUNDER_ONLY_SECTIONS.has(targetSection) && !isFounderActor()) {
+          event.preventDefault();
+          return;
+        }
+        closeMenu();
+      });
+    });
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
@@ -422,6 +446,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!targetSection) return;
         event.preventDefault();
         link.blur?.();
+        if (FOUNDER_ONLY_SECTIONS.has(targetSection) && !isFounderActor()) {
+          return;
+        }
         closeMenu();
         closeOtherDropdown();
         closeDrawerOtherSubmenu();
@@ -519,15 +546,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, appFiles: appFilesModule, applicationForm: applicationFormModule });
 
-    examSettings.init();
-    blocksModule.init();
+    if (isFounderActor()) {
+      examSettings.init();
+      blocksModule.init();
+      multiApartmentModule.init();
+      multiFunctionalModule.init();
+    } else {
+      FOUNDER_ONLY_SECTIONS.forEach((secKey) => {
+        const secEl = DOM.sections[secKey];
+        if (secEl) {
+          secEl.style.display = 'none';
+          secEl.innerHTML = '';
+        }
+      });
+    }
     resultsModule.init();
     projectResultsModule.init();
     statementsModule.init();
     certificateModule.init();
     usersModule.init();
-    multiApartmentModule.init();
-    multiFunctionalModule.init();
     guideModule.init();
     regulationsModule.init();
     documentsModule.init();

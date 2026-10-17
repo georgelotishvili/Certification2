@@ -196,7 +196,11 @@ def verify_admin_access(
     db: Session = Depends(get_db),
 ) -> Response:
     _require_admin(db, authorization)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    is_founder = _is_founder_actor(authorization, db)
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"X-Is-Founder": "true" if is_founder else "false"},
+    )
 
 
 @router.get("/exam/settings", response_model=ExamSettingsResponse)
