@@ -1,0 +1,231 @@
+<header>
+  <!-- City silhouette SVG (sky is transparent) -->
+  <img src="../assets/svg/header.svg" alt="" class="header-hero" />
+
+  <!-- Login Modal -->
+  <div class="login-modal" id="loginModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-content" role="document">
+      <button class="modal-close" id="modalClose" aria-label="დახურვა">&times;</button>
+      <h3>ავტორიზაცია / რეგისტრაცია</h3>
+      <div class="modal-buttons">
+        <button class="modal-btn login-option">ავტორიზაცია</button>
+        <button class="modal-btn register-option">რეგისტრაცია</button>
+      </div>
+      <form class="login-form" id="loginForm" novalidate>
+        <div class="field">
+          <input type="email" name="email" placeholder="ელფოსტა" required />
+        </div>
+        <div class="field">
+          <input type="password" name="password" placeholder="პაროლი" required />
+        </div>
+        <div class="forgot-password-link">
+          <a href="#" id="forgotPasswordLink">დაგავიწყდათ პაროლი?</a>
+        </div>
+        <div class="modal-buttons">
+          <button type="submit" class="modal-btn submit">ავტორიზაცია</button>
+        </div>
+      </form>
+
+      <form class="register-form" id="registerForm" novalidate>
+        <!-- Step 1: Basic info -->
+        <div class="register-step" id="registerStep1">
+          <div class="field">
+            <input type="text" name="personalId" inputmode="numeric" maxlength="11" placeholder="პირადი ნომერი" required />
+          </div>
+          <div class="field">
+            <input type="text" name="firstName" placeholder="სახელი (ქართულად, პირადობის მიხედვით)" required />
+          </div>
+          <div class="field">
+            <input type="text" name="lastName" placeholder="გვარი (ქართულად, პირადობის მიხედვით)" required />
+            <small class="register-name-hint">სახელი და გვარი შეიყვანეთ ქართულად, პირადობის დოკუმენტის შესაბამისად</small>
+          </div>
+          <div class="field">
+            <input type="tel" name="phone" placeholder="ტელეფონი" required />
+          </div>
+          <div class="field">
+            <input type="email" name="email" placeholder="ელფოსტა" required />
+          </div>
+          <div class="field">
+            <input type="password" name="password" placeholder="პაროლი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="confirmPassword" placeholder="გაიმეორეთ პაროლი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="button" class="modal-btn submit" id="registerSendCodeBtn">კოდის გაგზავნა</button>
+          </div>
+        </div>
+        <!-- Step 2: Verification code -->
+        <div class="register-step" id="registerStep2" style="display:none;">
+          <p class="verification-info">4-ნიშნა კოდი გაგზავნილია თქვენს ელფოსტაზე</p>
+          <div class="field">
+            <input type="text" name="verificationCode" inputmode="numeric" maxlength="4" placeholder="შეიყვანეთ კოდი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">რეგისტრაცია</button>
+            <button type="button" class="modal-btn back-to-login" id="registerBackBtn">უკან დაბრუნება</button>
+          </div>
+        </div>
+      </form>
+
+      <form class="forgot-password-form" id="forgotPasswordForm" novalidate>
+        <div class="forgot-step" id="forgotStep1">
+          <div class="field">
+            <input type="email" name="email" placeholder="ელფოსტა" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">კოდის გაგზავნა</button>
+            <button type="button" class="modal-btn back-to-login">უკან დაბრუნება</button>
+          </div>
+        </div>
+        <div class="forgot-step" id="forgotStep2" style="display:none;">
+          <p class="verification-info">4-ნიშნა კოდი გაგზავნილია თქვენს ელფოსტაზე</p>
+          <div class="field">
+            <input type="text" name="resetCode" inputmode="numeric" maxlength="4" placeholder="შეიყვანეთ კოდი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="newPassword" placeholder="ახალი პაროლი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="confirmNewPassword" placeholder="გაიმეორეთ ახალი პაროლი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">პაროლის შეცვლა</button>
+            <button type="button" class="modal-btn back-to-login" id="forgotBackBtn">უკან დაბრუნება</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Site Info Modal -->
+  <div class="site-info-modal" id="siteInfoModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="site-info-content" role="document" aria-labelledby="siteInfoTitle">
+      <div class="site-info-head">
+        <h3 id="siteInfoTitle">ინფორმაცია</h3>
+        <div class="site-info-head-actions">
+          <button type="button" class="site-info-download-btn" id="siteInfoDownloadPdfBtn" hidden aria-label="დოკუმენტის ჩამოტვირთვა PDF ფორმატში">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>PDF ჩამოტვირთვა</span>
+          </button>
+          <button class="modal-close site-info-close" aria-label="დახურვა" type="button">&times;</button>
+        </div>
+      </div>
+      <div class="site-info-body" id="siteInfoBody"></div>
+    </div>
+  </div>
+
+  <div class="overlay" aria-hidden="true"></div>
+  <aside id="mobile-drawer" class="drawer" aria-label="მობილური მენიუ">
+    <button class="drawer-close" aria-label="დახურვა" type="button"></button>
+    <div class="drawer-auth-banner" hidden></div>
+    <nav class="drawer-nav">
+      <a href="../pages/index.html" class="drawer-home" data-page-link>მთავარი</a>
+      <a href="../pages/registry.html" class="drawer-registry" data-page-link>რეესტრი</a>
+      <a href="../pages/documents.html" class="drawer-documents" data-page-link>დოკუმენტები</a>
+      <a href="#" class="drawer-statements">განცხადებები</a>
+      <div class="drawer-item drawer-about">
+        <a href="#" class="drawer-about-trigger" aria-haspopup="true" aria-expanded="false">ინფორმაცია</a>
+        <div class="drawer-about-submenu drawer-submenu" role="menu" hidden>
+          <!-- ფიქსირებული პუნქტები -->
+          <button type="button" class="drawer-submenu-item guide">გზამკვლევი</button>
+        </div>
+      </div>
+      <a href="../pages/my.html" class="drawer-profile" data-page-link>ჩემი გვერდი</a>
+    </nav>
+    <button class="drawer-login" data-auth-btn>ავტორიზაცია</button>
+  </aside>
+
+  <div class="nav-bar">
+    <div class="logo">
+      <img src="../assets/svg/logo.svg?v=20261016-1" alt="GIPC" />
+    </div>
+    <div class="auth-banner" hidden></div>
+    <nav class="nav">
+      <a href="../pages/index.html" class="nav-home" data-page-link>მთავარი</a>
+      <a href="../pages/registry.html" class="nav-registry" data-page-link>რეესტრი</a>
+      <a href="../pages/documents.html" class="nav-documents" data-page-link>დოკუმენტები</a>
+      <a href="#" class="nav-statements">განცხადებები</a>
+      <div class="nav-item nav-about">
+        <a href="#" class="about-trigger" aria-haspopup="true" aria-expanded="false">ინფორმაცია</a>
+        <div class="dropdown about-dropdown" role="menu" aria-hidden="true">
+          <!-- ფიქსირებული პუნქტები -->
+          <button type="button" class="dropdown-item guide">გზამკვლევი</button>
+        </div>
+      </div>
+      <a href="../pages/my.html" class="nav-profile" data-page-link>ჩემი გვერდი</a>
+    </nav>
+    <button class="login-btn" data-auth-btn>შესვლა</button>
+    <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </div>
+
+  <!-- Statements Modal -->
+  <div class="results-overlay" id="userStatementsOverlay" aria-hidden="true">
+    <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
+      <div class="results-modal-head">
+        <div class="results-modal-titles">
+          <h2 id="userStatementsTitle">განცხადებები</h2>
+          <div class="results-modal-meta">
+            <span class="meta-item" id="userStatementsMeta"></span>
+          </div>
+        </div>
+        <div class="results-modal-actions">
+          <button type="button" class="modal-close" id="userStatementsClose" aria-label="დახურვა">×</button>
+        </div>
+      </div>
+      <div class="results-modal-body">
+        <form id="userStatementForm" class="statement-compose">
+          <div class="statement-message-field">
+            <div class="statement-field-heading">
+              <label for="userStatementMessage" class="statement-field-label">ახალი განცხადება</label>
+              <span class="statement-required-badge">სავალდებულო</span>
+            </div>
+            <p id="statementMessageHint" class="statement-hint">მოგვწერეთ თქვენი საკითხის შესახებ.</p>
+            <textarea id="userStatementMessage" name="message" placeholder="დაწერეთ განცხადების ტექსტი…" rows="5" aria-describedby="statementMessageHint" required></textarea>
+          </div>
+          <div class="statement-file">
+            <div class="statement-field-heading">
+              <span class="statement-field-label">ფაილის მიმაგრება</span>
+              <span class="statement-optional">არასავალდებულო</span>
+            </div>
+            <div class="statement-file-controls" id="statementFileControls">
+              <button type="button" class="statement-file-choose" id="statementFileChoose" aria-describedby="statementFileHint">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+                ფაილის არჩევა
+              </button>
+              <input type="file" name="attachment" id="statementFileInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.doc,.docx" aria-label="განცხადებაზე მისამაგრებელი ფაილი" aria-describedby="statementFileHint" tabindex="-1" />
+              <input type="text" class="statement-file-display" id="statementFileDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="არჩეული ფაილის სახელი" readonly />
+            </div>
+            <p id="statementFileHint" class="statement-hint">ZIP, RAR, PDF, JPG, JPEG, DOC, DOCX · მაქსიმუმ 100 მბ</p>
+          </div>
+          <div class="statement-app-form">
+            <div class="statement-app-form-info">
+              <span class="statement-app-form-label">განაცხადის ფორმა</span>
+              <p class="statement-hint">საჭიროების შემთხვევაში ჩამოტვირთეთ და შეავსეთ.</p>
+            </div>
+            <button type="button" class="statement-file-choose statement-app-form-download" id="appFormDownloadBtn" aria-label="განაცხადის ფორმის ჩამოტვირთვა" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              ჩამოტვირთვა
+            </button>
+          </div>
+          <div class="compose-actions">
+            <p class="statement-hint">გაგზავნილი განცხადება შეინახება ისტორიაში.</p>
+            <button type="submit" class="submit">განცხადების გაგზავნა</button>
+          </div>
+        </form>
+        <section class="statement-history" aria-labelledby="statementHistoryTitle">
+          <div class="statement-history-head">
+            <h3 id="statementHistoryTitle">გაგზავნილი განცხადებები</h3>
+            <span class="statement-history-count" id="userStatementsCount" aria-live="polite">0</span>
+          </div>
+          <div id="userStatementsList" class="statements-list" role="list"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</header>
+

@@ -1,24 +1,60 @@
 {
   "release": "admin-release-20261016-01",
-  "created_at": "2026-10-16T18:43:08.881293+00:00",
+  "created_at": "2026-10-17T22:36:35.002658+00:00",
   "host": "gipcadmin@148.251.167.229",
   "files": [
     {
-      "path": "frontend/pages/admin.html",
-      "before_sha256": "b33b1b3224a667290ede3109c3573984f2e72c913805d62b15cd0fcb18d29687",
-      "after_sha256": "f21af4f3091063baac33c0f161dff027a0a793895bc6b7a26a662372c75b1afa",
+      "path": "frontend/pages/documents.html",
+      "before_sha256": "058957dede342b93152acd982fe7444b40bfee22eb9c8d6773505540db73bd32",
+      "after_sha256": "0047f9b0f5d316d0a31f505277babb86126bbed53623fb3f463cc0575c2267d7",
       "existed_before": true
     },
     {
-      "path": "frontend/scripts/admin/app-files.js",
-      "before_sha256": "3543eca48e00e02032a9cb48b0b0ccfe0718a842acf98efdaca921e7f62f99fa",
-      "after_sha256": "28414faff3244ad45e84eecdf73d96d0004e87b94f821493ad5f29e1c480bed0",
+      "path": "frontend/pages/index.html",
+      "before_sha256": "f9d3cdd0c4a07bee79aeeff2afcce7029688c825676c52eacf4891a24a98fe5c",
+      "after_sha256": "3107daa74d04b138d23bf1b362cfed9f19d7af6c0df66b4179aafcc5d6dfe304",
       "existed_before": true
     },
     {
-      "path": "frontend/styles/admin.css",
-      "before_sha256": "edbd43e2f8033c03cba3a8fa07c96ee58b2ee33d4ba8959610e89c3ee3e4838f",
-      "after_sha256": "cddeee7eceb7b5f5d03826212cac34a2dae5577a99aec8b67a4c097bfedf970f",
+      "path": "frontend/pages/my.html",
+      "before_sha256": "c604a3658a6fadafec219b408d99dc2129c3cbad34f453575b0482ac0437774e",
+      "after_sha256": "593a979f04bb320c9b1224982865146ed3cf8c33592581fad7dfc0d4146636e4",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/pages/registry.html",
+      "before_sha256": "55f1141cb4d908685a8aa91ba1679abfab32fded175fe6e895a02d4dbb4ef16c",
+      "after_sha256": "d332fcaa1d88c1b58ae3b03f328fe9ae089ecccfb088a366bc0e96ad2f6473ed",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/partials/header.html",
+      "before_sha256": "a40be99e67a089c09a734ad73b395a6ef108e50b4a7b7f71f062f289455fa185",
+      "after_sha256": "a602fe8449fcc23ab84c7112d6324197e2cc40a9e2d04663aa5054e3ac75135c",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/header.js",
+      "before_sha256": "06639f9156b9f73eaa45efbc3af4766e1f710c3e6ff2bc82054769b870b37583",
+      "after_sha256": "310b21a409671ccdc97ffeafa217ed0fead64abe73a6b06ec881f2f244f578ff",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/my.js",
+      "before_sha256": "cceeda9594277c04d54ad3acadbd7dc212634fff695512e2dd78655f4b51c087",
+      "after_sha256": "16f664bc78f7014712bc0bf55cb47a89a9d9c38c307003f3c3a8da97ebdb25c5",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/script.js",
+      "before_sha256": "6583f7fa88655018672f54279cb4b6e925aff5491b84d46ac1335898ba2cff1b",
+      "after_sha256": "dcf8e58a630bfe6a4549686ebbf02cf9ff828aa3f497f11bda8a3e03679db392",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/styles/header.css",
+      "before_sha256": "402b2ce2919c176e6e42a2c716acf0e6b2176da79da6508efe6c9892cd7f7b27",
+      "after_sha256": "9e262616994e9549b26ff2dbc9b9301906a92e999538df9a8d35501971c7290c",
       "existed_before": true
     }
   ]

@@ -1679,8 +1679,212 @@ main {
   color: var(--text-strong);
 }
 
-.exam-schedule-time {
-  min-width: 110px;
+.exam-schedule-period-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft, #e2e8f0);
+  background: #f8fafc;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.exam-schedule-period-group.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.exam-schedule-period-check {
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exam-schedule-time-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.exam-schedule-time-trigger:hover,
+.exam-schedule-time-trigger.is-open {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.exam-schedule-clock-icon {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.exam-schedule-time-trigger-text {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.exam-schedule-time-trigger-badge {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.exam-schedule-time-trigger-pill {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.exam-schedule-time-trigger:hover .exam-schedule-time-trigger-pill,
+.exam-schedule-time-trigger.is-open .exam-schedule-time-trigger-pill {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.exam-schedule-time-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: 280px;
+  max-width: calc(100vw - 48px);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.exam-schedule-time-popover[hidden] {
+  display: none !important;
+}
+
+.exam-schedule-time-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.exam-schedule-time-popover-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.exam-schedule-time-popover-close {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.exam-schedule-time-popover-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.exam-schedule-time-popover-meta {
+  font-size: 12px;
+  color: #475569;
+  background: #f8fafc;
+  padding: 5px 8px;
+  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+}
+
+.exam-schedule-time-popover-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.exam-schedule-time,
+.exam-schedule-morning-time,
+.exam-schedule-evening-time {
+  min-width: 118px;
+  height: 34px;
+  padding: 2px 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.exam-schedule-time-popover-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.exam-schedule-time-once-btn,
+.exam-schedule-time-default-btn {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.exam-schedule-time-once-btn {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.exam-schedule-time-once-btn:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+}
+
+.exam-schedule-time-default-btn {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.exam-schedule-time-default-btn:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.exam-schedule-time-default-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .exam-schedule-letter-box {
@@ -3952,6 +4156,49 @@ body.modal-open {
   white-space: nowrap;
 }
 
+.admin-result-board-value.is-green,
+.admin-result-board-row--single.is-green {
+  color: #1f8a4d;
+}
+
+.admin-result-board-value.is-yellow,
+.admin-result-board-row--single.is-yellow {
+  color: #b45309;
+}
+
+.admin-result-board-value.is-red,
+.admin-result-board-row--single.is-red {
+  color: #c73631;
+}
+
+.admin-result-status-banner {
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin-bottom: 12px;
+  border: 1.5px solid transparent;
+}
+
+.admin-result-status-banner.is-green {
+  background: #edf7ee;
+  border-color: #2e7d32;
+  color: #1b5e20;
+}
+
+.admin-result-status-banner.is-yellow {
+  background: #fffbeb;
+  border-color: #d97706;
+  color: #92400e;
+}
+
+.admin-result-status-banner.is-red {
+  background: #fef2f2;
+  border-color: #c73631;
+  color: #991b1b;
+}
+
 @media (max-width: 920px) {
   .result-summary-boards {
     grid-template-columns: 1fr;
@@ -4245,6 +4492,12 @@ body.modal-open {
   background: var(--surface-muted);
   color: var(--text-muted);
   border: 1px solid var(--border-soft);
+}
+
+.result-tag.warning {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid rgba(217, 119, 6, 0.35);
 }
 
 .danger-btn {
@@ -5100,6 +5353,10 @@ body.modal-open {
 }
 
 /* APP Files section */
+.app-file-card {
+  display: flex;
+  flex-direction: column;
+}
 .app-file-head {
   grid-template-columns: minmax(0, 1fr) auto;
 }
@@ -5109,17 +5366,118 @@ body.modal-open {
   align-items: center;
 }
 .app-file-download {
-  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 132px;
+  height: 36px;
+  padding: 0 16px;
   font-size: 13px;
-  background: transparent;
-  border: 2px solid var(--accent);
+  background: #ffffff;
+  border: 1.5px solid var(--accent);
+  border-radius: 6px;
   color: var(--accent);
   font-weight: 600;
   cursor: pointer;
-  transition: all 200ms ease;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
-.app-file-download:hover {
-  background: #f0f4ff;
+.app-file-download:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1e40af;
+}
+.app-file-download:disabled {
+  cursor: not-allowed;
+}
+.app-file-card.is-downloading .app-file-download {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e40af;
+  font-weight: 700;
+}
+.app-file-card.is-download-complete .app-file-download {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #047857;
+  font-weight: 700;
+}
+.app-file-card .head-delete:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.app-file-btn-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(30, 64, 175, 0.25);
+  border-top-color: #1e40af;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  animation: app-file-spin 0.75s linear infinite;
+}
+@keyframes app-file-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.app-file-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 12px;
+  background: #f8fafc;
+  border-top: 1px solid var(--border-soft);
+}
+.app-file-progress[hidden] {
+  display: none !important;
+}
+.app-file-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+}
+.app-file-progress-status {
+  color: #1e40af;
+  font-weight: 600;
+}
+.app-file-card.is-download-complete .app-file-progress-status {
+  color: #047857;
+}
+.app-file-progress-stats {
+  color: #334155;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.app-file-progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.app-file-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 999px;
+  transition: width 0.12s linear, background-color 0.2s ease;
+}
+.app-file-card.is-download-complete .app-file-progress-fill {
+  background: linear-gradient(90deg, #059669 0%, #10b981 100%);
+}
+.app-file-progress-fill.is-indeterminate {
+  animation: app-file-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes app-file-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
 }
 
 /* Regulations section */
@@ -6496,3 +6854,68 @@ body.modal-open {
     order: 1;
   }
 }
+
+/* Candidate exam outcome badge & pending notification button highlights */
+.user-exam-outcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.user-exam-outcome-badge[hidden] {
+  display: none !important;
+}
+
+.user-exam-outcome-badge.is-pass-bc {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #22c55e;
+}
+
+.user-exam-outcome-badge.is-pass-a {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.user-exam-outcome-badge.is-fail {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
+}
+
+.btn-certificate-handover.has-pending-exam-pass {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border-color: #15803d !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.28);
+  font-weight: 800;
+}
+
+.btn-certificate-handover.has-pending-exam-pass:hover {
+  background: #15803d !important;
+  border-color: #166534 !important;
+}
+
+.btn-exam-fail-letter.has-pending-exam-fail {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28);
+  font-weight: 800;
+}
+
+.btn-exam-fail-letter.has-pending-exam-fail:hover {
+  background: #b91c1c !important;
+  border-color: #991b1b !important;
+}
+

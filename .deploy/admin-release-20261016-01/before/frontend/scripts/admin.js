@@ -93,6 +93,16 @@ document.addEventListener('DOMContentLoaded', () => {
     filterCertificateHandover: document.getElementById('filterCertificateHandover'),
     examScheduleDate: document.getElementById('examScheduleDate'),
     clearExamScheduleDate: document.getElementById('clearExamScheduleDate'),
+    filterExamPassed: document.getElementById('filterExamPassed'),
+    filterExamFailed: document.getElementById('filterExamFailed'),
+    filterPendingPassLetter: document.getElementById('filterPendingPassLetter'),
+    filterPendingPassLetterChip: document.getElementById('filterPendingPassLetterChip'),
+    filterPendingPassLetterBadge: document.getElementById('filterPendingPassLetterBadge'),
+    filterPendingFailLetter: document.getElementById('filterPendingFailLetter'),
+    filterPendingFailLetterChip: document.getElementById('filterPendingFailLetterChip'),
+    filterPendingFailLetterBadge: document.getElementById('filterPendingFailLetterBadge'),
+    examResultDate: document.getElementById('examResultDate'),
+    clearExamResultDate: document.getElementById('clearExamResultDate'),
     candidateResultsOverlay: document.getElementById('candidateResultsOverlay'),
     candidateResultsList: document.getElementById('candidateResultsList'),
     candidateResultsFullName: document.getElementById('candidateResultsFullName'),
@@ -143,8 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
     resultDetailDuration: document.getElementById('resultDetailDuration'),
     resultDetailScore: document.getElementById('resultDetailScore'),
     resultBlockStats: document.getElementById('resultBlockStats'),
+    resultDetailStatusBanner: document.getElementById('resultDetailStatusBanner'),
     resultDetailSummary: document.getElementById('resultDetailSummary'),
     resultQuestionList: document.getElementById('resultQuestionList'),
+    resultDetailDownloadShort: document.getElementById('resultDetailDownloadShort'),
     resultDetailDownload: document.getElementById('resultDetailDownload'),
     resultDetailMedia: document.getElementById('resultDetailMedia'),
     resultDetailScreenMedia: document.getElementById('resultDetailScreenMedia'),
@@ -168,8 +180,10 @@ document.addEventListener('DOMContentLoaded', () => {
     projectDetailFinishedAt: document.getElementById('projectDetailFinishedAt'),
     projectDetailDuration: document.getElementById('projectDetailDuration'),
     projectDetailScore: document.getElementById('projectDetailScore'),
+    projectDetailStatusBanner: document.getElementById('projectDetailStatusBanner'),
     projectDetailSummary: document.getElementById('projectDetailSummary'),
     projectAnswerList: document.getElementById('projectAnswerList'),
+    projectDetailDownloadShort: document.getElementById('projectDetailDownloadShort'),
     projectDetailDownload: document.getElementById('projectDetailDownload'),
     projectDetailClose: document.getElementById('projectDetailClose'),
     userEditOverlay: document.getElementById('userEditOverlay'),
@@ -258,6 +272,11 @@ document.addEventListener('DOMContentLoaded', () => {
         link.removeAttribute('aria-current');
       }
     });
+
+    const otherChildTargets = new Set(['guide', 'regulations', 'applicationForm']);
+    const isOtherChildActive = !!activeName && otherChildTargets.has(activeName);
+    document.querySelector('.other-trigger')?.classList.toggle('active', isOtherChildActive);
+    document.querySelector('.drawer-other-trigger')?.classList.toggle('active', isOtherChildActive);
   }
 
   function getCurrentUser() {
@@ -360,6 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
     on(DOM.drawerLoginBtn, 'click', goHome);
 
     // "სხვადასხვა" dropdown handling
+    const navOther = document.querySelector('.nav-other');
     const otherTrigger = document.querySelector('.other-trigger');
     const otherDropdown = document.querySelector('.other-dropdown');
     const drawerOtherTrigger = document.querySelector('.drawer-other-trigger');
@@ -367,11 +387,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeOtherDropdown() {
       otherDropdown?.classList.remove('show');
+      navOther?.classList.remove('open');
+      otherTrigger?.setAttribute('aria-expanded', 'false');
     }
     function toggleOtherDropdown(e) {
       e?.preventDefault();
       e?.stopPropagation();
-      otherDropdown?.classList.toggle('show');
+      const willOpen = !otherDropdown?.classList.contains('show');
+      otherDropdown?.classList.toggle('show', willOpen);
+      navOther?.classList.toggle('open', willOpen);
+      otherTrigger?.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      otherTrigger?.blur?.();
     }
     function closeDrawerOtherSubmenu() {
       if (drawerOtherSubmenu) drawerOtherSubmenu.hidden = true;
@@ -395,6 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetSection = getNavTarget(link);
         if (!targetSection) return;
         event.preventDefault();
+        link.blur?.();
         closeMenu();
         closeOtherDropdown();
         closeDrawerOtherSubmenu();

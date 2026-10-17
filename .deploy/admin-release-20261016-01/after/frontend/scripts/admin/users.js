@@ -46,6 +46,8 @@
     let paginatedList = false;
     let globalUnseenUsers = null;
     let globalPendingUsers = null;
+    let globalPendingPassUsers = null;
+    let globalPendingFailUsers = null;
     let searchTimer = null;
     let renderController = null;
     let renderInFlight = false;
@@ -186,6 +188,23 @@
       syncResetFiltersButton();
     }
 
+    function hasExamResultFilter() {
+      return !!(
+        DOM.examResultDate?.value
+        || DOM.filterExamPassed?.checked
+        || DOM.filterExamFailed?.checked
+        || DOM.filterPendingPassLetter?.checked
+        || DOM.filterPendingFailLetter?.checked
+      );
+    }
+
+    function syncExamResultFilterControls() {
+      if (DOM.clearExamResultDate) {
+        DOM.clearExamResultDate.disabled = !DOM.examResultDate?.value;
+      }
+      syncResetFiltersButton();
+    }
+
     function hasAnyActiveUsersFilter() {
       return !!(
         String(DOM.usersSearch?.value || '').trim()
@@ -200,6 +219,7 @@
         || DOM.filterPendingStatements?.checked
         || selectedStatementsDate()
         || hasExamScheduleFilter()
+        || hasExamResultFilter()
       );
     }
 
@@ -224,8 +244,14 @@
       if (DOM.filterExamEvening) DOM.filterExamEvening.checked = false;
       if (DOM.filterCertificateHandover) DOM.filterCertificateHandover.checked = false;
       if (DOM.examScheduleDate) DOM.examScheduleDate.value = '';
+      if (DOM.filterExamPassed) DOM.filterExamPassed.checked = false;
+      if (DOM.filterExamFailed) DOM.filterExamFailed.checked = false;
+      if (DOM.filterPendingPassLetter) DOM.filterPendingPassLetter.checked = false;
+      if (DOM.filterPendingFailLetter) DOM.filterPendingFailLetter.checked = false;
+      if (DOM.examResultDate) DOM.examResultDate.value = '';
       syncStatementFilterControls();
       syncExamScheduleFilterControls();
+      syncExamResultFilterControls();
       syncResetFiltersButton();
       return render();
     }
@@ -240,6 +266,25 @@
         const m = Math.max(0, Number(pendingUsersCount) || 0);
         DOM.filterPendingStatementsBadge.textContent = String(m);
         DOM.filterPendingStatementsBadge.hidden = m === 0;
+      }
+    }
+
+    function updateExamOutcomeFilterBadges(pendingPassCount, pendingFailCount) {
+      const passN = Math.max(0, Number(pendingPassCount) || 0);
+      const failN = Math.max(0, Number(pendingFailCount) || 0);
+      if (DOM.filterPendingPassLetterBadge) {
+        DOM.filterPendingPassLetterBadge.textContent = String(passN);
+        DOM.filterPendingPassLetterBadge.hidden = passN === 0;
+      }
+      if (DOM.filterPendingPassLetterChip) {
+        DOM.filterPendingPassLetterChip.classList.toggle('has-pending-pass-alert', passN > 0);
+      }
+      if (DOM.filterPendingFailLetterBadge) {
+        DOM.filterPendingFailLetterBadge.textContent = String(failN);
+        DOM.filterPendingFailLetterBadge.hidden = failN === 0;
+      }
+      if (DOM.filterPendingFailLetterChip) {
+        DOM.filterPendingFailLetterChip.classList.toggle('has-pending-fail-alert', failN > 0);
       }
     }
 
@@ -321,6 +366,11 @@
       if (DOM.filterExamEvening?.checked) params.set('exam_evening', 'true');
       if (DOM.filterCertificateHandover?.checked) params.set('certificate_handover', 'true');
       if (DOM.examScheduleDate?.value) params.set('exam_date', DOM.examScheduleDate.value);
+      if (DOM.filterExamPassed?.checked) params.set('exam_passed', 'true');
+      if (DOM.filterExamFailed?.checked) params.set('exam_failed', 'true');
+      if (DOM.filterPendingPassLetter?.checked) params.set('pending_pass_letter', 'true');
+      if (DOM.filterPendingFailLetter?.checked) params.set('pending_fail_letter', 'true');
+      if (DOM.examResultDate?.value) params.set('exam_result_date', DOM.examResultDate.value);
       params.set('sort', DOM.usersSort?.value || 'date_desc');
       const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, {
         headers: { ...getAdminHeaders(), ...getActorHeaders() },
@@ -377,8 +427,15 @@
         if (data.global_pending_users != null) {
           globalPendingUsers = data.global_pending_users;
         }
+        if (data.global_pending_pass_users != null) {
+          globalPendingPassUsers = data.global_pending_pass_users;
+        }
+        if (data.global_pending_fail_users != null) {
+          globalPendingFailUsers = data.global_pending_fail_users;
+        }
         updateNavBadge(globalUnseenUsers > 0);
         updateStatementFilterBadges(globalUnseenUsers, globalPendingUsers);
+        updateExamOutcomeFilterBadges(globalPendingPassUsers, globalPendingFailUsers);
       }
       const pages = Math.max(1, Math.ceil(totalUsers / PAGE_SIZE));
       if (pagination.container) pagination.container.hidden = !paginatedList;
@@ -425,7 +482,7 @@
           }
           return;
         }
-        const dateMembershipChanged = (selectedStatementsDate() || hasExamScheduleFilter()) && (
+        const dateMembershipChanged = (selectedStatementsDate() || hasExamScheduleFilter() || hasExamResultFilter()) && (
           items.length !== cachedItems.length ||
           items.some((user, index) => String(user.id) !== String(cachedItems[index]?.id))
         );
@@ -458,6 +515,64 @@
       on(document, 'visibilitychange', () => {
         if (!document.hidden) refreshLiveUserStates({ force: true });
       });
+      on(window, 'admin:examResultsChanged', () => {
+        schedulesStateVersion += 1;
+        void render({ preserveExisting: true, keepPage: true });
+      });
+    }
+
+    function examOutcomeBadgeMeta(examOutcome) {
+      if (!examOutcome || !examOutcome.unacknowledged) return null;
+      if (examOutcome.outcome === 'pass_bc') {
+        return {
+          cls: 'is-pass-bc',
+          label: '✓ ჩააბარა (B/C)',
+          title: 'გამოცდა ჩაბარებულია (B/C კატეგორია) — სერტიფიკატის გადაცემის შეტყობინება გასაგზავნია',
+        };
+      }
+      if (examOutcome.outcome === 'pass_a') {
+        return {
+          cls: 'is-pass-a',
+          label: '✓ ჩააბარა (A)',
+          title: 'გამოცდა ჩაბარებულია (A კატეგორია) — სერტიფიკატის გადაცემის შეტყობინება გასაგზავნია',
+        };
+      }
+      if (examOutcome.outcome === 'fail') {
+        return {
+          cls: 'is-fail',
+          label: '✕ ჩაიჭრა',
+          title: 'გამოცდა ვერ ჩააბარა — ჩაჭრის შეტყობინება გასაგზავნია',
+        };
+      }
+      return null;
+    }
+
+    function syncExamOutcomeUI(card, user) {
+      if (!card || !user) return;
+      const meta = examOutcomeBadgeMeta(user.exam_outcome);
+      const badge = card.querySelector('.user-exam-outcome-badge');
+      if (badge) {
+        badge.classList.remove('is-pass-bc', 'is-pass-a', 'is-fail');
+        if (meta) {
+          badge.textContent = meta.label;
+          badge.title = meta.title;
+          badge.classList.add(meta.cls);
+          badge.hidden = false;
+        } else {
+          badge.textContent = '';
+          badge.removeAttribute('title');
+          badge.hidden = true;
+        }
+      }
+      const isPendingPass = Boolean(
+        user.exam_outcome?.unacknowledged &&
+          (user.exam_outcome.outcome === 'pass_bc' || user.exam_outcome.outcome === 'pass_a')
+      );
+      const isPendingFail = Boolean(
+        user.exam_outcome?.unacknowledged && user.exam_outcome.outcome === 'fail'
+      );
+      card.querySelector('.btn-certificate-handover')?.classList.toggle('has-pending-exam-pass', isPendingPass);
+      card.querySelector('.btn-exam-fail-letter')?.classList.toggle('has-pending-exam-fail', isPendingFail);
     }
 
     function certificateDotMeta(certificateData) {
@@ -509,11 +624,12 @@
       const safeEmail = escapeHtml(user.email || '');
       const safeRegistered = escapeHtml(formatDateTime(user.created_at));
       const dotMeta = certificateDotMeta(user.certificate || user.certificate_info);
+      const outcomeMeta = examOutcomeBadgeMeta(user.exam_outcome);
       
       return `
         <div class="block-tile block-card${user.has_unseen_statements ? ' has-new-statements' : (user.has_pending_statements ? ' has-pending-statements' : '')}" data-id="${safeId}">
           <div class="block-head user-block-head">
-            <div class="user-name"><span class="user-cert-dot${dotMeta ? ` ${dotMeta.cls}` : ''}"${dotMeta ? ` title="${dotMeta.title}"` : ' hidden'}></span><span class="user-name-text">${safeFullName}</span></div>
+            <div class="user-name"><span class="user-cert-dot${dotMeta ? ` ${dotMeta.cls}` : ''}"${dotMeta ? ` title="${dotMeta.title}"` : ' hidden'}></span><span class="user-name-text">${safeFullName}</span><span class="user-exam-outcome-badge${outcomeMeta ? ` ${outcomeMeta.cls}` : ''}"${outcomeMeta ? ` title="${escapeHtml(outcomeMeta.title)}"` : ' hidden'}>${outcomeMeta ? escapeHtml(outcomeMeta.label) : ''}</span></div>
             <div class="user-controls">
               <label class="user-checkbox-label user-admin-check-label" title="${founderRow ? 'მუდმივი ადმინი' : 'ადმინი'}">
                 <input type="checkbox" class="chk-admin" ${checked} ${disabled} />
@@ -947,6 +1063,7 @@
       const deletePhoto = card.querySelector('.photo-delete-btn');
       if (deletePhoto) deletePhoto.style.display = user.photo_filename ? 'inline-flex' : 'none';
       updateUserCardColor(user.id, user.certificate || user.certificate_info, false);
+      syncExamOutcomeUI(card, user);
     }
 
     function normalizeUserValue(value) {
@@ -1228,6 +1345,48 @@
         return render();
       });
       syncExamScheduleFilterControls();
+      on(DOM.filterExamPassed, 'change', () => {
+        if (DOM.filterExamPassed?.checked) {
+          if (DOM.filterPendingPassLetter) DOM.filterPendingPassLetter.checked = false;
+          if (DOM.filterPendingFailLetter) DOM.filterPendingFailLetter.checked = false;
+        }
+        syncExamResultFilterControls();
+        return render();
+      });
+      on(DOM.filterExamFailed, 'change', () => {
+        if (DOM.filterExamFailed?.checked) {
+          if (DOM.filterPendingPassLetter) DOM.filterPendingPassLetter.checked = false;
+          if (DOM.filterPendingFailLetter) DOM.filterPendingFailLetter.checked = false;
+        }
+        syncExamResultFilterControls();
+        return render();
+      });
+      on(DOM.filterPendingPassLetter, 'change', () => {
+        if (DOM.filterPendingPassLetter?.checked) {
+          if (DOM.filterExamPassed) DOM.filterExamPassed.checked = false;
+          if (DOM.filterExamFailed) DOM.filterExamFailed.checked = false;
+        }
+        syncExamResultFilterControls();
+        return render();
+      });
+      on(DOM.filterPendingFailLetter, 'change', () => {
+        if (DOM.filterPendingFailLetter?.checked) {
+          if (DOM.filterExamPassed) DOM.filterExamPassed.checked = false;
+          if (DOM.filterExamFailed) DOM.filterExamFailed.checked = false;
+        }
+        syncExamResultFilterControls();
+        return render();
+      });
+      on(DOM.examResultDate, 'change', () => {
+        syncExamResultFilterControls();
+        return render();
+      });
+      on(DOM.clearExamResultDate, 'click', () => {
+        if (DOM.examResultDate) DOM.examResultDate.value = '';
+        syncExamResultFilterControls();
+        return render();
+      });
+      syncExamResultFilterControls();
       on(DOM.filterArchitects, 'change', () => {
         // Ensure only one certificate filter is active at a time
         if (DOM.filterArchitects?.checked) {
@@ -1375,10 +1534,16 @@
         if (statementVersion !== statementsStateVersion || requestVersion !== usersRenderVersion) return;
         if (data?.unseen_users != null) globalUnseenUsers = Number(data.unseen_users) || 0;
         if (data?.pending_users != null) globalPendingUsers = Number(data.pending_users) || 0;
+        if (data?.pending_pass_users != null) globalPendingPassUsers = Number(data.pending_pass_users) || 0;
+        if (data?.pending_fail_users != null) globalPendingFailUsers = Number(data.pending_fail_users) || 0;
         updateNavBadge(!!data?.has_unseen);
         updateStatementFilterBadges(
           globalUnseenUsers ?? (data?.has_unseen ? 1 : 0),
           globalPendingUsers ?? 0
+        );
+        updateExamOutcomeFilterBadges(
+          globalPendingPassUsers ?? 0,
+          globalPendingFailUsers ?? 0
         );
       } catch {}
     }

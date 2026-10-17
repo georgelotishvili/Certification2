@@ -36,6 +36,38 @@
     const form = DOM.certificateForm;
     const formSubmitBtn = DOM.certificateFormSubmit;
     const validUntilDisplayNode = DOM.certificateFormValidUntilDisplay;
+    const notifyEditor = DOM.certificateFormNotifyEditor || overlay?.querySelector('#certificateFormNotifyEditor');
+    const notifyEditBtn = DOM.certificateFormNotifyEditBtn || overlay?.querySelector('#certificateFormNotifyEditBtn');
+    const notifyResetBtn = DOM.certificateFormNotifyReset || overlay?.querySelector('#certificateFormNotifyReset');
+    const notifySaveTemplateBtn = DOM.certificateFormNotifySaveTemplate || overlay?.querySelector('#certificateFormNotifySaveTemplate');
+    const notifySubjectInput = DOM.certificateFormNotifySubject || overlay?.querySelector('#certificateFormNotifySubject');
+    const notifyBodyInput = DOM.certificateFormNotifyBody || overlay?.querySelector('#certificateFormNotifyBody');
+
+    const DEFAULT_CERT_ISSUED_SUBJECT = 'სერტიფიკატის გაცემა და საჯარო რეესტრში ასახვა';
+    const DEFAULT_CERT_ISSUED_BODY = [
+      'ბატონო/ქალბატონო {name},',
+      'გაცნობებთ, რომ თქვენზე გაიცა შესაბამისობის სერტიფიკატი და მონაცემები აისახა ინსტიტუტის სერტიფიცირებულ პირთა საჯარო რეესტრში.',
+      '',
+      '• სერტიფიკატის ნომერი: {code}',
+      '• სერტიფიცირების კატეგორია: {qualification}',
+      '• გაცემის თარიღი: {issue_date}',
+      '• მოქმედების ბოლო თარიღი: {valid_until}',
+      '• საჯარო რეესტრის ბმული: https://gipc.org.ge',
+      '',
+      'შეტყობინებას თან ერთვის ელექტრონული სერტიფიკატი (PDF). სერტიფიკატისა და სერტიფიცირების სტატუსის გამოყენება დასაშვებია მხოლოდ მინიჭებული კატეგორიის, მოქმედების ვადისა და სასერტიფიკაციო ხელშეკრულებით განსაზღვრული პირობების ფარგლებში (GIPC-PRO-006).',
+      '',
+      'პატივისცემით,',
+      'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    ].join('\n');
+
+    let certIssuedTemplate = {
+      subject: DEFAULT_CERT_ISSUED_SUBJECT,
+      body: DEFAULT_CERT_ISSUED_BODY,
+      updated_at: null,
+    };
+    let certIssuedTemplateLoaded = false;
+    let notifyEditorOpen = false;
+    let notifyManuallyEdited = false;
 
     const formFields = {
       uniqueCode: DOM.certificateFormCode,
@@ -44,6 +76,7 @@
       issueDate: DOM.certificateFormIssueDate,
       validityTerm: DOM.certificateFormValidityTerm,
       validUntil: DOM.certificateFormValidUntil,
+      sendNotification: DOM.certificateFormSendNotification || overlay?.querySelector('#certificateFormSendNotification'),
     };
 
     const formSummaryNodes = {
@@ -1025,6 +1058,177 @@
       if (formSummaryNodes.code) formSummaryNodes.code.textContent = code || '—';
     }
 
+    function formatDashDate(raw) {
+      if (!raw) return '—';
+      const parsed = parseDate(raw);
+      if (!parsed) return String(raw).replace(/\//g, '-');
+      const d = String(parsed.getDate()).padStart(2, '0');
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const y = parsed.getFullYear();
+      return `${d}-${m}-${y}`;
+    }
+
+    function buildCurrentNotifyTokens() {
+      const fullName = buildFullName(activeUser) || activeData?.fullName || '—';
+      const personalId = String(activeUser?.personal_id || '—').trim();
+      const code = (formFields.uniqueCode?.value || activeData?.uniqueCode || activeUser?.code || '—').trim();
+      const levelVal = formFields.level?.value || activeData?.level?.key || 'architect';
+      const qualLabel = normalizeLevel(levelVal).label || 'შენობა-ნაგებობის არქიტექტორი';
+      const statusVal = formFields.status?.value || activeData?.status?.key || 'active';
+      const statusMap = { active: 'მოქმედი', suspended: 'შეჩერებული', expired: 'ვადაგასული' };
+      const statusLabel = statusMap[statusVal] || 'მოქმედი';
+      const issueDateStr = formatDashDate(formFields.issueDate?.value || activeData?.issueDate);
+      const validUntilStr = formatDashDate(formFields.validUntil?.value || validUntilDisplayNode?.textContent || activeData?.validUntil);
+      return {
+        name: fullName,
+        personal_id: personalId,
+        code,
+        qualification: qualLabel,
+        status: statusLabel,
+        issue_date: issueDateStr,
+        valid_until: validUntilStr,
+        date: issueDateStr,
+      };
+    }
+
+    function applyNotifyTokens(templateStr, tokens) {
+      let out = String(templateStr || '');
+      Object.entries(tokens).forEach(([k, v]) => {
+        out = out.split(`{${k}}`).join(v ?? '—');
+      });
+      return out;
+    }
+
+    function updateNotifyEditorVisibility() {
+      if (notifyEditor) {
+        notifyEditor.classList.toggle('hidden', !notifyEditorOpen);
+      }
+      if (notifyEditBtn) {
+        notifyEditBtn.textContent = notifyEditorOpen
+          ? 'შეტყობინების ტექსტის დამალვა'
+          : 'შეტყობინების ტექსტის რედაქტირება';
+      }
+    }
+
+    function renderNotifyFields({ force = false } = {}) {
+      if (!force && notifyManuallyEdited) return;
+      const tokens = buildCurrentNotifyTokens();
+      if (notifySubjectInput) {
+        notifySubjectInput.value = applyNotifyTokens(certIssuedTemplate.subject || DEFAULT_CERT_ISSUED_SUBJECT, tokens);
+      }
+      if (notifyBodyInput) {
+        notifyBodyInput.value = applyNotifyTokens(certIssuedTemplate.body || DEFAULT_CERT_ISSUED_BODY, tokens);
+      }
+      if (force) {
+        notifyManuallyEdited = false;
+      }
+    }
+
+    async function loadCertIssuedTemplate() {
+      if (certIssuedTemplateLoaded) return;
+      try {
+        const res = await fetch(`${API_BASE}/admin/planning-templates`, {
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.cert_issued_template) {
+            certIssuedTemplate = {
+              subject: data.cert_issued_template.subject || DEFAULT_CERT_ISSUED_SUBJECT,
+              body: data.cert_issued_template.body || DEFAULT_CERT_ISSUED_BODY,
+              updated_at: data.cert_issued_template.updated_at || null,
+            };
+            certIssuedTemplateLoaded = true;
+            if (formOpen && !notifyManuallyEdited) {
+              renderNotifyFields({ force: true });
+            }
+          }
+        }
+      } catch {}
+    }
+
+    function toggleNotifyEditor() {
+      notifyEditorOpen = !notifyEditorOpen;
+      if (notifyEditorOpen && !notifyManuallyEdited) {
+        renderNotifyFields({ force: false });
+      }
+      updateNotifyEditorVisibility();
+      if (notifyEditorOpen) {
+        requestAnimationFrame(() => {
+          notifyBodyInput?.focus?.();
+        });
+      }
+    }
+
+    function handleNotifyReset() {
+      certIssuedTemplate = {
+        ...certIssuedTemplate,
+        subject: DEFAULT_CERT_ISSUED_SUBJECT,
+        body: DEFAULT_CERT_ISSUED_BODY,
+      };
+      renderNotifyFields({ force: true });
+      showToast('დაბრუნდა სტანდარტული ტექსტი', 'info');
+    }
+
+    function convertCandidateValuesToPlaceholders(text, tokens) {
+      let result = String(text || '');
+      const pairs = [
+        [tokens.name, '{name}'],
+        [tokens.personal_id, '{personal_id}'],
+        [tokens.code, '{code}'],
+        [tokens.qualification, '{qualification}'],
+        [tokens.issue_date, '{issue_date}'],
+        [tokens.valid_until, '{valid_until}'],
+      ];
+      pairs.forEach(([val, token]) => {
+        const v = String(val || '').trim();
+        if (v && v !== '—' && v.length >= 2) {
+          result = result.split(v).join(token);
+        }
+      });
+      return result;
+    }
+
+    async function handleNotifySaveTemplate() {
+      const subj = (notifySubjectInput?.value || '').trim();
+      const body = (notifyBodyInput?.value || '').trim();
+      if (!subj || !body) {
+        showToast('გთხოვთ შეავსოთ წერილის სათაური და ტექსტი', 'error');
+        return;
+      }
+      const tokens = buildCurrentNotifyTokens();
+      const tokenizedSubject = convertCandidateValuesToPlaceholders(subj, tokens);
+      const tokenizedBody = convertCandidateValuesToPlaceholders(body, tokens);
+
+      if (notifySaveTemplateBtn) notifySaveTemplateBtn.disabled = true;
+      try {
+        const formData = new FormData();
+        formData.append('subject', tokenizedSubject);
+        formData.append('body', tokenizedBody);
+        const res = await fetch(`${API_BASE}/admin/planning-templates/cert_issued`, {
+          method: 'PUT',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          body: formData,
+        });
+        if (!res.ok) {
+          await handleAdminErrorResponse(res);
+          return;
+        }
+        const saved = await res.json();
+        certIssuedTemplate = {
+          subject: saved.subject || tokenizedSubject,
+          body: saved.body || tokenizedBody,
+          updated_at: saved.updated_at || null,
+        };
+        certIssuedTemplateLoaded = true;
+        showToast('შეტყობინების შაბლონი შეინახა', 'success');
+      } catch {
+        showToast('შაბლონის შენახვა ვერ მოხერხდა', 'error');
+      } finally {
+        if (notifySaveTemplateBtn) notifySaveTemplateBtn.disabled = false;
+      }
+    }
+
     function resetForm() {
       form?.reset();
       setFormSummary(null);
@@ -1034,6 +1238,12 @@
       if (validUntilDisplayNode) {
         validUntilDisplayNode.textContent = '—';
       }
+      if (formFields.sendNotification) {
+        formFields.sendNotification.checked = true;
+      }
+      notifyEditorOpen = false;
+      notifyManuallyEdited = false;
+      updateNotifyEditorVisibility();
     }
 
     function populateFormFields() {
@@ -1061,9 +1271,13 @@
       if (formFields.validityTerm) formFields.validityTerm.value = defaults.validityTerm;
       if (formFields.validUntil) formFields.validUntil.value = defaults.validUntil;
       if (validUntilDisplayNode) validUntilDisplayNode.textContent = defaults.validUntilDisplay || '—';
+      if (formFields.sendNotification) formFields.sendNotification.checked = true;
       setFormSummary(activeData);
 
+      notifyManuallyEdited = false;
       updateAutoValidity();
+      renderNotifyFields({ force: true });
+      void loadCertIssuedTemplate();
     }
 
     function updateAutoValidity() {
@@ -1075,6 +1289,7 @@
       if (!issueDateValue || termNumber == null) {
         formFields.validUntil.value = '';
         if (validUntilDisplayNode) validUntilDisplayNode.textContent = '—';
+        renderNotifyFields({ force: false });
         return;
       }
 
@@ -1082,6 +1297,7 @@
       if (!issueDate) {
         formFields.validUntil.value = '';
         if (validUntilDisplayNode) validUntilDisplayNode.textContent = '—';
+        renderNotifyFields({ force: false });
         return;
       }
 
@@ -1092,6 +1308,7 @@
       if (validUntilDisplayNode) {
         validUntilDisplayNode.textContent = formatted ? formatDate(suggestion) : '—';
       }
+      renderNotifyFields({ force: false });
     }
 
     function updateView() {
@@ -1156,6 +1373,81 @@
       }
     }
 
+    async function autoUploadCertificatePdf(exportUserId, exportData) {
+      if (!exportUserId || !exportData || !previewReady || !getCertificateElement()?.querySelector('.certificate-qr')) {
+        return false;
+      }
+      let svgSandbox = null;
+      try {
+        const libsOk = await ensureVectorPdfLibrariesLoaded();
+        if (!libsOk) return false;
+        if (document.fonts?.ready) await document.fonts.ready;
+        const levelKey = resolveLevelKey(exportData.level || exportData.level?.key);
+        const svgElement = await buildCertificateSvgElement(levelKey);
+        if (!svgElement) return false;
+        const jsPdfFactory = global.jspdf?.jsPDF;
+        const svg2pdfLib = findSvg2PdfFunction();
+        if (!jsPdfFactory || !svg2pdfLib) return false;
+
+        svgSandbox = document.createElement('div');
+        svgSandbox.style.position = 'fixed';
+        svgSandbox.style.left = '-10000px';
+        svgSandbox.style.top = '-10000px';
+        svgSandbox.style.width = `${BASE_CERTIFICATE_WIDTH}px`;
+        svgSandbox.style.height = `${BASE_CERTIFICATE_HEIGHT}px`;
+        svgSandbox.style.opacity = '0';
+        svgSandbox.style.pointerEvents = 'none';
+        svgSandbox.setAttribute('aria-hidden', 'true');
+        svgSandbox.className = 'certificate-svg-export';
+        svgSandbox.appendChild(svgElement);
+        document.body.appendChild(svgSandbox);
+
+        const pdf = new jsPdfFactory('l', 'pt', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        svgElement.setAttribute('width', String(pageWidth));
+        svgElement.setAttribute('height', String(pageHeight));
+        await ensureDejaVuSansRegistered(pdf);
+        await ensureBpgNinoRegistered(pdf);
+
+        if (typeof svg2pdfLib === 'function') {
+          await Promise.resolve(svg2pdfLib(svgElement, pdf, {
+            x: 0,
+            y: 0,
+            width: pageWidth,
+            height: pageHeight,
+          }));
+        } else if (global.jspdf?.jsPDF?.API && typeof global.jspdf.jsPDF.API.svg === 'function') {
+          await Promise.resolve(global.jspdf.jsPDF.API.svg(svgElement, pdf, {
+            x: 0,
+            y: 0,
+            width: pageWidth,
+            height: pageHeight,
+          }));
+        } else {
+          return false;
+        }
+
+        const safeFullName = (exportData.fullName || '')
+          .trim()
+          .replace(/[<>:"/\\|?*]+/g, '')
+          .replace(/\s+/g, '_');
+        const safeCode = (exportData.uniqueCode || '').trim().replace(/[<>:"/\\|?*]+/g, '');
+        const filenameParts = ['certificate'];
+        if (safeFullName) filenameParts.push(safeFullName);
+        if (safeCode) filenameParts.push(safeCode);
+        const filename = `${filenameParts.join('_')}.pdf`;
+
+        return await uploadCertificatePdf(pdf, filename, exportUserId);
+      } catch {
+        return false;
+      } finally {
+        if (svgSandbox?.parentNode) {
+          svgSandbox.parentNode.removeChild(svgSandbox);
+        }
+      }
+    }
+
     async function handleFormSubmit(event) {
       if (exportBusy) { event?.preventDefault?.(); return; }
       event?.preventDefault?.();
@@ -1167,6 +1459,12 @@
       const issueDateValue = formFields.issueDate?.value || null;
       const validityTermValue = parseNumber(formFields.validityTerm?.value);
       const validUntilValue = formFields.validUntil?.value || null;
+      const shouldSendNotification = formFields.sendNotification ? !!formFields.sendNotification.checked : false;
+      if (!notifyManuallyEdited) {
+        renderNotifyFields({ force: false });
+      }
+      const customNotifySubject = (notifySubjectInput?.value || '').trim() || null;
+      const customNotifyBody = (notifyBodyInput?.value || '').trim() || null;
 
       if (!issueDateValue) {
         showToast('გთხოვ მიუთითო გაცემის თარიღი', 'error');
@@ -1186,10 +1484,12 @@
         issue_date: formatInputDate(issueDateValue),
         validity_term: validityTermValue,
         valid_until: validUntilValue,
+        send_notification: false,
       };
 
       const requestRevision = openRevision;
       const requestUserId = activeUser.id;
+      if (formSubmitBtn) formSubmitBtn.disabled = true;
       try {
         const url = `${API_BASE}/users/${requestUserId}/certificate`;
         const method = formMode === 'create' ? 'POST' : 'PUT';
@@ -1267,10 +1567,47 @@
         if (activeUser?.id && onUserCertificateUpdated) {
           onUserCertificateUpdated(activeUser.id, certificateData);
         }
-        
-        showToast('სერტიფიკატის მონაცემები შეინახა', 'success');
+
+        const snapshotData = { ...activeData };
+        await autoUploadCertificatePdf(requestUserId, snapshotData);
+
+        if (shouldSendNotification) {
+          try {
+            const notifyRes = await fetch(`${API_BASE}/users/${requestUserId}/certificate/notify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...getAdminHeaders(),
+                ...getActorHeaders(),
+              },
+              body: JSON.stringify({
+                subject: customNotifySubject,
+                body: customNotifyBody,
+              }),
+            });
+            if (notifyRes.ok) {
+              const notifyData = await notifyRes.json();
+              try {
+                global.dispatchEvent(new CustomEvent('admin:certificateNotified', { detail: { userId: requestUserId } }));
+              } catch {}
+              if (notifyData?.notification_status === 'sent' || notifyData?.notification_status === 'simulated') {
+                showToast('სერტიფიკატი შეინახა და შეტყობინება გაიგზავნა', 'success');
+              } else {
+                showToast('სერტიფიკატი შეინახა, მაგრამ შეტყობინების გაგზავნა ვერ მოხერხდა', 'error');
+              }
+            } else {
+              showToast('სერტიფიკატი შეინახა, მაგრამ შეტყობინების გაგზავნა ვერ მოხერხდა', 'error');
+            }
+          } catch {
+            showToast('სერტიფიკატი შეინახა, მაგრამ შეტყობინების გაგზავნა ვერ მოხერხდა', 'error');
+          }
+        } else {
+          showToast('სერტიფიკატის მონაცემები შეინახა', 'success');
+        }
       } catch {
         showToast('სერტიფიკატის შენახვა ვერ მოხერხდა', 'error');
+      } finally {
+        if (formSubmitBtn) formSubmitBtn.disabled = false;
       }
     }
 
@@ -1721,8 +2058,14 @@
       deleteBtn?.addEventListener('click', handleDelete);
       editBtn?.addEventListener('click', handleEditClick);
       formSubmitBtn?.addEventListener('click', handleFormSubmit);
+      notifyEditBtn?.addEventListener('click', toggleNotifyEditor);
+      notifyResetBtn?.addEventListener('click', handleNotifyReset);
+      notifySaveTemplateBtn?.addEventListener('click', () => { void handleNotifySaveTemplate(); });
+      notifySubjectInput?.addEventListener('input', () => { notifyManuallyEdited = true; });
+      notifyBodyInput?.addEventListener('input', () => { notifyManuallyEdited = true; });
       formFields.issueDate?.addEventListener('change', () => updateAutoValidity());
       formFields.validityTerm?.addEventListener('input', () => updateAutoValidity());
+      formFields.status?.addEventListener('change', () => renderNotifyFields({ force: false }));
       downloadBtn?.addEventListener('click', handleDownload);
       attachIssueDatePicker();
       
@@ -1730,11 +2073,12 @@
       formFields.level?.addEventListener('change', async (event) => {
         if (exportBusy) return;
         const level = event.target.value;
-      // Update activeData level and re-render; populateView will load correct template
-      if (activeData) {
-        const normalized = normalizeLevel(level);
-        activeData.level = normalized;
-      }
+        // Update activeData level and re-render; populateView will load correct template
+        if (activeData) {
+          const normalized = normalizeLevel(level);
+          activeData.level = normalized;
+        }
+        renderNotifyFields({ force: false });
         await populateView(activeData);
         updateView();
       });

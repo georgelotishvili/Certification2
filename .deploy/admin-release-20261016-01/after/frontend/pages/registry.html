@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>სერტიფიცირებული პირების რეესტრი | GIPC</title>
+    <meta name="description" content="საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის რეესტრი: მოძებნეთ სერტიფიცირებული არქიტექტორი, არქიტექტორი ექსპერტი ან მუნიციპალიტეტის სპეციალისტი სახელით, გვარით ან კოდით." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://gipc.org.ge/pages/registry.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ka_GE" />
+    <meta property="og:title" content="სერტიფიცირებული პირების რეესტრი | GIPC" />
+    <meta property="og:description" content="მოძებნეთ სერტიფიცირებული არქიტექტორი, არქიტექტორი ექსპერტი ან მუნიციპალიტეტის სპეციალისტი სახელით, გვარით ან კოდით." />
+    <meta property="og:url" content="https://gipc.org.ge/pages/registry.html" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "სერტიფიცირებული პირების რეესტრი",
+        "description": "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის სერტიფიცირებული პირების რეესტრი.",
+        "url": "https://gipc.org.ge/pages/registry.html",
+        "inLanguage": "ka",
+        "publisher": {
+          "@type": "Organization",
+          "name": "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი",
+          "url": "https://gipc.ge/"
+        }
+      }
+    </script>
+    <link rel="preload" as="image" href="../assets/svg/header.svg" />
+    <meta name="api-base" content="" />
+    <script src="../scripts/config.js?v=4" defer></script>
+    <script src="../scripts/header.js?v=20261018-auth2" defer></script>
+    <link rel="stylesheet" href="../styles/styles.css?v=20261017-smooth1" />
+    <link rel="stylesheet" href="../styles/header.css?v=20261018-auth2" />
+    <link rel="stylesheet" href="../styles/registry.css?v=20261008-accent1-3" />
+  </head>
+  <body class="registry-document">
+    <!-- The same shared header used by the homepage and personal page. -->
+    <main class="registry-page" id="registryPage">
+      <nav class="registry-breadcrumb" aria-label="გვერდის მდებარეობა">
+        <a href="index.html">მთავარი გვერდი</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">რეესტრი</span>
+      </nav>
+
+      <section class="registry-intro" aria-labelledby="registryTitle">
+        <div class="registry-intro-copy">
+          <p class="registry-kicker">საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი</p>
+          <h1 id="registryTitle">სერტიფიცირებული პირების რეესტრი</h1>
+          <p class="registry-description">არქიტექტორები, არქიტექტორი ექსპერტები და მუნიციპალიტეტის სპეციალისტები. მოძებნეთ პირი სახელით, გვარით ან სერტიფიცირების კოდით და გაეცანით მის პროფილს.</p>
+        </div>
+        <div class="registry-total" aria-label="რეესტრში ჩანაწერების რაოდენობა">
+          <strong id="registryTotalCount">—</strong>
+          <span>ჩანაწერი</span>
+        </div>
+      </section>
+
+      <section class="registry-controls" aria-label="რეესტრში ძიება და ფილტრები">
+        <div class="registry-control-row">
+          <div class="registry-search-field">
+            <label class="registry-field-label" for="registrySearch">პირის ძიება</label>
+            <input type="search" id="registrySearch" class="registry-search" placeholder="სახელი, გვარი ან სერტიფიცირების კოდი" autocomplete="off" maxlength="300" />
+          </div>
+          <label class="registry-sort" for="registrySort">
+            <span class="registry-field-label">დალაგება</span>
+            <select id="registrySort">
+              <option value="date_desc">უახლესი რეგისტრაციები</option>
+              <option value="date_asc">ძველი რეგისტრაციები</option>
+              <option value="name_asc">სახელი (ა-ჰ)</option>
+              <option value="name_desc">სახელი (ჰ-ა)</option>
+              <option value="rating_desc">რეიტინგი მაღალი → დაბალი</option>
+              <option value="rating_asc">რეიტინგი დაბალი → მაღალი</option>
+            </select>
+          </label>
+        </div>
+        <fieldset class="registry-filter-fieldset">
+          <legend class="registry-field-label">კვალიფიკაცია</legend>
+          <div class="registry-checkboxes">
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterArchitect" />
+              <span>არქიტექტორი</span>
+            </label>
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterExpert" />
+              <span>არქიტექტორი ექსპერტი</span>
+            </label>
+            <label class="registry-check">
+              <input type="checkbox" id="registryFilterMunicipal" />
+              <span>მუნიციპალიტეტის სპეციალისტი</span>
+            </label>
+          </div>
+        </fieldset>
+      </section>
+
+      <section class="registry-results" aria-labelledby="registryResultsTitle">
+        <div class="registry-results-head">
+          <div>
+            <h2 id="registryResultsTitle">რეესტრის ჩანაწერები</h2>
+            <p id="registryResultsCount" class="registry-results-count" role="status" aria-live="polite" aria-atomic="true">მონაცემები იტვირთება...</p>
+          </div>
+          <button type="button" id="registryResetFilters" class="registry-reset">ფილტრების გასუფთავება</button>
+        </div>
+        <noscript>
+          <p class="registry-noscript">ჩანაწერების ჩასატვირთად და მოსაძებნად ჩართეთ JavaScript თქვენს ბრაუზერში. ინფორმაციისთვის დაგვიკავშირდით: <a href="mailto:info@gipc.ge">info@gipc.ge</a>.</p>
+        </noscript>
+        <div id="registryError" class="registry-refresh-error" role="alert" hidden></div>
+        <div class="registry-list" id="registryList" role="list" aria-label="სერტიფიცირებული პირები" aria-busy="true"></div>
+        <nav id="registryPagination" class="registry-pagination" hidden aria-label="რეესტრის გვერდები">
+          <button id="registryPrevious" type="button">წინა</button>
+          <span id="registryPageNumber" role="status" aria-live="polite"></span>
+          <button id="registryNext" type="button">შემდეგი</button>
+        </nav>
+        <p class="registry-status-note">ჩანაწერში მითითებულია სერტიფიკატის მიმდინარე სტატუსი. რეესტრში შეიძლება გამოჩნდეს მოქმედი, შეჩერებული ან ვადაგასული სერტიფიკატი.</p>
+      </section>
+    </main>
+
+    <footer class="registry-footer">
+      <div class="footer-content footer-only-contact">
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/E-mail.svg" alt="" aria-hidden="true" />
+          <a href="mailto:info@gipc.ge" aria-label="ელფოსტა">info@gipc.ge</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/phone.svg" alt="" aria-hidden="true" />
+          <a href="tel:+995593222033" aria-label="ტელეფონი">+995 593 222 033</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/location.svg" alt="" aria-hidden="true" />
+          <a href="https://maps.app.goo.gl/MbTQmmvtGZBNgCEj9" target="_blank" rel="noopener noreferrer" aria-label="მისამართი">თბილისი, მირიან მეფის 98</a>
+        </div>
+        <div class="footer-contact-item">
+          <img class="footer-icon" src="../assets/svg/world.svg" alt="" aria-hidden="true" />
+          <a href="https://gipc.ge/" aria-label="ვებსაიტი">gipc.ge</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია <a href="admin.html" class="admin-link" style="display:none">/ ადმინ გვერდი</a></p>
+      </div>
+    </footer>
+    <script src="../scripts/registry.mini.js?v=20261008-perf1" defer></script>
+    <script src="../scripts/script.js?v=20261018-auth2" defer></script>
+  </body>
+</html>

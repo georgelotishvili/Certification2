@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..config import get_settings
 from ..database import get_db
 from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
-from ..models import ExamSchedule
+from ..models import ExamSchedule, PlanningLetter, MultiApartmentEvaluation, MultiFunctionalEvaluation
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -951,6 +951,491 @@ def _today_in_tbilisi() -> date:
     return datetime.now(timezone(timedelta(hours=4))).date()
 
 
+def _format_pct(value: float | int | None) -> str:
+    val = round(float(value or 0.0), 2)
+    if val == int(val):
+        return str(int(val))
+    return f"{val:.2f}".rstrip("0").rstrip(".")
+
+
+def _extract_theory_stage_summary(session: ExamSession) -> dict:
+    snapshot = _load_session_snapshot(session)
+    chapters_out: list[dict] = []
+    if snapshot:
+        for ch in snapshot.get("chapters") or []:
+            if not isinstance(ch, dict):
+                continue
+            stats = ch.get("stats") if isinstance(ch.get("stats"), dict) else {}
+            total = int(stats.get("total", 0) or 0)
+            correct = int(stats.get("correct", 0) or 0)
+            percent = round(float(stats.get("percent", 0.0) or 0.0), 2)
+            if total > 0:
+                chapters_out.append({
+                    "title": str(ch.get("name") or "თავი").strip(),
+                    "total": total,
+                    "correct": correct,
+                    "percent": percent,
+                })
+        for blk in snapshot.get("untagged_blocks") or []:
+            if not isinstance(blk, dict):
+                continue
+            stats = blk.get("stats") if isinstance(blk.get("stats"), dict) else {}
+            total = int(stats.get("total", 0) or 0)
+            correct = int(stats.get("correct", 0) or 0)
+            percent = round(float(stats.get("percent", 0.0) or 0.0), 2)
+            if total > 0:
+                chapters_out.append({
+                    "title": str(blk.get("title") or f"ბლოკი {blk.get('id', '')}").strip(),
+                    "total": total,
+                    "correct": correct,
+                    "percent": percent,
+                })
+    if not chapters_out and session.block_stats:
+        try:
+            raw_stats = _json.loads(session.block_stats)
+            if isinstance(raw_stats, list):
+                for entry in raw_stats:
+                    if not isinstance(entry, dict):
+                        continue
+                    total = int(entry.get("total", 0) or 0)
+                    correct = int(entry.get("correct", 0) or 0)
+                    percent = round(float(entry.get("percent", 0.0) or 0.0), 2)
+                    if total > 0:
+                        chapters_out.append({
+                            "title": str(entry.get("block_title") or f"ბლოკი {entry.get('block_id', '')}").strip(),
+                            "total": total,
+                            "correct": correct,
+                            "percent": percent,
+                        })
+        except Exception:
+            pass
+
+    score_pct = round(float(session.score_percent or 0.0), 2)
+    if chapters_out:
+        if any(c["percent"] < 70 for c in chapters_out):
+            level = "fail"
+        elif any(c["percent"] < 75 for c in chapters_out):
+            level = "a"
+        else:
+            level = "bc"
+    else:
+        if score_pct < 70:
+            level = "fail"
+        elif score_pct < 75:
+            level = "a"
+        else:
+            level = "bc"
+
+    finished_at = session.finished_at or session.started_at
+    return {
+        "session_id": session.id,
+        "finished_at": finished_at,
+        "score_percent": score_pct,
+        "chapters": chapters_out,
+        "level": level,
+    }
+
+
+def _extract_practical_stage_summary(eval_row) -> dict:
+    pct = round(float(eval_row.percentage or 0.0), 2)
+    wrong = int(eval_row.wrong_count or 0)
+    correct = int(eval_row.correct_count or 0)
+    total_correct = int(eval_row.total_correct_answers or 0)
+    if pct < 70 or wrong >= 3:
+        level = "fail"
+    elif pct < 75 or wrong == 2:
+        level = "a"
+    else:
+        level = "bc"
+    finished_at = eval_row.finished_at or eval_row.created_at
+    return {
+        "evaluation_id": eval_row.id,
+        "finished_at": finished_at,
+        "percentage": pct,
+        "wrong_count": wrong,
+        "correct_count": correct,
+        "total_correct_answers": total_correct,
+        "level": level,
+    }
+
+
+def _build_exam_outcome_payload(
+    s1: dict | None,
+    s2: dict | None,
+    s3: dict | None,
+    last_letter_at: datetime | None,
+) -> dict:
+    stages_map = {"stage1": s1, "stage2": s2, "stage3": s3}
+    present = {k: v for k, v in stages_map.items() if v is not None}
+    if not present:
+        return {
+            "has_results": False,
+            "unacknowledged": False,
+            "outcome": "none",
+            "category_label": None,
+            "results_text": "",
+            "latest_exam_at": None,
+            "completed_stages": 0,
+        }
+
+    timestamps = [v["finished_at"] for v in present.values() if v.get("finished_at") is not None]
+    latest_exam_at = max(timestamps) if timestamps else None
+
+    if latest_exam_at is not None:
+        sitting_cutoff = latest_exam_at - timedelta(days=2)
+        present = {
+            k: v for k, v in present.items()
+            if v.get("finished_at") is None or v["finished_at"] >= sitting_cutoff
+        }
+
+    if last_letter_at is None:
+        unacknowledged = True
+        cycle_stages = present
+    elif latest_exam_at and latest_exam_at > last_letter_at:
+        unacknowledged = True
+        cycle_stages = {
+            k: v for k, v in present.items()
+            if v.get("finished_at") is not None and v["finished_at"] > last_letter_at
+        }
+    else:
+        unacknowledged = False
+        cycle_stages = present
+
+    st1 = cycle_stages.get("stage1")
+    st2 = cycle_stages.get("stage2")
+    st3 = cycle_stages.get("stage3")
+
+    all_three_completed = st1 is not None and st2 is not None and st3 is not None
+    levels = [st["level"] for st in (st1, st2, st3) if st is not None]
+
+    if not all_three_completed or any(lv == "fail" for lv in levels):
+        outcome = "fail"
+        category_label = None
+    elif all(lv == "bc" for lv in levels):
+        outcome = "pass_bc"
+        category_label = "B/C კატეგორიის"
+    else:
+        outcome = "pass_a"
+        category_label = "A კატეგორიის"
+
+    lines: list[str] = ["თქვენი გამოცდის შედეგები:"]
+    if st1:
+        chapters = st1.get("chapters") or []
+        if chapters:
+            lines.append("• ეტაპი 1 — თეორიული გამოცდა:")
+            for ch in chapters:
+                lines.append(
+                    f"  - {ch['title']}: {ch['total']} კითხვიდან {ch['correct']} სწორი — {_format_pct(ch['percent'])}%"
+                )
+        else:
+            lines.append(f"• ეტაპი 1 — თეორიული გამოცდა: {_format_pct(st1.get('score_percent'))}%")
+    else:
+        lines.append("• ეტაპი 1 — თეორიული გამოცდა: გამოტოვებულია")
+
+    if st2:
+        lines.append(
+            f"• ეტაპი 2 — მრავალბინიანი შენობის პროექტის შეფასება: {_format_pct(st2['percentage'])}%, არასწორი პასუხები: {st2['wrong_count']}"
+        )
+    else:
+        lines.append("• ეტაპი 2 — მრავალბინიანი შენობის პროექტის შეფასება: გამოტოვებულია")
+
+    if st3:
+        lines.append(
+            f"• ეტაპი 3 — მრავალფუნქციური შენობის პროექტის შეფასება: {_format_pct(st3['percentage'])}%, არასწორი პასუხები: {st3['wrong_count']}"
+        )
+    else:
+        lines.append("• ეტაპი 3 — მრავალფუნქციური შენობის პროექტის შეფასება: გამოტოვებულია")
+
+    results_text = "\n".join(lines) if len(lines) > 1 else ""
+
+    return {
+        "has_results": True,
+        "unacknowledged": unacknowledged,
+        "outcome": outcome,
+        "category_label": category_label,
+        "results_text": results_text,
+        "latest_exam_at": latest_exam_at.isoformat() if latest_exam_at else None,
+        "completed_stages": len(cycle_stages),
+    }
+
+
+def _compute_exam_outcomes_for_users(db: Session, users: list[User]) -> dict[int, dict]:
+    if not users:
+        return {}
+    user_ids = [u.id for u in users]
+    code_to_user_id: dict[str, int] = {}
+    for u in users:
+        if u.code:
+            code_to_user_id[u.code.strip().lower()] = u.id
+
+    latest_s1_by_user: dict[int, dict] = {}
+    s1_conds = [ExamSession.user_id.in_(user_ids)]
+    if code_to_user_id:
+        s1_conds.append(func.lower(ExamSession.candidate_code).in_(list(code_to_user_id.keys())))
+    s1_rows = db.scalars(
+        select(ExamSession)
+        .where(ExamSession.finished_at.is_not(None), or_(*s1_conds))
+        .order_by(ExamSession.finished_at.desc(), ExamSession.id.desc())
+    ).all()
+    for s in s1_rows:
+        uid = s.user_id
+        if uid not in user_ids and s.candidate_code:
+            uid = code_to_user_id.get(s.candidate_code.strip().lower())
+        if uid is not None and uid not in latest_s1_by_user:
+            latest_s1_by_user[uid] = _extract_theory_stage_summary(s)
+
+    latest_s2_by_user: dict[int, dict] = {}
+    s2_rows = db.scalars(
+        select(MultiApartmentEvaluation)
+        .where(MultiApartmentEvaluation.user_id.in_(user_ids))
+        .order_by(MultiApartmentEvaluation.finished_at.desc(), MultiApartmentEvaluation.id.desc())
+    ).all()
+    for e2 in s2_rows:
+        if e2.user_id not in latest_s2_by_user:
+            latest_s2_by_user[e2.user_id] = _extract_practical_stage_summary(e2)
+
+    latest_s3_by_user: dict[int, dict] = {}
+    s3_rows = db.scalars(
+        select(MultiFunctionalEvaluation)
+        .where(MultiFunctionalEvaluation.user_id.in_(user_ids))
+        .order_by(MultiFunctionalEvaluation.finished_at.desc(), MultiFunctionalEvaluation.id.desc())
+    ).all()
+    for e3 in s3_rows:
+        if e3.user_id not in latest_s3_by_user:
+            latest_s3_by_user[e3.user_id] = _extract_practical_stage_summary(e3)
+
+    last_letter_by_user: dict[int, datetime] = {}
+    letter_rows = db.execute(
+        select(
+            PlanningLetter.user_id,
+            func.max(func.coalesce(PlanningLetter.sent_at, PlanningLetter.created_at)),
+        )
+        .where(
+            PlanningLetter.user_id.in_(user_ids),
+            or_(
+                PlanningLetter.kind == "certificate",
+                PlanningLetter.period.in_(("exam_fail", "fail_send_only")),
+            ),
+        )
+        .group_by(PlanningLetter.user_id)
+    ).all()
+    for uid, max_dt in letter_rows:
+        if max_dt is not None:
+            if isinstance(max_dt, str):
+                try:
+                    max_dt = datetime.fromisoformat(max_dt.replace("Z", ""))
+                except Exception:
+                    max_dt = None
+            if max_dt is not None:
+                last_letter_by_user[int(uid)] = max_dt
+
+    return {
+        u.id: _build_exam_outcome_payload(
+            latest_s1_by_user.get(u.id),
+            latest_s2_by_user.get(u.id),
+            latest_s3_by_user.get(u.id),
+            last_letter_by_user.get(u.id),
+        )
+        for u in users
+    }
+
+
+def _exam_dt_to_tbilisi_date(dt: datetime) -> date:
+    return (dt + timedelta(hours=4)).date()
+
+
+def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
+    s1_rows = db.scalars(
+        select(ExamSession)
+        .where(ExamSession.finished_at.is_not(None))
+        .order_by(ExamSession.finished_at.asc(), ExamSession.id.asc())
+    ).all()
+    s2_rows = db.scalars(
+        select(MultiApartmentEvaluation)
+        .order_by(MultiApartmentEvaluation.finished_at.asc(), MultiApartmentEvaluation.id.asc())
+    ).all()
+    s3_rows = db.scalars(
+        select(MultiFunctionalEvaluation)
+        .order_by(MultiFunctionalEvaluation.finished_at.asc(), MultiFunctionalEvaluation.id.asc())
+    ).all()
+
+    if not s1_rows and not s2_rows and not s3_rows:
+        return {}
+
+    all_s1_codes = {
+        s.candidate_code.strip().lower()
+        for s in s1_rows
+        if s.candidate_code and s.candidate_code.strip()
+    }
+    code_to_user_id: dict[str, int] = {}
+    if all_s1_codes:
+        for uid, code in db.execute(
+            select(User.id, User.code).where(func.lower(User.code).in_(list(all_s1_codes)))
+        ).all():
+            if code:
+                code_to_user_id[code.strip().lower()] = int(uid)
+
+    attempts_by_user: dict[int, list[tuple[str, dict]]] = {}
+    latest_s1_by_user: dict[int, dict] = {}
+    latest_s2_by_user: dict[int, dict] = {}
+    latest_s3_by_user: dict[int, dict] = {}
+
+    for s in s1_rows:
+        uid = s.user_id
+        if s.candidate_code:
+            code_uid = code_to_user_id.get(s.candidate_code.strip().lower())
+            if uid is None or (code_uid is not None and uid != code_uid):
+                uid = code_uid
+        if uid is not None:
+            summary = _extract_theory_stage_summary(s)
+            latest_s1_by_user[uid] = summary
+            attempts_by_user.setdefault(uid, []).append(("stage1", summary))
+
+    for e2 in s2_rows:
+        if e2.user_id is not None:
+            summary = _extract_practical_stage_summary(e2)
+            latest_s2_by_user[e2.user_id] = summary
+            attempts_by_user.setdefault(e2.user_id, []).append(("stage2", summary))
+
+    for e3 in s3_rows:
+        if e3.user_id is not None:
+            summary = _extract_practical_stage_summary(e3)
+            latest_s3_by_user[e3.user_id] = summary
+            attempts_by_user.setdefault(e3.user_id, []).append(("stage3", summary))
+
+    if not attempts_by_user:
+        return {}
+
+    candidate_uids = list(attempts_by_user.keys())
+    existing_uids = {
+        int(uid)
+        for uid in db.scalars(select(User.id).where(User.id.in_(candidate_uids))).all()
+    }
+    if not existing_uids:
+        return {}
+
+    letter_dts_by_user: dict[int, list[datetime]] = {}
+    last_letter_by_user: dict[int, datetime] = {}
+    letter_rows = db.execute(
+        select(
+            PlanningLetter.user_id,
+            func.coalesce(PlanningLetter.sent_at, PlanningLetter.created_at),
+        ).where(
+            PlanningLetter.user_id.in_(list(existing_uids)),
+            or_(
+                PlanningLetter.kind == "certificate",
+                PlanningLetter.period.in_(("exam_fail", "fail_send_only")),
+            ),
+        )
+    ).all()
+    for uid, raw_dt in letter_rows:
+        if raw_dt is None:
+            continue
+        dt = raw_dt
+        if isinstance(dt, str):
+            try:
+                dt = datetime.fromisoformat(dt.replace("Z", ""))
+            except Exception:
+                dt = None
+        if dt is not None:
+            uid_int = int(uid)
+            letter_dts_by_user.setdefault(uid_int, []).append(dt)
+            if uid_int not in last_letter_by_user or dt > last_letter_by_user[uid_int]:
+                last_letter_by_user[uid_int] = dt
+
+    stage_order = {"stage1": 1, "stage2": 2, "stage3": 3}
+    histories: dict[int, dict] = {}
+    for uid in existing_uids:
+        user_attempts = attempts_by_user.get(uid, [])
+        user_attempts.sort(
+            key=lambda pair: (
+                pair[1].get("finished_at") or datetime.min,
+                stage_order.get(pair[0], 9),
+            )
+        )
+        letter_dts = sorted(letter_dts_by_user.get(uid, []))
+        sittings: list[dict] = []
+        for stage_key, summary in user_attempts:
+            dt = summary.get("finished_at")
+            if sittings:
+                curr = sittings[-1]
+                prev_dt = curr["latest_at"]
+                same_window = (
+                    dt is None
+                    or prev_dt is None
+                    or (dt - prev_dt) <= timedelta(days=2)
+                )
+                letter_between = (
+                    dt is not None
+                    and prev_dt is not None
+                    and any(prev_dt <= l_dt < dt for l_dt in letter_dts)
+                )
+                stage_already_in_sitting = stage_key in curr["stages"]
+                same_day = (
+                    dt is not None
+                    and prev_dt is not None
+                    and _exam_dt_to_tbilisi_date(dt) == _exam_dt_to_tbilisi_date(prev_dt)
+                )
+                if same_window and not letter_between and (not stage_already_in_sitting or same_day):
+                    curr["stages"][stage_key] = summary
+                    if dt is not None:
+                        if curr["latest_at"] is None or dt > curr["latest_at"]:
+                            curr["latest_at"] = dt
+                        curr["dates"].add(_exam_dt_to_tbilisi_date(dt))
+                        curr["dates"].add(dt.date())
+                    continue
+            new_dates: set[date] = set()
+            if dt is not None:
+                new_dates.add(_exam_dt_to_tbilisi_date(dt))
+                new_dates.add(dt.date())
+            sittings.append({
+                "stages": {stage_key: summary},
+                "latest_at": dt,
+                "dates": new_dates,
+            })
+
+        for sitting in sittings:
+            st1 = sitting["stages"].get("stage1")
+            st2 = sitting["stages"].get("stage2")
+            st3 = sitting["stages"].get("stage3")
+            all_three = st1 is not None and st2 is not None and st3 is not None
+            levels = [st["level"] for st in (st1, st2, st3) if st is not None]
+            if not all_three or any(lv == "fail" for lv in levels):
+                sitting["outcome"] = "fail"
+            elif all(lv == "bc" for lv in levels):
+                sitting["outcome"] = "pass_bc"
+            else:
+                sitting["outcome"] = "pass_a"
+
+        latest_outcome = _build_exam_outcome_payload(
+            latest_s1_by_user.get(uid),
+            latest_s2_by_user.get(uid),
+            latest_s3_by_user.get(uid),
+            last_letter_by_user.get(uid),
+        )
+        histories[uid] = {
+            "latest_outcome": latest_outcome,
+            "sittings": sittings,
+        }
+
+    return histories
+
+
+@router.get("/users/{user_id}/exam-outcome")
+def admin_user_exam_outcome(
+    user_id: int,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    auto_close_expired_sessions(db)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    outcomes = _compute_exam_outcomes_for_users(db, [user])
+    return outcomes.get(user.id) or _build_exam_outcome_payload(None, None, None, None)
+
+
 @router.get("/users", response_model=None)
 def admin_users(
     page: int = 1,
@@ -964,11 +1449,17 @@ def admin_users(
     exam_date: date | None = None,
     exam_morning: bool = False,
     exam_evening: bool = False,
+    certificate_handover: bool = False,
     paginated: bool = False,
     live: bool = False,
     new_statements: bool = False,
     pending_statements: bool = False,
     qualification: str | None = None,
+    exam_passed: bool = False,
+    exam_failed: bool = False,
+    exam_result_date: date | None = None,
+    pending_pass_letter: bool = False,
+    pending_fail_letter: bool = False,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
@@ -998,11 +1489,16 @@ def admin_users(
         "certified": ("architect", "expert", "municipal"),
     }
     if qualification:
-        if qualification not in qualification_levels:
+        if qualification == "suspended_expired":
+            stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
+                Certificate.status.in_(("suspended", "expired"))
+            )))
+        elif qualification in qualification_levels:
+            stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
+                Certificate.level.in_(qualification_levels[qualification])
+            )))
+        else:
             raise HTTPException(status_code=422, detail="Unknown qualification filter")
-        stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
-            Certificate.level.in_(qualification_levels[qualification])
-        )))
 
     if statement_date is None and (new_statements or pending_statements):
         has_new = select(Statement.id).where(
@@ -1019,16 +1515,30 @@ def admin_users(
             colors.append(~has_new & has_pending)
         stmt = stmt.where(or_(*colors))
 
-    if exam_date is not None or exam_morning or exam_evening:
-        schedule_query = select(ExamSchedule.user_id).where(
-            ExamSchedule.exam_date == (exam_date if exam_date is not None else _today_in_tbilisi())
-        )
-        # Both selected, or a date alone, includes both groups without duplicates.
-        if exam_morning and not exam_evening:
-            schedule_query = schedule_query.where(ExamSchedule.period == "morning")
-        elif exam_evening and not exam_morning:
-            schedule_query = schedule_query.where(ExamSchedule.period == "evening")
-        stmt = stmt.where(User.id.in_(schedule_query))
+    if exam_date is not None or exam_morning or exam_evening or certificate_handover:
+        target_schedule_date = exam_date if exam_date is not None else _today_in_tbilisi()
+        schedule_conditions = []
+        if exam_morning or exam_evening or not certificate_handover:
+            schedule_query = select(ExamSchedule.user_id).where(
+                ExamSchedule.exam_date == target_schedule_date
+            )
+            # Both selected, or a date alone, includes both groups without duplicates.
+            if exam_morning and not exam_evening:
+                schedule_query = schedule_query.where(ExamSchedule.period == "morning")
+            elif exam_evening and not exam_morning:
+                schedule_query = schedule_query.where(ExamSchedule.period == "evening")
+            schedule_conditions.append(User.id.in_(schedule_query))
+        if certificate_handover:
+            cert_handover_query = select(PlanningLetter.user_id).where(
+                PlanningLetter.kind == "certificate",
+                PlanningLetter.event_date == target_schedule_date,
+                or_(
+                    PlanningLetter.period.is_(None),
+                    PlanningLetter.period.in_(("morning", "evening", "cert_am_send", "cert_pm_send")),
+                ),
+            )
+            schedule_conditions.append(User.id.in_(cert_handover_query))
+        stmt = stmt.where(or_(*schedule_conditions))
 
     if statement_date is not None:
         # Statements are stored in naive UTC; the selected day is in Georgia.
@@ -1050,6 +1560,70 @@ def admin_users(
                 )
             )
         )
+
+    exam_histories = _compute_all_exam_histories(db)
+    global_pending_pass_users = sum(
+        1
+        for h in exam_histories.values()
+        if h["latest_outcome"].get("unacknowledged")
+        and h["latest_outcome"].get("outcome") in ("pass_bc", "pass_a")
+    )
+    global_pending_fail_users = sum(
+        1
+        for h in exam_histories.values()
+        if h["latest_outcome"].get("unacknowledged")
+        and h["latest_outcome"].get("outcome") == "fail"
+    )
+
+    if (
+        exam_passed
+        or exam_failed
+        or exam_result_date is not None
+        or pending_pass_letter
+        or pending_fail_letter
+    ):
+        matching_uids: list[int] = []
+        has_outcome_filter = exam_passed or exam_failed
+        has_pending_filter = pending_pass_letter or pending_fail_letter
+        for uid, h in exam_histories.items():
+            sittings = h.get("sittings") or []
+            latest = h.get("latest_outcome") or {}
+            if not sittings:
+                continue
+            outcome_ok = True
+            if has_outcome_filter:
+                outcome_ok = False
+                for sitting in sittings:
+                    if exam_result_date is not None and exam_result_date not in sitting["dates"]:
+                        continue
+                    if exam_passed and sitting["outcome"] in ("pass_bc", "pass_a"):
+                        outcome_ok = True
+                        break
+                    if exam_failed and sitting["outcome"] == "fail":
+                        outcome_ok = True
+                        break
+            elif exam_result_date is not None and not has_pending_filter:
+                outcome_ok = any(exam_result_date in sitting["dates"] for sitting in sittings)
+
+            pending_ok = True
+            if has_pending_filter:
+                pending_ok = False
+                if latest.get("unacknowledged"):
+                    latest_sitting = sittings[-1]
+                    date_ok = exam_result_date is None or exam_result_date in latest_sitting["dates"]
+                    if date_ok:
+                        if pending_pass_letter and latest.get("outcome") in ("pass_bc", "pass_a"):
+                            pending_ok = True
+                        if pending_fail_letter and latest.get("outcome") == "fail":
+                            pending_ok = True
+
+            if outcome_ok and pending_ok:
+                matching_uids.append(uid)
+
+        if matching_uids:
+            stmt = stmt.where(User.id.in_(matching_uids))
+        else:
+            stmt = stmt.where(User.id == -1)
 
     if sort == "date_asc":
         stmt = stmt.order_by(User.created_at.asc())
@@ -1094,6 +1668,15 @@ def admin_users(
             unseen_counts[int(user_id)] = int(unseen_count)
             pending_counts[int(user_id)] = int(pending_count)
 
+    empty_outcome = _build_exam_outcome_payload(None, None, None, None)
+    exam_outcomes = {
+        u.id: (
+            exam_histories[u.id]["latest_outcome"]
+            if u.id in exam_histories
+            else empty_outcome
+        )
+        for u in users
+    }
     items = []
     stage_expired_changed = False
     for u in users:
@@ -1147,6 +1730,7 @@ def admin_users(
             'has_pending_statements': pending_count > 0,
             'pending_statement_count': pending_count,
             'photo_filename': u.photo_filename,
+            'exam_outcome': exam_outcomes.get(u.id),
         }
         if cert_data:
             user_dict['certificate'] = cert_data
@@ -1155,10 +1739,19 @@ def admin_users(
     if stage_expired_changed:
         db.commit()
     if paginated:
+        has_unseen_stmt = select(Statement.id).where(
+            Statement.user_id == User.id, Statement.seen_at.is_(None)
+        ).exists()
+        has_pending_stmt = select(Statement.id).where(
+            Statement.user_id == User.id,
+            Statement.seen_at.is_not(None),
+            Statement.answered_at.is_(None),
+        ).exists()
         global_unseen_users = int(db.scalar(
-            select(func.count(func.distinct(Statement.user_id)))
-            .join(User, User.id == Statement.user_id)
-            .where(Statement.seen_at.is_(None))
+            select(func.count(User.id)).where(has_unseen_stmt)
+        ) or 0)
+        global_pending_users = int(db.scalar(
+            select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
         ) or 0)
         page_items = []
         for item in items:
@@ -1168,7 +1761,7 @@ def admin_users(
             display = {key: payload.get(key) for key in (
                 "personal_id", "first_name", "last_name", "phone", "email",
                 "code", "is_admin", "is_founder", "created_at", "certificate",
-                "photo_filename",
+                "photo_filename", "exam_outcome",
             )}
             revision = sha256(_json.dumps(display, sort_keys=True).encode()).hexdigest()[:20]
             if live:
@@ -1185,6 +1778,9 @@ def admin_users(
             "items": page_items, "total": total, "page": page, "size": size,
             "paginated": True, "live": live,
             "global_unseen_users": global_unseen_users,
+            "global_pending_users": global_pending_users,
+            "global_pending_pass_users": global_pending_pass_users,
+            "global_pending_fail_users": global_pending_fail_users,
         }
     return UsersListResponse(items=items, total=len(items))
 
@@ -1776,7 +2372,41 @@ def admin_statements_summary(
     total_unseen = db.scalar(
         select(func.count()).select_from(Statement).where(Statement.seen_at.is_(None))
     ) or 0
-    return {"has_unseen": total_unseen > 0, "unseen_total": total_unseen}
+    has_unseen_stmt = select(Statement.id).where(
+        Statement.user_id == User.id, Statement.seen_at.is_(None)
+    ).exists()
+    has_pending_stmt = select(Statement.id).where(
+        Statement.user_id == User.id,
+        Statement.seen_at.is_not(None),
+        Statement.answered_at.is_(None),
+    ).exists()
+    unseen_users = int(db.scalar(
+        select(func.count(User.id)).where(has_unseen_stmt)
+    ) or 0)
+    pending_users = int(db.scalar(
+        select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
+    ) or 0)
+    exam_histories = _compute_all_exam_histories(db)
+    pending_pass_users = sum(
+        1
+        for h in exam_histories.values()
+        if h["latest_outcome"].get("unacknowledged")
+        and h["latest_outcome"].get("outcome") in ("pass_bc", "pass_a")
+    )
+    pending_fail_users = sum(
+        1
+        for h in exam_histories.values()
+        if h["latest_outcome"].get("unacknowledged")
+        and h["latest_outcome"].get("outcome") == "fail"
+    )
+    return {
+        "has_unseen": total_unseen > 0,
+        "unseen_total": total_unseen,
+        "unseen_users": unseen_users,
+        "pending_users": pending_users,
+        "pending_pass_users": pending_pass_users,
+        "pending_fail_users": pending_fail_users,
+    }
 
 
 @router.post("/statements/mark-seen", status_code=status.HTTP_204_NO_CONTENT)

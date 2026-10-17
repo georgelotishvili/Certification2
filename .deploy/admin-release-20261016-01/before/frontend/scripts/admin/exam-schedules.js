@@ -354,6 +354,76 @@
     };
     let sharedTemplatesLoaded = false;
 
+    const SCHEDULE_TIMES_STORAGE_KEY = 'gipc_schedule_times_v1';
+    const sharedScheduleTimes = {
+      morning: '10:00',
+      evening: '14:00',
+    };
+    try {
+      const rawStoredTimes = global.localStorage?.getItem?.(SCHEDULE_TIMES_STORAGE_KEY);
+      if (rawStoredTimes) {
+        const parsedTimes = JSON.parse(rawStoredTimes);
+        if (isValidTime(parsedTimes?.morning)) sharedScheduleTimes.morning = parsedTimes.morning.trim();
+        if (isValidTime(parsedTimes?.evening)) sharedScheduleTimes.evening = parsedTimes.evening.trim();
+      }
+    } catch {}
+
+    function getDefaultScheduleTime(period) {
+      if (period === 'evening' || period === 'cert_pm_send') {
+        return isValidTime(sharedScheduleTimes.evening) ? sharedScheduleTimes.evening : '14:00';
+      }
+      return isValidTime(sharedScheduleTimes.morning) ? sharedScheduleTimes.morning : '10:00';
+    }
+
+    function applyLoadedScheduleTimes(serverTimes) {
+      if (!serverTimes || typeof serverTimes !== 'object') return;
+      let changed = false;
+      if (isValidTime(serverTimes.morning)) {
+        sharedScheduleTimes.morning = String(serverTimes.morning).trim();
+        changed = true;
+      }
+      if (isValidTime(serverTimes.evening)) {
+        sharedScheduleTimes.evening = String(serverTimes.evening).trim();
+        changed = true;
+      }
+      if (changed) {
+        try {
+          global.localStorage?.setItem?.(SCHEDULE_TIMES_STORAGE_KEY, JSON.stringify(sharedScheduleTimes));
+        } catch {}
+      }
+    }
+
+    async function saveDefaultScheduleTimes(updates = {}) {
+      if (isValidTime(updates.morning)) {
+        sharedScheduleTimes.morning = updates.morning.trim();
+      }
+      if (isValidTime(updates.evening)) {
+        sharedScheduleTimes.evening = updates.evening.trim();
+      }
+      try {
+        global.localStorage?.setItem?.(SCHEDULE_TIMES_STORAGE_KEY, JSON.stringify(sharedScheduleTimes));
+      } catch {}
+      if (!API_BASE) return true;
+      try {
+        const formData = new FormData();
+        formData.append('morning', sharedScheduleTimes.morning);
+        formData.append('evening', sharedScheduleTimes.evening);
+        const response = await fetch(`${API_BASE}/admin/planning-schedule-times`, {
+          method: 'PUT',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          body: formData,
+        });
+        if (!response.ok) return false;
+        const data = await response.json().catch(() => null);
+        if (data?.schedule_times) {
+          applyLoadedScheduleTimes(data.schedule_times);
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     function candidateTokens(user, examDate, examTime, period) {
       const fullName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || '(უსახელო)';
       const personalId = String(user?.personal_id || '—').trim();
@@ -565,7 +635,7 @@
             letterId: letter ? letter.id : null,
             examDate: sched.exam_date,
             period: sched.period,
-            eventTime: letter ? letter.event_time : '',
+            eventTime: (letter && letter.event_time) ? letter.event_time : getDefaultScheduleTime(sched.period),
             subject: letter ? letter.subject : '',
             body: letter ? letter.body : '',
             status: letter ? letter.status : 'saved',
@@ -716,6 +786,9 @@
                 body: normalizeGreeting(failTmpl.body, DEFAULT_EXAM_FAIL_BODY),
               };
             }
+            if (tmplData?.schedule_times) {
+              applyLoadedScheduleTimes(tmplData.schedule_times);
+            }
             sharedTemplatesLoaded = true;
           }
 
@@ -845,8 +918,18 @@
 
         const initialDate = editingItem?.examDate || (hasTimeAndPeriod ? '' : todayIsoDate());
         const initialPeriod = hasTimeAndPeriod ? (editingItem?.period || '') : resolvedMode;
+        let modalMorningTime = (editingItem && initialPeriod === 'morning' && isValidTime(editingItem.eventTime))
+          ? editingItem.eventTime.trim()
+          : getDefaultScheduleTime('morning');
+        let modalEveningTime = (editingItem && initialPeriod === 'evening' && isValidTime(editingItem.eventTime))
+          ? editingItem.eventTime.trim()
+          : getDefaultScheduleTime('evening');
         const initialTime = hasTimeAndPeriod
-          ? (editingItem?.eventTime || (initialPeriod === 'morning' ? '10:00' : initialPeriod === 'evening' ? '14:00' : ''))
+          ? (initialPeriod === 'morning'
+              ? modalMorningTime
+              : initialPeriod === 'evening'
+                ? modalEveningTime
+                : (editingItem?.eventTime || ''))
           : '00:00';
         let lastTokens = candidateTokens(user, initialDate, initialTime, initialPeriod);
 
@@ -877,17 +960,80 @@
                     <label class="exam-schedule-date-label">${escapeHtml(meta.dateLabel)}
                       <input class="exam-schedule-date users-filter-date" type="date" value="${escapeHtml(initialDate)}" />
                     </label>
-                    <label class="users-filter-label">
-                      <input class="exam-schedule-morning" type="checkbox" ${initialPeriod === 'morning' ? 'checked' : ''} />
-                      <span>დილით</span>
-                    </label>
-                    <label class="users-filter-label">
-                      <input class="exam-schedule-evening" type="checkbox" ${initialPeriod === 'evening' ? 'checked' : ''} />
-                      <span>საღამოს</span>
-                    </label>
-                    <label class="exam-schedule-time-label">საათი
-                      <input class="exam-schedule-time users-filter-date" type="time" step="60" value="${escapeHtml(initialTime)}" />
-                    </label>
+
+                    <div class="exam-schedule-period-group ${initialPeriod === 'morning' ? 'is-active' : ''}" data-period-group="morning">
+                      <label class="users-filter-label exam-schedule-period-check">
+                        <input class="exam-schedule-morning" type="checkbox" ${initialPeriod === 'morning' ? 'checked' : ''} />
+                        <span>დილით</span>
+                      </label>
+                      <button type="button" class="exam-schedule-time-trigger" data-time-trigger="morning" title="დილის საათის რეგულირება" aria-expanded="false">
+                        <svg class="exam-schedule-clock-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span class="exam-schedule-time-trigger-text" data-time-display="morning">${escapeHtml(modalMorningTime)}</span>
+                        <span class="exam-schedule-time-trigger-badge" data-time-badge="morning" ${modalMorningTime !== getDefaultScheduleTime('morning') ? '' : 'hidden'}>ერთჯერადი</span>
+                        <span class="exam-schedule-time-trigger-pill">დრო ▾</span>
+                      </button>
+                      <div class="exam-schedule-time-popover" data-time-popover="morning" hidden>
+                        <div class="exam-schedule-time-popover-head">
+                          <span class="exam-schedule-time-popover-title">დილის საათის რეგულირება</span>
+                          <button type="button" class="exam-schedule-time-popover-close" data-time-close="morning" aria-label="დახურვა">×</button>
+                        </div>
+                        <div class="exam-schedule-time-popover-meta">
+                          სტანდარტული დრო: <strong data-default-display="morning">${escapeHtml(getDefaultScheduleTime('morning'))}</strong>
+                        </div>
+                        <label class="exam-schedule-time-popover-field">
+                          <span>აირჩიეთ საათი:</span>
+                          <input class="exam-schedule-morning-time users-filter-date" type="time" step="60" value="${escapeHtml(modalMorningTime)}" aria-label="დილის საათი" />
+                        </label>
+                        <div class="exam-schedule-time-popover-actions">
+                          <button type="button" class="exam-schedule-time-once-btn" data-time-once="morning">
+                            ერთჯერადი ცვლილება
+                          </button>
+                          <button type="button" class="exam-schedule-time-default-btn" data-time-default="morning">
+                            სტანდარტული დროის შენახვა
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="exam-schedule-period-group ${initialPeriod === 'evening' ? 'is-active' : ''}" data-period-group="evening">
+                      <label class="users-filter-label exam-schedule-period-check">
+                        <input class="exam-schedule-evening" type="checkbox" ${initialPeriod === 'evening' ? 'checked' : ''} />
+                        <span>საღამოს</span>
+                      </label>
+                      <button type="button" class="exam-schedule-time-trigger" data-time-trigger="evening" title="საღამოს საათის რეგულირება" aria-expanded="false">
+                        <svg class="exam-schedule-clock-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span class="exam-schedule-time-trigger-text" data-time-display="evening">${escapeHtml(modalEveningTime)}</span>
+                        <span class="exam-schedule-time-trigger-badge" data-time-badge="evening" ${modalEveningTime !== getDefaultScheduleTime('evening') ? '' : 'hidden'}>ერთჯერადი</span>
+                        <span class="exam-schedule-time-trigger-pill">დრო ▾</span>
+                      </button>
+                      <div class="exam-schedule-time-popover" data-time-popover="evening" hidden>
+                        <div class="exam-schedule-time-popover-head">
+                          <span class="exam-schedule-time-popover-title">საღამოს საათის რეგულირება</span>
+                          <button type="button" class="exam-schedule-time-popover-close" data-time-close="evening" aria-label="დახურვა">×</button>
+                        </div>
+                        <div class="exam-schedule-time-popover-meta">
+                          სტანდარტული დრო: <strong data-default-display="evening">${escapeHtml(getDefaultScheduleTime('evening'))}</strong>
+                        </div>
+                        <label class="exam-schedule-time-popover-field">
+                          <span>აირჩიეთ საათი:</span>
+                          <input class="exam-schedule-evening-time users-filter-date" type="time" step="60" value="${escapeHtml(modalEveningTime)}" aria-label="საღამოს საათი" />
+                        </label>
+                        <div class="exam-schedule-time-popover-actions">
+                          <button type="button" class="exam-schedule-time-once-btn" data-time-once="evening">
+                            ერთჯერადი ცვლილება
+                          </button>
+                          <button type="button" class="exam-schedule-time-default-btn" data-time-default="evening">
+                            სტანდარტული დროის შენახვა
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ` : `
                   <div class="exam-schedule-controls exam-rejection-controls">
@@ -988,7 +1134,20 @@
         const dateInput = overlay.querySelector('.exam-schedule-date');
         const morning = overlay.querySelector('.exam-schedule-morning');
         const evening = overlay.querySelector('.exam-schedule-evening');
-        const timeInput = overlay.querySelector('.exam-schedule-time');
+        const morningTimeInput = overlay.querySelector('.exam-schedule-morning-time');
+        const eveningTimeInput = overlay.querySelector('.exam-schedule-evening-time');
+        const morningGroup = overlay.querySelector('[data-period-group="morning"]');
+        const eveningGroup = overlay.querySelector('[data-period-group="evening"]');
+        const morningTrigger = overlay.querySelector('[data-time-trigger="morning"]');
+        const eveningTrigger = overlay.querySelector('[data-time-trigger="evening"]');
+        const morningPopover = overlay.querySelector('[data-time-popover="morning"]');
+        const eveningPopover = overlay.querySelector('[data-time-popover="evening"]');
+        const morningDisplay = overlay.querySelector('[data-time-display="morning"]');
+        const eveningDisplay = overlay.querySelector('[data-time-display="evening"]');
+        const morningBadge = overlay.querySelector('[data-time-badge="morning"]');
+        const eveningBadge = overlay.querySelector('[data-time-badge="evening"]');
+        const morningDefaultDisplay = overlay.querySelector('[data-default-display="morning"]');
+        const eveningDefaultDisplay = overlay.querySelector('[data-default-display="evening"]');
         const subjectInput = overlay.querySelector('.exam-schedule-subject');
         const bodyInput = overlay.querySelector('.exam-schedule-body');
         const textEditBtn = overlay.querySelector('.exam-schedule-text-edit-btn');
@@ -1007,19 +1166,64 @@
           statusEl.classList.toggle('is-error', !!isError);
         }
 
+        function syncPeriodGroupState() {
+          morningGroup?.classList.toggle('is-active', !!morning?.checked);
+          eveningGroup?.classList.toggle('is-active', !!evening?.checked);
+        }
+
+        function syncTimeTriggerUI() {
+          const defMorning = getDefaultScheduleTime('morning');
+          const defEvening = getDefaultScheduleTime('evening');
+          if (morningDisplay) morningDisplay.textContent = modalMorningTime;
+          if (eveningDisplay) eveningDisplay.textContent = modalEveningTime;
+          if (morningDefaultDisplay) morningDefaultDisplay.textContent = defMorning;
+          if (eveningDefaultDisplay) eveningDefaultDisplay.textContent = defEvening;
+          if (morningBadge) morningBadge.hidden = modalMorningTime === defMorning;
+          if (eveningBadge) eveningBadge.hidden = modalEveningTime === defEvening;
+        }
+
+        function closeTimePopovers() {
+          if (morningPopover) morningPopover.hidden = true;
+          if (eveningPopover) eveningPopover.hidden = true;
+          morningTrigger?.setAttribute('aria-expanded', 'false');
+          eveningTrigger?.setAttribute('aria-expanded', 'false');
+          morningTrigger?.classList.remove('is-open');
+          eveningTrigger?.classList.remove('is-open');
+        }
+
+        function toggleTimePopover(periodKey) {
+          const isMorning = periodKey === 'morning';
+          const targetPopover = isMorning ? morningPopover : eveningPopover;
+          const targetTrigger = isMorning ? morningTrigger : eveningTrigger;
+          const targetInput = isMorning ? morningTimeInput : eveningTimeInput;
+          if (!targetPopover) return;
+          const willOpen = targetPopover.hidden;
+          closeTimePopovers();
+          if (willOpen) {
+            if (targetInput) {
+              targetInput.value = isMorning ? modalMorningTime : modalEveningTime;
+            }
+            syncTimeTriggerUI();
+            targetPopover.hidden = false;
+            targetTrigger?.setAttribute('aria-expanded', 'true');
+            targetTrigger?.classList.add('is-open');
+            setTimeout(() => targetInput?.focus(), 20);
+          }
+        }
+
         function currentPeriod() {
           if (!hasTimeAndPeriod) return resolvedMode;
           if (morning?.checked) return 'morning';
           if (evening?.checked) return 'evening';
-          if (timeInput && isValidTime(timeInput.value)) {
-            return timeInput.value < '12:00' ? 'morning' : 'evening';
-          }
           return '';
         }
 
         function currentTimeValue() {
           if (!hasTimeAndPeriod) return '00:00';
-          return timeInput ? timeInput.value.trim() : '';
+          const period = currentPeriod();
+          if (period === 'morning') return modalMorningTime;
+          if (period === 'evening') return modalEveningTime;
+          return '';
         }
 
         function refreshRenderedText({ forceTemplate = false } = {}) {
@@ -1095,6 +1299,7 @@
           refreshRenderedText({ forceTemplate: true });
         }
         updateAttachmentUI();
+        syncTimeTriggerUI();
 
         // Event listeners inside modal
         dateInput?.addEventListener('change', () => {
@@ -1103,40 +1308,129 @@
         });
 
         morning?.addEventListener('change', () => {
-          if (morning.checked) {
+          if (morning.checked && evening) {
             evening.checked = false;
-            if (!timeInput.value || timeInput.value >= '12:00') {
-              timeInput.value = '10:00';
-            }
           }
+          syncPeriodGroupState();
           setModalStatus('');
           refreshRenderedText();
         });
 
         evening?.addEventListener('change', () => {
-          if (evening.checked) {
+          if (evening.checked && morning) {
             morning.checked = false;
-            if (!timeInput.value || timeInput.value < '12:00') {
-              timeInput.value = '14:00';
-            }
           }
+          syncPeriodGroupState();
           setModalStatus('');
           refreshRenderedText();
         });
 
-        timeInput?.addEventListener('input', () => {
-          const val = timeInput.value;
-          if (isValidTime(val)) {
-            if (val < '12:00') {
-              if (morning) morning.checked = true;
-              if (evening) evening.checked = false;
-            } else {
-              if (evening) evening.checked = true;
-              if (morning) morning.checked = false;
+        morningTrigger?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleTimePopover('morning');
+        });
+
+        eveningTrigger?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleTimePopover('evening');
+        });
+
+        overlay.querySelectorAll('[data-time-close]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeTimePopovers();
+          });
+        });
+
+        // Clicking inside popover should not close it
+        morningPopover?.addEventListener('click', (e) => e.stopPropagation());
+        eveningPopover?.addEventListener('click', (e) => e.stopPropagation());
+
+        // Clicking anywhere else in the modal closes open time popovers
+        overlay.querySelector('.modal')?.addEventListener('click', () => {
+          closeTimePopovers();
+        });
+
+        // Input changes inside the popover apply as a one-time change by default (without checking checkbox!)
+        const applyOneTimeChange = (periodKey, closeCard = false) => {
+          const isMorning = periodKey === 'morning';
+          const inputEl = isMorning ? morningTimeInput : eveningTimeInput;
+          const val = inputEl?.value?.trim() || '';
+          if (!isValidTime(val)) {
+            if (closeCard) {
+              setModalStatus('გთხოვთ მიუთითოთ სწორი საათი (მაგ.: 10:00 ან 14:00).', true);
+              inputEl?.focus();
             }
+            return;
           }
-          setModalStatus('');
+          if (isMorning) {
+            modalMorningTime = val;
+          } else {
+            modalEveningTime = val;
+          }
+          syncTimeTriggerUI();
           refreshRenderedText();
+          if (closeCard) {
+            closeTimePopovers();
+            const label = isMorning ? 'დილის' : 'საღამოს';
+            setModalStatus(`${label} საათი (${val}) დაყენდა ერთჯერადად ამ განცხადებისთვის.`);
+          }
+        };
+
+        morningTimeInput?.addEventListener('input', () => applyOneTimeChange('morning', false));
+        morningTimeInput?.addEventListener('change', () => applyOneTimeChange('morning', false));
+        eveningTimeInput?.addEventListener('input', () => applyOneTimeChange('evening', false));
+        eveningTimeInput?.addEventListener('change', () => applyOneTimeChange('evening', false));
+
+        overlay.querySelector('[data-time-once="morning"]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyOneTimeChange('morning', true);
+        });
+
+        overlay.querySelector('[data-time-once="evening"]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyOneTimeChange('evening', true);
+        });
+
+        const applyAndSaveStandardTime = async (periodKey, btnEl) => {
+          const isMorning = periodKey === 'morning';
+          const inputEl = isMorning ? morningTimeInput : eveningTimeInput;
+          const val = inputEl?.value?.trim() || '';
+          if (!isValidTime(val)) {
+            setModalStatus('გთხოვთ მიუთითოთ სწორი საათი (მაგ.: 10:00 ან 14:00).', true);
+            inputEl?.focus();
+            return;
+          }
+          if (isMorning) {
+            modalMorningTime = val;
+          } else {
+            modalEveningTime = val;
+          }
+          if (btnEl) btnEl.disabled = true;
+          const ok = await saveDefaultScheduleTimes(isMorning ? { morning: val } : { evening: val });
+          if (btnEl) btnEl.disabled = false;
+          syncTimeTriggerUI();
+          refreshRenderedText();
+          closeTimePopovers();
+          const label = isMorning ? 'დილის' : 'საღამოს';
+          if (ok) {
+            const msg = `${label} სტანდარტული დრო (${val}) შეინახა ყველა შემდეგი განცხადებისთვის და აისახა ამ განცხადებაზეც.`;
+            setModalStatus(msg, false);
+            showToast(`${label} სტანდარტული დრო (${val}) შეინახა`);
+          } else {
+            setModalStatus(`${label} სტანდარტული დროის სერვერზე შენახვა ვერ მოხერხდა.`, true);
+            showToast('სტანდარტული დროის შენახვა ვერ მოხერხდა', 'error');
+          }
+        };
+
+        overlay.querySelector('[data-time-default="morning"]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          void applyAndSaveStandardTime('morning', e.currentTarget);
+        });
+
+        overlay.querySelector('[data-time-default="evening"]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          void applyAndSaveStandardTime('evening', e.currentTarget);
         });
 
         textEditBtn?.addEventListener('click', () => {
@@ -1239,6 +1533,7 @@
         // Step 1 -> Step 2 ("შემდეგი")
         nextBtn.addEventListener('click', () => {
           if (modalBusy) return;
+          closeTimePopovers();
           if (!hasTimeAndPeriod && !isValidDate(dateInput.value)) {
             dateInput.value = todayIsoDate();
           }
@@ -1251,18 +1546,14 @@
           const period = currentPeriod();
           if (hasTimeAndPeriod) {
             if (!period) {
-              setModalStatus('აირჩიეთ „დილით“ ან „საღამოს“, ან მიუთითეთ საათი.', true);
+              setModalStatus('აირჩიეთ „დილით“ ან „საღამოს“.', true);
               morning?.focus();
               return;
-            }
-            if (morning && evening && !morning.checked && !evening.checked) {
-              if (period === 'morning') morning.checked = true;
-              else evening.checked = true;
             }
             const examTime = currentTimeValue();
             if (!isValidTime(examTime)) {
               setModalStatus('გთხოვთ მიუთითოთ საათი (მაგ.: 10:00 ან 14:00).', true);
-              timeInput?.focus();
+              toggleTimePopover(period);
               return;
             }
           }
@@ -1864,11 +2155,14 @@
 
           filtered.forEach((item) => {
             const meta = MODE_META[item.mode] || MODE_META.exam;
-            const row = document.createElement('details');
+            const row = document.createElement('div');
             row.className = `exam-schedule-row ${item.rowClass || meta.rowClass}`;
 
-            const summary = document.createElement('summary');
+            const summary = document.createElement('div');
             summary.className = 'exam-schedule-row-head';
+            summary.setAttribute('role', 'button');
+            summary.setAttribute('tabindex', '0');
+            summary.setAttribute('aria-expanded', 'false');
 
             const headLeft = document.createElement('div');
             headLeft.className = 'exam-schedule-head-left';
@@ -1912,6 +2206,7 @@
 
             const bodyWrap = document.createElement('div');
             bodyWrap.className = 'exam-schedule-row-body';
+            bodyWrap.hidden = true;
 
             const bodyBar = document.createElement('div');
             bodyBar.className = 'exam-schedule-body-bar';
@@ -2073,23 +2368,32 @@
 
             row.appendChild(bodyWrap);
 
+            const setRowOpen = (openState) => {
+              row.classList.toggle('is-open', openState);
+              bodyWrap.hidden = !openState;
+              summary.setAttribute('aria-expanded', openState ? 'true' : 'false');
+              if (openState && item.isIncomingStatement && item.seenAt == null) {
+                void markStatementSeenInModal(item.statementId, item, row, badge);
+              }
+            };
+
+            summary.addEventListener('click', () => {
+              setRowOpen(!row.classList.contains('is-open'));
+            });
+
+            summary.addEventListener('keydown', (ev) => {
+              if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                setRowOpen(!row.classList.contains('is-open'));
+              }
+            });
+
             const matchesInsideText = needle && (
               String(item.subject || '').toLowerCase().includes(needle)
               || String(item.body || '').toLowerCase().includes(needle)
             );
             if (expandAllTexts || matchesInsideText) {
-              row.open = true;
-              if (item.isIncomingStatement && item.seenAt == null) {
-                void markStatementSeenInModal(item.statementId, item, row, badge);
-              }
-            }
-
-            if (item.isIncomingStatement) {
-              row.addEventListener('toggle', () => {
-                if (row.open && item.seenAt == null) {
-                  void markStatementSeenInModal(item.statementId, item, row, badge);
-                }
-              });
+              setRowOpen(true);
             }
 
             historyContainer.appendChild(row);

@@ -1,93 +1,68 @@
 (function (global) {
-  const DEFAULT_EXAM_SUBJECT = 'გამოცდაზე დაშვება და საგამოცდო დეტალები';
+  const DEFAULT_EXAM_SUBJECT = 'გამოცდაზე დაშვება';
   const DEFAULT_EXAM_BODY = [
-    'ბატონო/ქალბატონო {name},',
-    'გაცნობებთ, რომ თქვენი განაცხადი დადასტურდა და დაშვებული ხართ სერტიფიცირების გამოცდაზე.',
+    'ადრესატი: {name}',
     '',
-    '• კანდიდატი: {name}',
-    '• განაცხადის ნომერი: {code}',
-    '• გამოცდის თარიღი და დაწყების დრო: {date}, {time}',
-    '• გამოცხადების დრო (რეგისტრაცია და ხელშეკრულების ხელმოწერა): გამოცდის დაწყებამდე 30 წუთით ადრე',
-    '• საგამოცდო ცენტრის მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6',
-    '• საგამოცდო საფასური: 350 ლარი',
-    '• გადახდის ვადა: საგამოცდო ხელშეკრულების (GIPC-CON-004) გაფორმებამდე (ხელმოწერამდე — წინა დღეებში ან ადგილზევე ხელმოწერის წინ უნაღდო ანგარიშსწორებით / ინტერნეტბანკით)',
-    '• საბანკო ანგარიში: GE33TB7313736080100014',
-    '• გადახდის დანიშნულება: საგამოცდო საფასური, {name}, {code}',
+    'მოგესალმებით,',
     '',
-    'შეტყობინებას გასაცნობად თან ერთვის საგამოცდო მომსახურების ხელშეკრულება (GIPC-CON-004, რომელიც ასევე საჯაროდ ხელმისაწვდომია ვებგვერდზე gipc.org.ge). გამოცდაზე დასაშვებად აუცილებელია საგამოცდო საფასურის (350 ლარი) გადახდა საგამოცდო ხელშეკრულების გაფორმებამდე (ხელმოწერამდე — წინა დღეებში ან ადგილზევე ხელმოწერის წინ უნაღდო ანგარიშსწორებით / ინტერნეტბანკით) და საგამოცდო ცენტრში გამოცდის დაწყებამდე 30 წუთით ადრე გამოცხადება პირადობის დამადასტურებელი მოქმედი დოკუმენტით, საგამოცდო მომსახურების ხელშეკრულების (GIPC-CON-004) ადგილზე ხელმოწერისა და რეგისტრაციის გავლის მიზნით (GIPC-PRO-002 §10.1).',
+    'გაცნობებთ, რომ თქვენი განაცხადი დადასტურდა და დაშვებული ხართ სერტიფიცირების გამოცდაზე. თქვენი გამოცდა დაიგეგმა {date}, {time}-ზე, მისამართზე: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6.',
+    '',
+    'გამოცდაზე დასაშვებად აუცილებელია:',
+    '- საგამოცდო მომსახურების ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});',
+    '- საგამოცდო ცენტრში გამოცხადდეთ გამოცდის დაწყებამდე 30 წუთით ადრე პირადობის დამადასტურებელი მოქმედი დოკუმენტით, ხელშეკრულებაზე ხელმოწერისა და რეგისტრაციის გავლის მიზნით.',
+    '',
+    'გთხოვთ წინასწარ გაეცნოთ შესაბამისი მომსახურების ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.',
     '',
     'პატივისცემით,',
-    'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
   ].join('\n');
 
-  const DEFAULT_REJECTION_SUBJECT = 'სერტიფიცირების განაცხადის უარყოფა';
+  const DEFAULT_REJECTION_SUBJECT = 'განაცხადის უარყოფა';
   const DEFAULT_REJECTION_BODY = [
-    'ბატონო/ქალბატონო {name},',
-    'გაცნობებთ, რომ თქვენი სერტიფიცირების განაცხადი არ დაკმაყოფილდა.',
+    'ადრესატი: {name}',
     '',
-    '• განაცხადის ნომერი: {code}',
-    '• მოთხოვნილი კატეგორია: [A / B / C]',
-    '• გადაწყვეტილების თარიღი: {date}',
-    '• უარის საფუძველი: [სქემის/პროცედურის შესაბამისი პუნქტი]',
+    'მოგესალმებით,',
     '',
-    'გადაწყვეტილების დასაბუთება:',
-    '1. [ფაქტობრივი და ნორმატიული დასაბუთება];',
-    '2. [ფაქტობრივი და ნორმატიული დასაბუთება].',
+    'გაცნობებთ, რომ თქვენი განაცხადი არ დაკმაყოფილდა, ვინაიდან ვერ აკმაყოფილებთ საქართველოს მთავრობის №134 დადგენილებითა და სერტიფიკაციის სქემით განსაზღვრულ სასერტიფიკაციო მოთხოვნებს.',
     '',
-    'აღნიშნული გადაწყვეტილება შეგიძლიათ გაასაჩივროთ ინსტიტუტის დამოუკიდებელ სააპელაციო რგოლში შეტყობინების ჩაბარებიდან 20 სამუშაო დღის ვადაში, საჩივრებისა და აპელაციების პროცედურის (GIPC-PRO-003 §6) შესაბამისად.',
+    'გადაწყვეტილების გასაჩივრების წესი და ვადები იხილეთ საიტზე gipc.org.ge-ზე გამოქვეყნებულ შესაბამის ოფიციალურ დოკუმენტებში.',
     '',
     'პატივისცემით,',
-    'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
   ].join('\n');
 
-  const DEFAULT_CERTIFICATE_SUBJECT = 'სერტიფიცირების გამოცდის წარმატებით ჩაბარება და სერტიფიკატის გაცემის პირობები';
+  const DEFAULT_CERTIFICATE_SUBJECT = 'სერტიფიცირების გამოცდის წარმატებით ჩაბარება';
   const DEFAULT_CERTIFICATE_BODY = [
-    'ბატონო/ქალბატონო {name},',
-    'გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და თქვენი სერტიფიცირების განაცხადისა (GIPC-FRM-001) და საქმის მასალების საფუძველზე მიღებულია დადებითი გადაწყვეტილება თქვენთვის სერტიფიკატის მინიჭების შესახებ.',
+    'ადრესატი: {name}',
     '',
-    '• განაცხადის ნომერი და თარიღი: {code} / {date}',
-    '• საგამოცდო მცდელობის ნომერი და თარიღი: {code} / {date}',
-    '• ეტაპი I (თეორიული ტესტირება): [თითოეულ თავში/ქვეთავში ≥X% — ბარიერი: ≥70% (A) / ≥75% (B/C)]',
-    '• ეტაპი II (მრავალბინიანი საცხოვრებელი სახლის პროექტი): [ნაპოვნი ხარვეზების %; არასწორი მონიშვნა: X — ბარიერი: ≥70%, ≤2 (A) / ≥75%, ≤1 (B/C)]',
-    '• ეტაპი III (საჯარო/საზოგადოებრივი შენობის პროექტი): [ნაპოვნი ხარვეზების %; არასწორი მონიშვნა: X — ბარიერი: ≥70%, ≤2 (A) / ≥75%, ≤1 (B/C)]',
-    '• დაკმაყოფილებული საგამოცდო ბარიერი: [კატეგორია A დონე (≥70%, ≤2) / კატეგორია B და C დონე (≥75%, ≤1)]',
-    '• მინიჭებული სერტიფიკატის კატეგორია: [კატეგორია A — შენობა-ნაგებობის არქიტექტორი / კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი / კატეგორია C — არქიტექტურული პროექტის ექსპერტი] (შენიშვნა: თუ განაცხადი წარდგენილი გქონდათ B ან C კატეგორიაზე და გამოცდაზე დაძლიეთ A კატეგორიის ≥70%-იანი ბარიერი, GIPC-FRM-001 §3-ში დაფიქსირებული თქვენი თანხმობის შესაბამისად გენიჭებათ A კატეგორიის სერტიფიკატი)',
-    '• საგამოცდო შედეგის მოქმედების ვადა (1 წელი): {date}',
-    '• სერტიფიკატის გაცემის საფასური: 3 000 ლარი (ერთჯერადად, სრულად)',
-    '• საბანკო ანგარიში: GE33TB7313736080100014',
-    '• გადახდის დანიშნულება: სერტიფიკატის გაცემის საფასური, {name}, {code}',
-    '• ხელშეკრულების ხელმოწერის დღეები და საათები: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6; {date}, {time} ({period}) / ან კვალიფიციური ელექტრონული ხელმოწერით',
+    'მოგესალმებით,',
     '',
-    'შეტყობინებას თან ერთვის უკვე გამზადებული შესაბამისი კატეგორიის სასერტიფიკაციო ხელშეკრულება (GIPC-CON-001 / GIPC-CON-002 / GIPC-CON-003) (საჭიროების შემთხვევაში, შეტყობინებას ასევე შეიძლება დაერთოს ინდივიდუალური საგამოცდო ანგარიში PDF ფორმატში, თუ შედეგების დეტალიზაცია სრულად არ არის ასახული წერილის ცხრილში ან საგამოცდო პლატფორმაში).',
+    'გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და მიღებულია გადაწყვეტილება თქვენთვის [კატეგორია] სერტიფიკატის მინიჭების შესახებ.',
     '',
-    'სერტიფიკატის გაცემისა და გააქტიურების წესი:',
-    '1. საფასურის გადახდა და ხელშეკრულების ხელმოწერა: სერტიფიკატის მისაღებად გთხოვთ საგამოცდო შედეგის მოქმედების 1 (ერთი) წლის ვადაში (GIPC-PRO-001 §5.6.3) გადაიხადოთ სერტიფიკატის გაცემის ერთჯერადი საფასური (3 000 ლარი) და მობრძანდეთ ინსტიტუტის ოფისში ზემოთ მითითებულ მიღების დღეებსა და საათებში უკვე გამზადებულ სასერტიფიკაციო ხელშეკრულებაზე ხელმოსაწერად (ან დაადასტუროთ ხელშეკრულება კვალიფიციური ელექტრონული ხელმოწერით).',
-    '2. სერტიფიკატის გააქტიურება: საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 (ათი) სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და იგი გააქტიურდება ინსტიტუტის ვებგვერდზე (gipc.org.ge) განთავსებულ საჯარო რეესტრში (GIPC-PRO-001 §§5.7.2, 5.9).',
-    '3. შედეგის გაუმჯობესება ან გასაჩივრება: თუ დააკმაყოფილეთ მხოლოდ A კატეგორიის ბარიერი და გსურთ B ან C კატეგორიის ბარიერის (≥75%, თითოეულ პროექტში არაუმეტეს 1 არასწორი მონიშვნისა) დაძლევა, უფლება გაქვთ ნებისმიერ დროს განმეორებით ჩააბაროთ სრული გამოცდა (სტანდარტული საგამოცდო საფასური — 350 ლარი; GIPC-PRO-001 §10.1). საგამოცდო შედეგის გასაჩივრება შეგიძლიათ დამოუკიდებელ სააპელაციო რგოლში შეტყობინების მიღებიდან 20 სამუშაო დღის ვადაში (GIPC-PRO-003 §6).',
+    'სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში:',
+    '- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});',
+    '- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.',
+    '',
+    'საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.',
+    '',
+    'გთხოვთ წინასწარ გაეცნოთ შესაბამის სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.',
     '',
     'პატივისცემით,',
-    'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
   ].join('\n');
 
   const DEFAULT_EXAM_FAIL_SUBJECT = 'სერტიფიცირების გამოცდის შედეგი';
   const DEFAULT_EXAM_FAIL_BODY = [
-    'ბატონო/ქალბატონო {name},',
+    'ადრესატი: {name}',
+    '',
+    'მოგესალმებით,',
+    '',
     'გაცნობებთ, რომ სერტიფიცირების გამოცდაზე ვერ დააკმაყოფილეთ სერტიფიცირების სქემით დადგენილი გამსვლელი ბარიერი.',
     '',
-    '• საგამოცდო მცდელობის ნომერი და თარიღი: {code} / {date}',
-    '• ეტაპი I (თეორიული ტესტირება): [ქულა / % თეორიული თავებისა და ქვეთავების მიხედვით]',
-    '• ეტაპი II (მრავალბინიანი საცხოვრებელი სახლის პროექტი): [ნაპოვნი ხარვეზების %; არასწორი მონიშვნა: X]',
-    '• ეტაპი III (საჯარო/საზოგადოებრივი შენობის პროექტი): [ნაპოვნი ხარვეზების %; არასწორი მონიშვნა: X]',
-    '• შეუსრულებელი კრიტერიუმი: [კონკრეტული ეტაპი და ზღვარი, რომელიც ვერ დაკმაყოფილდა]',
-    '',
-    'ზემოთ მოცემულ ცხრილში (ან საჭიროების შემთხვევაში — შეტყობინებაზე თანდართულ ინდივიდუალურ საგამოცდო ანგარიშში / საგამოცდო პლატფორმის პირად კაბინეტში) მოცემულია I ეტაპის შედეგები თეორიული თავებისა და ქვეთავების მიხედვით, აგრეთვე II და III ეტაპების თითოეულ პროექტში ნაპოვნი ხარვეზების პროცენტული მაჩვენებელი და არასწორი/ზედმეტი მონიშვნების რაოდენობა (GIPC-PRO-002 §12.2; წერილში მოცემული ცხრილის გარდა ცალკე დამატებითი PDF-ანგარიშის მიბმა სავალდებულო არ არის და გამოიყენება მხოლოდ საჭიროების შემთხვევაში). საგამოცდო მასალების კონფიდენციალურობის დაცვის მიზნით ტესტური კითხვების ტექსტი, სწორი პასუხების დამტკიცებული ჩამონათვალი, დავალების შეფასების დოკუმენტები და საგამოცდო პროექტების ასლები არ გაიცემა (GIPC-POL-002 §7).',
-    '',
-    'განმეორებითი გამოცდა და გასაჩივრება:',
-    '1. განმეორებითი გამოცდა: უფლება გაქვთ სრული გამოცდა ჩააბაროთ განმეორებით, მცდელობათა რაოდენობის შეზღუდვისა და სავალდებულო მოცდის პერიოდის გარეშე (GIPC-PRO-001 §10.1). ახალი გამოცდის თარიღი და დრო განისაზღვრება თქვენთან შეთანხმებით; თითოეული სტანდარტული საგამოცდო მცდელობის საფასურია 350 ლარი (გამოცდის ვერ ჩაბარებისას სერტიფიკატის გაცემის 3 000-ლარიანი საფასური არ გადაიხდება).',
-    '2. გასაჩივრების უფლება: საგამოცდო შედეგის გასაჩივრება შეგიძლიათ ინსტიტუტის დამოუკიდებელ სააპელაციო რგოლში შეტყობინების მიღებიდან 20 სამუშაო დღის ვადაში, საჩივრებისა და აპელაციების პროცედურის (GIPC-PRO-003 §6) შესაბამისად. თუ აპელაციის შედეგად დადგინდება ინსტიტუტის პასუხისმგებლობით გამოწვეული ტექნიკური ან პროცედურული ხარვეზი, ჩაინიშნება განმეორებითი საგამოცდო სესია დამატებითი საფასურის გარეშე (ხოლო გადახდილი საგამოცდო საფასურის დაბრუნება განხორციელდება იმ შემთხვევაში, თუ ინსტიტუტი 30 კალენდარული დღის ვადაში ვერ უზრუნველყოფს განმეორებითი სესიის ჩატარებას — GIPC-PRO-003 §6.5.1, GIPC-CON-004 §9.5).',
+    'განმეორებით გამოცდაზე გასვლისა და შედეგის გასაჩივრების (აპელაციის) წესი განთავსებულია საიტზე gipc.org.ge.',
     '',
     'პატივისცემით,',
-    'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“',
+    'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
   ].join('\n');
 
   const MODE_META = {
@@ -354,6 +329,76 @@
     };
     let sharedTemplatesLoaded = false;
 
+    const SCHEDULE_TIMES_STORAGE_KEY = 'gipc_schedule_times_v1';
+    const sharedScheduleTimes = {
+      morning: '10:00',
+      evening: '14:00',
+    };
+    try {
+      const rawStoredTimes = global.localStorage?.getItem?.(SCHEDULE_TIMES_STORAGE_KEY);
+      if (rawStoredTimes) {
+        const parsedTimes = JSON.parse(rawStoredTimes);
+        if (isValidTime(parsedTimes?.morning)) sharedScheduleTimes.morning = parsedTimes.morning.trim();
+        if (isValidTime(parsedTimes?.evening)) sharedScheduleTimes.evening = parsedTimes.evening.trim();
+      }
+    } catch {}
+
+    function getDefaultScheduleTime(period) {
+      if (period === 'evening' || period === 'cert_pm_send') {
+        return isValidTime(sharedScheduleTimes.evening) ? sharedScheduleTimes.evening : '14:00';
+      }
+      return isValidTime(sharedScheduleTimes.morning) ? sharedScheduleTimes.morning : '10:00';
+    }
+
+    function applyLoadedScheduleTimes(serverTimes) {
+      if (!serverTimes || typeof serverTimes !== 'object') return;
+      let changed = false;
+      if (isValidTime(serverTimes.morning)) {
+        sharedScheduleTimes.morning = String(serverTimes.morning).trim();
+        changed = true;
+      }
+      if (isValidTime(serverTimes.evening)) {
+        sharedScheduleTimes.evening = String(serverTimes.evening).trim();
+        changed = true;
+      }
+      if (changed) {
+        try {
+          global.localStorage?.setItem?.(SCHEDULE_TIMES_STORAGE_KEY, JSON.stringify(sharedScheduleTimes));
+        } catch {}
+      }
+    }
+
+    async function saveDefaultScheduleTimes(updates = {}) {
+      if (isValidTime(updates.morning)) {
+        sharedScheduleTimes.morning = updates.morning.trim();
+      }
+      if (isValidTime(updates.evening)) {
+        sharedScheduleTimes.evening = updates.evening.trim();
+      }
+      try {
+        global.localStorage?.setItem?.(SCHEDULE_TIMES_STORAGE_KEY, JSON.stringify(sharedScheduleTimes));
+      } catch {}
+      if (!API_BASE) return true;
+      try {
+        const formData = new FormData();
+        formData.append('morning', sharedScheduleTimes.morning);
+        formData.append('evening', sharedScheduleTimes.evening);
+        const response = await fetch(`${API_BASE}/admin/planning-schedule-times`, {
+          method: 'PUT',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          body: formData,
+        });
+        if (!response.ok) return false;
+        const data = await response.json().catch(() => null);
+        if (data?.schedule_times) {
+          applyLoadedScheduleTimes(data.schedule_times);
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     function candidateTokens(user, examDate, examTime, period) {
       const fullName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || '(უსახელო)';
       const personalId = String(user?.personal_id || '—').trim();
@@ -361,6 +406,8 @@
       const dateStr = isValidDate(examDate) ? formatDisplayDate(examDate) : '[თარიღი]';
       const timeStr = isValidTime(examTime) ? String(examTime).trim() : '[საათი]';
       const periodStr = periodLabelText(period) || '[დილით/საღამოს]';
+      const categoryStr = String(user?.exam_outcome?.category_label || 'შესაბამისი კატეგორიის').trim();
+      const examResultsStr = String(user?.exam_outcome?.results_text || '').trim();
       return {
         name: fullName,
         personal_id: personalId,
@@ -368,6 +415,8 @@
         date: dateStr,
         time: timeStr,
         period: periodStr,
+        category: categoryStr,
+        exam_results: examResultsStr,
       };
     }
 
@@ -380,6 +429,9 @@
         [/\{date\}|\[გამოცდის თარიღი\]|\[თარიღი\]/gi, tokens.date],
         [/\{time\}|\[საათი\]/gi, tokens.time],
         [/\{period\}|\[ცვლა\]|\[დილით\/საღამოს\]/gi, tokens.period],
+        [/\[კატეგორია\]\s*კატეგორიის/gi, tokens.category || 'შესაბამისი კატეგორიის'],
+        [/\{category\}|\[კატეგორია\]/gi, tokens.category || 'შესაბამისი კატეგორიის'],
+        [/\{exam_results\}|\[გამოცდის შედეგები\]/gi, tokens.exam_results || ''],
       ];
       for (const [pattern, val] of replacements) {
         result = result.replace(pattern, () => val);
@@ -387,8 +439,36 @@
       return result;
     }
 
+    function injectExamResultsIntoBody(bodyText, examOutcome, mode) {
+      let text = String(bodyText || '');
+      const resultsBlock = String(examOutcome?.results_text || '').trim();
+      if (!resultsBlock) return text;
+      if (mode !== 'certificate' && mode !== 'exam_fail') return text;
+      if (text.includes(resultsBlock) || text.includes('თქვენი გამოცდის შედეგები:')) {
+        return text;
+      }
+      const certAnchor = 'სერტიფიკატის მისაღებად აუცილებელია';
+      const failAnchor = 'განმეორებით გამოცდაზე გასვლისა';
+      const signoffAnchor = 'პატივისცემით,';
+      if (mode === 'certificate' && text.includes(certAnchor)) {
+        return text.replace(certAnchor, `${resultsBlock}\n\n${certAnchor}`);
+      }
+      if (mode === 'exam_fail' && text.includes(failAnchor)) {
+        return text.replace(failAnchor, `${resultsBlock}\n\n${failAnchor}`);
+      }
+      if (text.includes(signoffAnchor)) {
+        return text.replace(signoffAnchor, `${resultsBlock}\n\n${signoffAnchor}`);
+      }
+      return `${text.trimEnd()}\n\n${resultsBlock}`;
+    }
+
     function convertRenderedToTemplate(renderedText, tokens) {
       let result = String(renderedText || '');
+      if (tokens.exam_results) {
+        result = result.split(`\n\n${tokens.exam_results}`).join('');
+        result = result.split(`${tokens.exam_results}\n\n`).join('');
+        result = result.split(tokens.exam_results).join('');
+      }
       const pairs = [
         [tokens.name, '{name}'],
         [tokens.personal_id, '{personal_id}'],
@@ -403,15 +483,31 @@
         }
       }
       result = result
+        .replace(/B\/C კატეგორიის|A კატეგორიის|შესაბამისი კატეგორიის/g, '[კატეგორია]')
         .replace(/\[თარიღი\]|\[გამოცდის თარიღი\]/g, '{date}')
         .replace(/\[საათი\]/g, '{time}')
         .replace(/\[დილით\/საღამოს\]|\[ცვლა\]/g, '{period}');
       return result;
     }
 
+    function isLegacyTemplateBody(body) {
+      const raw = String(body || '').trim();
+      return (
+        !raw ||
+        raw.startsWith('ბატონო/ქალბატონო') ||
+        raw.startsWith('გამარჯობა,') ||
+        /\[შეავსეთ/.test(raw) ||
+        raw.includes('GIPC-PRO-') ||
+        raw.includes('GIPC-CON-') ||
+        raw.includes('GIPC-FRM-') ||
+        raw.includes('შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“') ||
+        raw.includes('შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"')
+      );
+    }
+
     function normalizeGreeting(body, fallback) {
       const raw = String(body || '').trim();
-      if (!raw || raw.startsWith('მოგესალმებით,') || raw.startsWith('გამარჯობა,')) {
+      if (isLegacyTemplateBody(raw)) {
         return fallback;
       }
       return raw;
@@ -445,11 +541,13 @@
       const schedulesEndpoint = `${API_BASE}/admin/users/${encodeURIComponent(user.id)}/exam-schedules`;
       const lettersEndpoint = `${API_BASE}/admin/users/${encodeURIComponent(user.id)}/planning-letters`;
       const statementsEndpoint = `${API_BASE}/admin/users/${encodeURIComponent(user.id)}/statements`;
+      const examOutcomeEndpoint = `${API_BASE}/admin/users/${encodeURIComponent(user.id)}/exam-outcome`;
       const templatesEndpoint = `${API_BASE}/admin/planning-templates`;
 
       let scheduleItems = [];
       let letterItems = [];
       let statementItems = [];
+      let examOutcome = user.exam_outcome || null;
       let loadingData = false;
       const seenInFlight = new Set();
 
@@ -565,7 +663,7 @@
             letterId: letter ? letter.id : null,
             examDate: sched.exam_date,
             period: sched.period,
-            eventTime: letter ? letter.event_time : '',
+            eventTime: (letter && letter.event_time) ? letter.event_time : getDefaultScheduleTime(sched.period),
             subject: letter ? letter.subject : '',
             body: letter ? letter.body : '',
             status: letter ? letter.status : 'saved',
@@ -639,6 +737,37 @@
           'has-custom-record',
           combined.some((item) => item.mode === 'custom')
         );
+
+        const isPendingPass = Boolean(
+          examOutcome?.unacknowledged &&
+            (examOutcome.outcome === 'pass_bc' || examOutcome.outcome === 'pass_a')
+        );
+        const isPendingFail = Boolean(
+          examOutcome?.unacknowledged && examOutcome.outcome === 'fail'
+        );
+        openCertificateModalBtn?.classList.toggle('has-pending-exam-pass', isPendingPass);
+        openExamFailModalBtn?.classList.toggle('has-pending-exam-fail', isPendingFail);
+
+        const outcomeBadgeEl = cardEl?.querySelector('.user-exam-outcome-badge');
+        if (outcomeBadgeEl) {
+          outcomeBadgeEl.classList.remove('is-pass-bc', 'is-pass-a', 'is-fail');
+          if (examOutcome?.unacknowledged && examOutcome.outcome === 'pass_bc') {
+            outcomeBadgeEl.textContent = '✓ ჩააბარა (B/C)';
+            outcomeBadgeEl.classList.add('is-pass-bc');
+            outcomeBadgeEl.hidden = false;
+          } else if (examOutcome?.unacknowledged && examOutcome.outcome === 'pass_a') {
+            outcomeBadgeEl.textContent = '✓ ჩააბარა (A)';
+            outcomeBadgeEl.classList.add('is-pass-a');
+            outcomeBadgeEl.hidden = false;
+          } else if (examOutcome?.unacknowledged && examOutcome.outcome === 'fail') {
+            outcomeBadgeEl.textContent = '✕ ჩაიჭრა';
+            outcomeBadgeEl.classList.add('is-fail');
+            outcomeBadgeEl.hidden = false;
+          } else {
+            outcomeBadgeEl.textContent = '';
+            outcomeBadgeEl.hidden = true;
+          }
+        }
       }
 
       function notifyStatementState(serverState = null) {
@@ -670,13 +799,14 @@
             fetch(schedulesEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }),
             fetch(lettersEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }).catch(() => null),
             fetch(statementsEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }).catch(() => null),
+            fetch(examOutcomeEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }).catch(() => null),
           ];
           if (!sharedTemplatesLoaded) {
             requests.push(
               fetch(templatesEndpoint, { headers: { ...getAdminHeaders(), ...getActorHeaders() } }).catch(() => null)
             );
           }
-          const [schedRes, lettersRes, stmtRes, tmplRes] = await Promise.all(requests);
+          const [schedRes, lettersRes, stmtRes, outcomeRes, tmplRes] = await Promise.all(requests);
           if (!isCurrent()) return;
 
           if (tmplRes && tmplRes.ok) {
@@ -684,37 +814,42 @@
             const items = Array.isArray(tmplData?.items) ? tmplData.items : [];
             const examTmpl = items.find((t) => t.kind === 'exam');
             if (examTmpl) {
-              const hasBlocked = /\[შეავსეთ/.test(String(examTmpl.body || ''));
+              const legacy = isLegacyTemplateBody(examTmpl.body);
               sharedTemplates.exam = {
                 ...examTmpl,
-                subject: hasBlocked ? DEFAULT_EXAM_SUBJECT : (examTmpl.subject || DEFAULT_EXAM_SUBJECT),
-                body: normalizeGreeting(hasBlocked ? DEFAULT_EXAM_BODY : examTmpl.body, DEFAULT_EXAM_BODY),
+                subject: legacy ? DEFAULT_EXAM_SUBJECT : (examTmpl.subject || DEFAULT_EXAM_SUBJECT),
+                body: normalizeGreeting(examTmpl.body, DEFAULT_EXAM_BODY),
               };
             }
             const certTmpl = items.find((t) => t.kind === 'certificate');
             if (certTmpl) {
-              const isOldDefault = String(certTmpl.body || '').startsWith('გამარჯობა, {name}');
+              const legacy = isLegacyTemplateBody(certTmpl.body);
               sharedTemplates.certificate = {
                 ...certTmpl,
-                subject: isOldDefault ? DEFAULT_CERTIFICATE_SUBJECT : (certTmpl.subject || DEFAULT_CERTIFICATE_SUBJECT),
-                body: normalizeGreeting(isOldDefault ? DEFAULT_CERTIFICATE_BODY : certTmpl.body, DEFAULT_CERTIFICATE_BODY),
+                subject: legacy ? DEFAULT_CERTIFICATE_SUBJECT : (certTmpl.subject || DEFAULT_CERTIFICATE_SUBJECT),
+                body: normalizeGreeting(certTmpl.body, DEFAULT_CERTIFICATE_BODY),
               };
             }
             if (tmplData?.rejection_template) {
               const rejTmpl = tmplData.rejection_template;
+              const legacy = isLegacyTemplateBody(rejTmpl.body);
               sharedTemplates.rejection = {
                 ...rejTmpl,
-                subject: rejTmpl.subject || DEFAULT_REJECTION_SUBJECT,
+                subject: legacy ? DEFAULT_REJECTION_SUBJECT : (rejTmpl.subject || DEFAULT_REJECTION_SUBJECT),
                 body: normalizeGreeting(rejTmpl.body, DEFAULT_REJECTION_BODY),
               };
             }
             if (tmplData?.exam_fail_template) {
               const failTmpl = tmplData.exam_fail_template;
+              const legacy = isLegacyTemplateBody(failTmpl.body);
               sharedTemplates.exam_fail = {
                 ...failTmpl,
-                subject: failTmpl.subject || DEFAULT_EXAM_FAIL_SUBJECT,
+                subject: legacy ? DEFAULT_EXAM_FAIL_SUBJECT : (failTmpl.subject || DEFAULT_EXAM_FAIL_SUBJECT),
                 body: normalizeGreeting(failTmpl.body, DEFAULT_EXAM_FAIL_BODY),
               };
+            }
+            if (tmplData?.schedule_times) {
+              applyLoadedScheduleTimes(tmplData.schedule_times);
             }
             sharedTemplatesLoaded = true;
           }
@@ -731,6 +866,13 @@
             const stmtData = await stmtRes.json().catch(() => null);
             statementItems = Array.isArray(stmtData?.items) ? stmtData.items : [];
             notifyStatementState();
+          }
+          if (outcomeRes && outcomeRes.ok) {
+            const outcomeData = await outcomeRes.json().catch(() => null);
+            if (outcomeData) {
+              examOutcome = outcomeData;
+              user.exam_outcome = outcomeData;
+            }
           }
           updateCardButtonBadge();
         } catch {
@@ -845,8 +987,18 @@
 
         const initialDate = editingItem?.examDate || (hasTimeAndPeriod ? '' : todayIsoDate());
         const initialPeriod = hasTimeAndPeriod ? (editingItem?.period || '') : resolvedMode;
+        let modalMorningTime = (editingItem && initialPeriod === 'morning' && isValidTime(editingItem.eventTime))
+          ? editingItem.eventTime.trim()
+          : getDefaultScheduleTime('morning');
+        let modalEveningTime = (editingItem && initialPeriod === 'evening' && isValidTime(editingItem.eventTime))
+          ? editingItem.eventTime.trim()
+          : getDefaultScheduleTime('evening');
         const initialTime = hasTimeAndPeriod
-          ? (editingItem?.eventTime || (initialPeriod === 'morning' ? '10:00' : initialPeriod === 'evening' ? '14:00' : ''))
+          ? (initialPeriod === 'morning'
+              ? modalMorningTime
+              : initialPeriod === 'evening'
+                ? modalEveningTime
+                : (editingItem?.eventTime || ''))
           : '00:00';
         let lastTokens = candidateTokens(user, initialDate, initialTime, initialPeriod);
 
@@ -877,17 +1029,80 @@
                     <label class="exam-schedule-date-label">${escapeHtml(meta.dateLabel)}
                       <input class="exam-schedule-date users-filter-date" type="date" value="${escapeHtml(initialDate)}" />
                     </label>
-                    <label class="users-filter-label">
-                      <input class="exam-schedule-morning" type="checkbox" ${initialPeriod === 'morning' ? 'checked' : ''} />
-                      <span>დილით</span>
-                    </label>
-                    <label class="users-filter-label">
-                      <input class="exam-schedule-evening" type="checkbox" ${initialPeriod === 'evening' ? 'checked' : ''} />
-                      <span>საღამოს</span>
-                    </label>
-                    <label class="exam-schedule-time-label">საათი
-                      <input class="exam-schedule-time users-filter-date" type="time" step="60" value="${escapeHtml(initialTime)}" />
-                    </label>
+
+                    <div class="exam-schedule-period-group ${initialPeriod === 'morning' ? 'is-active' : ''}" data-period-group="morning">
+                      <label class="users-filter-label exam-schedule-period-check">
+                        <input class="exam-schedule-morning" type="checkbox" ${initialPeriod === 'morning' ? 'checked' : ''} />
+                        <span>დილით</span>
+                      </label>
+                      <button type="button" class="exam-schedule-time-trigger" data-time-trigger="morning" title="დილის საათის რეგულირება" aria-expanded="false">
+                        <svg class="exam-schedule-clock-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span class="exam-schedule-time-trigger-text" data-time-display="morning">${escapeHtml(modalMorningTime)}</span>
+                        <span class="exam-schedule-time-trigger-badge" data-time-badge="morning" ${modalMorningTime !== getDefaultScheduleTime('morning') ? '' : 'hidden'}>ერთჯერადი</span>
+                        <span class="exam-schedule-time-trigger-pill">დრო ▾</span>
+                      </button>
+                      <div class="exam-schedule-time-popover" data-time-popover="morning" hidden>
+                        <div class="exam-schedule-time-popover-head">
+                          <span class="exam-schedule-time-popover-title">დილის საათის რეგულირება</span>
+                          <button type="button" class="exam-schedule-time-popover-close" data-time-close="morning" aria-label="დახურვა">×</button>
+                        </div>
+                        <div class="exam-schedule-time-popover-meta">
+                          სტანდარტული დრო: <strong data-default-display="morning">${escapeHtml(getDefaultScheduleTime('morning'))}</strong>
+                        </div>
+                        <label class="exam-schedule-time-popover-field">
+                          <span>აირჩიეთ საათი:</span>
+                          <input class="exam-schedule-morning-time users-filter-date" type="time" step="60" value="${escapeHtml(modalMorningTime)}" aria-label="დილის საათი" />
+                        </label>
+                        <div class="exam-schedule-time-popover-actions">
+                          <button type="button" class="exam-schedule-time-once-btn" data-time-once="morning">
+                            ერთჯერადი ცვლილება
+                          </button>
+                          <button type="button" class="exam-schedule-time-default-btn" data-time-default="morning">
+                            სტანდარტული დროის შენახვა
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="exam-schedule-period-group ${initialPeriod === 'evening' ? 'is-active' : ''}" data-period-group="evening">
+                      <label class="users-filter-label exam-schedule-period-check">
+                        <input class="exam-schedule-evening" type="checkbox" ${initialPeriod === 'evening' ? 'checked' : ''} />
+                        <span>საღამოს</span>
+                      </label>
+                      <button type="button" class="exam-schedule-time-trigger" data-time-trigger="evening" title="საღამოს საათის რეგულირება" aria-expanded="false">
+                        <svg class="exam-schedule-clock-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span class="exam-schedule-time-trigger-text" data-time-display="evening">${escapeHtml(modalEveningTime)}</span>
+                        <span class="exam-schedule-time-trigger-badge" data-time-badge="evening" ${modalEveningTime !== getDefaultScheduleTime('evening') ? '' : 'hidden'}>ერთჯერადი</span>
+                        <span class="exam-schedule-time-trigger-pill">დრო ▾</span>
+                      </button>
+                      <div class="exam-schedule-time-popover" data-time-popover="evening" hidden>
+                        <div class="exam-schedule-time-popover-head">
+                          <span class="exam-schedule-time-popover-title">საღამოს საათის რეგულირება</span>
+                          <button type="button" class="exam-schedule-time-popover-close" data-time-close="evening" aria-label="დახურვა">×</button>
+                        </div>
+                        <div class="exam-schedule-time-popover-meta">
+                          სტანდარტული დრო: <strong data-default-display="evening">${escapeHtml(getDefaultScheduleTime('evening'))}</strong>
+                        </div>
+                        <label class="exam-schedule-time-popover-field">
+                          <span>აირჩიეთ საათი:</span>
+                          <input class="exam-schedule-evening-time users-filter-date" type="time" step="60" value="${escapeHtml(modalEveningTime)}" aria-label="საღამოს საათი" />
+                        </label>
+                        <div class="exam-schedule-time-popover-actions">
+                          <button type="button" class="exam-schedule-time-once-btn" data-time-once="evening">
+                            ერთჯერადი ცვლილება
+                          </button>
+                          <button type="button" class="exam-schedule-time-default-btn" data-time-default="evening">
+                            სტანდარტული დროის შენახვა
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ` : `
                   <div class="exam-schedule-controls exam-rejection-controls">
@@ -988,7 +1203,20 @@
         const dateInput = overlay.querySelector('.exam-schedule-date');
         const morning = overlay.querySelector('.exam-schedule-morning');
         const evening = overlay.querySelector('.exam-schedule-evening');
-        const timeInput = overlay.querySelector('.exam-schedule-time');
+        const morningTimeInput = overlay.querySelector('.exam-schedule-morning-time');
+        const eveningTimeInput = overlay.querySelector('.exam-schedule-evening-time');
+        const morningGroup = overlay.querySelector('[data-period-group="morning"]');
+        const eveningGroup = overlay.querySelector('[data-period-group="evening"]');
+        const morningTrigger = overlay.querySelector('[data-time-trigger="morning"]');
+        const eveningTrigger = overlay.querySelector('[data-time-trigger="evening"]');
+        const morningPopover = overlay.querySelector('[data-time-popover="morning"]');
+        const eveningPopover = overlay.querySelector('[data-time-popover="evening"]');
+        const morningDisplay = overlay.querySelector('[data-time-display="morning"]');
+        const eveningDisplay = overlay.querySelector('[data-time-display="evening"]');
+        const morningBadge = overlay.querySelector('[data-time-badge="morning"]');
+        const eveningBadge = overlay.querySelector('[data-time-badge="evening"]');
+        const morningDefaultDisplay = overlay.querySelector('[data-default-display="morning"]');
+        const eveningDefaultDisplay = overlay.querySelector('[data-default-display="evening"]');
         const subjectInput = overlay.querySelector('.exam-schedule-subject');
         const bodyInput = overlay.querySelector('.exam-schedule-body');
         const textEditBtn = overlay.querySelector('.exam-schedule-text-edit-btn');
@@ -1007,19 +1235,64 @@
           statusEl.classList.toggle('is-error', !!isError);
         }
 
+        function syncPeriodGroupState() {
+          morningGroup?.classList.toggle('is-active', !!morning?.checked);
+          eveningGroup?.classList.toggle('is-active', !!evening?.checked);
+        }
+
+        function syncTimeTriggerUI() {
+          const defMorning = getDefaultScheduleTime('morning');
+          const defEvening = getDefaultScheduleTime('evening');
+          if (morningDisplay) morningDisplay.textContent = modalMorningTime;
+          if (eveningDisplay) eveningDisplay.textContent = modalEveningTime;
+          if (morningDefaultDisplay) morningDefaultDisplay.textContent = defMorning;
+          if (eveningDefaultDisplay) eveningDefaultDisplay.textContent = defEvening;
+          if (morningBadge) morningBadge.hidden = modalMorningTime === defMorning;
+          if (eveningBadge) eveningBadge.hidden = modalEveningTime === defEvening;
+        }
+
+        function closeTimePopovers() {
+          if (morningPopover) morningPopover.hidden = true;
+          if (eveningPopover) eveningPopover.hidden = true;
+          morningTrigger?.setAttribute('aria-expanded', 'false');
+          eveningTrigger?.setAttribute('aria-expanded', 'false');
+          morningTrigger?.classList.remove('is-open');
+          eveningTrigger?.classList.remove('is-open');
+        }
+
+        function toggleTimePopover(periodKey) {
+          const isMorning = periodKey === 'morning';
+          const targetPopover = isMorning ? morningPopover : eveningPopover;
+          const targetTrigger = isMorning ? morningTrigger : eveningTrigger;
+          const targetInput = isMorning ? morningTimeInput : eveningTimeInput;
+          if (!targetPopover) return;
+          const willOpen = targetPopover.hidden;
+          closeTimePopovers();
+          if (willOpen) {
+            if (targetInput) {
+              targetInput.value = isMorning ? modalMorningTime : modalEveningTime;
+            }
+            syncTimeTriggerUI();
+            targetPopover.hidden = false;
+            targetTrigger?.setAttribute('aria-expanded', 'true');
+            targetTrigger?.classList.add('is-open');
+            setTimeout(() => targetInput?.focus(), 20);
+          }
+        }
+
         function currentPeriod() {
           if (!hasTimeAndPeriod) return resolvedMode;
           if (morning?.checked) return 'morning';
           if (evening?.checked) return 'evening';
-          if (timeInput && isValidTime(timeInput.value)) {
-            return timeInput.value < '12:00' ? 'morning' : 'evening';
-          }
           return '';
         }
 
         function currentTimeValue() {
           if (!hasTimeAndPeriod) return '00:00';
-          return timeInput ? timeInput.value.trim() : '';
+          const period = currentPeriod();
+          if (period === 'morning') return modalMorningTime;
+          if (period === 'evening') return modalEveningTime;
+          return '';
         }
 
         function refreshRenderedText({ forceTemplate = false } = {}) {
@@ -1028,7 +1301,8 @@
           const nextTokens = candidateTokens(user, dateInput.value, currentTimeValue(), currentPeriod());
           if (forceTemplate || !textCustomized) {
             subjectInput.value = applyTemplateTokens(tmpl.subject || meta.defaultSubject, nextTokens);
-            bodyInput.value = applyTemplateTokens(tmpl.body || meta.defaultBody, nextTokens);
+            const rawBody = applyTemplateTokens(tmpl.body || meta.defaultBody, nextTokens);
+            bodyInput.value = injectExamResultsIntoBody(rawBody, examOutcome, resolvedMode);
           } else {
             let nextSubject = subjectInput.value;
             let nextBody = bodyInput.value;
@@ -1095,6 +1369,7 @@
           refreshRenderedText({ forceTemplate: true });
         }
         updateAttachmentUI();
+        syncTimeTriggerUI();
 
         // Event listeners inside modal
         dateInput?.addEventListener('change', () => {
@@ -1103,40 +1378,129 @@
         });
 
         morning?.addEventListener('change', () => {
-          if (morning.checked) {
+          if (morning.checked && evening) {
             evening.checked = false;
-            if (!timeInput.value || timeInput.value >= '12:00') {
-              timeInput.value = '10:00';
-            }
           }
+          syncPeriodGroupState();
           setModalStatus('');
           refreshRenderedText();
         });
 
         evening?.addEventListener('change', () => {
-          if (evening.checked) {
+          if (evening.checked && morning) {
             morning.checked = false;
-            if (!timeInput.value || timeInput.value < '12:00') {
-              timeInput.value = '14:00';
-            }
           }
+          syncPeriodGroupState();
           setModalStatus('');
           refreshRenderedText();
         });
 
-        timeInput?.addEventListener('input', () => {
-          const val = timeInput.value;
-          if (isValidTime(val)) {
-            if (val < '12:00') {
-              if (morning) morning.checked = true;
-              if (evening) evening.checked = false;
-            } else {
-              if (evening) evening.checked = true;
-              if (morning) morning.checked = false;
+        morningTrigger?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleTimePopover('morning');
+        });
+
+        eveningTrigger?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleTimePopover('evening');
+        });
+
+        overlay.querySelectorAll('[data-time-close]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeTimePopovers();
+          });
+        });
+
+        // Clicking inside popover should not close it
+        morningPopover?.addEventListener('click', (e) => e.stopPropagation());
+        eveningPopover?.addEventListener('click', (e) => e.stopPropagation());
+
+        // Clicking anywhere else in the modal closes open time popovers
+        overlay.querySelector('.modal')?.addEventListener('click', () => {
+          closeTimePopovers();
+        });
+
+        // Input changes inside the popover apply as a one-time change by default (without checking checkbox!)
+        const applyOneTimeChange = (periodKey, closeCard = false) => {
+          const isMorning = periodKey === 'morning';
+          const inputEl = isMorning ? morningTimeInput : eveningTimeInput;
+          const val = inputEl?.value?.trim() || '';
+          if (!isValidTime(val)) {
+            if (closeCard) {
+              setModalStatus('გთხოვთ მიუთითოთ სწორი საათი (მაგ.: 10:00 ან 14:00).', true);
+              inputEl?.focus();
             }
+            return;
           }
-          setModalStatus('');
+          if (isMorning) {
+            modalMorningTime = val;
+          } else {
+            modalEveningTime = val;
+          }
+          syncTimeTriggerUI();
           refreshRenderedText();
+          if (closeCard) {
+            closeTimePopovers();
+            const label = isMorning ? 'დილის' : 'საღამოს';
+            setModalStatus(`${label} საათი (${val}) დაყენდა ერთჯერადად ამ განცხადებისთვის.`);
+          }
+        };
+
+        morningTimeInput?.addEventListener('input', () => applyOneTimeChange('morning', false));
+        morningTimeInput?.addEventListener('change', () => applyOneTimeChange('morning', false));
+        eveningTimeInput?.addEventListener('input', () => applyOneTimeChange('evening', false));
+        eveningTimeInput?.addEventListener('change', () => applyOneTimeChange('evening', false));
+
+        overlay.querySelector('[data-time-once="morning"]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyOneTimeChange('morning', true);
+        });
+
+        overlay.querySelector('[data-time-once="evening"]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyOneTimeChange('evening', true);
+        });
+
+        const applyAndSaveStandardTime = async (periodKey, btnEl) => {
+          const isMorning = periodKey === 'morning';
+          const inputEl = isMorning ? morningTimeInput : eveningTimeInput;
+          const val = inputEl?.value?.trim() || '';
+          if (!isValidTime(val)) {
+            setModalStatus('გთხოვთ მიუთითოთ სწორი საათი (მაგ.: 10:00 ან 14:00).', true);
+            inputEl?.focus();
+            return;
+          }
+          if (isMorning) {
+            modalMorningTime = val;
+          } else {
+            modalEveningTime = val;
+          }
+          if (btnEl) btnEl.disabled = true;
+          const ok = await saveDefaultScheduleTimes(isMorning ? { morning: val } : { evening: val });
+          if (btnEl) btnEl.disabled = false;
+          syncTimeTriggerUI();
+          refreshRenderedText();
+          closeTimePopovers();
+          const label = isMorning ? 'დილის' : 'საღამოს';
+          if (ok) {
+            const msg = `${label} სტანდარტული დრო (${val}) შეინახა ყველა შემდეგი განცხადებისთვის და აისახა ამ განცხადებაზეც.`;
+            setModalStatus(msg, false);
+            showToast(`${label} სტანდარტული დრო (${val}) შეინახა`);
+          } else {
+            setModalStatus(`${label} სტანდარტული დროის სერვერზე შენახვა ვერ მოხერხდა.`, true);
+            showToast('სტანდარტული დროის შენახვა ვერ მოხერხდა', 'error');
+          }
+        };
+
+        overlay.querySelector('[data-time-default="morning"]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          void applyAndSaveStandardTime('morning', e.currentTarget);
+        });
+
+        overlay.querySelector('[data-time-default="evening"]')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          void applyAndSaveStandardTime('evening', e.currentTarget);
         });
 
         textEditBtn?.addEventListener('click', () => {
@@ -1239,6 +1603,7 @@
         // Step 1 -> Step 2 ("შემდეგი")
         nextBtn.addEventListener('click', () => {
           if (modalBusy) return;
+          closeTimePopovers();
           if (!hasTimeAndPeriod && !isValidDate(dateInput.value)) {
             dateInput.value = todayIsoDate();
           }
@@ -1251,18 +1616,14 @@
           const period = currentPeriod();
           if (hasTimeAndPeriod) {
             if (!period) {
-              setModalStatus('აირჩიეთ „დილით“ ან „საღამოს“, ან მიუთითეთ საათი.', true);
+              setModalStatus('აირჩიეთ „დილით“ ან „საღამოს“.', true);
               morning?.focus();
               return;
-            }
-            if (morning && evening && !morning.checked && !evening.checked) {
-              if (period === 'morning') morning.checked = true;
-              else evening.checked = true;
             }
             const examTime = currentTimeValue();
             if (!isValidTime(examTime)) {
               setModalStatus('გთხოვთ მიუთითოთ საათი (მაგ.: 10:00 ან 14:00).', true);
-              timeInput?.focus();
+              toggleTimePopover(period);
               return;
             }
           }
@@ -2209,6 +2570,14 @@
           void load();
         }
       });
+
+      global.addEventListener('admin:examResultsChanged', (ev) => {
+        if ((!ev?.detail?.userId || Number(ev.detail.userId) === Number(user.id)) && isCurrent()) {
+          void load();
+        }
+      });
+
+      updateCardButtonBadge();
 
       return { load, openHistoryModal: openScheduledExamsListModal };
     }
