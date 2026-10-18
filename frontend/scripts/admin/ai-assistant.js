@@ -13,17 +13,38 @@
     const STORAGE_KEY_HISTORY = 'gipc_ai_chat_history_v1';
     let isOpen = false;
     let isExpanded = false;
-    let isSettingsOpen = false;
+    let isSettingsModalOpen = false;
     let isSending = false;
     let aiStatus = {
       configured: false,
+      gemini_configured: false,
+      openai_configured: false,
       masked_key: null,
+      masked_gemini_key: null,
+      masked_openai_key: null,
       model: 'gemini-4-argon',
-      allowed_models: ['gemini-4-argon'],
+      model_label: 'Gemini 4 Argon',
+      provider: 'gemini',
+      reasoning_level: 'high',
+      reasoning_level_label: 'High (მაღალი / ღრმა ანალიზი)',
+      reasoning_level_short: 'High',
       custom_system_prompt: '',
       default_system_prompt: '',
       quick_stats: { unseen_statements: 0, pending_statements: 0 },
     };
+
+    const MODEL_OPTIONS = [
+      { id: 'gemini-4-argon', label: 'Gemini 4 Argon', provider: 'gemini', sub: 'Google Gemini 4' },
+      { id: 'chatgpt-sol', label: 'ChatGPT Sol', provider: 'openai', sub: 'OpenAI ChatGPT' },
+      { id: 'chatgpt-astra', label: 'ChatGPT Astra', provider: 'openai', sub: 'OpenAI ChatGPT' },
+    ];
+
+    const LEVEL_OPTIONS = [
+      { id: 'standard', label: 'Standard', desc: 'სწრაფი' },
+      { id: 'medium', label: 'Medium', desc: 'დაბალანსებული' },
+      { id: 'high', label: 'High', desc: 'მაღალი' },
+      { id: 'ultra', label: 'Ultra', desc: 'ულტრა' },
+    ];
 
     let messages = [];
     let fabEl = null;
@@ -33,8 +54,11 @@
     let messagesContainerEl = null;
     let inputEl = null;
     let sendBtnEl = null;
-    let settingsDrawerEl = null;
-    let modelBadgeEl = null;
+    let headerConfigBtnEl = null;
+    let settingsModalOverlayEl = null;
+
+    let draftModel = 'gemini-4-argon';
+    let draftLevel = 'high';
 
     const TEMPLATE_MODE_LABELS = {
       exam: 'გამოცდის დაგეგმვა (დადებითი პასუხი)',
@@ -124,6 +148,16 @@
         .replace(/`([^`]+)`/g, '<code>$1</code>');
     }
 
+    function getActiveModelLabel() {
+      const found = MODEL_OPTIONS.find((m) => m.id === aiStatus.model);
+      return found ? found.label : aiStatus.model_label || 'Gemini 4 Argon';
+    }
+
+    function getActiveLevelShortLabel() {
+      const found = LEVEL_OPTIONS.find((l) => l.id === aiStatus.reasoning_level);
+      return found ? found.label : aiStatus.reasoning_level_short || 'High';
+    }
+
     async function fetchStatus() {
       try {
         const resp = await fetch(`${API_BASE}/admin/ai/status`, {
@@ -137,22 +171,24 @@
     }
 
     function syncStatusUI() {
+      const modelLabel = getActiveModelLabel();
+      const levelShort = getActiveLevelShortLabel();
+
       if (fabDotEl) {
         fabDotEl.className = `ai-fab-status-dot ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}`;
         fabDotEl.title = aiStatus.configured
-          ? `Gemini 4 Argon ჩართულია (${aiStatus.model})`
-          : 'საჭიროა Gemini API Key-ს მითითება';
+          ? `${modelLabel} • ${levelShort} ჩართულია`
+          : 'საჭიროა API Key-ს მითითება';
       }
       const pendingCount = Number(aiStatus.quick_stats?.pending_statements || 0);
       if (fabBadgeEl) {
         fabBadgeEl.textContent = String(pendingCount);
         fabBadgeEl.hidden = pendingCount <= 0;
       }
-      if (modelBadgeEl) {
-        modelBadgeEl.textContent = aiStatus.configured
-          ? '● Gemini 4 Argon'
-          : '⚠ API Key არ არის შეყვანილი';
-        modelBadgeEl.className = `ai-panel-model-badge ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}`;
+      if (headerConfigBtnEl) {
+        const dotHtml = `<span class="ai-header-config-dot ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}"></span>`;
+        headerConfigBtnEl.innerHTML = `${dotHtml}<span>⚙️ ${escapeHtml(modelLabel)} • ${escapeHtml(levelShort)}</span><span class="ai-header-config-caret">▾</span>`;
+        headerConfigBtnEl.className = `ai-header-config-btn ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}`;
       }
     }
 
@@ -174,76 +210,132 @@
       on(fabEl, 'click', () => togglePanel());
       document.body.appendChild(fabEl);
 
+      // Clean, uncluttered chat window
       panelEl = document.createElement('aside');
       panelEl.id = 'aiAssistantPanel';
       panelEl.className = 'ai-assistant-panel';
       panelEl.hidden = true;
       panelEl.innerHTML = `
         <div class="ai-panel-header">
-          <div class="ai-panel-title-wrap">
-            <div class="ai-panel-title-row">
-              <span class="ai-panel-sparkle">✨</span>
-              <h3 class="ai-panel-title">GIPC AI მრჩეველი</h3>
-              <span class="ai-panel-model-badge is-unconfigured">Gemini 4 Argon</span>
-            </div>
-            <p class="ai-panel-subtitle">განცხადებების, დოკუმენტების და საიტის ანალიზი • წერილები იგზავნება მხოლოდ თქვენი დასტურით</p>
+          <div class="ai-panel-title-row">
+            <span class="ai-panel-sparkle">✨</span>
+            <h3 class="ai-panel-title">AI ჩატი</h3>
           </div>
+          <button type="button" class="ai-header-config-btn is-unconfigured" title="AI მოდელის, დონის, პარამეტრებისა და სწრაფი ანალიზის ფანჯარა">
+            <span class="ai-header-config-dot is-unconfigured"></span>
+            <span>⚙️ Gemini 4 Argon • High</span>
+            <span class="ai-header-config-caret">▾</span>
+          </button>
           <div class="ai-panel-header-actions">
-            <button type="button" class="ai-panel-icon-btn ai-btn-settings" title="Gemini API Key და პარამეტრები">⚙️</button>
             <button type="button" class="ai-panel-icon-btn ai-btn-expand" title="ფანჯრის გაფართოება / დაპატარავება">⛶</button>
             <button type="button" class="ai-panel-icon-btn ai-btn-clear" title="ჩატის გასუფთავება">🗑️</button>
             <button type="button" class="ai-panel-icon-btn ai-btn-close" title="დახურვა">×</button>
           </div>
         </div>
 
-        <div class="ai-settings-drawer" hidden>
-          <div class="ai-settings-inner">
-            <div class="ai-settings-head">
-              <strong>⚙️ Gemini 4 Argon — კონფიგურაცია</strong>
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="ai-key-link">🔑 API Key-ს აღება (Google AI Studio)</a>
-            </div>
-            <label class="ai-settings-label">
-              <span>Gemini API Key <small class="ai-masked-key-hint"></small></span>
-              <input type="password" class="ai-settings-input ai-input-apikey" placeholder="ჩასვით AIza... გასაღები (ცარიელი = უცვლელი)" autocomplete="off" />
-            </label>
-            <label class="ai-settings-label">
-              <span>Gemini მოდელი</span>
-              <select class="ai-settings-select ai-select-model">
-                <option value="gemini-4-argon">gemini-4-argon (Gemini 4 Argon)</option>
-              </select>
-            </label>
-            <label class="ai-settings-label">
-              <span>დამატებითი ინსტრუქცია (სურვილისამებრ — ძირითადი უსაფრთხოების პრომპტი ყოველთვის აქტიურია)</span>
-              <textarea class="ai-settings-textarea ai-input-custom-prompt" rows="3" placeholder="მაგ: ყურადღება გაამახვილე სტაჟის ცნობებზე..."></textarea>
-            </label>
-            <div class="ai-settings-actions">
-              <button type="button" class="secondary-btn ai-settings-cancel">დახურვა</button>
-              <button type="button" class="primary-btn ai-settings-save">შენახვა</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="ai-quick-actions-bar">
-          <button type="button" class="ai-quick-chip" data-mode="site_analysis">📊 საიტის სრული ანალიზი</button>
-          <button type="button" class="ai-quick-chip" data-mode="statements_analysis">📨 უპასუხო განცხადებები და ფაილები</button>
-          <button type="button" class="ai-quick-chip" data-mode="exam_analysis">🎓 გამოცდის შედეგები და ვადები</button>
-        </div>
-
         <div class="ai-messages-container"></div>
 
         <form class="ai-input-bar">
-          <textarea class="ai-chat-input" rows="2" placeholder="დაუსვით კითხვა ან დაავალეთ განცხადების/დოკუმენტის შემოწმება... (Enter - გაგზავნა)"></textarea>
+          <textarea class="ai-chat-input" rows="1" placeholder="დაწერეთ შეტყობინება... (Enter - გაგზავნა)"></textarea>
           <button type="submit" class="ai-chat-send-btn">გაგზავნა ➤</button>
         </form>
       `;
 
       document.body.appendChild(panelEl);
 
-      modelBadgeEl = panelEl.querySelector('.ai-panel-model-badge');
+      // Separate modal window for Model, Reasoning Level, API Keys & Quick Actions
+      settingsModalOverlayEl = document.createElement('div');
+      settingsModalOverlayEl.id = 'aiSettingsModalOverlay';
+      settingsModalOverlayEl.className = 'ai-settings-modal-overlay';
+      settingsModalOverlayEl.hidden = true;
+      settingsModalOverlayEl.innerHTML = `
+        <div class="ai-settings-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="aiSettingsModalTitle">
+          <div class="ai-settings-modal-header">
+            <h3 id="aiSettingsModalTitle" class="ai-settings-modal-title">⚙️ AI მოდელი, დონე და მართვა</h3>
+            <button type="button" class="ai-settings-modal-close" title="დახურვა">×</button>
+          </div>
+
+          <div class="ai-settings-modal-body">
+            <div class="ai-modal-section">
+              <div class="ai-modal-section-title">1. აირჩიეთ ხელოვნური ინტელექტი (Model)</div>
+              <div class="ai-model-cards-grid">
+                ${MODEL_OPTIONS.map(
+                  (m) => `
+                  <button type="button" class="ai-model-card" data-model-id="${m.id}">
+                    <span class="ai-model-card-name">${escapeHtml(m.label)}</span>
+                    <span class="ai-model-card-sub">${escapeHtml(m.sub)}</span>
+                  </button>
+                `
+                ).join('')}
+              </div>
+            </div>
+
+            <div class="ai-modal-section">
+              <div class="ai-modal-section-title">2. აზროვნების / ინტელექტის დონე (Level)</div>
+              <div class="ai-level-pills-grid">
+                ${LEVEL_OPTIONS.map(
+                  (l) => `
+                  <button type="button" class="ai-level-pill" data-level-id="${l.id}">
+                    <span class="ai-level-pill-name">${escapeHtml(l.label)}</span>
+                    <span class="ai-level-pill-desc">${escapeHtml(l.desc)}</span>
+                  </button>
+                `
+                ).join('')}
+              </div>
+            </div>
+
+            <div class="ai-modal-section">
+              <div class="ai-modal-section-title">3. სწრაფი ანალიზის ბრძანებები</div>
+              <div class="ai-modal-quick-grid">
+                <button type="button" class="ai-quick-chip" data-mode="site_analysis">📊 საიტის სრული ანალიზი</button>
+                <button type="button" class="ai-quick-chip" data-mode="statements_analysis">📨 უპასუხო განცხადებები და ფაილები</button>
+                <button type="button" class="ai-quick-chip" data-mode="exam_analysis">🎓 გამოცდის შედეგები და ვადები</button>
+              </div>
+            </div>
+
+            <div class="ai-modal-section">
+              <div class="ai-modal-section-title">4. API გასაღებები (API Keys)</div>
+              <div class="ai-keys-grid">
+                <label class="ai-settings-label">
+                  <span>
+                    Gemini API Key (Gemini 4 Argon)
+                    <small class="ai-masked-gemini-hint"></small>
+                    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="ai-key-link">🔑 გასაღების აღება</a>
+                  </span>
+                  <input type="password" class="ai-settings-input ai-input-gemini-key" placeholder="AIza... (ცარიელი = უცვლელი)" autocomplete="off" />
+                </label>
+                <label class="ai-settings-label">
+                  <span>
+                    OpenAI API Key (ChatGPT Sol / Astra)
+                    <small class="ai-masked-openai-hint"></small>
+                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="ai-key-link">🔑 გასაღების აღება</a>
+                  </span>
+                  <input type="password" class="ai-settings-input ai-input-openai-key" placeholder="sk-... (ცარიელი = უცვლელი)" autocomplete="off" />
+                </label>
+              </div>
+            </div>
+
+            <div class="ai-modal-section">
+              <label class="ai-settings-label">
+                <span>5. დამატებითი ინსტრუქცია (სურვილისამებრ — უსაფრთხოების პრომპტი ყოველთვის ჩართულია)</span>
+                <textarea class="ai-settings-textarea ai-input-custom-prompt" rows="2" placeholder="მაგ: ყურადღება გაამახვილე სტაჟის ცნობებზე..."></textarea>
+              </label>
+            </div>
+          </div>
+
+          <div class="ai-settings-modal-footer">
+            <button type="button" class="secondary-btn ai-settings-cancel">დახურვა</button>
+            <button type="button" class="primary-btn ai-settings-save">შენახვა</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(settingsModalOverlayEl);
+
+      headerConfigBtnEl = panelEl.querySelector('.ai-header-config-btn');
       messagesContainerEl = panelEl.querySelector('.ai-messages-container');
       inputEl = panelEl.querySelector('.ai-chat-input');
       sendBtnEl = panelEl.querySelector('.ai-chat-send-btn');
-      settingsDrawerEl = panelEl.querySelector('.ai-settings-drawer');
 
       on(panelEl.querySelector('.ai-btn-close'), 'click', () => togglePanel(false));
       on(panelEl.querySelector('.ai-btn-expand'), 'click', () => {
@@ -255,17 +347,40 @@
         saveHistory();
         renderMessages();
       });
-      on(panelEl.querySelector('.ai-btn-settings'), 'click', () => {
-        toggleSettingsDrawer(!isSettingsOpen);
+      on(headerConfigBtnEl, 'click', () => {
+        openSettingsModal();
       });
-      on(panelEl.querySelector('.ai-settings-cancel'), 'click', () => {
-        toggleSettingsDrawer(false);
+
+      on(settingsModalOverlayEl.querySelector('.ai-settings-modal-close'), 'click', () => {
+        closeSettingsModal();
       });
-      on(panelEl.querySelector('.ai-settings-save'), 'click', () => {
+      on(settingsModalOverlayEl.querySelector('.ai-settings-cancel'), 'click', () => {
+        closeSettingsModal();
+      });
+      on(settingsModalOverlayEl, 'click', (e) => {
+        if (e.target === settingsModalOverlayEl) {
+          closeSettingsModal();
+        }
+      });
+      on(settingsModalOverlayEl.querySelector('.ai-settings-save'), 'click', () => {
         void saveSettings();
       });
 
-      panelEl.querySelectorAll('.ai-quick-chip').forEach((chip) => {
+      settingsModalOverlayEl.querySelectorAll('.ai-model-card').forEach((btn) => {
+        on(btn, 'click', () => {
+          draftModel = btn.getAttribute('data-model-id') || 'gemini-4-argon';
+          syncModalSelectionUI();
+        });
+      });
+
+      settingsModalOverlayEl.querySelectorAll('.ai-level-pill').forEach((btn) => {
+        on(btn, 'click', () => {
+          draftLevel = btn.getAttribute('data-level-id') || 'high';
+          syncModalSelectionUI();
+        });
+      });
+
+      settingsModalOverlayEl.querySelectorAll('.ai-quick-chip').forEach((chip) => {
         on(chip, 'click', () => {
           const mode = chip.getAttribute('data-mode') || 'site_analysis';
           const labelMap = {
@@ -273,6 +388,7 @@
             statements_analysis: '📨 შეისწავლე ყველა უპასუხო განცხადება და მათზე მიბმული დოკუმენტები, შეაფასე და მოამზადე სარეკომენდაციო პასუხები.',
             exam_analysis: '🎓 გააანალიზე გამოცდების შედეგები, კანდიდატები და 30-დღიანი ვადები.',
           };
+          closeSettingsModal();
           void sendChatMessage(labelMap[mode] || chip.textContent, { mode });
         });
       });
@@ -294,39 +410,75 @@
       });
     }
 
-    function toggleSettingsDrawer(force) {
-      isSettingsOpen = typeof force === 'boolean' ? force : !isSettingsOpen;
-      if (!settingsDrawerEl) return;
-      settingsDrawerEl.hidden = !isSettingsOpen;
-      if (isSettingsOpen) {
-        const maskedHint = settingsDrawerEl.querySelector('.ai-masked-key-hint');
-        const modelSelect = settingsDrawerEl.querySelector('.ai-select-model');
-        const customPromptInput = settingsDrawerEl.querySelector('.ai-input-custom-prompt');
-        const keyInput = settingsDrawerEl.querySelector('.ai-input-apikey');
-        if (maskedHint) {
-          maskedHint.textContent = aiStatus.masked_key
-            ? `(შენახულია: ${aiStatus.masked_key})`
-            : '(ჯერ არ არის შენახული)';
-        }
-        if (keyInput) keyInput.value = '';
-        if (modelSelect) modelSelect.value = aiStatus.model || 'gemini-4-argon';
-        if (customPromptInput) customPromptInput.value = aiStatus.custom_system_prompt || '';
+    function syncModalSelectionUI() {
+      if (!settingsModalOverlayEl) return;
+      settingsModalOverlayEl.querySelectorAll('.ai-model-card').forEach((btn) => {
+        const id = btn.getAttribute('data-model-id');
+        btn.classList.toggle('is-active', id === draftModel);
+      });
+      settingsModalOverlayEl.querySelectorAll('.ai-level-pill').forEach((btn) => {
+        const id = btn.getAttribute('data-level-id');
+        btn.classList.toggle('is-active', id === draftLevel);
+      });
+    }
+
+    function openSettingsModal() {
+      buildUI();
+      isSettingsModalOpen = true;
+      draftModel = aiStatus.model || 'gemini-4-argon';
+      draftLevel = aiStatus.reasoning_level || 'high';
+      syncModalSelectionUI();
+
+      const geminiHint = settingsModalOverlayEl.querySelector('.ai-masked-gemini-hint');
+      const openaiHint = settingsModalOverlayEl.querySelector('.ai-masked-openai-hint');
+      const geminiInput = settingsModalOverlayEl.querySelector('.ai-input-gemini-key');
+      const openaiInput = settingsModalOverlayEl.querySelector('.ai-input-openai-key');
+      const customPromptInput = settingsModalOverlayEl.querySelector('.ai-input-custom-prompt');
+
+      if (geminiHint) {
+        geminiHint.textContent = aiStatus.masked_gemini_key
+          ? `(შენახულია: ${aiStatus.masked_gemini_key})`
+          : '(არ არის შენახული)';
+      }
+      if (openaiHint) {
+        openaiHint.textContent = aiStatus.masked_openai_key
+          ? `(შენახულია: ${aiStatus.masked_openai_key})`
+          : '(არ არის შენახული)';
+      }
+      if (geminiInput) geminiInput.value = '';
+      if (openaiInput) openaiInput.value = '';
+      if (customPromptInput) customPromptInput.value = aiStatus.custom_system_prompt || '';
+
+      settingsModalOverlayEl.hidden = false;
+    }
+
+    function closeSettingsModal() {
+      isSettingsModalOpen = false;
+      if (settingsModalOverlayEl) {
+        settingsModalOverlayEl.hidden = true;
       }
     }
 
     async function saveSettings() {
-      const keyInput = settingsDrawerEl?.querySelector('.ai-input-apikey');
-      const modelSelect = settingsDrawerEl?.querySelector('.ai-select-model');
-      const customPromptInput = settingsDrawerEl?.querySelector('.ai-input-custom-prompt');
-      const saveBtn = settingsDrawerEl?.querySelector('.ai-settings-save');
+      if (!settingsModalOverlayEl) return;
+      const geminiInput = settingsModalOverlayEl.querySelector('.ai-input-gemini-key');
+      const openaiInput = settingsModalOverlayEl.querySelector('.ai-input-openai-key');
+      const customPromptInput = settingsModalOverlayEl.querySelector('.ai-input-custom-prompt');
+      const saveBtn = settingsModalOverlayEl.querySelector('.ai-settings-save');
 
       const payload = {
-        model: modelSelect?.value || 'gemini-4-argon',
+        model: draftModel || 'gemini-4-argon',
+        reasoning_level: draftLevel || 'high',
         custom_system_prompt: customPromptInput?.value || '',
       };
-      const typedKey = String(keyInput?.value || '').trim();
-      if (typedKey) {
-        payload.api_key = typedKey;
+
+      const typedGemini = String(geminiInput?.value || '').trim();
+      const typedOpenai = String(openaiInput?.value || '').trim();
+      if (typedGemini) {
+        payload.gemini_api_key = typedGemini;
+      }
+      if (typedOpenai) {
+        payload.openai_api_key = typedOpenai;
       }
 
       if (saveBtn) saveBtn.disabled = true;
@@ -346,8 +498,8 @@
         const data = await resp.json();
         aiStatus = { ...aiStatus, ...data };
         syncStatusUI();
-        toggleSettingsDrawer(false);
-        showToast('Gemini-ს პარამეტრები შეინახა');
+        closeSettingsModal();
+        showToast(`არჩეულია: ${getActiveModelLabel()} (${getActiveLevelShortLabel()})`);
         renderMessages();
       } catch (err) {
         showToast(err?.message || 'შენახვა ვერ მოხერხდა', 'error');
@@ -363,16 +515,13 @@
       fabEl?.classList.toggle('is-open', isOpen);
       if (isOpen) {
         void fetchStatus().then(() => {
-          if (!aiStatus.configured) {
-            toggleSettingsDrawer(true);
-          }
           renderMessages();
           inputEl?.focus();
         });
       }
     }
 
-    function createProposalCardElement(proposal, msgObj, proposalIndex) {
+    function createProposalCardElement(proposal) {
       const card = document.createElement('div');
       card.className = `ai-letter-confirm-card ${proposal.sent ? 'is-sent' : ''}`;
 
@@ -433,7 +582,7 @@
           </label>
           <label class="ai-letter-field-label">
             <span>📝 წერილის სრული ტექსტი (შეგიძლიათ ჩაასწოროთ გაგზავნამდე):</span>
-            <textarea class="ai-letter-body-textarea" rows="7" ${proposal.sent ? 'disabled' : ''}>${escapeHtml(proposal.body || '')}</textarea>
+            <textarea class="ai-letter-body-textarea" rows="6" ${proposal.sent ? 'disabled' : ''}>${escapeHtml(proposal.body || '')}</textarea>
           </label>
         </div>
 
@@ -553,21 +702,13 @@
       if (!messagesContainerEl) return;
       messagesContainerEl.innerHTML = '';
 
-      if (!messages.length) {
-        const welcome = document.createElement('div');
-        welcome.className = 'ai-welcome-box';
-        welcome.innerHTML = `
-          <div class="ai-welcome-title">👋 გამარჯობა! მე ვარ GIPC-ის AI ოპერატიული მრჩეველი (Gemini 4 Argon).</div>
-          <p class="ai-welcome-text">
-            შემიძლია შევისწავლო შემოსული განცხადებები, წავიკითხო მიბმული PDF/Word/სურათი დოკუმენტები,
-            გადავამოწმო გამოცდების შედეგები და მოგიმზადოთ სამოქმედო გეგმა და საპასუხო წერილები.
-          </p>
-          <div class="ai-welcome-safety">
-            🔒 <strong>უსაფრთხოების გარანტია:</strong> წერილი არასდროს იგზავნება თავისით — თითოეულ შეთავაზებულ წერილზე
-            ჩატში გამოგიჩნდებათ აღწერა (სად, რატომ და რა იგზავნება) და მხოლოდ თქვენი დადასტურების შემდეგ გაიგზავნება.
-          </div>
+      if (!messages.length && !isSending) {
+        const emptyHint = document.createElement('div');
+        emptyHint.className = 'ai-empty-chat-hint';
+        emptyHint.innerHTML = `
+          <span>💬 დაწერეთ შეტყობინება ქვემოთ ან დააჭირეთ ზემოთ <strong>⚙️ ${escapeHtml(getActiveModelLabel())} • ${escapeHtml(getActiveLevelShortLabel())}</strong> ღილაკს მოდელის/ანალიზის ასარჩევად.</span>
         `;
-        messagesContainerEl.appendChild(welcome);
+        messagesContainerEl.appendChild(emptyHint);
         return;
       }
 
@@ -595,8 +736,8 @@
         itemEl.appendChild(bubble);
 
         if (Array.isArray(msg.proposed_letters) && msg.proposed_letters.length > 0) {
-          msg.proposed_letters.forEach((prop, idx) => {
-            itemEl.appendChild(createProposalCardElement(prop, msg, idx));
+          msg.proposed_letters.forEach((prop) => {
+            itemEl.appendChild(createProposalCardElement(prop));
           });
         }
 
@@ -608,7 +749,7 @@
         loadingEl.className = 'ai-msg-item is-assistant is-loading';
         loadingEl.innerHTML = `
           <div class="ai-msg-bubble">
-            <span class="ai-typing-indicator">✨ Gemini 4 Argon სწავლობს ბაზას და მიბმულ დოკუმენტებს...</span>
+            <span class="ai-typing-indicator">✨ ${escapeHtml(getActiveModelLabel())} (${escapeHtml(getActiveLevelShortLabel())}) ამუშავებს მოთხოვნას...</span>
           </div>
         `;
         messagesContainerEl.appendChild(loadingEl);
@@ -663,7 +804,7 @@
             if (errJson?.detail) detail = String(errJson.detail);
           } catch {}
           if (resp.status === 400 && detail.includes('API Key')) {
-            toggleSettingsDrawer(true);
+            openSettingsModal();
           }
           throw new Error(detail);
         }

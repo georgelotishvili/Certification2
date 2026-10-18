@@ -49,14 +49,84 @@ from .planning_letters import (
 
 router = APIRouter()
 
-ALLOWED_MODELS = (
-    "gemini-4-argon",
-)
+MODEL_CATALOG = {
+    "gemini-4-argon": {
+        "id": "gemini-4-argon",
+        "label": "Gemini 4 Argon",
+        "provider": "gemini",
+        "provider_label": "Google Gemini",
+        "badge": "Gemini 4 Argon",
+    },
+    "chatgpt-sol": {
+        "id": "chatgpt-sol",
+        "label": "ChatGPT Sol",
+        "provider": "openai",
+        "provider_label": "OpenAI ChatGPT",
+        "badge": "ChatGPT Sol",
+    },
+    "chatgpt-astra": {
+        "id": "chatgpt-astra",
+        "label": "ChatGPT Astra",
+        "provider": "openai",
+        "provider_label": "OpenAI ChatGPT",
+        "badge": "ChatGPT Astra",
+    },
+}
+
+ALLOWED_MODELS = tuple(MODEL_CATALOG.keys())
 DEFAULT_MODEL = "gemini-4-argon"
+
+REASONING_LEVELS = {
+    "standard": {
+        "id": "standard",
+        "label": "Standard (სწრაფი)",
+        "short_label": "Standard",
+        "temperature": 0.3,
+        "max_tokens": 3072,
+        "openai_effort": "low",
+        "prompt_directive": "აზროვნების დონე: STANDARD — უპასუხე სწრაფად, ლაკონიურად და მხოლოდ მთავარ საკითხებზე.",
+    },
+    "medium": {
+        "id": "medium",
+        "label": "Medium (დაბალანსებული)",
+        "short_label": "Medium",
+        "temperature": 0.25,
+        "max_tokens": 4096,
+        "openai_effort": "medium",
+        "prompt_directive": "აზროვნების დონე: MEDIUM — ჩაატარე დაბალანსებული ანალიზი და მოამზადე მკაფიო რეკომენდაციები.",
+    },
+    "high": {
+        "id": "high",
+        "label": "High (მაღალი / ღრმა ანალიზი)",
+        "short_label": "High",
+        "temperature": 0.2,
+        "max_tokens": 6144,
+        "openai_effort": "high",
+        "prompt_directive": (
+            "აზროვნების დონე: HIGH — ჩაატარე ღრმა, მრავალმხრივი ანალიზი: დეტალურად შეამოწმე თითოეული დოკუმენტი, "
+            "თარიღი, კატეგორიის შესაბამისობა და მოამზადე სრულყოფილი სამოქმედო გეგმა."
+        ),
+    },
+    "ultra": {
+        "id": "ultra",
+        "label": "Ultra (ულტრა / მაქსიმალური ინტელექტი)",
+        "short_label": "Ultra",
+        "temperature": 0.15,
+        "max_tokens": 8192,
+        "openai_effort": "high",
+        "prompt_directive": (
+            "აზროვნების დონე: ULTRA — იმუშავე მაქსიმალური ანალიტიკური სიღრმითა და სიზუსტით: "
+            "გადაამოწმე ყველა დეტალი, შეადარე განმცხადებლის ისტორია, დოკუმენტები, გამოცდის ქულები, "
+            "ვადები და მოამზადე ამომწურავი ექსპერტული დასკვნა და რეკომენდაციები."
+        ),
+    },
+}
+ALLOWED_REASONING_LEVELS = tuple(REASONING_LEVELS.keys())
+DEFAULT_REASONING_LEVEL = "high"
 
 CATEGORY_LABELS_KA = dict(CATEGORY_DISPLAY_LABELS)
 
-DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის (gipc.org.ge) ადმინისტრატორის ოფიციალური ხელოვნური ინტელექტის ასისტენტი და ოპერატიული მრჩეველი (Google Gemini 4 Argon).
+DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის (gipc.org.ge) ადმინისტრატორის ოფიციალური ხელოვნური ინტელექტის ასისტენტი და ოპერატიული მრჩეველი.
 
 შენი მთავარი დანიშნულებაა:
 1. შეისწავლო საიტზე არსებული მონაცემები: რეგისტრირებული პირები, შემოსული განცხადებები, განცხადებებზე მიბმული დოკუმენტები (PDF, სურათები, Word ფაილები), დაგეგმილი გამოცდები, გამოცდების შედეგები, კანდიდატების სტატუსები და გაგზავნილი წერილები.
@@ -111,8 +181,11 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს
 
 
 class AISettingsPayload(BaseModel):
-    api_key: str | None = Field(default=None)
+    api_key: str | None = Field(default=None)  # Backward-compatible alias for gemini_api_key
+    gemini_api_key: str | None = Field(default=None)
+    openai_api_key: str | None = Field(default=None)
     model: str | None = Field(default=None)
+    reasoning_level: str | None = Field(default=None)
     custom_system_prompt: str | None = Field(default=None)
 
 
@@ -144,16 +217,35 @@ def _load_ai_settings() -> dict[str, Any]:
                 data = raw
         except Exception:
             data = {}
-    env_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    stored_key = str(data.get("api_key") or "").strip()
-    api_key = stored_key or env_key
+
+    env_gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    env_openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+
+    stored_gemini_key = str(data.get("gemini_api_key") or data.get("api_key") or "").strip()
+    stored_openai_key = str(data.get("openai_api_key") or "").strip()
+
+    gemini_key = stored_gemini_key or env_gemini_key
+    openai_key = stored_openai_key or env_openai_key
+
     model = str(data.get("model") or DEFAULT_MODEL).strip()
-    if model not in ALLOWED_MODELS:
+    if model not in MODEL_CATALOG:
         model = DEFAULT_MODEL
+
+    reasoning_level = str(data.get("reasoning_level") or DEFAULT_REASONING_LEVEL).strip().lower()
+    if reasoning_level not in REASONING_LEVELS:
+        reasoning_level = DEFAULT_REASONING_LEVEL
+
     custom_prompt = str(data.get("custom_system_prompt") or "").strip()
+    provider = MODEL_CATALOG[model]["provider"]
+    active_key = openai_key if provider == "openai" else gemini_key
+
     return {
-        "api_key": api_key,
+        "api_key": active_key,
+        "gemini_api_key": gemini_key,
+        "openai_api_key": openai_key,
         "model": model,
+        "provider": provider,
+        "reasoning_level": reasoning_level,
         "custom_system_prompt": custom_prompt,
     }
 
@@ -161,20 +253,35 @@ def _load_ai_settings() -> dict[str, Any]:
 def _save_ai_settings(
     *,
     api_key: str | None = None,
+    gemini_api_key: str | None = None,
+    openai_api_key: str | None = None,
     model: str | None = None,
+    reasoning_level: str | None = None,
     custom_system_prompt: str | None = None,
 ) -> dict[str, Any]:
     current = _load_ai_settings()
-    if api_key is not None:
-        cleaned_key = api_key.strip()
-        if cleaned_key:
-            current["api_key"] = cleaned_key
-        elif cleaned_key == "":
-            current["api_key"] = ""
+
+    effective_gemini_key = gemini_api_key if gemini_api_key is not None else api_key
+    if effective_gemini_key is not None:
+        cleaned = effective_gemini_key.strip()
+        if cleaned:
+            current["gemini_api_key"] = cleaned
+
+    if openai_api_key is not None:
+        cleaned_oa = openai_api_key.strip()
+        if cleaned_oa:
+            current["openai_api_key"] = cleaned_oa
+
     if model is not None:
         cleaned_model = model.strip()
-        if cleaned_model in ALLOWED_MODELS:
+        if cleaned_model in MODEL_CATALOG:
             current["model"] = cleaned_model
+
+    if reasoning_level is not None:
+        cleaned_level = reasoning_level.strip().lower()
+        if cleaned_level in REASONING_LEVELS:
+            current["reasoning_level"] = cleaned_level
+
     if custom_system_prompt is not None:
         current["custom_system_prompt"] = custom_system_prompt.strip()
 
@@ -182,8 +289,11 @@ def _save_ai_settings(
     path.write_text(
         json.dumps(
             {
-                "api_key": current["api_key"],
+                "api_key": current["gemini_api_key"],
+                "gemini_api_key": current["gemini_api_key"],
+                "openai_api_key": current["openai_api_key"],
                 "model": current["model"],
+                "reasoning_level": current["reasoning_level"],
                 "custom_system_prompt": current["custom_system_prompt"],
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
@@ -192,7 +302,7 @@ def _save_ai_settings(
         ),
         encoding="utf-8",
     )
-    return current
+    return _load_ai_settings()
 
 
 def _mask_key(key: str) -> str | None:
@@ -201,6 +311,33 @@ def _mask_key(key: str) -> str | None:
     if len(key) <= 10:
         return key[:3] + "***"
     return f"{key[:6]}...{key[-4:]}"
+
+
+def _build_status_response(cfg: dict[str, Any], quick_stats: dict[str, int] | None = None) -> dict[str, Any]:
+    model_info = MODEL_CATALOG.get(cfg["model"], MODEL_CATALOG[DEFAULT_MODEL])
+    level_info = REASONING_LEVELS.get(cfg["reasoning_level"], REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
+    out = {
+        "configured": bool(cfg["api_key"]),
+        "gemini_configured": bool(cfg["gemini_api_key"]),
+        "openai_configured": bool(cfg["openai_api_key"]),
+        "masked_key": _mask_key(cfg["api_key"]),
+        "masked_gemini_key": _mask_key(cfg["gemini_api_key"]),
+        "masked_openai_key": _mask_key(cfg["openai_api_key"]),
+        "model": cfg["model"],
+        "model_label": model_info["label"],
+        "provider": cfg["provider"],
+        "reasoning_level": cfg["reasoning_level"],
+        "reasoning_level_label": level_info["label"],
+        "reasoning_level_short": level_info["short_label"],
+        "allowed_models": list(ALLOWED_MODELS),
+        "model_catalog": list(MODEL_CATALOG.values()),
+        "reasoning_levels": list(REASONING_LEVELS.values()),
+        "custom_system_prompt": cfg["custom_system_prompt"],
+        "default_system_prompt": DEFAULT_SYSTEM_PROMPT,
+    }
+    if quick_stats is not None:
+        out["quick_stats"] = quick_stats
+    return out
 
 
 def _extract_docx_text(file_bytes: bytes, max_chars: int = 12000) -> str:
@@ -234,7 +371,7 @@ def _read_statement_attachment_parts(
     *,
     budget_bytes: int,
 ) -> tuple[list[dict[str, Any]], int, str | None]:
-    """Read a statement attachment and return Gemini API content parts + bytes used + description."""
+    """Read a statement attachment and return content parts + bytes used + description."""
     if not statement.attachment_path:
         return [], 0, None
     try:
@@ -296,6 +433,7 @@ def _read_statement_attachment_parts(
                 "inline_data": {
                     "mime_type": mime_map[suffix],
                     "data": base64.b64encode(raw_bytes).decode("ascii"),
+                    "filename": filename,
                 }
             }
         )
@@ -342,6 +480,7 @@ def _read_statement_attachment_parts(
                                     "inline_data": {
                                         "mime_type": mime_map[inner_suffix],
                                         "data": base64.b64encode(inner_bytes).decode("ascii"),
+                                        "filename": inner_name,
                                     }
                                 }
                             )
@@ -374,7 +513,7 @@ def _read_statement_attachment_parts(
 
 def _next_workday(today: date) -> date:
     candidate = today + timedelta(days=1)
-    while candidate.weekday() >= 5:  # 5=Saturday, 6=Sunday
+    while candidate.weekday() >= 5:
         candidate += timedelta(days=1)
     return candidate
 
@@ -467,7 +606,6 @@ def _build_site_context_and_attachments(
     active_certs = [c for c in certs if c.status == "active"]
     suspended_or_expired_certs = [c for c in certs if c.status in ("suspended", "expired")]
 
-    # Check exam outcomes needing pass/fail letters
     pending_pass_users: list[dict[str, Any]] = []
     pending_fail_users: list[dict[str, Any]] = []
     for uid, hist in exam_histories.items():
@@ -497,7 +635,6 @@ def _build_site_context_and_attachments(
                 }
             )
 
-    # Check cert_candidates approaching 30-day deadline
     now_utc = datetime.utcnow()
     cert_candidates_info: list[dict[str, Any]] = []
     for u in cert_candidates:
@@ -517,7 +654,6 @@ def _build_site_context_and_attachments(
             }
         )
 
-    # Format unanswered statements in detail
     statements_summary: list[dict[str, Any]] = []
     for s in statements[:30]:
         u = users_by_id.get(s.user_id)
@@ -553,7 +689,6 @@ def _build_site_context_and_attachments(
             }
         )
 
-    # Format recent letters
     recent_letters_summary: list[dict[str, Any]] = []
     for l in letters[:20]:
         u = users_by_id.get(l.user_id)
@@ -574,7 +709,6 @@ def _build_site_context_and_attachments(
             }
         )
 
-    # Focus user or statement details if requested
     focus_context: dict[str, Any] = {}
     if focus_statement_id is not None:
         st_obj = next((s for s in statements if s.id == focus_statement_id), None)
@@ -623,7 +757,6 @@ def _build_site_context_and_attachments(
             ],
         }
 
-    # Decide which statement attachments to feed directly to Gemini
     attachments_to_load: list[Statement] = []
     if focus_statement_id is not None:
         st_obj = next((s for s in statements if s.id == focus_statement_id), None)
@@ -636,7 +769,6 @@ def _build_site_context_and_attachments(
                 if len(attachments_to_load) >= 3:
                     break
     else:
-        # Check if user message mentions a specific doc_number (e.g. IN-2026-0005) or user name
         msg_lower = last_user_message.lower()
         for s in statements:
             if not s.attachment_path:
@@ -672,7 +804,7 @@ def _build_site_context_and_attachments(
 
     attachment_parts: list[dict[str, Any]] = []
     inspected_labels: list[str] = []
-    remaining_budget = 12 * 1024 * 1024  # 12 MB max inline data per request
+    remaining_budget = 12 * 1024 * 1024
     for st_item in attachments_to_load:
         u = users_by_id.get(st_item.user_id)
         parts, used_bytes, label = _read_statement_attachment_parts(
@@ -788,7 +920,6 @@ def _parse_proposed_letters(
         subject = str(data.get("subject") or fallback_subject).strip() or fallback_subject
         body = str(data.get("body") or fallback_body).strip() or fallback_body
 
-        # Ensure placeholders are replaced even if AI left {name}, {date}, {time}
         full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
         cat_label = CATEGORY_LABELS_KA.get(cat, CATEGORY_LABELS_KA["A"])
         for placeholder, val in (
@@ -836,7 +967,7 @@ def _parse_proposed_letters(
     return cleaned, proposals
 
 
-def _discover_available_model(api_key: str, preferred: str = "gemini-4-argon") -> str:
+def _discover_available_gemini_model(api_key: str, preferred: str = "gemini-4-argon") -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models?key={urllib.parse.quote(api_key)}"
     try:
         req = urllib.request.Request(url, method="GET")
@@ -868,15 +999,35 @@ def _call_gemini_api(
     model: str,
     system_instruction: str,
     contents: list[dict[str, Any]],
+    reasoning_level: str = DEFAULT_REASONING_LEVEL,
 ) -> str:
+    level_cfg = REASONING_LEVELS.get(reasoning_level, REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
+    cleaned_contents: list[dict[str, Any]] = []
+    for turn in contents:
+        cleaned_parts: list[dict[str, Any]] = []
+        for p in turn.get("parts") or []:
+            if "inline_data" in p:
+                inl = p["inline_data"]
+                cleaned_parts.append(
+                    {
+                        "inline_data": {
+                            "mime_type": inl["mime_type"],
+                            "data": inl["data"],
+                        }
+                    }
+                )
+            elif "text" in p:
+                cleaned_parts.append({"text": p["text"]})
+        cleaned_contents.append({"role": turn.get("role", "user"), "parts": cleaned_parts})
+
     payload = {
         "systemInstruction": {
             "parts": [{"text": system_instruction}],
         },
-        "contents": contents,
+        "contents": cleaned_contents,
         "generationConfig": {
-            "temperature": 0.25,
-            "maxOutputTokens": 4096,
+            "temperature": level_cfg["temperature"],
+            "maxOutputTokens": level_cfg["max_tokens"],
         },
     }
     body_bytes = json.dumps(payload).encode("utf-8")
@@ -899,7 +1050,7 @@ def _call_gemini_api(
         resp_data = _send_for_model(model)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            resolved_model = _discover_available_model(api_key, preferred=model)
+            resolved_model = _discover_available_gemini_model(api_key, preferred=model)
             if resolved_model and resolved_model != model:
                 try:
                     resp_data = _send_for_model(resolved_model)
@@ -933,6 +1084,149 @@ def _call_gemini_api(
     return "\n".join(text_chunks).strip()
 
 
+def _discover_available_openai_model(api_key: str, preferred: str) -> str:
+    url = "https://api.openai.com/v1/models"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        items = data.get("data") or []
+        ids = [str(it.get("id") or "") for it in items if it.get("id")]
+        keyword = "sol" if "sol" in preferred.lower() else ("astra" if "astra" in preferred.lower() else preferred)
+        for mid in ids:
+            if keyword.lower() in mid.lower():
+                return mid
+        for fallback_prefix in ("gpt-5", "o3", "o4", "gpt-4o"):
+            for mid in ids:
+                if mid.startswith(fallback_prefix):
+                    return mid
+    except Exception:
+        pass
+    return preferred
+
+
+def _call_openai_api(
+    *,
+    api_key: str,
+    model: str,
+    system_instruction: str,
+    contents: list[dict[str, Any]],
+    reasoning_level: str = DEFAULT_REASONING_LEVEL,
+) -> str:
+    level_cfg = REASONING_LEVELS.get(reasoning_level, REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
+    oa_messages: list[dict[str, Any]] = [
+        {"role": "system", "content": system_instruction},
+    ]
+    for turn in contents:
+        role = "assistant" if turn.get("role") == "model" else "user"
+        parts = turn.get("parts") or []
+        content_blocks: list[dict[str, Any]] = []
+        for p in parts:
+            if "text" in p:
+                content_blocks.append({"type": "text", "text": p["text"]})
+            elif "inline_data" in p:
+                inl = p["inline_data"]
+                mime = inl.get("mime_type") or ""
+                b64 = inl.get("data") or ""
+                fname = inl.get("filename") or "document.pdf"
+                if mime.startswith("image/"):
+                    content_blocks.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{mime};base64,{b64}"},
+                        }
+                    )
+                elif mime == "application/pdf":
+                    content_blocks.append(
+                        {
+                            "type": "file",
+                            "file": {
+                                "filename": fname,
+                                "file_data": f"data:{mime};base64,{b64}",
+                            },
+                        }
+                    )
+        if len(content_blocks) == 1 and content_blocks[0].get("type") == "text":
+            oa_messages.append({"role": role, "content": content_blocks[0]["text"]})
+        elif content_blocks:
+            oa_messages.append({"role": role, "content": content_blocks})
+
+    def _send_oa(target_model: str, include_effort: bool = True) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": target_model,
+            "messages": oa_messages,
+        }
+        if include_effort:
+            payload["reasoning_effort"] = level_cfg["openai_effort"]
+        else:
+            payload["temperature"] = level_cfg["temperature"]
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    try:
+        resp_data = _send_oa(model, include_effort=True)
+    except urllib.error.HTTPError as exc:
+        err_body = ""
+        try:
+            err_body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        if exc.code == 400 and "reasoning_effort" in err_body:
+            try:
+                resp_data = _send_oa(model, include_effort=False)
+            except urllib.error.HTTPError as exc2:
+                exc = exc2
+                try:
+                    err_body = exc2.read().decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+            else:
+                choices = resp_data.get("choices") or []
+                return str(choices[0].get("message", {}).get("content") or "").strip() if choices else ""
+        if exc.code in (400, 404) and ("model" in err_body.lower() or exc.code == 404):
+            resolved = _discover_available_openai_model(api_key, preferred=model)
+            if resolved and resolved != model:
+                try:
+                    resp_data = _send_oa(resolved, include_effort=False)
+                except urllib.error.HTTPError as exc3:
+                    exc = exc3
+                    try:
+                        err_body = exc3.read().decode("utf-8", errors="replace")
+                    except Exception:
+                        pass
+                else:
+                    choices = resp_data.get("choices") or []
+                    return str(choices[0].get("message", {}).get("content") or "").strip() if choices else ""
+        try:
+            err_json = json.loads(err_body)
+            err_msg = err_json.get("error", {}).get("message") or err_body
+        except Exception:
+            err_msg = err_body or str(exc)
+        if exc.code in (401, 403):
+            raise HTTPException(400, "OpenAI (ChatGPT) API Key არასწორია ან არააქტიურია. გადაამოწმეთ გასაღები პარამეტრებში.")
+        raise HTTPException(502, f"ChatGPT API შეცდომა ({exc.code}): {err_msg[:300]}")
+    except Exception as exc:
+        raise HTTPException(502, f"ChatGPT-სთან დაკავშირება ვერ მოხერხდა: {exc}")
+
+    choices = resp_data.get("choices") or []
+    if not choices:
+        raise HTTPException(502, "ChatGPT-მ ცარიელი პასუხი დააბრუნა.")
+    return str(choices[0].get("message", {}).get("content") or "").strip()
+
+
 @router.get("/ai/status")
 def get_ai_status(
     authorization: str | None = Header(None),
@@ -942,18 +1236,13 @@ def get_ai_status(
     cfg = _load_ai_settings()
     unseen_count = len(db.scalars(select(Statement.id).where(Statement.seen_at.is_(None))).all())
     pending_count = len(db.scalars(select(Statement.id).where(Statement.answered_at.is_(None))).all())
-    return {
-        "configured": bool(cfg["api_key"]),
-        "masked_key": _mask_key(cfg["api_key"]),
-        "model": cfg["model"],
-        "allowed_models": list(ALLOWED_MODELS),
-        "custom_system_prompt": cfg["custom_system_prompt"],
-        "default_system_prompt": DEFAULT_SYSTEM_PROMPT,
-        "quick_stats": {
+    return _build_status_response(
+        cfg,
+        quick_stats={
             "unseen_statements": unseen_count,
             "pending_statements": pending_count,
         },
-    }
+    )
 
 
 @router.put("/ai/settings")
@@ -965,17 +1254,13 @@ def update_ai_settings(
     _require_admin(db, authorization)
     cfg = _save_ai_settings(
         api_key=payload.api_key,
+        gemini_api_key=payload.gemini_api_key,
+        openai_api_key=payload.openai_api_key,
         model=payload.model,
+        reasoning_level=payload.reasoning_level,
         custom_system_prompt=payload.custom_system_prompt,
     )
-    return {
-        "configured": bool(cfg["api_key"]),
-        "masked_key": _mask_key(cfg["api_key"]),
-        "model": cfg["model"],
-        "allowed_models": list(ALLOWED_MODELS),
-        "custom_system_prompt": cfg["custom_system_prompt"],
-        "default_system_prompt": DEFAULT_SYSTEM_PROMPT,
-    }
+    return _build_status_response(cfg)
 
 
 @router.post("/ai/chat")
@@ -986,10 +1271,14 @@ def ai_chat(
 ):
     _require_admin(db, authorization)
     cfg = _load_ai_settings()
+    model_info = MODEL_CATALOG.get(cfg["model"], MODEL_CATALOG[DEFAULT_MODEL])
+    level_info = REASONING_LEVELS.get(cfg["reasoning_level"], REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
+
     if not cfg["api_key"]:
+        key_label = "OpenAI (ChatGPT) API Key" if cfg["provider"] == "openai" else "Gemini API Key"
         raise HTTPException(
             400,
-            "Gemini API Key არ არის მითითებული. დააჭირეთ ჩატის ზედა მარჯვენა კუთხეში ⚙️ ღილაკს და ჩასვით თქვენი Gemini API Key.",
+            f"{model_info['label']}-ისთვის საჭიროა {key_label}. დააჭირეთ ჩატის თავში მოდელის/დონის ღილაკს და შეიყვანეთ API Key.",
         )
 
     mode = (payload.mode or "chat").strip().lower()
@@ -1029,12 +1318,14 @@ def ai_chat(
         )
     )
 
-    system_instruction = DEFAULT_SYSTEM_PROMPT
+    system_instruction = (
+        DEFAULT_SYSTEM_PROMPT
+        + f"\n\nაქტიური მოდელი: {model_info['label']} | {level_info['prompt_directive']}"
+    )
     if cfg["custom_system_prompt"]:
         system_instruction += "\n\nდამატებითი ინსტრუქცია ადმინისტრატორისგან:\n" + cfg["custom_system_prompt"]
 
     contents: list[dict[str, Any]] = []
-    # Include prior conversation turns (up to last 10 messages)
     prior_messages = payload.messages[:-1] if payload.messages else []
     for m in prior_messages[-10:]:
         role = "model" if m.role in ("assistant", "model") else "user"
@@ -1042,19 +1333,28 @@ def ai_chat(
         if text:
             contents.append({"role": role, "parts": [{"text": text}]})
 
-    # Final user turn includes live DB context + attachment inline_data + user prompt
     final_parts: list[dict[str, Any]] = [{"text": context_str}]
     if attachment_parts:
         final_parts.extend(attachment_parts)
     final_parts.append({"text": f"ადმინისტრატორის მოთხოვნა:\n{last_user_msg}"})
     contents.append({"role": "user", "parts": final_parts})
 
-    raw_reply = _call_gemini_api(
-        api_key=cfg["api_key"],
-        model=cfg["model"],
-        system_instruction=system_instruction,
-        contents=contents,
-    )
+    if cfg["provider"] == "openai":
+        raw_reply = _call_openai_api(
+            api_key=cfg["api_key"],
+            model=cfg["model"],
+            system_instruction=system_instruction,
+            contents=contents,
+            reasoning_level=cfg["reasoning_level"],
+        )
+    else:
+        raw_reply = _call_gemini_api(
+            api_key=cfg["api_key"],
+            model=cfg["model"],
+            system_instruction=system_instruction,
+            contents=contents,
+            reasoning_level=cfg["reasoning_level"],
+        )
 
     today = _today_in_tbilisi()
     default_date = _next_workday(today).isoformat()
@@ -1072,4 +1372,7 @@ def ai_chat(
         "proposed_letters": proposed_letters,
         "inspected_attachments": inspected_labels,
         "model": cfg["model"],
+        "model_label": model_info["label"],
+        "reasoning_level": cfg["reasoning_level"],
+        "reasoning_level_label": level_info["short_label"],
     }

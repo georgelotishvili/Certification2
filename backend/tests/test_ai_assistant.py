@@ -55,11 +55,12 @@ class AiAssistantTests(unittest.TestCase):
         self.addCleanup(resolve_patch.stop)
 
     def test_settings_and_chat_with_attachment_and_letter_proposal(self):
-        # 1. Configure API key and model
         updated = ai_assistant.update_ai_settings(
             payload=ai_assistant.AISettingsPayload(
                 api_key="AIzaSyTestKey123456789",
+                openai_api_key="sk-test-openai-key-123456",
                 model="gemini-4-argon",
+                reasoning_level="ultra",
                 custom_system_prompt="ყოველთვის შეამოწმე დიპლომი.",
             ),
             authorization=None,
@@ -67,8 +68,13 @@ class AiAssistantTests(unittest.TestCase):
         )
         self.assertTrue(updated["configured"])
         self.assertEqual(updated["model"], "gemini-4-argon")
-        self.assertEqual(updated["allowed_models"], ["gemini-4-argon"])
+        self.assertEqual(updated["reasoning_level"], "ultra")
+        self.assertEqual(
+            updated["allowed_models"],
+            ["gemini-4-argon", "chatgpt-sol", "chatgpt-astra"],
+        )
         self.assertEqual(updated["masked_key"], "AIzaSy...6789")
+        self.assertEqual(updated["masked_openai_key"], "sk-tes...3456")
 
         # 2. Add a user and a statement with a PDF attachment
         user = User(
