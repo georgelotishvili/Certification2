@@ -759,6 +759,14 @@
       return `${first} ${last}`.trim();
     }
 
+    function candidateCategoryToLevelKey(cat) {
+      const normalized = String(cat || '').trim().toUpperCase();
+      if (normalized === 'B' || normalized === 'B_A') return 'municipal';
+      if (normalized === 'C' || normalized === 'C_A') return 'expert';
+      if (normalized === 'A') return 'architect';
+      return '';
+    }
+
     function buildCertificateData(user) {
       const certificate = user?.certificate || user?.certificate_info || {};
       const hasCertificate = hasCertificatePayload(certificate);
@@ -770,8 +778,11 @@
       const rawUniqueCode = certificate.unique_code || certificate.code || '';
       const uniqueCode = rawUniqueCode || user?.code || '';
 
+      const candidateSuggestedLevel = !hasCertificate
+        ? candidateCategoryToLevelKey(user?.candidate_category || user?.requested_category)
+        : '';
       const rawLevel =
-        certificate.level || certificate.rank || user?.certificate_level || user?.level;
+        certificate.level || certificate.rank || user?.certificate_level || user?.level || candidateSuggestedLevel;
       const level = normalizeLevel(rawLevel);
 
       const issueDateRaw =
@@ -1555,6 +1566,12 @@
           };
           activeUserRef.certificate_status = certificateData.status;
           activeUserRef.certificate_valid_until = certificateData.valid_until;
+          activeUserRef.candidate_status = null;
+          activeUserRef.candidate_category = null;
+        }
+        if (activeUser) {
+          activeUser.candidate_status = null;
+          activeUser.candidate_category = null;
         }
 
         closeForm({ force: true });

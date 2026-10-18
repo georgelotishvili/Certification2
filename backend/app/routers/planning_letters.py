@@ -15,8 +15,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import ExamSchedule, PlanningLetter, PlanningTemplate, User, format_letter_doc_number
+from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate, User, format_letter_doc_number
 from ..services.bounded_upload import UploadTooLarge, save_upload_stream
+from ..services.candidate_status import (
+    VALID_CANDIDATE_CATEGORIES,
+    get_user_latest_requested_category,
+    normalize_cert_category,
+)
 from ..services.media_storage import ensure_media_root, relative_storage_path, resolve_storage_path
 from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
 from .admin import _require_admin
@@ -214,6 +219,9 @@ def _letter_out(letter: PlanningLetter):
     out["doc_number"] = format_letter_doc_number(letter)
     if letter.attempts == 0 and letter.sent_at is None:
         out["status"] = "saved"
+    if letter.user is not None:
+        out["user_candidate_status"] = letter.user.candidate_status
+        out["user_candidate_category"] = letter.user.candidate_category
     return out
 
 
@@ -455,6 +463,7 @@ def send_letter(
     schedule_id: int | None = Form(None),
     edit_letter_id: int | None = Form(None),
     keep_existing_attachment: bool = Form(False),
+    candidate_category: str | None = Form(None),
     authorization: str | None = Header(None), db: Session = Depends(get_db),
 ):
     actor = _require_admin(db, authorization)
@@ -620,6 +629,31 @@ def send_letter(
             db.flush()
             if old_letter_path and old_letter_path != new_path:
                 _remove_file(old_letter_path, namespace)
+
+        # Update candidate status based on letter kind
+        now = datetime.utcnow()
+        clean_cat = (candidate_category or "").strip().upper()
+        valid_cat = clean_cat if clean_cat in VALID_CANDIDATE_CATEGORIES else None
+        has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user_id)) is not None
+        if custom_kind in ("rejection", "exam_fail") or has_cert:
+            user.candidate_status = None
+            user.candidate_category = None
+            user.candidate_updated_at = now
+            db.add(user)
+        elif kind == "exam" and not custom_kind:
+            req_cat = get_user_latest_requested_category(db, user_id)
+            user.candidate_status = "exam_candidate"
+            user.candidate_category = valid_cat or req_cat or user.candidate_category or "A"
+            user.candidate_updated_at = now
+            db.add(user)
+        elif kind == "certificate" and not custom_kind:
+            req_cat = get_user_latest_requested_category(db, user_id)
+            user.candidate_status = "cert_candidate"
+            user.candidate_category = normalize_cert_category(
+                valid_cat or user.candidate_category or req_cat or "A"
+            )
+            user.candidate_updated_at = now
+            db.add(user)
 
         db.add(letter)
         db.flush()

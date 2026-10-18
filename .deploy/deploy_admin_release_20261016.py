@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEPLOY_DIR = ROOT / ".deploy" / "admin-release-20261016-01"
+DEPLOY_DIR = ROOT / ".deploy" / "candidate-status-release-20261018-01"
 BEFORE_DIR = DEPLOY_DIR / "before"
 AFTER_DIR = DEPLOY_DIR / "after"
 
@@ -39,9 +39,12 @@ CANDIDATE_FILES = [
     "backend/app/routers/statements.py",
     "backend/app/routers/users.py",
     "backend/app/schemas.py",
+    "backend/app/services/candidate_status.py",
     "backend/app/services/email_verification.py",
     "backend/app/services/planning_email.py",
+    "backend/scripts/migrate_candidate_status.py",
     "backend/scripts/migrate_planning_letters.py",
+    "backend/scripts/migrate_doc_numbers.py",
     "frontend/assets/svg/logo.svg",
     "frontend/pages/admin.html",
     "frontend/pages/documents.html",

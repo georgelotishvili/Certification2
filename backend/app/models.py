@@ -280,6 +280,10 @@ class User(Base):
     # Profile photo
     photo_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     photo_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Candidate status tracking ('exam_candidate', 'cert_candidate', or None)
+    candidate_status: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    candidate_category: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    candidate_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     statements: Mapped[List["Statement"]] = relationship(
         "Statement",
         back_populates="user",

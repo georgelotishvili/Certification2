@@ -399,14 +399,59 @@
       }
     }
 
-    function candidateTokens(user, examDate, examTime, period) {
+    function parseStatementCategory(message) {
+      const text = String(message || '').trim();
+      if (!text) return null;
+      if (text.includes('2) კატეგორია C ან A') || text.includes('კატეგორია C ან A')) return 'C_A';
+      if (text.includes('3) კატეგორია B ან A') || text.includes('კატეგორია B ან A')) return 'B_A';
+      if (text.includes('1) კატეგორია A') || text.includes('კატეგორია A —')) return 'A';
+      if (text.includes('4) კატეგორია B') || text.includes('კატეგორია B —')) return 'B';
+      if (text.includes('5) კატეგორია C') || text.includes('კატეგორია C —')) return 'C';
+      return null;
+    }
+
+    function inferExamCandidateCategory(user, statementItems = []) {
+      const valid = new Set(['A', 'B', 'C', 'B_A', 'C_A']);
+      const candCat = String(user?.candidate_category || '').trim().toUpperCase();
+      if (valid.has(candCat)) return candCat;
+      const reqCat = String(user?.requested_category || '').trim().toUpperCase();
+      if (valid.has(reqCat)) return reqCat;
+      for (const stmt of statementItems) {
+        const parsed = parseStatementCategory(stmt?.message);
+        if (parsed && valid.has(parsed)) return parsed;
+      }
+      return 'A';
+    }
+
+    function inferCertificateCandidateCategory(user, examOutcome, statementItems = []) {
+      const base = inferExamCandidateCategory(user, statementItems);
+      if (base === 'A' || base === 'B' || base === 'C') return base;
+      const outcome = examOutcome?.outcome || user?.exam_outcome?.outcome || '';
+      if (base === 'B_A') {
+        return outcome === 'pass_a' ? 'A' : 'B';
+      }
+      if (base === 'C_A') {
+        return outcome === 'pass_a' ? 'A' : 'C';
+      }
+      return outcome === 'pass_bc' ? 'B' : 'A';
+    }
+
+    function categoryLabelForLetter(certCategory, fallbackOutcomeLabel = '') {
+      const cat = String(certCategory || '').trim().toUpperCase();
+      if (cat === 'A') return 'A კატეგორიის';
+      if (cat === 'B') return 'B კატეგორიის';
+      if (cat === 'C') return 'C კატეგორიის';
+      return String(fallbackOutcomeLabel || 'შესაბამისი კატეგორიის').trim();
+    }
+
+    function candidateTokens(user, examDate, examTime, period, selectedCertCategory = '') {
       const fullName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || '(უსახელო)';
       const personalId = String(user?.personal_id || '—').trim();
       const code = String(user?.code || '—').trim();
       const dateStr = isValidDate(examDate) ? formatDisplayDate(examDate) : '[თარიღი]';
       const timeStr = isValidTime(examTime) ? String(examTime).trim() : '[საათი]';
       const periodStr = periodLabelText(period) || '[დილით/საღამოს]';
-      const categoryStr = String(user?.exam_outcome?.category_label || 'შესაბამისი კატეგორიის').trim();
+      const categoryStr = categoryLabelForLetter(selectedCertCategory, user?.exam_outcome?.category_label);
       const examResultsStr = String(user?.exam_outcome?.results_text || '').trim();
       return {
         name: fullName,
@@ -483,7 +528,7 @@
         }
       }
       result = result
-        .replace(/B\/C კატეგორიის|A კატეგორიის|შესაბამისი კატეგორიის/g, '[კატეგორია]')
+        .replace(/[ABC] კატეგორიის|B\/C კატეგორიის|შესაბამისი კატეგორიის/g, '[კატეგორია]')
         .replace(/\[თარიღი\]|\[გამოცდის თარიღი\]/g, '{date}')
         .replace(/\[საათი\]/g, '{time}')
         .replace(/\[დილით\/საღამოს\]|\[ცვლა\]/g, '{period}');
@@ -984,6 +1029,7 @@
         const meta = MODE_META[resolvedMode] || MODE_META.exam;
         const hasTimeAndPeriod = meta.hasTimeAndPeriod;
         const hasTemplate = meta.hasTemplate !== false;
+        const hasCategorySelect = resolvedMode === 'exam' || resolvedMode === 'certificate';
 
         await load();
         closeAnyExamModal();
@@ -1005,6 +1051,23 @@
         let keepExistingFile = !!(editingItem && editingItem.attachmentFilename);
         let modalBusy = false;
 
+        const initialCategory = resolvedMode === 'certificate'
+          ? inferCertificateCandidateCategory(user, examOutcome, statementItems)
+          : inferExamCandidateCategory(user, statementItems);
+        const categoryOptionsHtml = resolvedMode === 'certificate'
+          ? [
+              { key: 'A', label: 'A კატეგორია — შენობა-ნაგებობის არქიტექტორი' },
+              { key: 'B', label: 'B კატეგორია — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი' },
+              { key: 'C', label: 'C კატეგორია — არქიტექტურული პროექტის ექსპერტი' },
+            ].map((opt) => `<option value="${opt.key}"${opt.key === initialCategory ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`).join('')
+          : [
+              { key: 'A', label: 'A — შენობა-ნაგებობის არქიტექტორი' },
+              { key: 'B', label: 'B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი' },
+              { key: 'C', label: 'C — არქიტექტურული პროექტის ექსპერტი' },
+              { key: 'B_A', label: 'B ან A (ქულების შესაბამისად)' },
+              { key: 'C_A', label: 'C ან A (ქულების ან გამოცდილების შესაბამისად)' },
+            ].map((opt) => `<option value="${opt.key}"${opt.key === initialCategory ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
+
         const initialDate = editingItem?.examDate || (hasTimeAndPeriod ? '' : todayIsoDate());
         const initialPeriod = hasTimeAndPeriod ? (editingItem?.period || '') : resolvedMode;
         let modalMorningTime = (editingItem && initialPeriod === 'morning' && isValidTime(editingItem.eventTime))
@@ -1020,7 +1083,13 @@
                 ? modalEveningTime
                 : (editingItem?.eventTime || ''))
           : '00:00';
-        let lastTokens = candidateTokens(user, initialDate, initialTime, initialPeriod);
+        let lastTokens = candidateTokens(
+          user,
+          initialDate,
+          initialTime,
+          initialPeriod,
+          resolvedMode === 'certificate' ? initialCategory : ''
+        );
 
         const modalTitleText = editingItem ? meta.editTitle : meta.createTitle;
 
@@ -1132,6 +1201,15 @@
                   </div>
                 `}
 
+                ${hasCategorySelect ? `
+                  <div class="planning-letter-category-row">
+                    <label class="planning-letter-category-label">
+                      <span>${resolvedMode === 'certificate' ? 'მისანიჭებელი სერტიფიკატის კატეგორია:' : 'კანდიდატის კატეგორია (განაცხადიდან):'}</span>
+                      <select class="exam-schedule-category-select">${categoryOptionsHtml}</select>
+                    </label>
+                  </div>
+                ` : ''}
+
                 <div class="exam-schedule-letter-box">
                   <div class="exam-schedule-letter-toolbar">
                     <span class="exam-schedule-letter-title">${escapeHtml(meta.letterBoxTitle)}</span>
@@ -1237,6 +1315,7 @@
         const eveningBadge = overlay.querySelector('[data-time-badge="evening"]');
         const morningDefaultDisplay = overlay.querySelector('[data-default-display="morning"]');
         const eveningDefaultDisplay = overlay.querySelector('[data-default-display="evening"]');
+        const categorySelect = overlay.querySelector('.exam-schedule-category-select');
         const subjectInput = overlay.querySelector('.exam-schedule-subject');
         const bodyInput = overlay.querySelector('.exam-schedule-body');
         const textEditBtn = overlay.querySelector('.exam-schedule-text-edit-btn');
@@ -1315,10 +1394,20 @@
           return '';
         }
 
+        function currentSelectedCategory() {
+          return categorySelect?.value || initialCategory;
+        }
+
         function refreshRenderedText({ forceTemplate = false } = {}) {
           if (!hasTemplate) return;
           const tmpl = getActiveTemplate();
-          const nextTokens = candidateTokens(user, dateInput.value, currentTimeValue(), currentPeriod());
+          const nextTokens = candidateTokens(
+            user,
+            dateInput.value,
+            currentTimeValue(),
+            currentPeriod(),
+            resolvedMode === 'certificate' ? currentSelectedCategory() : ''
+          );
           if (forceTemplate || !textCustomized) {
             subjectInput.value = applyTemplateTokens(tmpl.subject || meta.defaultSubject, nextTokens);
             const rawBody = applyTemplateTokens(tmpl.body || meta.defaultBody, nextTokens);
@@ -1336,6 +1425,10 @@
             }
             if (hasTimeAndPeriod && lastTokens.period && lastTokens.period !== nextTokens.period) {
               nextBody = nextBody.split(`(${lastTokens.period})`).join(`(${nextTokens.period})`);
+            }
+            if (resolvedMode === 'certificate' && lastTokens.category && lastTokens.category !== nextTokens.category) {
+              nextBody = nextBody.split(lastTokens.category).join(nextTokens.category);
+              nextBody = nextBody.replace(/(?:[ABC]|B\/C|შესაბამისი)\s*კატეგორიის(?=\s+სერტიფიკატის)/g, nextTokens.category);
             }
             subjectInput.value = applyTemplateTokens(nextSubject, nextTokens);
             bodyInput.value = applyTemplateTokens(nextBody, nextTokens);
@@ -1393,6 +1486,11 @@
 
         // Event listeners inside modal
         dateInput?.addEventListener('change', () => {
+          setModalStatus('');
+          refreshRenderedText();
+        });
+
+        categorySelect?.addEventListener('change', () => {
           setModalStatus('');
           refreshRenderedText();
         });
@@ -1547,7 +1645,13 @@
 
         saveTemplateBtn?.addEventListener('click', async () => {
           if (modalBusy || !hasTemplate) return;
-          const currentTokens = candidateTokens(user, dateInput.value, currentTimeValue(), currentPeriod());
+          const currentTokens = candidateTokens(
+            user,
+            dateInput.value,
+            currentTimeValue(),
+            currentPeriod(),
+            resolvedMode === 'certificate' ? currentSelectedCategory() : ''
+          );
           const templateSubject = convertRenderedToTemplate(subjectInput.value.trim(), currentTokens);
           const templateBody = convertRenderedToTemplate(bodyInput.value.trim(), currentTokens);
           if (!templateSubject || !templateBody) {
@@ -1678,12 +1782,14 @@
                 : 'ფაილის გარეშე';
 
           const summaryEl = overlay.querySelector('.exam-schedule-confirm-summary');
+          const catText = hasCategorySelect ? (categorySelect?.selectedOptions?.[0]?.textContent || currentSelectedCategory()) : '';
           summaryEl.innerHTML = `
             <div><strong>კანდიდატი:</strong> ${escapeHtml(candidateName)} (${escapeHtml(user.personal_id || '—')}, კოდი: ${escapeHtml(user.code || '—')})</div>
             <div><strong>მიმღების მეილი:</strong> ${safeEmail}</div>
             ${hasTimeAndPeriod
               ? `<div><strong>${escapeHtml(meta.historyTypeLabel)}:</strong> ${escapeHtml(dateLabel)} — ${escapeHtml(periodLabel)}, ${escapeHtml(examTime)} სთ</div>`
               : `<div><strong>წერილის ტიპი:</strong> ${escapeHtml(meta.historyTypeLabel)} (${escapeHtml(dateLabel)})</div>`}
+            ${hasCategorySelect ? `<div><strong>კატეგორია:</strong> ${escapeHtml(catText)}</div>` : ''}
             <div><strong>მიმაგრებული ფაილი:</strong> ${escapeHtml(attachmentLabel)}</div>
           `;
           overlay.querySelector('.exam-schedule-confirm-preview-subject').innerHTML = `<strong>სათაური:</strong> ${escapeHtml(finalSubject)}`;
@@ -1741,6 +1847,9 @@
             formData.append('request_id', generateUuid());
             formData.append('confirmed', 'true');
             formData.append('expected_to_email', String(user.email || '').trim());
+            if (hasCategorySelect) {
+              formData.append('candidate_category', currentSelectedCategory());
+            }
 
             if (editingItem) {
               if (resolvedMode === 'exam' && editingItem.scheduleId != null && actionMode !== 'send_only') {
@@ -1777,6 +1886,10 @@
             }
 
             const letterResult = await response.json();
+            if (letterResult && 'user_candidate_status' in letterResult) {
+              user.candidate_status = letterResult.user_candidate_status || null;
+              user.candidate_category = letterResult.user_candidate_category || null;
+            }
             await load();
             await notifyChanged();
 

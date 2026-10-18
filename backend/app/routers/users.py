@@ -860,6 +860,10 @@ def create_certificate(
         valid_until=payload.valid_until,
         exam_score=None,
     )
+    user.candidate_status = None
+    user.candidate_category = None
+    user.candidate_updated_at = datetime.utcnow()
+    db.add(user)
     db.add(cert)
     db.commit()
     db.refresh(cert)
@@ -906,6 +910,10 @@ def update_certificate(
         cert.valid_until = payload.valid_until
     cert.exam_score = None
     
+    user.candidate_status = None
+    user.candidate_category = None
+    user.candidate_updated_at = datetime.utcnow()
+    db.add(user)
     cert.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(cert)

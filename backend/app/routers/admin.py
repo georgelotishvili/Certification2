@@ -38,6 +38,7 @@ from ..schemas import (
     ToggleAdminRequest,
     ToggleExamPermissionRequest,
     ToggleExamStagePermissionRequest,
+    UpdateCandidateStatusRequest,
     AdminUserUpdateRequest,
     AdminStatementsResponse,
     AdminStatementOut,
@@ -59,6 +60,11 @@ from ..services.exam_stage_grants import (
 from ..services.media_storage import resolve_storage_path, ensure_media_root, delete_storage_file
 from ..services.expert_certificate_cleanup import delete_expert_certificate_files
 from ..services.user_codes import UserCodeConflict, move_user_code, remember_user_code
+from ..services.candidate_status import (
+    get_user_latest_requested_category,
+    normalize_cert_category,
+    sync_all_user_candidates,
+)
 from ..services.bounded_upload import (
     DEFAULT_UPLOAD_MAX_BYTES,
     UploadTooLarge,
@@ -1464,9 +1470,14 @@ def admin_users(
     exam_result_date: date | None = None,
     pending_pass_letter: bool = False,
     pending_fail_letter: bool = False,
+    exam_candidate: bool = False,
+    cert_candidate: bool = False,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
+
+    exam_histories = _compute_all_exam_histories(db)
+    requested_categories = sync_all_user_candidates(db, exam_histories)
 
     stmt = select(User)
     if search:
@@ -1499,12 +1510,24 @@ def admin_users(
             stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
                 Certificate.status.in_(("suspended", "expired"))
             )))
+        elif qualification == "exam_candidate":
+            stmt = stmt.where(User.candidate_status == "exam_candidate")
+        elif qualification == "cert_candidate":
+            stmt = stmt.where(User.candidate_status == "cert_candidate")
         elif qualification in qualification_levels:
             stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
                 Certificate.level.in_(qualification_levels[qualification])
             )))
         else:
             raise HTTPException(status_code=422, detail="Unknown qualification filter")
+
+    if exam_candidate or cert_candidate:
+        cand_statuses = []
+        if exam_candidate:
+            cand_statuses.append("exam_candidate")
+        if cert_candidate:
+            cand_statuses.append("cert_candidate")
+        stmt = stmt.where(User.candidate_status.in_(cand_statuses))
 
     if statement_date is None and (new_statements or pending_statements):
         has_new = select(Statement.id).where(
@@ -1567,7 +1590,6 @@ def admin_users(
             )
         )
 
-    exam_histories = _compute_all_exam_histories(db)
     global_pending_pass_users = sum(
         1
         for h in exam_histories.values()
@@ -1737,6 +1759,9 @@ def admin_users(
             'pending_statement_count': pending_count,
             'photo_filename': u.photo_filename,
             'exam_outcome': exam_outcomes.get(u.id),
+            'candidate_status': u.candidate_status,
+            'candidate_category': u.candidate_category,
+            'requested_category': requested_categories.get(u.id),
         }
         if cert_data:
             user_dict['certificate'] = cert_data
@@ -1759,6 +1784,12 @@ def admin_users(
         global_pending_users = int(db.scalar(
             select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
         ) or 0)
+        global_exam_candidates = int(db.scalar(
+            select(func.count(User.id)).where(User.candidate_status == "exam_candidate")
+        ) or 0)
+        global_cert_candidates = int(db.scalar(
+            select(func.count(User.id)).where(User.candidate_status == "cert_candidate")
+        ) or 0)
         page_items = []
         for item in items:
             payload = item.model_dump(mode="json")
@@ -1768,6 +1799,7 @@ def admin_users(
                 "personal_id", "first_name", "last_name", "phone", "email",
                 "code", "is_admin", "is_founder", "created_at", "certificate",
                 "photo_filename", "exam_outcome",
+                "candidate_status", "candidate_category", "requested_category",
             )}
             revision = sha256(_json.dumps(display, sort_keys=True).encode()).hexdigest()[:20]
             if live:
@@ -1787,6 +1819,8 @@ def admin_users(
             "global_pending_users": global_pending_users,
             "global_pending_pass_users": global_pending_pass_users,
             "global_pending_fail_users": global_pending_fail_users,
+            "global_exam_candidates": global_exam_candidates,
+            "global_cert_candidates": global_cert_candidates,
         }
     return UsersListResponse(items=items, total=len(items))
 
@@ -1861,6 +1895,17 @@ def _stage_permission_user_out(db: Session, user: User) -> UserOut:
     is_founder = (user.email or "").lower() == founder_email
     is_admin_user = is_founder or bool(user.is_admin)
     state = exam_state_with_permissions(db, user, is_admin_user=is_admin_user)
+    req_cat = get_user_latest_requested_category(db, user.id)
+    cert_data = None
+    if user.certificate:
+        cert_data = {
+            "unique_code": user.certificate.unique_code,
+            "level": user.certificate.level,
+            "status": user.certificate.status,
+            "issue_date": user.certificate.issue_date,
+            "validity_term": user.certificate.validity_term,
+            "valid_until": user.certificate.valid_until,
+        }
     return UserOut(
         id=user.id,
         personal_id=user.personal_id,
@@ -1880,7 +1925,44 @@ def _stage_permission_user_out(db: Session, user: User) -> UserOut:
         exam_stage_permissions=state["exam_stage_permissions"],
         created_at=user.created_at,
         photo_filename=user.photo_filename,
+        certificate=cert_data,
+        certificate_info=cert_data,
+        candidate_status=user.candidate_status,
+        candidate_category=user.candidate_category,
+        requested_category=req_cat,
     )
+
+
+@router.patch("/users/{user_id}/candidate-status", response_model=UserOut)
+def admin_update_candidate_status(
+    user_id: int,
+    payload: UpdateCandidateStatusRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    now = datetime.utcnow()
+    if payload.candidate_status is None:
+        user.candidate_status = None
+        user.candidate_category = None
+        user.candidate_updated_at = now
+    else:
+        user.candidate_status = payload.candidate_status
+        req_cat = get_user_latest_requested_category(db, user.id)
+        chosen_cat = payload.candidate_category or user.candidate_category or req_cat or "A"
+        if payload.candidate_status == "cert_candidate" and payload.candidate_category is None:
+            chosen_cat = normalize_cert_category(chosen_cat)
+        user.candidate_category = chosen_cat
+        user.candidate_updated_at = now
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _stage_permission_user_out(db, user)
 
 
 @router.patch(
@@ -2083,6 +2165,9 @@ def admin_update_user(
         unseen_statement_count=unseen_count,
         has_pending_statements=pending_count > 0,
         pending_statement_count=pending_count,
+        candidate_status=user.candidate_status,
+        candidate_category=user.candidate_category,
+        requested_category=get_user_latest_requested_category(db, user.id),
     )
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -2394,6 +2479,13 @@ def admin_statements_summary(
         select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
     ) or 0)
     exam_histories = _compute_all_exam_histories(db)
+    sync_all_user_candidates(db, exam_histories)
+    exam_candidates = int(db.scalar(
+        select(func.count(User.id)).where(User.candidate_status == "exam_candidate")
+    ) or 0)
+    cert_candidates = int(db.scalar(
+        select(func.count(User.id)).where(User.candidate_status == "cert_candidate")
+    ) or 0)
     pending_pass_users = sum(
         1
         for h in exam_histories.values()
@@ -2413,6 +2505,8 @@ def admin_statements_summary(
         "pending_users": pending_users,
         "pending_pass_users": pending_pass_users,
         "pending_fail_users": pending_fail_users,
+        "exam_candidates": exam_candidates,
+        "cert_candidates": cert_candidates,
     }
 
 

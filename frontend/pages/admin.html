@@ -16,15 +16,15 @@
     <script src="../scripts/admin/project-results.js?v=20261018-outcome2" defer></script>
     <script src="../scripts/vendor/qrcode-generator.js?v=1" defer></script>
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
-    <script src="../scripts/admin/certificate.js?v=20261018-outcome2" defer></script>
-    <script src="../scripts/admin/exam-schedules.js?v=20261018-docnum1" defer></script>
-    <script src="../scripts/admin/users.js?v=20261018-filters1" defer></script>
+    <script src="../scripts/admin/certificate.js?v=20261018-cand1" defer></script>
+    <script src="../scripts/admin/exam-schedules.js?v=20261018-cand1" defer></script>
+    <script src="../scripts/admin/users.js?v=20261018-cand1" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
     <script src="../scripts/admin/documents.js?v=20261018-docs1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261018-docnum1" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261018-cand1" />
   </head>
   <body>
     <header>
@@ -203,6 +203,18 @@
                   <input id="filterSuspendedExpired" type="checkbox" />
                   <span class="filter-color-dot is-suspended" aria-hidden="true"></span>
                   <span>შეჩერებული / ვადაგასული</span>
+                </label>
+                <label id="filterExamCandidatesChip" class="users-filter-label is-info-chip" title="გამოცდის კანდიდატები — პირები, რომლებსაც დაუდასტურდათ გამოცდაზე დაშვება">
+                  <input id="filterExamCandidates" type="checkbox" />
+                  <span class="filter-color-dot is-exam-candidate" aria-hidden="true"></span>
+                  <span>გამოცდის კანდ.</span>
+                  <span id="filterExamCandidatesBadge" class="users-filter-count-badge is-exam-cand" hidden>0</span>
+                </label>
+                <label id="filterCertCandidatesChip" class="users-filter-label is-success-chip" title="სერტიფიკატის კანდიდატები — პირები, რომლებმაც წარმატებით ჩააბარეს გამოცდა და ელოდებიან სერტიფიკატის გაცემას">
+                  <input id="filterCertCandidates" type="checkbox" />
+                  <span class="filter-color-dot is-cert-candidate" aria-hidden="true"></span>
+                  <span>სერტიფიკატის კანდ.</span>
+                  <span id="filterCertCandidatesBadge" class="users-filter-count-badge is-cert-cand" hidden>0</span>
                 </label>
               </div>
             </div>
@@ -867,6 +879,6 @@
       </div>
     </footer>
 
-    <script src="../scripts/admin.js?v=20261018-founder1" defer></script>
+    <script src="../scripts/admin.js?v=20261018-cand1" defer></script>
   </body>
 </html>

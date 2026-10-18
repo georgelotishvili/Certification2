@@ -6991,3 +6991,172 @@ body.modal-open {
   border-color: #991b1b !important;
 }
 
+/* =========================================================================
+   Exam Candidate ("გამოცდის კანდიდატი") & Certificate Candidate ("სერტიფიკატის კანდიდატი")
+   ========================================================================= */
+.filter-color-dot.is-exam-candidate {
+  background: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.22);
+}
+
+.filter-color-dot.is-cert-candidate {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.22);
+}
+
+.users-filter-count-badge.is-exam-cand {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.users-filter-count-badge.is-cert-cand {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.user-candidate-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.user-candidate-chip[hidden] {
+  display: none !important;
+}
+
+.user-candidate-chip.is-exam-candidate {
+  background: #dbeafe;
+  border: 1.5px solid #3b82f6;
+  color: #1e40af;
+}
+
+.user-candidate-chip.is-cert-candidate {
+  background: #dcfce7;
+  border: 1.5px solid #16a34a;
+  color: #14532d;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
+}
+
+.user-candidate-chip-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.user-candidate-chip-check .chk-candidate-status {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.user-candidate-chip.is-exam-candidate .chk-candidate-status {
+  accent-color: #2563eb;
+}
+
+.user-candidate-chip.is-cert-candidate .chk-candidate-status {
+  accent-color: #16a34a;
+}
+
+.user-candidate-chip .sel-candidate-category {
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  outline: none;
+}
+
+.user-candidate-chip.is-exam-candidate .sel-candidate-category {
+  background: #ffffff;
+  border: 1px solid #60a5fa;
+  color: #1e3a8a;
+}
+
+.user-candidate-chip.is-cert-candidate .sel-candidate-category {
+  background: #ffffff;
+  border: 1px solid #4ade80;
+  color: #14532d;
+}
+
+.user-candidate-manual-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.sel-manual-candidate-status,
+.sel-manual-candidate-category {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #ffffff;
+  color: var(--text-strong, #0f172a);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sel-manual-candidate-category:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.planning-letter-category-row {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.planning-letter-category-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong, #0f172a);
+}
+
+.exam-schedule-category-select {
+  flex: 1 1 280px;
+  max-width: 440px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text-strong, #0f172a);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exam-schedule-category-select:focus {
+  outline: none;
+  border-color: var(--accent, #2f5ba8);
+  box-shadow: 0 0 0 2px rgba(47, 91, 168, 0.14);
+}

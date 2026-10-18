@@ -440,6 +440,9 @@ class UserOut(BaseModel):
     certificate_info: dict | None = None
     photo_filename: str | None = None
     exam_outcome: dict[str, Any] | None = None
+    candidate_status: str | None = None
+    candidate_category: str | None = None
+    requested_category: str | None = None
 
 
 class PublicUserOut(BaseModel):
@@ -595,6 +598,11 @@ class ToggleExamStagePermissionRequest(BaseModel):
     granted: bool
     replace_started: bool = False
     expected_grant_id: int | None = None
+
+
+class UpdateCandidateStatusRequest(BaseModel):
+    candidate_status: Literal["exam_candidate", "cert_candidate"] | None = None
+    candidate_category: Literal["A", "B", "C", "B_A", "C_A"] | None = None
 
 
 class AdminUserUpdateRequest(CamelModel):

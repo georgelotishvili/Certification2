@@ -5,9 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from datetime import datetime
 from ..database import get_db
-from ..models import ExamSchedule, PlanningLetter, User
+from ..models import Certificate, ExamSchedule, PlanningLetter, User
 from ..schemas import ExamScheduleCreate, ExamScheduleOut, ExamSchedulesResponse
+from ..services.candidate_status import get_user_latest_requested_category
 from ..services.media_storage import delete_storage_file
 from .admin import _require_admin
 
@@ -50,9 +52,16 @@ def create_exam_schedule(
     db: Session = Depends(get_db),
 ):
     _require_admin(db, authorization)
-    _require_user(db, user_id)
+    user = _require_user(db, user_id)
+    has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user_id)) is not None
+    req_cat = get_user_latest_requested_category(db, user_id) if not has_cert else None
     entry = ExamSchedule(user_id=user_id, exam_date=payload.exam_date, period=payload.period)
     db.add(entry)
+    if not has_cert:
+        user.candidate_status = "exam_candidate"
+        user.candidate_category = req_cat or user.candidate_category or "A"
+        user.candidate_updated_at = datetime.utcnow()
+        db.add(user)
     try:
         # The unique constraint also protects simultaneous requests/retries.
         db.commit()
