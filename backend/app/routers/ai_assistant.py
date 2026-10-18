@@ -606,7 +606,13 @@ def _fill_template_preview(
     subject = str(tpl.get("subject") or "შეტყობინება")
     body = str(tpl.get("body") or "")
     full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    cat_label = CATEGORY_LABELS_KA.get(candidate_category, CATEGORY_LABELS_KA["A"])
+    cat_code = (candidate_category or "A").strip().upper()
+    if cat_code in ("B", "B_A"):
+        cat_letter_label = "B კატეგორიის"
+    elif cat_code in ("C", "C_A"):
+        cat_letter_label = "C კატეგორიის"
+    else:
+        cat_letter_label = "A კატეგორიის"
     replacements = {
         "{name}": full_name,
         "{date}": event_date,
@@ -614,9 +620,16 @@ def _fill_template_preview(
         "{code}": user.code or "",
         "{personal_id}": user.personal_id or "",
         "[სახელი და გვარი]": full_name,
+        "[სახელი, გვარი]": full_name,
+        "სახელი და გვარი)": f"{full_name})",
+        "[IBAN ანგარიში]": "GE33TB7313736080100014",
+        "[IBAN]": "GE33TB7313736080100014",
+        "[მისამართი]": "ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6",
         "[გამოცდის თარიღი]": event_date,
         "[საათი]": event_time,
-        "[კატეგორია]": cat_label,
+        "[კატეგორია] კატეგორიის": cat_letter_label,
+        "[კატეგორია]": cat_letter_label,
+        "{category}": cat_letter_label,
     }
     for k, v in replacements.items():
         subject = subject.replace(k, v)
