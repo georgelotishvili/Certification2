@@ -200,12 +200,13 @@
     }
 
     function findContractDocForSlot(slotDef) {
-      return state.documents.find(
-        (d) =>
-          d.contract_type === slotDef.key ||
-          (d.title && d.title.includes(slotDef.code)) ||
-          (d.content && d.content.includes(slotDef.code))
-      ) || null;
+      const byType = state.documents.find((d) => d.contract_type === slotDef.key);
+      if (byType) return byType;
+      return (
+        state.documents.find(
+          (d) => !d.contract_type && d.title && d.title.includes(slotDef.code)
+        ) || null
+      );
     }
 
     function renderContractSlots() {

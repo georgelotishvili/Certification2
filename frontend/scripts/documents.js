@@ -82,14 +82,12 @@
           const parsed = parseDocumentTitleAndCode(doc);
           const safeTitle = escapeHtml(parsed.title);
           const safeFullTitle = escapeHtml(parsed.fullTitle);
-          const safeCode = parsed.code ? escapeHtml(parsed.code) : '';
 
           return `
             <article class="doc-public-card" role="listitem" tabindex="0" data-doc-card-id="${safeId}" aria-label="${safeFullTitle}">
               <div class="doc-public-index" aria-hidden="true">${displayNumber}</div>
               <div class="doc-public-body">
                 <h2 class="doc-public-title">${safeTitle}</h2>
-                ${safeCode ? `<span class="doc-public-code">${safeCode}</span>` : ''}
               </div>
               <div class="doc-public-actions">
                 <button type="button" class="doc-public-view-btn" data-open-doc="${safeId}">

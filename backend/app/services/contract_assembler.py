@@ -26,7 +26,7 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
     {
         "key": "scheme",
         "code": "GIPC-SCH-001",
-        "default_title": "სერტიფიცირების სქემა (GIPC-SCH-001)",
+        "default_title": "სერტიფიცირების სქემა",
         "order_index": 1,
         "source_md": "01_სერტიფიკაციის_სქემა.md",
         "source_docx": "01_სერტიფიკაციის_სქემა.docx",
@@ -35,7 +35,7 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
     {
         "key": "impartiality",
         "code": "GIPC-POL-001",
-        "default_title": "მიუკერძოებლობის პოლიტიკა (GIPC-POL-001)",
+        "default_title": "მიუკერძოებლობის პოლიტიკა",
         "order_index": 2,
         "source_md": "03_მიუკერძოებლობის_პოლიტიკა.md",
         "source_docx": "03_მიუკერძოებლობის_პოლიტიკა.docx",
@@ -44,7 +44,7 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
     {
         "key": "confidentiality",
         "code": "GIPC-POL-002",
-        "default_title": "კონფიდენციალურობისა და პერსონალურ მონაცემთა დაცვის პოლიტიკა (GIPC-POL-002)",
+        "default_title": "კონფიდენციალურობისა და პერსონალურ მონაცემთა დაცვის პოლიტიკა",
         "order_index": 3,
         "source_md": "04_კონფიდენციალურობის_პოლიტიკა.md",
         "source_docx": "04_კონფიდენციალურობის_პოლიტიკა.docx",
@@ -53,7 +53,7 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
     {
         "key": "complaints_appeals",
         "code": "GIPC-PRO-003",
-        "default_title": "საჩივრებისა და აპელაციების პროცედურა (GIPC-PRO-003)",
+        "default_title": "საჩივრებისა და აპელაციების პროცედურა",
         "order_index": 4,
         "source_md": "07_საჩივრებისა_და_აპელაციების_პროცედურა.md",
         "source_docx": "07_საჩივრებისა_და_აპელაციების_პროცედურა.docx",
@@ -66,7 +66,7 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "key": "exam",
         "code": "GIPC-CON-004",
         "short_title": "საგამოცდო ხელშეკრულება",
-        "default_title": "საგამოცდო ხელშეკრულება (GIPC-CON-004)",
+        "default_title": "საგამოცდო ხელშეკრულება",
         "category": "EXAM",
         "order_index": 5,
         "source_md": "10_საგამოცდო_ხელშეკრულება.md",
@@ -76,7 +76,7 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "key": "cert_a",
         "code": "GIPC-CON-001",
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია A (არქიტექტორი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი (GIPC-CON-001)",
+        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი",
         "category": "A",
         "order_index": 6,
         "source_md": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.md",
@@ -86,7 +86,7 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "key": "cert_b",
         "code": "GIPC-CON-002",
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია B (სპეციალისტი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (GIPC-CON-002)",
+        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი",
         "category": "B",
         "order_index": 7,
         "source_md": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.md",
@@ -96,7 +96,7 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "key": "cert_c",
         "code": "GIPC-CON-003",
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია C (ექსპერტი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია C: არქიტექტურული პროექტის ექსპერტი (GIPC-CON-003)",
+        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია C: არქიტექტურული პროექტის ექსპერტი",
         "category": "C",
         "order_index": 8,
         "source_md": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.md",
@@ -381,12 +381,14 @@ def markdown_to_html(md_text: str) -> str:
             i += 1
             continue
 
-        # Consecutive "- " items -> en-dash bullet items matching Word layout
+        # Consecutive "- " items -> semantic <ul><li> list
         if stripped.startswith("- "):
+            out.append("<ul>")
             while i < n and lines[i].strip().startswith("- "):
                 item_text = lines[i].strip()[2:].strip()
-                out.append(f"<p>– {_inline_md_to_html(item_text)}</p>")
+                out.append(f"<li>{_inline_md_to_html(item_text)}</li>")
                 i += 1
+            out.append("</ul>")
             continue
 
         # Markdown Table
@@ -407,7 +409,10 @@ def markdown_to_html(md_text: str) -> str:
                 out.append("</table>")
             continue
 
-        out.append(f"<p>{_inline_md_to_html(stripped)}</p>")
+        if "___" in stripped:
+            out.append(f'<p style="text-align:left;">{_inline_md_to_html(stripped)}</p>')
+        else:
+            out.append(f"<p>{_inline_md_to_html(stripped)}</p>")
         i += 1
 
     return "\n".join(out)
@@ -555,13 +560,10 @@ def _make_table(rows: list[list[str]], col_widths: list[int], *, is_meta_table: 
             tc = _w_el("tc")
             tcPr = _w_el("tcPr")
             tcPr.append(_w_el("tcW", {"type": "dxa", "w": str(width)}))
-            shade = (is_meta_table and c_idx == 0) or (not is_meta_table and r_idx == 0)
-            if shade:
-                tcPr.append(_w_el("shd", {"val": "clear", "color": "auto", "fill": "F2F2F2"}))
+            cell_bold = (is_meta_table and c_idx == 0) or (not is_meta_table and r_idx == 0)
             tcPr.append(_w_el("vAlign", {"val": "center"}))
             tc.append(tcPr)
 
-            cell_bold = shade
             p = _make_paragraph(
                 cell_text,
                 jc="left",

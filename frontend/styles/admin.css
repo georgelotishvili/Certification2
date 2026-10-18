@@ -9270,74 +9270,121 @@ body.modal-open {
   background: #1d4ed8;
 }
 
-/* ========== Assembled Contract Preview Modal ========== */
+/* ========== Assembled Contract Preview Modal & Document Editor (Strictly B&W + Justified) ========== */
 .admin-contract-preview-sheet {
-  max-width: 820px;
+  max-width: 78ch;
   margin: 0 auto;
   padding: 28px 34px;
-  border-radius: 12px;
+  border-radius: 0;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
-  color: #0f172a;
-  font-size: 14.5px;
-  line-height: 1.65;
+  border: 1px solid #000000;
+  box-shadow: none;
+  color: #000000;
+  font-family: 'DejaVu Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
-.admin-contract-preview-sheet h1 {
-  font-size: 20px;
-  font-weight: 800;
-  color: #0f172a;
+.admin-contract-preview-sheet *,
+.document-editor * {
+  color: #000000 !important;
+}
+
+.admin-contract-preview-sheet h1,
+.document-editor h1 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #000000;
   margin: 0 0 6px;
+  text-align: center;
 }
 
-.admin-contract-preview-sheet h2 {
-  font-size: 16px;
-  font-weight: 800;
-  color: #1e3a8a;
+.admin-contract-preview-sheet h2,
+.document-editor h2 {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #000000;
   margin: 18px 0 8px;
   padding-bottom: 4px;
-  border-bottom: 1px solid #cbd5e1;
+  border-bottom: 1px solid #000000;
+  text-align: left;
 }
 
-.admin-contract-preview-sheet h3 {
+.admin-contract-preview-sheet h2[style*="center"],
+.document-editor h2[style*="center"] {
+  margin: 0 0 16px;
+  padding-bottom: 0;
+  border-bottom: none;
+  text-align: center !important;
+}
+
+.admin-contract-preview-sheet h3,
+.admin-contract-preview-sheet h4,
+.document-editor h3,
+.document-editor h4 {
   font-size: 14.5px;
-  font-weight: 800;
-  color: #0f172a;
+  font-weight: 700;
+  color: #000000;
   margin: 14px 0 6px;
+  text-align: left;
 }
 
-.admin-contract-preview-sheet p {
+.admin-contract-preview-sheet p,
+.admin-contract-preview-sheet li,
+.document-editor p,
+.document-editor li {
   margin: 0 0 8px;
+  text-align: justify;
+  text-justify: inter-word;
+  color: #000000;
 }
 
-.admin-contract-preview-sheet table {
+.admin-contract-preview-sheet p[style*="left"],
+.document-editor p[style*="left"] {
+  text-align: left !important;
+}
+
+.admin-contract-preview-sheet ul,
+.admin-contract-preview-sheet ol,
+.document-editor ul,
+.document-editor ol {
+  margin: 8px 0 14px 22px;
+  padding-left: 0;
+}
+
+.admin-contract-preview-sheet table,
+.document-editor table {
   width: 100%;
   border-collapse: collapse;
-  margin: 12px 0;
+  margin: 12px 0 16px;
   font-size: 13.5px;
+  border: 1px solid #000000;
+  background: #ffffff;
 }
 
 .admin-contract-preview-sheet th,
-.admin-contract-preview-sheet td {
-  border: 1px solid #cbd5e1;
+.admin-contract-preview-sheet td,
+.document-editor th,
+.document-editor td {
+  border: 1px solid #000000;
   padding: 7px 10px;
   text-align: left;
   vertical-align: top;
+  background: #ffffff !important;
+  color: #000000 !important;
 }
 
-.admin-contract-preview-sheet th {
-  background: #f1f5f9;
-  font-weight: 800;
-  color: #0f172a;
+.admin-contract-preview-sheet th,
+.document-editor th {
+  font-weight: 700;
 }
 
 .contract-filled-value {
-  background: #fef9c3;
-  color: #0f172a;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border-bottom: 2px solid #eab308;
-  font-weight: 800;
+  background: transparent;
+  color: #000000;
+  padding: 0 2px;
+  border-radius: 0;
+  border-bottom: 1px solid #000000;
+  font-weight: 700;
 }
 

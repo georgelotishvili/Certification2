@@ -1236,21 +1236,22 @@ body.modal-open {
   font-size: 13px;
 }
 
-/* Document sheet typography — unified 14px body & 16px headings */
+/* Document sheet typography — strictly black & white with equal-width justified lines */
 .site-doc-sheet {
   max-width: 78ch;
   margin: 0 auto;
   font-family: 'DejaVu Sans', sans-serif !important;
   font-size: 14px !important;
-  line-height: 1.75;
-  color: #1e293b;
+  line-height: 1.7;
+  color: #000000;
+  background: #ffffff;
   overflow-wrap: anywhere;
 }
 
 .site-doc-sheet * {
   font-family: inherit !important;
-  font-size: inherit !important;
   line-height: inherit;
+  color: #000000 !important;
 }
 
 .site-doc-sheet p,
@@ -1260,27 +1261,46 @@ body.modal-open {
 .site-doc-sheet span,
 .site-doc-sheet div {
   font-size: 14px !important;
-  line-height: 1.75;
+  line-height: 1.7;
 }
 
-.site-doc-sheet h1,
+.site-doc-sheet h1 {
+  margin: 0 0 6px;
+  padding-bottom: 0;
+  border-bottom: none;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1.35;
+  color: #000000 !important;
+  text-align: center;
+}
+
 .site-doc-sheet h2 {
   margin: 20px 0 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 16px !important;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #000000;
+  font-size: 15.5px !important;
   font-weight: 700 !important;
   line-height: 1.4;
-  color: #1C468C;
+  color: #000000 !important;
+  text-align: left;
+}
+
+.site-doc-sheet h2[style*="center"] {
+  margin: 0 0 16px;
+  padding-bottom: 0;
+  border-bottom: none;
+  text-align: center !important;
 }
 
 .site-doc-sheet h3,
 .site-doc-sheet h4 {
-  margin: 18px 0 8px;
-  font-size: 16px !important;
+  margin: 14px 0 6px;
+  font-size: 14.5px !important;
   font-weight: 700 !important;
   line-height: 1.4;
-  color: #0f172a;
+  color: #000000 !important;
+  text-align: left;
 }
 
 .site-doc-sheet > :first-child {
@@ -1301,42 +1321,50 @@ body.modal-open {
 .site-doc-sheet [style*="font-weight: 700"] {
   font-size: inherit !important;
   font-weight: 700 !important;
-  color: #0f172a;
+  color: #000000 !important;
 }
 
 .site-doc-sheet p {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+.site-doc-sheet p[style*="left"] {
+  text-align: left !important;
 }
 
 .site-doc-sheet p.site-doc-section-title {
   margin: 20px 0 10px;
-  font-size: 16px !important;
+  font-size: 15.5px !important;
   line-height: 1.45;
-  color: #0f172a;
+  color: #000000 !important;
+  text-align: left;
 }
 
 .site-doc-sheet p.site-doc-section-title > strong,
 .site-doc-sheet p.site-doc-section-title > b {
-  font-size: 16px !important;
-  color: #0f172a;
+  font-size: 15.5px !important;
+  color: #000000 !important;
 }
 
 .site-doc-sheet p.site-doc-lead-title {
   margin: 0 0 14px;
-  font-size: 16px !important;
-  line-height: 1.45;
-  color: #1C468C;
+  font-size: 17px !important;
+  line-height: 1.4;
+  color: #000000 !important;
+  text-align: center;
 }
 
 .site-doc-sheet p.site-doc-lead-title > strong,
 .site-doc-sheet p.site-doc-lead-title > b {
-  font-size: 16px !important;
-  color: #1C468C;
+  font-size: 17px !important;
+  color: #000000 !important;
 }
 
 .site-doc-sheet ul,
 .site-doc-sheet ol {
-  margin: 10px 0 16px 22px;
+  margin: 8px 0 14px 22px;
   padding-left: 0;
 }
 
@@ -1350,31 +1378,34 @@ body.modal-open {
 
 .site-doc-sheet li {
   margin-bottom: 6px;
+  text-align: justify;
+  text-justify: inter-word;
 }
 
 .site-doc-sheet table {
   width: 100%;
   border-collapse: collapse;
   margin: 14px 0 18px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #000000;
+  background: #ffffff;
 }
 
 .site-doc-sheet th,
 .site-doc-sheet td {
   padding: 8px 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #000000;
   text-align: left;
   vertical-align: top;
+  background: #ffffff !important;
+  color: #000000 !important;
 }
 
 .site-doc-sheet th {
-  background: #f8fafc;
-  color: #1C468C;
-  font-weight: 700;
+  font-weight: 700 !important;
 }
 
 .site-doc-sheet a {
-  color: #1C468C;
+  color: #000000 !important;
   text-decoration: underline;
   text-underline-offset: 2px;
 }

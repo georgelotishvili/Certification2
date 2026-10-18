@@ -316,8 +316,6 @@
     'TEMPLATE', 'TEXTAREA', 'TRACK', 'VIDEO',
   ]);
   const DOCUMENT_ALLOWED_STYLE_PROPERTIES = [
-    'background-color',
-    'color',
     'font-style',
     'font-weight',
     'text-align',
@@ -426,11 +424,19 @@
     // the "ინფორმაცია" menu contains only "გზამკვლევი".
   }
 
+  function stripLeadingBulletFromElement(el, leadingBulletRegex) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    const firstTextNode = walker.nextNode();
+    if (firstTextNode && firstTextNode.nodeValue) {
+      firstTextNode.nodeValue = firstTextNode.nodeValue.replace(leadingBulletRegex, '');
+    }
+  }
+
   // Word inline სტილების გასუფთავება და ბულეტების კონვერტაცია
   function sanitizeWordStyles(container) {
     if (!container) return;
     try {
-      // ყველა ელემენტის სტილების გასუფთავება
+      // ყველა ელემენტის სტილების გასუფთავება (მკაცრად შავ-თეთრი)
       const allElements = container.querySelectorAll('*');
       allElements.forEach(el => {
         if (el.style) {
@@ -438,6 +444,8 @@
           el.style.fontFamily = '';
           el.style.marginLeft = '';
           el.style.textIndent = '';
+          el.style.color = '';
+          el.style.backgroundColor = '';
           if (el.style.cssText) {
             el.style.cssText = el.style.cssText.replace(/mso-[^;]+;?/gi, '');
           }
@@ -445,9 +453,9 @@
         el.removeAttribute('class');
       });
 
-      // ბულეტიანი აბზაცების კონვერტაცია <ul>/<li>-ში
-      const bulletChars = '·•\\-–—§■□►▪▸●○⁃◦◘◙';
-      const bulletRegex = new RegExp('^[\\s\\u00A0]*[' + bulletChars + '][\\s\\u00A0]*');
+      // ბულეტიანი აბზაცების კონვერტაცია <ul>/<li>-ში (მხოლოდ სტრიქონის დასაწყისში)
+      const bulletChars = '·•\\-–—■□►▪▸●○⁃◦◘◙';
+      const bulletRegex = new RegExp('^[\\s\\u00A0]*[' + bulletChars + '][\\s\\u00A0]+');
       const paragraphs = Array.from(container.querySelectorAll('p'));
       
       let currentUl = null;
@@ -459,9 +467,8 @@
         
         if (isBullet) {
           const li = document.createElement('li');
-          // წავშალოთ ბულეტის სიმბოლო ტექსტიდან
-          const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
-          li.innerHTML = p.innerHTML.replace(cleanBulletRegex, '').trim();
+          li.innerHTML = p.innerHTML;
+          stripLeadingBulletFromElement(li, bulletRegex);
           
           if (!currentUl) {
             currentUl = document.createElement('ul');
@@ -479,25 +486,26 @@
         }
       });
 
-      // უკვე არსებული <li> ელემენტებიდანაც წავშალოთ ბულეტის სიმბოლოები
+      // უკვე არსებული <li> ელემენტებიდანაც წავშალოთ მხოლოდ წინა ბულეტის სიმბოლო
       container.querySelectorAll('li').forEach(li => {
-        const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
-        li.innerHTML = li.innerHTML.replace(cleanBulletRegex, '').trim();
+        stripLeadingBulletFromElement(li, bulletRegex);
       });
 
-      // ცალკე მდგომი bold აბზაცების (მთავარი სათაურებისა და მუხლების) მონიშვნა
-      const topParagraphs = Array.from(container.children).filter(el => el.tagName === 'P');
-      topParagraphs.forEach((p, idx) => {
-        const fullText = (p.textContent || '').replace(/\s+/g, ' ').trim();
-        if (!fullText) return;
-        const boldChild = p.querySelector(':scope > strong, :scope > b');
-        if (boldChild && p.children.length === 1) {
-          const boldText = (boldChild.textContent || '').replace(/\s+/g, ' ').trim();
-          if (boldText === fullText && !/^\d+\.\d+/.test(fullText)) {
-            p.classList.add(idx === 0 ? 'site-doc-lead-title' : 'site-doc-section-title');
+      // თუ დოკუმენტს უკვე აქვს სემანტიკური H1/H2 სათაურები, დამატებითი კლასები საჭირო არ არის
+      if (!container.querySelector('h1, h2')) {
+        const topParagraphs = Array.from(container.children).filter(el => el.tagName === 'P');
+        topParagraphs.forEach((p, idx) => {
+          const fullText = (p.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!fullText) return;
+          const boldChild = p.querySelector(':scope > strong, :scope > b');
+          if (boldChild && p.children.length === 1) {
+            const boldText = (boldChild.textContent || '').replace(/\s+/g, ' ').trim();
+            if (boldText === fullText && !/^\d+\.\d+/.test(fullText)) {
+              p.classList.add(idx === 0 ? 'site-doc-lead-title' : 'site-doc-section-title');
+            }
           }
-        }
-      });
+        });
+      }
     } catch (e) { console.error('sanitizeWordStyles error:', e); }
   }
 
@@ -595,7 +603,7 @@
 
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const marginX = 48;
+    const marginX = 52;
     const marginTop = 52;
     const marginBottom = 54;
     const usableWidth = pageWidth - marginX * 2;
@@ -608,36 +616,53 @@
       }
     };
 
+    const drawFormattedLine = (lineText, x, y, targetWidth, isLastLine, align = 'justify') => {
+      const clean = String(lineText || '').trim();
+      if (!clean) return;
+      if (align === 'center') {
+        const w = pdf.getTextWidth(clean);
+        pdf.text(clean, x + Math.max(0, (targetWidth - w) / 2), y);
+        return;
+      }
+      if (align === 'justify' && !isLastLine && !clean.includes('___')) {
+        const words = clean.split(/\s+/).filter(Boolean);
+        if (words.length > 1) {
+          const wordsWidth = words.reduce((sum, w) => sum + pdf.getTextWidth(w), 0);
+          const extra = targetWidth - wordsWidth;
+          if (extra > 0 && wordsWidth >= targetWidth * 0.62) {
+            const gap = extra / (words.length - 1);
+            let curX = x;
+            words.forEach((word) => {
+              pdf.text(word, curX, y);
+              curX += pdf.getTextWidth(word) + gap;
+            });
+            return;
+          }
+        }
+      }
+      pdf.text(clean, x, y);
+    };
+
     const tempContainer = document.createElement('div');
     const populatedHtml = populateContractHtmlForCurrentUser(doc.content || '', doc.contract_type);
     renderSafeDocumentHtml(tempContainer, populatedHtml);
     sanitizeWordStyles(tempContainer);
 
     const docTitle = String(doc.title || 'დოკუმენტი').replace(/\s+/g, ' ').trim();
+    const hasOwnH1 = Boolean(tempContainer.querySelector('h1'));
 
-    // Kicker header
-    pdf.setFont(fontName, 'normal');
-    pdf.setFontSize(9);
-    pdf.setTextColor(100, 116, 139);
-    pdf.text('საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)', marginX, cursorY);
-    cursorY += 18;
-
-    // Document main title
-    pdf.setFont(fontName, 'bold');
-    pdf.setFontSize(15);
-    pdf.setTextColor(28, 70, 140);
-    const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
-    titleLines.forEach((line) => {
-      ensureSpace(20);
-      pdf.text(line, marginX, cursorY);
-      cursorY += 20;
-    });
-
-    cursorY += 4;
-    pdf.setDrawColor(203, 213, 225);
-    pdf.setLineWidth(0.75);
-    pdf.line(marginX, cursorY, pageWidth - marginX, cursorY);
-    cursorY += 18;
+    if (!hasOwnH1) {
+      pdf.setFont(fontName, 'bold');
+      pdf.setFontSize(13.5);
+      pdf.setTextColor(0, 0, 0);
+      const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
+      titleLines.forEach((line, idx) => {
+        ensureSpace(19);
+        drawFormattedLine(line, marginX, cursorY, usableWidth, idx === titleLines.length - 1, 'center');
+        cursorY += 19;
+      });
+      cursorY += 10;
+    }
 
     const writeWrappedBlock = (text, opts = {}) => {
       const normalized = String(text || '').replace(/\s+/g, ' ').trim();
@@ -648,11 +673,12 @@
         fontStyle = 'normal',
         fontSize = 10.5,
         lineHeight = 16,
-        color = [30, 41, 59],
         spaceBefore = 0,
-        spaceAfter = 8,
+        spaceAfter = 7,
         prefix = '',
         prefixX = marginX,
+        align = 'justify',
+        bottomBorder = false,
       } = opts;
 
       if (spaceBefore > 0 && cursorY > marginTop + 10) {
@@ -661,7 +687,7 @@
 
       pdf.setFont(fontName, fontStyle);
       pdf.setFontSize(fontSize);
-      pdf.setTextColor(color[0], color[1], color[2]);
+      pdf.setTextColor(0, 0, 0);
 
       const lines = pdf.splitTextToSize(normalized, width);
       if (!lines.length) return;
@@ -676,9 +702,17 @@
         if (idx === 0 && prefix) {
           pdf.text(prefix, prefixX, cursorY);
         }
-        pdf.text(line, x, cursorY);
+        const isLast = idx === lines.length - 1;
+        drawFormattedLine(line, x, cursorY, width, isLast, align);
         cursorY += lineHeight;
       });
+
+      if (bottomBorder) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.6);
+        pdf.line(x, cursorY - lineHeight + 4, x + width, cursorY - lineHeight + 4);
+        cursorY += 2;
+      }
 
       cursorY += spaceAfter;
     };
@@ -690,60 +724,69 @@
       const parsedRows = rows.map((tr) => {
         const cells = Array.from(tr.querySelectorAll('th, td'));
         if (cells.length > maxCols) maxCols = cells.length;
-        const isHeader = cells.some((c) => c.tagName === 'TH');
+        const isHeader = cells.every((c) => c.tagName === 'TH');
         return {
           isHeader,
+          tags: cells.map((c) => c.tagName),
           texts: cells.map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()),
         };
       });
       if (!maxCols) return;
 
-      const colWidth = usableWidth / maxCols;
+      let colWidths = Array(maxCols).fill(usableWidth / maxCols);
+      if (maxCols === 2) {
+        colWidths = [usableWidth * 0.30, usableWidth * 0.70];
+      } else if (maxCols === 3) {
+        colWidths = [usableWidth * 0.24, usableWidth * 0.50, usableWidth * 0.26];
+      } else if (maxCols === 4) {
+        const firstHeader = (parsedRows[0]?.texts?.[0] || '').trim();
+        if (firstHeader === '№' || firstHeader === '#') {
+          colWidths = [usableWidth * 0.07, usableWidth * 0.25, usableWidth * 0.34, usableWidth * 0.34];
+        }
+      }
+
       const cellPadX = 6;
-      const cellPadY = 6;
+      const cellPadY = 5;
       const lineH = 13.5;
 
       if (cursorY > marginTop + 10) cursorY += 6;
 
       parsedRows.forEach((row) => {
-        pdf.setFont(fontName, row.isHeader ? 'bold' : 'normal');
         pdf.setFontSize(9.5);
         const cellLines = [];
         let maxLines = 1;
         for (let c = 0; c < maxCols; c++) {
+          const isBoldCell = row.isHeader || row.tags[c] === 'TH';
+          pdf.setFont(fontName, isBoldCell ? 'bold' : 'normal');
           const txt = row.texts[c] || '';
-          const wrapped = pdf.splitTextToSize(txt, Math.max(24, colWidth - cellPadX * 2));
+          const wrapped = pdf.splitTextToSize(txt, Math.max(24, colWidths[c] - cellPadX * 2));
           cellLines.push(wrapped);
           if (wrapped.length > maxLines) maxLines = wrapped.length;
         }
         const rowHeight = maxLines * lineH + cellPadY * 2;
         ensureSpace(rowHeight + 4);
 
+        let cellX = marginX;
         for (let c = 0; c < maxCols; c++) {
-          const cellX = marginX + c * colWidth;
-          if (row.isHeader) {
-            pdf.setFillColor(248, 250, 252);
-            pdf.setDrawColor(203, 213, 225);
-            pdf.setLineWidth(0.5);
-            pdf.rect(cellX, cursorY, colWidth, rowHeight, 'FD');
-            pdf.setTextColor(28, 70, 140);
-          } else {
-            pdf.setDrawColor(203, 213, 225);
-            pdf.setLineWidth(0.5);
-            pdf.rect(cellX, cursorY, colWidth, rowHeight, 'S');
-            pdf.setTextColor(30, 41, 59);
-          }
+          const cw = colWidths[c];
+          const isBoldCell = row.isHeader || row.tags[c] === 'TH';
+          pdf.setDrawColor(0, 0, 0);
+          pdf.setLineWidth(0.5);
+          pdf.rect(cellX, cursorY, cw, rowHeight, 'S');
+          pdf.setFont(fontName, isBoldCell ? 'bold' : 'normal');
+          pdf.setTextColor(0, 0, 0);
           const lines = cellLines[c] || [];
           lines.forEach((ln, idx) => {
             pdf.text(ln, cellX + cellPadX, cursorY + cellPadY + 9.5 + idx * lineH);
           });
+          cellX += cw;
         }
         cursorY += rowHeight;
       });
       cursorY += 10;
     };
 
-    let skippedDuplicateLeadTitle = false;
+    let seenH1 = false;
 
     const renderDomNodes = (parent) => {
       Array.from(parent.childNodes).forEach((node) => {
@@ -758,19 +801,31 @@
         const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
         if (!text && tag !== 'TABLE') return;
 
-        if (!skippedDuplicateLeadTitle && text === docTitle) {
-          skippedDuplicateLeadTitle = true;
+        if (tag === 'H1' || node.classList.contains('site-doc-lead-title')) {
+          seenH1 = true;
+          writeWrappedBlock(text, {
+            fontStyle: 'bold',
+            fontSize: 13.5,
+            lineHeight: 18,
+            spaceBefore: 0,
+            spaceAfter: 4,
+            align: 'center',
+          });
           return;
         }
 
-        if (tag === 'H1' || tag === 'H2' || node.classList.contains('site-doc-lead-title')) {
+        if (tag === 'H2') {
+          const isCenteredSubtitle =
+            (node.getAttribute('style') || '').includes('center') ||
+            (seenH1 && node.previousElementSibling?.tagName === 'H1');
           writeWrappedBlock(text, {
             fontStyle: 'bold',
-            fontSize: 12.5,
-            lineHeight: 17.5,
-            color: [28, 70, 140],
-            spaceBefore: 10,
-            spaceAfter: 7,
+            fontSize: 11.5,
+            lineHeight: 16.5,
+            spaceBefore: isCenteredSubtitle ? 2 : 12,
+            spaceAfter: isCenteredSubtitle ? 10 : 6,
+            align: isCenteredSubtitle ? 'center' : 'left',
+            bottomBorder: !isCenteredSubtitle,
           });
           return;
         }
@@ -778,11 +833,11 @@
         if (tag === 'H3' || tag === 'H4' || tag === 'H5' || tag === 'H6' || node.classList.contains('site-doc-section-title')) {
           writeWrappedBlock(text, {
             fontStyle: 'bold',
-            fontSize: 11.5,
-            lineHeight: 16.5,
-            color: [15, 23, 42],
-            spaceBefore: 9,
-            spaceAfter: 6,
+            fontSize: 10.5,
+            lineHeight: 15.5,
+            spaceBefore: 8,
+            spaceAfter: 4,
+            align: 'left',
           });
           return;
         }
@@ -792,18 +847,19 @@
           items.forEach((li, idx) => {
             const liText = (li.textContent || '').replace(/\s+/g, ' ').trim();
             if (!liText) return;
-            const prefix = tag === 'OL' ? `${idx + 1}.` : '•';
+            const prefix = tag === 'OL' ? `${idx + 1}.` : '–';
             writeWrappedBlock(liText, {
-              x: marginX + 20,
-              width: usableWidth - 20,
+              x: marginX + 16,
+              width: usableWidth - 16,
               prefix,
-              prefixX: marginX + 4,
+              prefixX: marginX + 2,
               fontSize: 10.5,
               lineHeight: 15.5,
-              spaceAfter: 5,
+              spaceAfter: 4,
+              align: 'justify',
             });
           });
-          cursorY += 4;
+          cursorY += 3;
           return;
         }
 
@@ -815,13 +871,14 @@
         if (tag === 'P' || tag === 'BLOCKQUOTE') {
           const onlyBold = node.children.length === 1 && (node.children[0].tagName === 'STRONG' || node.children[0].tagName === 'B') &&
             (node.children[0].textContent || '').replace(/\s+/g, ' ').trim() === text;
+          const isLeftField = text.includes('___') || onlyBold || /^(სახელი|პირადი|ტელეფონი|ელ\.?\s*ფოსტა|თარიღი|ხელმოწერა|საიდენტიფიკაციო|იურიდიული|წარმომადგენელი)/.test(text);
           writeWrappedBlock(text, {
             fontStyle: onlyBold ? 'bold' : 'normal',
             fontSize: 10.5,
             lineHeight: 16,
-            color: onlyBold ? [15, 23, 42] : [30, 41, 59],
             spaceBefore: onlyBold ? 6 : 0,
-            spaceAfter: 8,
+            spaceAfter: 6,
+            align: isLeftField ? 'left' : 'justify',
           });
           return;
         }
@@ -841,13 +898,13 @@
     for (let i = 1; i <= totalPages; i++) {
       pdf.setPage(i);
       const footerY = pageHeight - 26;
-      pdf.setDrawColor(226, 232, 240);
+      pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.5);
       pdf.line(marginX, footerY - 12, pageWidth - marginX, footerY - 12);
 
       pdf.setFont(fontName, 'normal');
       pdf.setFontSize(8.5);
-      pdf.setTextColor(100, 116, 139);
+      pdf.setTextColor(0, 0, 0);
       pdf.text('gipc.org.ge', marginX, footerY);
       const pageLabel = `გვერდი ${i} / ${totalPages}`;
       const pageLabelWidth = pdf.getTextWidth(pageLabel);
