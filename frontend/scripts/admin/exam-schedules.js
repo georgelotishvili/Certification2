@@ -949,6 +949,15 @@
             if (outcomeData) {
               examOutcome = outcomeData;
               user.exam_outcome = outcomeData;
+              if ('candidate_status' in outcomeData) {
+                user.candidate_status = outcomeData.candidate_status ?? null;
+              }
+              if ('candidate_category' in outcomeData) {
+                user.candidate_category = outcomeData.candidate_category ?? null;
+              }
+              if ('requested_category' in outcomeData) {
+                user.requested_category = outcomeData.requested_category ?? null;
+              }
             }
           }
           updateCardButtonBadge();
@@ -2407,9 +2416,8 @@
             await load();
             if (item.isIncomingStatement) {
               notifyStatementState();
-            } else {
-              await notifyChanged();
             }
+            await notifyChanged();
             renderModalList();
             setListStatus('ჩანაწერი წაიშალა.');
             showToast(item.isIncomingStatement ? 'განცხადება წაიშალა' : 'ჩანაწერი წაიშალა');

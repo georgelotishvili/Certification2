@@ -4,10 +4,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from ..models import Certificate, PlanningLetter, Statement, User
+from ..models import Certificate, ExamSchedule, PlanningLetter, Statement, User
 
 VALID_CANDIDATE_STATUSES = ("exam_candidate", "cert_candidate")
 VALID_CANDIDATE_CATEGORIES = ("A", "B", "C", "B_A", "C_A")
@@ -228,3 +228,128 @@ def sync_all_user_candidates(
         db.commit()
 
     return requested_by_user
+
+
+NON_EXAM_LETTER_PERIODS = (
+    "rejection",
+    "rej_send_only",
+    "rejection_send_only",
+    "exam_fail",
+    "fail_send_only",
+    "custom",
+    "cust_send_only",
+)
+
+
+def reconcile_user_candidate_status_after_delete(
+    db: Session,
+    user: User | None,
+    deleted_kind: str = "any",
+) -> bool:
+    """
+    Reconcile a user's candidate_status and candidate_category after deleting
+    a statement, exam schedule, or planning letter.
+    Returns True if user candidate fields were modified.
+    """
+    if user is None or user.candidate_status is None:
+        return False
+
+    now = datetime.utcnow()
+    has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user.id)) is not None
+    if has_cert:
+        user.candidate_status = None
+        user.candidate_category = None
+        user.candidate_updated_at = now
+        db.add(user)
+        return True
+
+    stmt_count = int(
+        db.scalar(select(func.count(Statement.id)).where(Statement.user_id == user.id)) or 0
+    )
+    sched_count = int(
+        db.scalar(select(func.count(ExamSchedule.id)).where(ExamSchedule.user_id == user.id)) or 0
+    )
+    upcoming_sched_count = int(
+        db.scalar(
+            select(func.count(ExamSchedule.id)).where(
+                ExamSchedule.user_id == user.id,
+                ExamSchedule.exam_date >= now.date(),
+            )
+        )
+        or 0
+    )
+    exam_letter_count = int(
+        db.scalar(
+            select(func.count(PlanningLetter.id)).where(
+                PlanningLetter.user_id == user.id,
+                PlanningLetter.kind == "exam",
+                or_(
+                    PlanningLetter.period.is_(None),
+                    ~PlanningLetter.period.in_(NON_EXAM_LETTER_PERIODS),
+                ),
+            )
+        )
+        or 0
+    )
+    cert_letter_count = int(
+        db.scalar(
+            select(func.count(PlanningLetter.id)).where(
+                PlanningLetter.user_id == user.id,
+                PlanningLetter.kind == "certificate",
+                or_(
+                    PlanningLetter.period.is_(None),
+                    PlanningLetter.period != "cert_issued",
+                ),
+            )
+        )
+        or 0
+    )
+
+    has_any_exam_activity = (sched_count > 0) or (exam_letter_count > 0)
+
+    # Rule 1: Deleting the last statement OR having no remaining candidate records at all clears status
+    if (deleted_kind == "statement" and stmt_count == 0) or (
+        stmt_count == 0 and not has_any_exam_activity and cert_letter_count == 0
+    ):
+        user.candidate_status = None
+        user.candidate_category = None
+        user.candidate_updated_at = now
+        db.add(user)
+        return True
+
+    # Rule 2: Deleting the last certificate handover letter
+    if deleted_kind == "certificate_letter" and cert_letter_count == 0:
+        if user.candidate_status == "cert_candidate":
+            if upcoming_sched_count > 0 and stmt_count > 0:
+                req_cat = get_user_latest_requested_category(db, user.id)
+                user.candidate_status = "exam_candidate"
+                user.candidate_category = req_cat or user.candidate_category or "A"
+            else:
+                user.candidate_status = None
+                user.candidate_category = None
+            user.candidate_updated_at = now
+            db.add(user)
+            return True
+
+    # Rule 3: Deleting the last exam schedule or exam admission letter
+    if deleted_kind in ("exam_schedule", "exam_letter") and not has_any_exam_activity:
+        if user.candidate_status == "exam_candidate" or (
+            user.candidate_status == "cert_candidate" and cert_letter_count == 0
+        ):
+            user.candidate_status = None
+            user.candidate_category = None
+            user.candidate_updated_at = now
+            db.add(user)
+            return True
+
+    # Rule 4: If a statement was deleted but other statements remain, keep category in sync
+    if deleted_kind == "statement" and stmt_count > 0 and user.candidate_status == "exam_candidate":
+        req_cat = get_user_latest_requested_category(db, user.id)
+        if req_cat and user.candidate_category != req_cat:
+            user.candidate_category = req_cat
+            user.candidate_updated_at = now
+            db.add(user)
+            return True
+
+    return False
+

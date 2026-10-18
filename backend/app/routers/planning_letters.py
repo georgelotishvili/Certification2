@@ -18,9 +18,11 @@ from ..database import get_db
 from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate, Statement, User, format_letter_doc_number
 from ..services.bounded_upload import UploadTooLarge, save_upload_stream
 from ..services.candidate_status import (
+    NON_EXAM_LETTER_PERIODS,
     VALID_CANDIDATE_CATEGORIES,
     get_user_latest_requested_category,
     normalize_cert_category,
+    reconcile_user_candidate_status_after_delete,
 )
 from ..services.media_storage import ensure_media_root, relative_storage_path, resolve_storage_path
 from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
@@ -721,8 +723,17 @@ def letter_attachment(user_id: int, letter_id: int, authorization: str | None = 
 def delete_letter(user_id: int, letter_id: int, authorization: str | None = Header(None), db: Session = Depends(get_db)):
     _require_admin(db, authorization)
     letter = _user_letter(db, user_id, letter_id)
+    user = db.get(User, user_id)
     old_path = letter.attachment_path
+    if letter.kind == "certificate" and letter.period != "cert_issued":
+        deleted_kind = "certificate_letter"
+    elif letter.kind == "exam" and (letter.period is None or letter.period not in NON_EXAM_LETTER_PERIODS):
+        deleted_kind = "exam_letter"
+    else:
+        deleted_kind = "other_letter"
     db.delete(letter)
+    db.flush()
+    reconcile_user_candidate_status_after_delete(db, user, deleted_kind=deleted_kind)
     db.commit()
     if old_path:
         _remove_file(old_path, f"letters/{user_id}")

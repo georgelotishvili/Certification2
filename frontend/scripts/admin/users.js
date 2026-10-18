@@ -639,8 +639,19 @@
       }
     }
 
-    async function refreshAfterScheduleChange() {
+    async function refreshAfterScheduleChange(detail = {}) {
       schedulesStateVersion += 1;
+      if (detail?.userId != null) {
+        const existing = cachedUsersById.get(String(detail.userId));
+        const card = findUserCard(detail.userId);
+        if (existing && card) {
+          syncCandidateControls(card, existing);
+          if (card.classList.contains('open')) {
+            void renderUserContractsSection(card, existing);
+          }
+        }
+      }
+      void refreshUnseenSummary();
       return render({ preserveExisting: true, keepPage: true });
     }
 

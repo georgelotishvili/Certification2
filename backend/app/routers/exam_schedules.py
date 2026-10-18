@@ -9,7 +9,10 @@ from datetime import datetime
 from ..database import get_db
 from ..models import Certificate, ExamSchedule, PlanningLetter, User
 from ..schemas import ExamScheduleCreate, ExamScheduleOut, ExamSchedulesResponse
-from ..services.candidate_status import get_user_latest_requested_category
+from ..services.candidate_status import (
+    get_user_latest_requested_category,
+    reconcile_user_candidate_status_after_delete,
+)
 from ..services.media_storage import delete_storage_file
 from .admin import _require_admin
 
@@ -126,7 +129,7 @@ def delete_exam_schedule(
     db: Session = Depends(get_db),
 ):
     _require_admin(db, authorization)
-    _require_user(db, user_id)
+    user = _require_user(db, user_id)
     entry = db.scalar(select(ExamSchedule).where(
         ExamSchedule.id == schedule_id, ExamSchedule.user_id == user_id,
     ))
@@ -144,5 +147,7 @@ def delete_exam_schedule(
                 pass
         db.delete(letter)
     db.delete(entry)
+    db.flush()
+    reconcile_user_candidate_status_after_delete(db, user, deleted_kind="exam_schedule")
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

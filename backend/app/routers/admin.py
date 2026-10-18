@@ -63,6 +63,7 @@ from ..services.user_codes import UserCodeConflict, move_user_code, remember_use
 from ..services.candidate_status import (
     get_user_latest_requested_category,
     normalize_cert_category,
+    reconcile_user_candidate_status_after_delete,
     sync_all_user_candidates,
 )
 from ..services.bounded_upload import (
@@ -1443,7 +1444,11 @@ def admin_user_exam_outcome(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     outcomes = _compute_exam_outcomes_for_users(db, [user])
-    return outcomes.get(user.id) or _build_exam_outcome_payload(None, None, None, None)
+    payload = dict(outcomes.get(user.id) or _build_exam_outcome_payload(None, None, None, None))
+    payload["candidate_status"] = user.candidate_status
+    payload["candidate_category"] = user.candidate_category
+    payload["requested_category"] = get_user_latest_requested_category(db, user.id)
+    return payload
 
 
 @router.get("/users", response_model=None)
@@ -1913,6 +1918,7 @@ def admin_users(
                     "exam_stage_remaining_seconds", "exam_stage_permissions",
                     "has_unseen_statements", "unseen_statement_count",
                     "has_pending_statements", "pending_statement_count",
+                    "candidate_status", "candidate_category", "requested_category",
                 )}
             payload["display_revision"] = revision
             page_items.append(payload)
@@ -2552,10 +2558,13 @@ def admin_delete_statement(
     statement = db.get(Statement, statement_id)
     if not statement:
         return
+    user = db.get(User, statement.user_id)
     # Remove stored attachment if present
     if statement.attachment_path:
         delete_storage_file(statement.attachment_path)
     db.delete(statement)
+    db.flush()
+    reconcile_user_candidate_status_after_delete(db, user, deleted_kind="statement")
     db.commit()
     return
 
