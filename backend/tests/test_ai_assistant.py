@@ -250,6 +250,96 @@ class AiAssistantTests(unittest.TestCase):
             created_at=datetime(2026, 10, 18, 8, 0),
         )
         self.db.add(user)
+        self.db.flush()
+
+        try:
+            from backend.app.models import (
+                AppFile,
+                Certificate,
+                Comment,
+                ExpertUpload,
+                PlanningLetter,
+                Regulation,
+                SiteDocument,
+            )
+        except ModuleNotFoundError:
+            from app.models import (
+                AppFile,
+                Certificate,
+                Comment,
+                ExpertUpload,
+                PlanningLetter,
+                Regulation,
+                SiteDocument,
+            )
+
+        cert = Certificate(
+            id=1,
+            user_id=user.id,
+            level="architect_expert",
+            status="active",
+            exam_score=92,
+            issue_date=datetime(2026, 1, 10),
+            filename="cert.pdf",
+            file_path="certificates/5/cert.pdf",
+            mime_type="application/pdf",
+        )
+        comment = Comment(
+            id=1,
+            target_user_id=user.id,
+            author_user_id=user.id,
+            message="ძალიან კარგი სერვისია",
+        )
+        site_doc = SiteDocument(
+            id=1,
+            title="წესდება",
+            content="წესდების ტექსტი",
+            filename="charter.pdf",
+            file_path="documents/charter.pdf",
+            file_size_bytes=2048,
+        )
+        reg = Regulation(
+            id=1,
+            title="41-ე დადგენილება",
+            filename="reg41.pdf",
+            file_path="regulations/reg41.pdf",
+            order_index=1,
+        )
+        exp_up = ExpertUpload(
+            id=1,
+            user_id=user.id,
+            unique_code="EXP-001",
+            building_function="საცხოვრებელი",
+            cadastral_code="01.10.12.001.001",
+            project_address="თბილისი",
+            expertise_filename="exp.pdf",
+            expertise_path="expert_uploads/5/exp.pdf",
+            project_filename="proj.pdf",
+            project_path="expert_uploads/5/proj.pdf",
+            status="submitted",
+        )
+        letter = PlanningLetter(
+            id=1,
+            user_id=user.id,
+            kind="exam",
+            event_date=datetime(2026, 10, 22).date(),
+            event_time="10:00",
+            request_id="req-001",
+            request_fingerprint="fp-001",
+            to_email=user.email,
+            subject="შეტყობინება",
+            body="ტექსტი",
+            created_by="admin@example.test",
+            status="sent",
+        )
+        app_file = AppFile(
+            id=1,
+            filename="stmt.pdf",
+            mime_type="application/pdf",
+            size_bytes=512,
+            storage_path="statements/5/stmt.pdf",
+        )
+        self.db.add_all([cert, comment, site_doc, reg, exp_up, letter, app_file])
         self.db.commit()
 
         fake_reply = """მოვამზადე ანგარიში და წერილი კომპიუტერის ფაილით:

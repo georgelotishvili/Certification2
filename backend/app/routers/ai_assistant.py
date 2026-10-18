@@ -802,7 +802,7 @@ def _build_site_context_and_attachments(
                 "issue_date": c.issue_date.isoformat() if c.issue_date else None,
                 "valid_until": c.valid_until.isoformat() if c.valid_until else None,
                 "has_file": bool(c.file_path),
-                "file_filename": c.file_filename,
+                "file_filename": c.filename,
                 "download_source": (
                     {"source_type": "certificate", "source_id": c.id}
                     if c.file_path
@@ -852,8 +852,8 @@ def _build_site_context_and_attachments(
                 "target_user_id": cm.target_user_id,
                 "target_user_name": f"{tu.first_name or ''} {tu.last_name or ''}".strip() if tu else "",
                 "author_user_id": cm.author_user_id,
-                "author_name": f"{au.first_name or ''} {au.last_name or ''}".strip() if au else (cm.author_email or "უცნობი"),
-                "author_email": cm.author_email,
+                "author_name": f"{au.first_name or ''} {au.last_name or ''}".strip() if au else "უცნობი",
+                "author_email": au.email if au else None,
                 "message": cm.message,
                 "created_at": cm.created_at.isoformat() if cm.created_at else None,
             }
@@ -891,15 +891,15 @@ def _build_site_context_and_attachments(
 
     site_documents_summary: list[dict[str, Any]] = []
     for sd in site_documents:
+        raw_content = re.sub(r"<[^>]+>", " ", str(sd.content or ""))
+        clean_excerpt = re.sub(r"\s+", " ", raw_content).strip()[:600]
         site_documents_summary.append(
             {
                 "document_id": sd.id,
                 "title": sd.title,
-                "description": sd.description,
+                "content_excerpt": clean_excerpt,
                 "filename": sd.filename,
                 "file_size_bytes": sd.file_size_bytes,
-                "mime_type": sd.mime_type,
-                "download_mode": sd.download_mode,
                 "has_file": bool(sd.file_path),
                 "download_source": (
                     {"source_type": "site_document", "source_id": sd.id}
@@ -916,8 +916,7 @@ def _build_site_context_and_attachments(
                 "regulation_id": reg.id,
                 "title": reg.title,
                 "filename": reg.filename,
-                "file_size_bytes": reg.file_size_bytes,
-                "mime_type": reg.mime_type,
+                "order_index": reg.order_index,
                 "has_file": bool(reg.file_path),
                 "download_source": (
                     {"source_type": "regulation", "source_id": reg.id}
@@ -1011,7 +1010,7 @@ def _build_site_context_and_attachments(
                     "exam_score": cert.exam_score,
                     "issue_date": cert.issue_date.isoformat() if cert.issue_date else None,
                     "valid_until": cert.valid_until.isoformat() if cert.valid_until else None,
-                    "file_filename": cert.file_filename,
+                    "file_filename": cert.filename,
                     "download_source": (
                         {"source_type": "certificate", "source_id": cert.id}
                         if cert.file_path
@@ -1418,18 +1417,26 @@ def _resolve_stored_file(
         rec = db.get(Statement, source_id)
         if not rec or not rec.attachment_path:
             return None
-        p = resolve_storage_path(rec.attachment_path, f"statements/{rec.user_id}")
+        try:
+            p = resolve_storage_path(rec.attachment_path)
+        except Exception:
+            return None
         if not p or not p.exists():
             return None
-        return p, rec.attachment_filename or p.name, "application/octet-stream"
+        fname = rec.attachment_filename or p.name
+        mtype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+        return p, fname, mtype
     if st == "certificate":
         rec = db.get(Certificate, source_id)
         if not rec or not rec.file_path:
             return None
-        p = resolve_storage_path(rec.file_path, f"certificates/{rec.user_id}")
+        try:
+            p = resolve_storage_path(rec.file_path)
+        except Exception:
+            return None
         if not p or not p.exists():
             return None
-        return p, rec.file_filename or p.name, rec.file_mime_type or "application/pdf"
+        return p, rec.filename or p.name, rec.mime_type or "application/pdf"
     if st == "site_document":
         rec = db.get(SiteDocument, source_id)
         if not rec or not rec.file_path:
@@ -1437,20 +1444,30 @@ def _resolve_stored_file(
         p = _resolve_document_path(rec.file_path)
         if not p or not p.exists():
             return None
-        return p, rec.filename or p.name, rec.mime_type or "application/octet-stream"
+        fname = rec.filename or p.name
+        mtype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+        return p, fname, mtype
     if st == "regulation":
         rec = db.get(Regulation, source_id)
         if not rec or not rec.file_path:
             return None
-        p = resolve_storage_path(rec.file_path, "regulations")
+        try:
+            p = resolve_storage_path(rec.file_path)
+        except Exception:
+            return None
         if not p or not p.exists():
             return None
-        return p, rec.filename or p.name, rec.mime_type or "application/octet-stream"
+        fname = rec.filename or p.name
+        mtype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+        return p, fname, mtype
     if st == "expert_expertise":
         rec = db.get(ExpertUpload, source_id)
         if not rec or not rec.expertise_path:
             return None
-        p = resolve_storage_path(rec.expertise_path, f"expert_uploads/{rec.user_id}")
+        try:
+            p = resolve_storage_path(rec.expertise_path)
+        except Exception:
+            return None
         if not p or not p.exists():
             return None
         return p, rec.expertise_filename or p.name, "application/pdf"
@@ -1458,18 +1475,28 @@ def _resolve_stored_file(
         rec = db.get(ExpertUpload, source_id)
         if not rec or not rec.project_path:
             return None
-        p = resolve_storage_path(rec.project_path, f"expert_uploads/{rec.user_id}")
+        try:
+            p = resolve_storage_path(rec.project_path)
+        except Exception:
+            return None
         if not p or not p.exists():
             return None
-        return p, rec.project_filename or p.name, "application/octet-stream"
+        fname = rec.project_filename or p.name
+        mtype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+        return p, fname, mtype
     if st == "letter":
         rec = db.get(PlanningLetter, source_id)
         if not rec or not rec.attachment_path:
             return None
-        p = resolve_storage_path(rec.attachment_path, f"letters/{rec.user_id}")
+        try:
+            p = resolve_storage_path(rec.attachment_path)
+        except Exception:
+            return None
         if not p or not p.exists():
             return None
-        return p, rec.attachment_filename or p.name, "application/octet-stream"
+        fname = rec.attachment_filename or p.name
+        mtype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+        return p, fname, mtype
     if st == "application_form":
         p = _get_application_form_path()
         if not p or not p.exists():
@@ -1479,7 +1506,10 @@ def _resolve_stored_file(
         rec = db.get(AppFile, source_id)
         if not rec or not rec.storage_path:
             return None
-        p = resolve_storage_path(rec.storage_path, "app_files")
+        try:
+            p = resolve_storage_path(rec.storage_path)
+        except Exception:
+            return None
         if not p or not p.exists():
             return None
         return p, rec.filename or p.name, rec.mime_type or "application/octet-stream"
@@ -1715,7 +1745,7 @@ def _call_gemini_api(
             err_body = exc.read().decode("utf-8", errors="replace")
         except Exception:
             pass
-        if exc.code == 400 and ("google_search" in err_body or "tools" in err_body.lower()):
+        if exc.code in (400, 404, 500, 501) and "API key" not in err_body:
             try:
                 resp_data = _send_gemini(enable_search_tool=False)
             except urllib.error.HTTPError as exc2:
@@ -1729,7 +1759,14 @@ def _call_gemini_api(
                 if not candidates:
                     raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
                 parts = candidates[0].get("content", {}).get("parts") or []
-                return "\n".join(str(p.get("text") or "") for p in parts if "text" in p).strip()
+                non_thought = [
+                    str(p.get("text") or "")
+                    for p in parts
+                    if "text" in p
+                    and not p.get("thought")
+                    and not str(p.get("text") or "").lstrip().startswith("thought\n")
+                ]
+                return "\n".join(non_thought or [str(p.get("text") or "") for p in parts if "text" in p]).strip()
         try:
             err_json = json.loads(err_body)
             err_msg = err_json.get("error", {}).get("message") or err_body
@@ -1769,7 +1806,15 @@ def _call_gemini_api(
                     out_web_sources.append(f"🌐 წყარო: {title}")
 
     parts = candidates[0].get("content", {}).get("parts") or []
-    text_chunks = [str(p.get("text") or "") for p in parts if "text" in p]
+    text_chunks = [
+        str(p.get("text") or "")
+        for p in parts
+        if "text" in p
+        and not p.get("thought")
+        and not str(p.get("text") or "").lstrip().startswith("thought\n")
+    ]
+    if not text_chunks:
+        text_chunks = [str(p.get("text") or "") for p in parts if "text" in p]
     return "\n".join(text_chunks).strip()
 
 
