@@ -617,7 +617,7 @@
           <input type="file" class="ai-chat-file-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip" hidden />
           <input type="file" class="ai-chat-folder-input" webkitdirectory directory multiple hidden />
           <button type="button" class="ai-chat-attach-btn" title="სკრინის ან ფაილის მიბმა კომპიუტერიდან (ან დააჭირეთ Ctrl+V სკრინის ჩასასმელად)">${ICONS.paperclip}</button>
-          <textarea class="ai-chat-input" rows="1" placeholder="დაწერეთ შეტყობინება ან ჩასვით სკრინი (Ctrl+V)..."></textarea>
+          <textarea class="ai-chat-input" rows="1" placeholder="დასვით კითხვა..."></textarea>
           <button type="submit" class="ai-chat-send-btn"><span>გაგზავნა</span>${ICONS.send}</button>
         </form>
       `;
@@ -924,12 +924,23 @@
         });
       });
 
+      function syncAdminInputHeight() {
+        if (!inputEl) return;
+        inputEl.style.height = '40px';
+        const nextH = Math.min(110, Math.max(40, inputEl.scrollHeight));
+        inputEl.style.height = `${nextH}px`;
+        inputEl.style.overflowY = inputEl.scrollHeight > 110 ? 'auto' : 'hidden';
+      }
+
+      on(inputEl, 'input', syncAdminInputHeight);
+
       const formEl = panelEl.querySelector('.ai-input-bar');
       on(formEl, 'submit', (e) => {
         e.preventDefault();
         const text = String(inputEl?.value || '').trim();
         if ((!text && !pendingAttachments.length) || isSending) return;
         inputEl.value = '';
+        syncAdminInputHeight();
         void sendChatMessage(text, { mode: 'chat' });
       });
 
