@@ -25,7 +25,7 @@
     <script src="../scripts/admin/application-form.js" defer></script>
     <script src="../scripts/admin/documents.js?v=20261018-contracts1" defer></script>
     <script src="../scripts/admin/ai-assistant.js?v=20261018-promptboard1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261018-promptboard1" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261018-dateclean1" />
   </head>
   <body>
     <header>
@@ -251,7 +251,6 @@
                 </label>
               </div>
               <div class="users-statements-filter">
-                <label class="users-date-field-label" for="statementsDate">მიღების თარიღი:</label>
                 <input id="statementsDate" class="users-filter-date" type="date" aria-label="განცხადების მიღების თარიღი" title="არჩეული დღე თბილისის დროით, 00:00–24:00; ჩანს იმ დღეს მიღებული ყველა განცხადების გამომგზავნი, სტატუსის ფილტრების მიუხედავად" />
                 <button id="clearStatementsDate" class="users-filter-date-clear" type="button" aria-label="განცხადების თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
@@ -288,7 +287,6 @@
                 </label>
               </div>
               <div class="users-sent-letters-date-filter">
-                <label class="users-date-field-label" for="sentLettersDate">გაგზავნის თარიღი:</label>
                 <input id="sentLettersDate" class="users-filter-date" type="date" aria-label="წერილის გაგზავნის თარიღი" title="აირჩიეთ წერილის გაგზავნის თარიღი (თბილისის დროით 00:00–24:00)" />
                 <button id="clearSentLettersDate" class="users-filter-date-clear" type="button" aria-label="გაგზავნის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
@@ -313,7 +311,6 @@
                 </label>
               </div>
               <div class="users-exam-date-filter">
-                <label class="users-date-field-label" for="examScheduleDate">დაგეგმვის თარიღი:</label>
                 <input id="examScheduleDate" class="users-filter-date" type="date" aria-label="გამოცდის თარიღი" title="აირჩიეთ წარსული ან მომავალი დღე; თარიღის გარეშე ჯგუფი დღევანდელი დღის მიხედვით იფილტრება თბილისის დროით" />
                 <button id="clearExamScheduleDate" class="users-filter-date-clear" type="button" aria-label="გამოცდის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
@@ -347,7 +344,6 @@
                 </label>
               </div>
               <div class="users-exam-results-date-filter">
-                <label class="users-date-field-label" for="examResultDate">გამოცდის თარიღი:</label>
                 <input id="examResultDate" class="users-filter-date" type="date" aria-label="გამოცდის შედეგის თარიღი" title="აირჩიეთ გამოცდის თარიღი — გამოჩნდებიან ამ თარიღში ჩაბარებული ან ჩაჭრილი პირები" />
                 <button id="clearExamResultDate" class="users-filter-date-clear" type="button" aria-label="გამოცდის შედეგის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>

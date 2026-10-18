@@ -1439,7 +1439,7 @@ main {
 .users-sent-letters-date-filter {
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   margin-left: auto;
   min-width: 0;
