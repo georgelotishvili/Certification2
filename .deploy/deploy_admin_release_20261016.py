@@ -46,6 +46,7 @@ CANDIDATE_FILES = [
     "backend/app/services/contract_assembler.py",
     "backend/app/services/email_verification.py",
     "backend/app/services/planning_email.py",
+    "backend/app/data/ai_knowledge_seed.zip",
     "backend/app/data/contracts/01_სერტიფიკაციის_სქემა.md",
     "backend/app/data/contracts/01_სერტიფიკაციის_სქემა.docx",
     "backend/app/data/contracts/03_მიუკერძოებლობის_პოლიტიკა.md",

@@ -1906,6 +1906,712 @@
     };
   }
 
+  function createPublicAiAdminModule(context) {
+    const {
+      API_BASE,
+      on,
+      showToast,
+      escapeHtml,
+      getAdminHeaders,
+      getActorHeaders,
+      onSettingsSaved,
+    } = context;
+
+    const MODEL_OPTIONS = [
+      { id: 'gemini-4-argon', label: 'Gemini 4 Argon', provider: 'gemini', sub: 'Google Gemini 4' },
+      { id: 'chatgpt-sol', label: 'ChatGPT Sol', provider: 'openai', sub: 'OpenAI ChatGPT' },
+      { id: 'chatgpt-astra', label: 'ChatGPT Astra', provider: 'openai', sub: 'OpenAI ChatGPT' },
+    ];
+
+    const LEVEL_OPTIONS = [
+      { id: 'standard', label: 'Standard', desc: 'სწრაფი' },
+      { id: 'medium', label: 'Medium', desc: 'დაბალანსებული' },
+      { id: 'high', label: 'High', desc: 'მაღალი' },
+      { id: 'ultra', label: 'Ultra', desc: 'ულტრა' },
+    ];
+
+    let mountEl = null;
+    let isLoaded = false;
+    let isSaving = false;
+    let isUploadingKb = false;
+
+    let pubState = {
+      public_enabled: true,
+      public_configured: false,
+      public_use_shared_key: true,
+      masked_gemini_key: null,
+      masked_openai_key: null,
+      masked_public_gemini_key: null,
+      masked_public_openai_key: null,
+      public_model: 'gemini-4-argon',
+      public_model_label: 'Gemini 4 Argon',
+      public_reasoning_level: 'high',
+      public_reasoning_level_short: 'High',
+      public_system_prompt: '',
+      public_system_prompt_customized: false,
+      default_public_system_prompt: '',
+    };
+
+    let kbState = {
+      total_files: 0,
+      total_size_bytes: 0,
+      total_chars: 0,
+      items: [],
+    };
+
+    let draftEnabled = true;
+    let draftUseSharedKey = true;
+    let draftModel = 'gemini-4-argon';
+    let draftLevel = 'high';
+    let draftPrompt = '';
+    let kbSearchQuery = '';
+    let kbFolderFilter = 'all';
+
+    function formatBytes(bytes) {
+      const b = Number(bytes || 0);
+      if (b < 1024) return `${b} B`;
+      if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+      return `${(b / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function getEffectivePublicPrompt(stateObj) {
+      if (stateObj.public_system_prompt !== null && stateObj.public_system_prompt !== undefined && String(stateObj.public_system_prompt).trim() !== '') {
+        return String(stateObj.public_system_prompt);
+      }
+      return String(stateObj.default_public_system_prompt || '');
+    }
+
+    async function loadData() {
+      try {
+        const [settingsResp, kbResp] = await Promise.all([
+          fetch(`${API_BASE}/admin/ai/public-settings`, {
+            headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          }),
+          fetch(`${API_BASE}/admin/ai/knowledge-base`, {
+            headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          }),
+        ]);
+        if (settingsResp.ok) {
+          const sData = await settingsResp.json();
+          pubState = { ...pubState, ...sData };
+          draftEnabled = Boolean(pubState.public_enabled);
+          draftUseSharedKey = Boolean(pubState.public_use_shared_key);
+          draftModel = pubState.public_model || 'gemini-4-argon';
+          draftLevel = pubState.public_reasoning_level || 'high';
+          draftPrompt = getEffectivePublicPrompt(pubState);
+        }
+        if (kbResp.ok) {
+          const kData = await kbResp.json();
+          kbState = {
+            total_files: Number(kData.total_files || 0),
+            total_size_bytes: Number(kData.total_size_bytes || 0),
+            total_chars: Number(kData.total_chars || 0),
+            items: Array.isArray(kData.items) ? kData.items : [],
+          };
+        }
+        isLoaded = true;
+        renderMount();
+      } catch (err) {
+        showToast('საჯარო AI-ს პარამეტრების ჩატვირთვა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    function buildMountSkeleton() {
+      mountEl = document.getElementById('publicAiAdminMount');
+      if (!mountEl || mountEl.dataset.initialized === 'true') return;
+      mountEl.dataset.initialized = 'true';
+
+      mountEl.innerHTML = `
+        <div class="pub-ai-admin-grid">
+          <!-- Card 1: Public AI Settings, Keys & System Prompt -->
+          <div class="pub-ai-admin-card">
+            <div class="pub-ai-card-header">
+              <div class="pub-ai-card-title-wrap">
+                <div class="pub-ai-card-badge-row">
+                  <span class="pub-ai-status-pill" id="pubAiStatusPill">მოწმდება...</span>
+                  <span class="pub-ai-model-summary" id="pubAiModelSummary">Gemini 4 Argon • High</span>
+                </div>
+                <h3 class="pub-ai-card-title">საჯარო AI ასისტენტის მართვა (საჯარო გვერდების კონსულტანტი)</h3>
+                <p class="pub-ai-card-subtitle">მართეთ საჯარო გვერდებზე განთავსებული AI კონსულტანტის ჩართულობა, მოდელი, API გასაღები (Key) და სტანდარტული პრომპტი.</p>
+              </div>
+              <div class="pub-ai-card-top-actions">
+                <label class="pub-ai-enable-toggle" title="საჯარო გვერდებზე AI ასისტენტის ჩართვა / გამორთვა">
+                  <input type="checkbox" id="pubAiEnabledCheckbox" checked />
+                  <span class="pub-ai-enable-label">ჩართულია საჯარო გვერდებზე</span>
+                </label>
+                <button type="button" class="primary-btn" id="pubAiSaveTopBtn">პარამეტრების შენახვა</button>
+              </div>
+            </div>
+
+            <div class="pub-ai-card-body">
+              <div class="pub-ai-two-col">
+                <div class="pub-ai-field-block">
+                  <div class="pub-ai-block-title">1. ხელოვნური ინტელექტის მოდელი (Model)</div>
+                  <div class="ai-model-cards-grid" id="pubAiModelGrid">
+                    ${MODEL_OPTIONS.map(
+                      (m) => `
+                      <button type="button" class="ai-model-card" data-pub-model="${m.id}">
+                        <span class="ai-model-card-name">${escapeHtml(m.label)}</span>
+                        <span class="ai-model-card-sub">${escapeHtml(m.sub)}</span>
+                      </button>
+                    `
+                    ).join('')}
+                  </div>
+                </div>
+
+                <div class="pub-ai-field-block">
+                  <div class="pub-ai-block-title">2. აზროვნების / ინტელექტის დონე (Level)</div>
+                  <div class="ai-level-pills-grid" id="pubAiLevelGrid">
+                    ${LEVEL_OPTIONS.map(
+                      (l) => `
+                      <button type="button" class="ai-level-pill" data-pub-level="${l.id}">
+                        <span class="ai-level-pill-name">${escapeHtml(l.label)}</span>
+                        <span class="ai-level-pill-desc">${escapeHtml(l.desc)}</span>
+                      </button>
+                    `
+                    ).join('')}
+                  </div>
+                </div>
+              </div>
+
+              <div class="pub-ai-field-block pub-ai-keys-block">
+                <div class="pub-ai-keys-head">
+                  <div class="pub-ai-block-title">3. API გასაღების (Key) კონფიგურაცია</div>
+                  <label class="pub-ai-shared-key-toggle">
+                    <input type="checkbox" id="pubAiUseSharedKeyCheckbox" checked />
+                    <span>გამოიყენოს ადმინის AI-ს საერთო API გასაღები (ორივე AI ერთ გასაღებზე)</span>
+                  </label>
+                </div>
+                <div class="pub-ai-keys-grid">
+                  <label class="ai-settings-label">
+                    <span>
+                      Gemini API Key (Gemini 4 Argon)
+                      <small class="ai-masked-gemini-hint" id="pubAiGeminiKeyHint"></small>
+                      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="ai-key-link">გასაღების აღება ↗</a>
+                    </span>
+                    <input type="text" id="pubAiGeminiKeyInput" name="gipc_pub_ai_gemini_key" class="ai-settings-input ai-masked-key-input" placeholder="AIza... (დატოვეთ ცარიელი თუ შეცვლა არ გსურთ)" autocomplete="off" spellcheck="false" data-lpignore="true" />
+                  </label>
+                  <label class="ai-settings-label">
+                    <span>
+                      OpenAI API Key (ChatGPT Sol / Astra)
+                      <small class="ai-masked-openai-hint" id="pubAiOpenaiKeyHint"></small>
+                      <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="ai-key-link">გასაღების აღება ↗</a>
+                    </span>
+                    <input type="text" id="pubAiOpenaiKeyInput" name="gipc_pub_ai_openai_key" class="ai-settings-input ai-masked-key-input" placeholder="sk-... (დატოვეთ ცარიელი თუ შეცვლა არ გსურთ)" autocomplete="off" spellcheck="false" data-lpignore="true" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="pub-ai-field-block pub-ai-prompt-block">
+                <div class="pub-ai-prompt-head">
+                  <div class="pub-ai-prompt-title-group">
+                    <div class="pub-ai-block-title">4. საჯარო AI-ს სტანდარტული პრომპტი (System Prompt)</div>
+                    <span class="ai-prompt-status-badge" id="pubAiPromptBadge">სტანდარტული</span>
+                    <span class="ai-prompt-char-count" id="pubAiPromptCharCount">0 სიმბოლო</span>
+                  </div>
+                  <div class="pub-ai-prompt-actions">
+                    <button type="button" class="ai-prompt-restore-btn" id="pubAiRestorePromptBtn" title="საწყისი სტანდარტული პრომპტის დაბრუნება">↺ სტანდარტული პრომპტის აღდგენა</button>
+                    <button type="button" class="ai-prompt-clear-btn" id="pubAiClearPromptBtn" title="პრომპტის ველის გასუფთავება">გასუფთავება</button>
+                  </div>
+                </div>
+                <div class="ai-prompt-board-hint">
+                  ეს პრომპტი განსაზღვრავს საჯარო AI-ს ქცევას, ტონს და მკაცრ შეზღუდვას, რომ უპასუხოს მხოლოდ ქვემოთ ატვირთული დოკუმენტური ბაზის საფუძველზე. შეგიძლიათ ნებისმიერ დროს შეცვალოთ ან აღადგინოთ სტანდარტული ვერსია.
+                </div>
+                <textarea id="pubAiPromptTextarea" class="ai-prompt-board-textarea pub-ai-prompt-textarea" rows="13" spellcheck="false" placeholder="შეიყვანეთ საჯარო AI-ს სტანდარტული პრომპტი..."></textarea>
+              </div>
+            </div>
+
+            <div class="pub-ai-card-footer">
+              <span class="pub-ai-footer-note">🔒 საჯარო AI სრულად იზოლირებულია: არ აქვს წვდომა ინტერნეტთან, ადმინის კომპიუტერთან და კანდიდატების პირად მონაცემებთან.</span>
+              <button type="button" class="primary-btn" id="pubAiSaveBottomBtn">პარამეტრებისა და პრომპტის შენახვა</button>
+            </div>
+          </div>
+
+          <!-- Card 2: Shared Knowledge Base Documents (\`დოკუმენტები\`) -->
+          <div class="pub-ai-admin-card">
+            <div class="pub-ai-card-header">
+              <div class="pub-ai-card-title-wrap">
+                <div class="pub-ai-card-badge-row">
+                  <span class="pub-ai-kb-count-badge" id="pubAiKbCountBadge">0 დოკუმენტი</span>
+                  <span class="pub-ai-kb-shared-badge">🔗 საერთო ბაზა: ადმინის AI + საჯარო AI</span>
+                </div>
+                <h3 class="pub-ai-card-title">დოკუმენტების ცოდნის ბაზა („დოკუმენტები“ — ორივე AI-ს საერთო ბაზა)</h3>
+                <p class="pub-ai-card-subtitle">აქ ატვირთული დოკუმენტები ავტომატურად ედება საფუძვლად როგორც <strong>საჯარო AI</strong>-ს, ისე <strong>ადმინის AI</strong>-ს. შეგიძლიათ ატვირთოთ ცალკეული ფაილები ან მთლიანი საქაღალდე.</p>
+              </div>
+              <div class="pub-ai-kb-upload-actions">
+                <input type="file" id="pubAiKbFilesInput" multiple accept=".md,.txt,.docx,.pdf,.csv,.json,.html" hidden />
+                <input type="file" id="pubAiKbFolderInput" webkitdirectory directory multiple hidden />
+                <button type="button" class="primary-btn" id="pubAiUploadFilesBtn">📄 ფაილების ატვირთვა</button>
+                <button type="button" class="secondary-btn" id="pubAiUploadFolderBtn">📁 საქაღალდის ატვირთვა</button>
+                <button type="button" class="secondary-btn" id="pubAiRestoreKbBtn" title="საწყისი 45 დოკუმენტის (data + doc 2) აღდგენა">↺ საწყისი ბაზის აღდგენა (45 ფაილი)</button>
+              </div>
+            </div>
+
+            <div class="pub-ai-card-body">
+              <div class="pub-ai-kb-toolbar">
+                <div class="pub-ai-kb-folder-tabs" id="pubAiKbFolderTabs"></div>
+                <input type="search" id="pubAiKbSearchInput" class="pub-ai-kb-search" placeholder="ძებნა დოკუმენტის სახელით ან კოდით..." autocomplete="off" />
+              </div>
+              <div class="pub-ai-kb-list" id="pubAiKbList"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const enabledCb = document.getElementById('pubAiEnabledCheckbox');
+      const sharedKeyCb = document.getElementById('pubAiUseSharedKeyCheckbox');
+      const promptTa = document.getElementById('pubAiPromptTextarea');
+      const restorePromptBtn = document.getElementById('pubAiRestorePromptBtn');
+      const clearPromptBtn = document.getElementById('pubAiClearPromptBtn');
+      const saveTopBtn = document.getElementById('pubAiSaveTopBtn');
+      const saveBottomBtn = document.getElementById('pubAiSaveBottomBtn');
+
+      on(enabledCb, 'change', () => {
+        draftEnabled = Boolean(enabledCb.checked);
+        syncControlsUI();
+      });
+
+      on(sharedKeyCb, 'change', () => {
+        draftUseSharedKey = Boolean(sharedKeyCb.checked);
+        syncControlsUI();
+      });
+
+      mountEl.querySelectorAll('[data-pub-model]').forEach((btn) => {
+        on(btn, 'click', () => {
+          draftModel = btn.getAttribute('data-pub-model') || 'gemini-4-argon';
+          syncControlsUI();
+        });
+      });
+
+      mountEl.querySelectorAll('[data-pub-level]').forEach((btn) => {
+        on(btn, 'click', () => {
+          draftLevel = btn.getAttribute('data-pub-level') || 'high';
+          syncControlsUI();
+        });
+      });
+
+      on(promptTa, 'input', () => {
+        draftPrompt = String(promptTa.value || '');
+        syncPromptMetaUI();
+      });
+
+      on(restorePromptBtn, 'click', () => {
+        draftPrompt = String(pubState.default_public_system_prompt || '');
+        if (promptTa) promptTa.value = draftPrompt;
+        syncPromptMetaUI();
+        showToast('ჩაისვა საჯარო AI-ს სტანდარტული პრომპტი — დააჭირეთ შენახვას');
+      });
+
+      on(clearPromptBtn, 'click', () => {
+        draftPrompt = '';
+        if (promptTa) {
+          promptTa.value = '';
+          promptTa.focus();
+        }
+        syncPromptMetaUI();
+      });
+
+      on(saveTopBtn, 'click', () => void savePublicSettings());
+      on(saveBottomBtn, 'click', () => void savePublicSettings());
+
+      // Knowledge base actions
+      const filesInput = document.getElementById('pubAiKbFilesInput');
+      const folderInput = document.getElementById('pubAiKbFolderInput');
+      const uploadFilesBtn = document.getElementById('pubAiUploadFilesBtn');
+      const uploadFolderBtn = document.getElementById('pubAiUploadFolderBtn');
+      const restoreKbBtn = document.getElementById('pubAiRestoreKbBtn');
+      const kbSearchInput = document.getElementById('pubAiKbSearchInput');
+
+      on(uploadFilesBtn, 'click', () => filesInput?.click());
+      on(uploadFolderBtn, 'click', () => folderInput?.click());
+
+      on(filesInput, 'change', () => {
+        if (filesInput?.files?.length) {
+          void uploadKnowledgeBaseFiles(filesInput.files, 'ატვირთული');
+          filesInput.value = '';
+        }
+      });
+
+      on(folderInput, 'change', () => {
+        if (folderInput?.files?.length) {
+          const firstRel = folderInput.files[0].webkitRelativePath || '';
+          const folderName = firstRel.includes('/') ? firstRel.split('/')[0] : 'დოკუმენტები';
+          void uploadKnowledgeBaseFiles(folderInput.files, folderName);
+          folderInput.value = '';
+        }
+      });
+
+      on(restoreKbBtn, 'click', () => {
+        if (!global.confirm('აღდგეს საწყისი 45 დოკუმენტი (data + doc 2) ცოდნის ბაზაში?')) return;
+        void restoreKnowledgeBaseDefaults();
+      });
+
+      on(kbSearchInput, 'input', () => {
+        kbSearchQuery = String(kbSearchInput.value || '').trim().toLowerCase();
+        renderKbList();
+      });
+    }
+
+    function syncPromptMetaUI() {
+      const badge = document.getElementById('pubAiPromptBadge');
+      const countEl = document.getElementById('pubAiPromptCharCount');
+      const trimmed = String(draftPrompt || '').trim();
+      const defTrimmed = String(pubState.default_public_system_prompt || '').trim();
+
+      if (countEl) {
+        countEl.textContent = `${trimmed.length} სიმბოლო`;
+      }
+      if (badge) {
+        if (!trimmed) {
+          badge.textContent = 'ცარიელია (გამოიყენება სტანდარტული)';
+          badge.className = 'ai-prompt-status-badge is-empty';
+        } else if (trimmed !== defTrimmed) {
+          badge.textContent = 'შეცვლილია';
+          badge.className = 'ai-prompt-status-badge is-custom';
+        } else {
+          badge.textContent = 'სტანდარტული პრომპტი აქტიურია';
+          badge.className = 'ai-prompt-status-badge';
+        }
+      }
+    }
+
+    function syncControlsUI() {
+      if (!mountEl) return;
+      const statusPill = document.getElementById('pubAiStatusPill');
+      const modelSummary = document.getElementById('pubAiModelSummary');
+      const enabledCb = document.getElementById('pubAiEnabledCheckbox');
+      const sharedKeyCb = document.getElementById('pubAiUseSharedKeyCheckbox');
+      const geminiHint = document.getElementById('pubAiGeminiKeyHint');
+      const openaiHint = document.getElementById('pubAiOpenaiKeyHint');
+
+      if (enabledCb) enabledCb.checked = draftEnabled;
+      if (sharedKeyCb) sharedKeyCb.checked = draftUseSharedKey;
+
+      const mObj = MODEL_OPTIONS.find((m) => m.id === draftModel) || MODEL_OPTIONS[0];
+      const lObj = LEVEL_OPTIONS.find((l) => l.id === draftLevel) || LEVEL_OPTIONS[2];
+
+      if (modelSummary) {
+        modelSummary.textContent = `${mObj.label} • ${lObj.label}`;
+      }
+
+      if (statusPill) {
+        if (!draftEnabled) {
+          statusPill.textContent = 'გამორთულია საჯარო გვერდებზე';
+          statusPill.className = 'pub-ai-status-pill is-disabled';
+        } else if (pubState.public_configured) {
+          statusPill.textContent = '● აქტიურია საჯარო გვერდებზე';
+          statusPill.className = 'pub-ai-status-pill is-ready';
+        } else {
+          statusPill.textContent = '⚠️ საჭიროა API Key-ს შეყვანა';
+          statusPill.className = 'pub-ai-status-pill is-unconfigured';
+        }
+      }
+
+      mountEl.querySelectorAll('[data-pub-model]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-pub-model') === draftModel);
+      });
+
+      mountEl.querySelectorAll('[data-pub-level]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-pub-level') === draftLevel);
+      });
+
+      const effGemMask = draftUseSharedKey
+        ? pubState.masked_gemini_key || pubState.masked_public_gemini_key
+        : pubState.masked_public_gemini_key;
+      const effOaMask = draftUseSharedKey
+        ? pubState.masked_openai_key || pubState.masked_public_openai_key
+        : pubState.masked_public_openai_key;
+
+      if (geminiHint) {
+        geminiHint.textContent = effGemMask
+          ? `(შენახულია: ${effGemMask})`
+          : '(არ არის შენახული)';
+      }
+      if (openaiHint) {
+        openaiHint.textContent = effOaMask
+          ? `(შენახულია: ${effOaMask})`
+          : '(არ არის შენახული)';
+      }
+
+      syncPromptMetaUI();
+    }
+
+    function renderKbList() {
+      const countBadge = document.getElementById('pubAiKbCountBadge');
+      const tabsEl = document.getElementById('pubAiKbFolderTabs');
+      const listEl = document.getElementById('pubAiKbList');
+      if (!listEl) return;
+
+      if (countBadge) {
+        countBadge.textContent = `${kbState.total_files} დოკუმენტი • ${formatBytes(kbState.total_size_bytes)}`;
+      }
+
+      const folders = Array.from(new Set(kbState.items.map((it) => it.folder || 'დოკუმენტები')));
+      if (tabsEl) {
+        const allButtons = [
+          `<button type="button" class="pub-ai-folder-tab ${kbFolderFilter === 'all' ? 'is-active' : ''}" data-folder="all">ყველა (${kbState.items.length})</button>`,
+          ...folders.map((f) => {
+            const c = kbState.items.filter((it) => (it.folder || 'დოკუმენტები') === f).length;
+            return `<button type="button" class="pub-ai-folder-tab ${kbFolderFilter === f ? 'is-active' : ''}" data-folder="${escapeHtml(f)}">📁 ${escapeHtml(f)} (${c})</button>`;
+          }),
+        ];
+        tabsEl.innerHTML = allButtons.join('');
+        tabsEl.querySelectorAll('[data-folder]').forEach((btn) => {
+          on(btn, 'click', () => {
+            kbFolderFilter = btn.getAttribute('data-folder') || 'all';
+            renderKbList();
+          });
+        });
+      }
+
+      const filtered = kbState.items.filter((it) => {
+        if (kbFolderFilter !== 'all' && (it.folder || 'დოკუმენტები') !== kbFolderFilter) {
+          return false;
+        }
+        if (!kbSearchQuery) return true;
+        const hay = `${it.filename || ''} ${it.folder || ''} ${it.rel_path || ''}`.toLowerCase();
+        return hay.includes(kbSearchQuery);
+      });
+
+      if (!filtered.length) {
+        listEl.innerHTML = `<div class="pub-ai-kb-empty">დოკუმენტები ვერ მოიძებნა.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered
+        .map(
+          (it) => `
+          <div class="pub-ai-kb-item">
+            <div class="pub-ai-kb-item-main">
+              <span class="pub-ai-kb-folder-tag">${escapeHtml(it.folder || 'დოკუმენტები')}</span>
+              <span class="pub-ai-kb-filename" title="${escapeHtml(it.rel_path || it.filename)}">${escapeHtml(it.filename)}</span>
+            </div>
+            <div class="pub-ai-kb-item-meta">
+              <span>${formatBytes(it.size_bytes)}</span>
+              <span>•</span>
+              <span>${Number(it.char_count || 0).toLocaleString()} სიმბოლო</span>
+              <button type="button" class="pub-ai-kb-delete-btn" data-del-doc="${escapeHtml(it.id)}" title="დოკუმენტის წაშლა ბაზიდან">✕</button>
+            </div>
+          </div>
+        `
+        )
+        .join('');
+
+      listEl.querySelectorAll('[data-del-doc]').forEach((btn) => {
+        on(btn, 'click', () => {
+          const docId = btn.getAttribute('data-del-doc');
+          if (docId) void deleteKnowledgeBaseFile(docId);
+        });
+      });
+    }
+
+    function renderMount() {
+      buildMountSkeleton();
+      if (!mountEl) return;
+      const promptTa = document.getElementById('pubAiPromptTextarea');
+      if (promptTa && document.activeElement !== promptTa) {
+        promptTa.value = draftPrompt;
+      }
+      syncControlsUI();
+      renderKbList();
+    }
+
+    async function savePublicSettings() {
+      if (isSaving) return;
+      isSaving = true;
+      const saveTopBtn = document.getElementById('pubAiSaveTopBtn');
+      const saveBottomBtn = document.getElementById('pubAiSaveBottomBtn');
+      const gemInput = document.getElementById('pubAiGeminiKeyInput');
+      const oaInput = document.getElementById('pubAiOpenaiKeyInput');
+      const promptTa = document.getElementById('pubAiPromptTextarea');
+
+      if (saveTopBtn) saveTopBtn.disabled = true;
+      if (saveBottomBtn) saveBottomBtn.disabled = true;
+
+      const currentPrompt = promptTa ? String(promptTa.value || '').trim() : draftPrompt.trim();
+      const defPrompt = String(pubState.default_public_system_prompt || '').trim();
+
+      const payload = {
+        public_enabled: draftEnabled,
+        public_use_shared_key: draftUseSharedKey,
+        public_model: draftModel,
+        public_reasoning_level: draftLevel,
+        public_system_prompt: currentPrompt === defPrompt ? '' : currentPrompt,
+      };
+
+      const typedGem = String(gemInput?.value || '').trim();
+      const typedOa = String(oaInput?.value || '').trim();
+      if (typedGem) {
+        payload.public_gemini_api_key = typedGem;
+        if (draftUseSharedKey) {
+          payload.gemini_api_key = typedGem;
+        }
+      }
+      if (typedOa) {
+        payload.public_openai_api_key = typedOa;
+        if (draftUseSharedKey) {
+          payload.openai_api_key = typedOa;
+        }
+      }
+
+      try {
+        const resp = await fetch(`${API_BASE}/admin/ai/public-settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAdminHeaders(),
+            ...getActorHeaders(),
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          throw new Error('საჯარო AI-ს პარამეტრების შენახვა ვერ მოხერხდა');
+        }
+        const data = await resp.json();
+        pubState = { ...pubState, ...data };
+        draftEnabled = Boolean(pubState.public_enabled);
+        draftUseSharedKey = Boolean(pubState.public_use_shared_key);
+        draftModel = pubState.public_model || 'gemini-4-argon';
+        draftLevel = pubState.public_reasoning_level || 'high';
+        draftPrompt = getEffectivePublicPrompt(pubState);
+        if (gemInput) gemInput.value = '';
+        if (oaInput) oaInput.value = '';
+        renderMount();
+        onSettingsSaved?.();
+        showToast('საჯარო AI-ს პარამეტრები წარმატებით შეინახა');
+      } catch (err) {
+        showToast(err?.message || 'შენახვა ვერ მოხერხდა', 'error');
+      } finally {
+        isSaving = false;
+        if (saveTopBtn) saveTopBtn.disabled = false;
+        if (saveBottomBtn) saveBottomBtn.disabled = false;
+      }
+    }
+
+    async function uploadKnowledgeBaseFiles(fileList, folderName = 'ატვირთული') {
+      if (isUploadingKb || !fileList?.length) return;
+      const allowedExts = ['.md', '.txt', '.docx', '.pdf', '.csv', '.json', '.html', '.htm'];
+      const validFiles = Array.from(fileList).filter((f) => {
+        const name = String(f.name || '').toLowerCase();
+        if (name.startsWith('.') || name.startsWith('~$')) return false;
+        return allowedExts.some((ext) => name.endsWith(ext));
+      });
+
+      if (!validFiles.length) {
+        showToast('ასატვირთად დაშვებულია .md, .txt, .docx, .pdf ფაილები', 'error');
+        return;
+      }
+
+      isUploadingKb = true;
+      const uploadFilesBtn = document.getElementById('pubAiUploadFilesBtn');
+      const uploadFolderBtn = document.getElementById('pubAiUploadFolderBtn');
+      if (uploadFilesBtn) uploadFilesBtn.disabled = true;
+      if (uploadFolderBtn) uploadFolderBtn.disabled = true;
+
+      try {
+        // Upload in batches of 15 files to avoid request size limits
+        let totalUploaded = 0;
+        const batchSize = 15;
+        for (let i = 0; i < validFiles.length; i += batchSize) {
+          const batch = validFiles.slice(i, i + batchSize);
+          const formData = new FormData();
+          formData.append('folder_name', folderName);
+          for (const f of batch) {
+            const relName = f.webkitRelativePath || f.name;
+            formData.append('files', f, relName);
+          }
+          const resp = await fetch(`${API_BASE}/admin/ai/knowledge-base/upload`, {
+            method: 'POST',
+            headers: {
+              ...getAdminHeaders(),
+              ...getActorHeaders(),
+            },
+            body: formData,
+          });
+          if (!resp.ok) {
+            throw new Error('დოკუმენტების ატვირთვა ვერ მოხერხდა');
+          }
+          const data = await resp.json();
+          totalUploaded += Number(data.uploaded_count || batch.length);
+          kbState = {
+            total_files: Number(data.total_files || 0),
+            total_size_bytes: Number(data.total_size_bytes || 0),
+            total_chars: Number(data.total_chars || 0),
+            items: Array.isArray(data.items) ? data.items : [],
+          };
+        }
+        renderKbList();
+        showToast(`ცოდნის ბაზაში აიტვირთა/განახლდა ${totalUploaded} დოკუმენტი`);
+      } catch (err) {
+        showToast(err?.message || 'დოკუმენტების ატვირთვა ვერ მოხერხდა', 'error');
+      } finally {
+        isUploadingKb = false;
+        if (uploadFilesBtn) uploadFilesBtn.disabled = false;
+        if (uploadFolderBtn) uploadFolderBtn.disabled = false;
+      }
+    }
+
+    async function deleteKnowledgeBaseFile(docId) {
+      const target = kbState.items.find((it) => String(it.id) === String(docId));
+      const name = target ? target.filename : docId;
+      if (!global.confirm(`წაიშალოს დოკუმენტი "${name}" საერთო ცოდნის ბაზიდან?`)) return;
+      try {
+        const resp = await fetch(`${API_BASE}/admin/ai/knowledge-base/${encodeURIComponent(docId)}`, {
+          method: 'DELETE',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        if (!resp.ok) throw new Error('დოკუმენტის წაშლა ვერ მოხერხდა');
+        const data = await resp.json();
+        kbState = {
+          total_files: Number(data.total_files || 0),
+          total_size_bytes: Number(data.total_size_bytes || 0),
+          total_chars: Number(data.total_chars || 0),
+          items: Array.isArray(data.items) ? data.items : [],
+        };
+        renderKbList();
+        showToast(`დოკუმენტი "${name}" წაიშალა`);
+      } catch (err) {
+        showToast(err?.message || 'წაშლა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    async function restoreKnowledgeBaseDefaults() {
+      try {
+        const resp = await fetch(`${API_BASE}/admin/ai/knowledge-base/restore-defaults`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        if (!resp.ok) throw new Error('საწყისი ბაზის აღდგენა ვერ მოხერხდა');
+        const data = await resp.json();
+        kbState = {
+          total_files: Number(data.total_files || 0),
+          total_size_bytes: Number(data.total_size_bytes || 0),
+          total_chars: Number(data.total_chars || 0),
+          items: Array.isArray(data.items) ? data.items : [],
+        };
+        renderKbList();
+        showToast(`საწყისი დოკუმენტური ბაზა აღდგენილია (${kbState.total_files} ფაილი)`);
+      } catch (err) {
+        showToast(err?.message || 'აღდგენა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    function init() {
+      buildMountSkeleton();
+    }
+
+    function render() {
+      buildMountSkeleton();
+      void loadData();
+    }
+
+    return {
+      init,
+      render,
+    };
+  }
+
   global.AdminModules = global.AdminModules || {};
   global.AdminModules.createAiAssistantModule = createAiAssistantModule;
+  global.AdminModules.createPublicAiAdminModule = createPublicAiAdminModule;
 })(window);

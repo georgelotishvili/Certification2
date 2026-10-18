@@ -24,8 +24,8 @@
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
     <script src="../scripts/admin/documents.js?v=20261019-bw1" defer></script>
-    <script src="../scripts/admin/ai-assistant.js?v=20261018-promptboard1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261019-bw1" />
+    <script src="../scripts/admin/ai-assistant.js?v=20261019-publicai1" defer></script>
+    <link rel="stylesheet" href="../styles/admin.css?v=20261019-publicai1" />
   </head>
   <body>
     <header>
@@ -52,6 +52,7 @@
           <a href="#" data-target="multiFunctional">მრავალფუნქციური</a>
           <a href="#" data-target="app">APP</a>
           <a href="#" data-target="documents">დამატება</a>
+          <a href="#" data-target="publicAi">საჯარო AI</a>
           <div class="drawer-item drawer-other">
             <a href="#" class="drawer-other-trigger">სხვადასხვა</a>
             <div class="drawer-other-submenu drawer-submenu" hidden>
@@ -73,6 +74,7 @@
         <a href="#" data-target="multiFunctional">მრავალფუნქციური</a>
         <a href="#" data-target="app">APP</a>
         <a href="#" data-target="documents">დამატება</a>
+        <a href="#" data-target="publicAi">საჯარო AI</a>
         <div class="nav-item nav-other">
           <a href="#" class="other-trigger">სხვადასხვა</a>
           <div class="dropdown other-dropdown" role="menu">
@@ -539,6 +541,14 @@
           </div>
         </div>
       </section>
+      <section id="public-ai-section" class="exam-settings" style="display:none;">
+        <div class="exam-content">
+          <div class="exam-blocks-header" aria-label="საჯარო AI და ცოდნის ბაზა">
+            <h2 class="exam-blocks-title">საჯარო AI და საერთო ცოდნის ბაზა (დოკუმენტები)</h2>
+          </div>
+          <div id="publicAiAdminMount"></div>
+        </div>
+      </section>
     </main>
 
     <div id="candidateResultsOverlay" class="results-overlay" aria-hidden="true">
@@ -982,6 +992,6 @@
       </div>
     </footer>
 
-    <script src="../scripts/admin.js?v=20261018-contracts1" defer></script>
+    <script src="../scripts/admin.js?v=20261019-publicai1" defer></script>
   </body>
 </html>

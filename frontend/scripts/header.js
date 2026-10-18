@@ -2165,11 +2165,396 @@
     });
   }
 
+  function initPublicAiAssistant() {
+    if (document.getElementById('publicAiFab') || window.location.pathname.includes('admin.html')) {
+      return;
+    }
+
+    const STORAGE_KEY = 'gipc_public_ai_chat_history_v1';
+    const API_BASE = getApiBase();
+
+    const ICONS = {
+      sparkle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/></svg>`,
+      book: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>`,
+      expand: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>`,
+      trash: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`,
+      close: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
+      send: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+    };
+
+    let isOpen = false;
+    let isExpanded = false;
+    let isSending = false;
+    let pubStatus = {
+      enabled: true,
+      configured: false,
+      model_label: 'Gemini 4 Argon',
+      reasoning_level_short: 'High',
+      knowledge_base_files_count: 45,
+    };
+    let messages = [];
+
+    function escapeHtmlSafe(val) {
+      return String(val ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatInlineMd(str) {
+      return str
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
+    function formatMarkdownSimple(text) {
+      const safe = escapeHtmlSafe(text);
+      const lines = safe.split(/\r?\n/);
+      const htmlLines = [];
+      let inList = false;
+
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        const bulletMatch = line.match(/^\s*[-*•]\s+(.*)$/);
+        const numMatch = line.match(/^\s*(\d+[.)])\s+(.*)$/);
+
+        if (bulletMatch || numMatch) {
+          if (!inList) {
+            htmlLines.push('<ul class="ai-msg-list">');
+            inList = true;
+          }
+          const itemContent = bulletMatch ? bulletMatch[1] : `${numMatch[1]} ${numMatch[2]}`;
+          htmlLines.push(`<li>${formatInlineMd(itemContent)}</li>`);
+          continue;
+        }
+
+        if (inList) {
+          htmlLines.push('</ul>');
+          inList = false;
+        }
+
+        if (/^#{1,3}\s+/.test(line)) {
+          const headingText = line.replace(/^#{1,3}\s+/, '');
+          htmlLines.push(`<div class="ai-msg-heading">${formatInlineMd(headingText)}</div>`);
+        } else if (!line.trim()) {
+          htmlLines.push('<div class="ai-msg-spacer"></div>');
+        } else {
+          htmlLines.push(`<p class="ai-msg-p">${formatInlineMd(line)}</p>`);
+        }
+      }
+
+      if (inList) {
+        htmlLines.push('</ul>');
+      }
+      return htmlLines.join('');
+    }
+
+    function loadHistory() {
+      try {
+        const raw = window.sessionStorage?.getItem?.(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            messages = parsed.slice(-24);
+          }
+        }
+      } catch {
+        messages = [];
+      }
+    }
+
+    function saveHistory() {
+      try {
+        window.sessionStorage?.setItem?.(STORAGE_KEY, JSON.stringify(messages.slice(-24)));
+      } catch {}
+    }
+
+    const fabEl = document.createElement('button');
+    fabEl.type = 'button';
+    fabEl.id = 'publicAiFab';
+    fabEl.className = 'ai-assistant-fab';
+    fabEl.innerHTML = `
+      <span class="ai-fab-icon">${ICONS.sparkle}</span>
+      <span class="ai-fab-label">AI ასისტენტი</span>
+      <span class="ai-fab-status-dot is-ready"></span>
+    `;
+    document.body.appendChild(fabEl);
+
+    const panelEl = document.createElement('aside');
+    panelEl.id = 'publicAiPanel';
+    panelEl.className = 'ai-assistant-panel';
+    panelEl.hidden = true;
+    panelEl.innerHTML = `
+      <div class="ai-panel-header">
+        <div class="ai-panel-header-left">
+          <div class="ai-panel-title-row">
+            <span class="ai-panel-brand-badge">${ICONS.sparkle}</span>
+            <h3 class="ai-panel-title">AI კონსულტანტი</h3>
+          </div>
+          <span class="ai-header-kb-pill" id="publicAiHeaderPill" title="პასუხობს მხოლოდ ინსტიტუტის ოფიციალური დოკუმენტური ბაზის საფუძველზე">
+            <span class="ai-header-config-dot is-ready" id="publicAiHeaderDot"></span>
+            ${ICONS.book}
+            <span id="publicAiHeaderText">ოფიციალური ბაზა</span>
+          </span>
+        </div>
+        <div class="ai-panel-header-actions">
+          <button type="button" class="ai-panel-icon-btn ai-btn-expand" title="ფანჯრის გაფართოება / დაპატარავება">${ICONS.expand}</button>
+          <button type="button" class="ai-panel-icon-btn ai-btn-clear" title="ჩატის გასუფთავება">${ICONS.trash}</button>
+          <button type="button" class="ai-panel-icon-btn ai-btn-close" title="დახურვა">${ICONS.close}</button>
+        </div>
+      </div>
+
+      <div class="ai-quick-toolbar" role="toolbar" aria-label="ხშირად დასმული საკითხები">
+        <button type="button" class="ai-quick-chip" data-question="რა კატეგორიებით ხდება არქიტექტორთა და ექსპერტთა სერტიფიცირება (A, B, C) და რა წინაპირობებია საჭირო?">
+          <span>კატეგორიები და პირობები</span>
+        </button>
+        <button type="button" class="ai-quick-chip" data-question="როგორ ტარდება სასერტიფიკაციო გამოცდა, რა არის გამსვლელი ქულა და რა ღირს გამოცდა და სერტიფიცირება?">
+          <span>გამოცდა და საფასური</span>
+        </button>
+        <button type="button" class="ai-quick-chip" data-question="როგორ და რა დოკუმენტებით უნდა წარვადგინო სერტიფიცირების განაცხადი საიტზე gipc.org.ge?">
+          <span>განაცხადის წარდგენა</span>
+        </button>
+      </div>
+
+      <div class="ai-messages-container" id="publicAiMessages"></div>
+
+      <form class="ai-input-bar" id="publicAiForm">
+        <textarea class="ai-chat-input" id="publicAiInput" rows="1" placeholder="დასვით შეკითხვა სერტიფიცირების, გამოცდის ან დოკუმენტების შესახებ..."></textarea>
+        <button type="submit" class="ai-chat-send-btn" id="publicAiSendBtn"><span>გაგზავნა</span>${ICONS.send}</button>
+      </form>
+    `;
+    document.body.appendChild(panelEl);
+
+    const fabDotEl = fabEl.querySelector('.ai-fab-status-dot');
+    const headerDotEl = document.getElementById('publicAiHeaderDot');
+    const headerTextEl = document.getElementById('publicAiHeaderText');
+    const messagesEl = document.getElementById('publicAiMessages');
+    const formEl = document.getElementById('publicAiForm');
+    const inputEl = document.getElementById('publicAiInput');
+    const sendBtnEl = document.getElementById('publicAiSendBtn');
+
+    function isExamActiveOnPage() {
+      if (document.body.classList.contains('exam-active')) return true;
+      const examModal = document.getElementById('examModal') || document.getElementById('examOverlay');
+      if (examModal && (examModal.classList.contains('open') || examModal.classList.contains('show') || examModal.getAttribute('aria-hidden') === 'false')) {
+        return true;
+      }
+      return false;
+    }
+
+    function syncVisibilityAndStatus() {
+      if (!pubStatus.enabled || isExamActiveOnPage()) {
+        fabEl.hidden = true;
+        panelEl.hidden = true;
+        isOpen = false;
+        fabEl.classList.remove('is-open');
+        return;
+      }
+      fabEl.hidden = false;
+      const ready = Boolean(pubStatus.configured);
+      if (fabDotEl) {
+        fabDotEl.className = `ai-fab-status-dot ${ready ? 'is-ready' : 'is-unconfigured'}`;
+      }
+      if (headerDotEl) {
+        headerDotEl.className = `ai-header-config-dot ${ready ? 'is-ready' : 'is-unconfigured'}`;
+      }
+      if (headerTextEl) {
+        const count = Number(pubStatus.knowledge_base_files_count || 45);
+        headerTextEl.textContent = `ოფიციალური ბაზა (${count} დოკ.)`;
+      }
+    }
+
+    async function fetchPublicStatus() {
+      try {
+        const resp = await fetch(`${API_BASE}/guide/ai/status`, { cache: 'no-cache' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        pubStatus = { ...pubStatus, ...data };
+        syncVisibilityAndStatus();
+      } catch {}
+    }
+
+    function renderMessages() {
+      if (!messagesEl) return;
+      messagesEl.innerHTML = '';
+
+      if (!messages.length && !isSending) {
+        const empty = document.createElement('div');
+        empty.className = 'ai-empty-chat-hint';
+        empty.innerHTML = `
+          <div class="ai-empty-chat-hint-icon">${ICONS.sparkle}</div>
+          <span>გამარჯობა! მე ვარ <strong>საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის (GIPC)</strong> ოფიციალური AI კონსულტანტი. დამისვით ნებისმიერი შეკითხვა სერტიფიცირების სქემის, კატეგორიების (A, B, C), საგამოცდო პროცედურის, საფასურების, ვადების ან ხელშეკრულებების შესახებ.</span>
+        `;
+        messagesEl.appendChild(empty);
+        return;
+      }
+
+      messages.forEach((msg) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = `ai-msg-item ${msg.role === 'user' ? 'is-user' : 'is-assistant'}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = 'ai-msg-bubble';
+
+        if (Array.isArray(msg.inspected_attachments) && msg.inspected_attachments.length > 0) {
+          const filesBar = document.createElement('div');
+          filesBar.className = 'ai-msg-files-inspected';
+          filesBar.innerHTML = `მოძიებული დოკუმენტები: <strong>${escapeHtmlSafe(
+            msg.inspected_attachments.slice(0, 5).join(', ')
+          )}</strong>`;
+          bubble.appendChild(filesBar);
+        }
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'ai-msg-content';
+        contentDiv.innerHTML = formatMarkdownSimple(msg.content);
+        bubble.appendChild(contentDiv);
+
+        itemEl.appendChild(bubble);
+        messagesEl.appendChild(itemEl);
+      });
+
+      if (isSending) {
+        const loadingEl = document.createElement('div');
+        loadingEl.className = 'ai-msg-item is-assistant is-loading';
+        loadingEl.innerHTML = `
+          <div class="ai-msg-bubble">
+            <span class="ai-typing-indicator">${ICONS.sparkle} <span>AI კონსულტანტი ამოწმებს ოფიციალურ დოკუმენტებს...</span></span>
+          </div>
+        `;
+        messagesEl.appendChild(loadingEl);
+      }
+
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function togglePanel(force) {
+      if (!pubStatus.enabled || isExamActiveOnPage()) return;
+      isOpen = typeof force === 'boolean' ? force : !isOpen;
+      panelEl.hidden = !isOpen;
+      fabEl.classList.toggle('is-open', isOpen);
+      if (isOpen) {
+        renderMessages();
+        setTimeout(() => inputEl?.focus(), 20);
+      }
+    }
+
+    async function sendQuestion(text) {
+      const clean = String(text || '').trim();
+      if (!clean || isSending) return;
+      if (!isOpen) togglePanel(true);
+
+      messages.push({
+        role: 'user',
+        content: clean,
+        timestamp: new Date().toISOString(),
+      });
+      saveHistory();
+      isSending = true;
+      if (sendBtnEl) sendBtnEl.disabled = true;
+      renderMessages();
+
+      try {
+        const apiMessages = messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+        const resp = await fetch(`${API_BASE}/guide/ai/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: apiMessages }),
+        });
+
+        if (!resp.ok) {
+          let detail = 'დროებით ვერ მოხერხდა პასუხის მიღება.';
+          try {
+            const errJson = await resp.json();
+            if (errJson?.detail) detail = String(errJson.detail);
+          } catch {}
+          throw new Error(detail);
+        }
+
+        const data = await resp.json();
+        messages.push({
+          role: 'assistant',
+          content: data.reply || 'პასუხი მომზადებულია.',
+          inspected_attachments: Array.isArray(data.inspected_attachments)
+            ? data.inspected_attachments
+            : [],
+          timestamp: new Date().toISOString(),
+        });
+        saveHistory();
+      } catch (err) {
+        messages.push({
+          role: 'assistant',
+          content: `⚠️ ${err?.message || 'მოთხოვნა ვერ შესრულდა.'}`,
+          inspected_attachments: [],
+          timestamp: new Date().toISOString(),
+        });
+        saveHistory();
+      } finally {
+        isSending = false;
+        if (sendBtnEl) sendBtnEl.disabled = false;
+        renderMessages();
+      }
+    }
+
+    on(fabEl, 'click', () => togglePanel());
+    on(panelEl.querySelector('.ai-btn-close'), 'click', () => togglePanel(false));
+    on(panelEl.querySelector('.ai-btn-expand'), 'click', () => {
+      isExpanded = !isExpanded;
+      panelEl.classList.toggle('is-expanded', isExpanded);
+    });
+    on(panelEl.querySelector('.ai-btn-clear'), 'click', () => {
+      messages = [];
+      saveHistory();
+      renderMessages();
+    });
+
+    panelEl.querySelectorAll('.ai-quick-chip').forEach((chip) => {
+      on(chip, 'click', () => {
+        const q = chip.getAttribute('data-question') || chip.textContent.trim();
+        void sendQuestion(q);
+      });
+    });
+
+    on(formEl, 'submit', (e) => {
+      e.preventDefault();
+      const text = String(inputEl?.value || '').trim();
+      if (!text || isSending) return;
+      inputEl.value = '';
+      void sendQuestion(text);
+    });
+
+    on(inputEl, 'keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        formEl.requestSubmit();
+      }
+    });
+
+    loadHistory();
+    void fetchPublicStatus();
+
+    // Watch for exam modal activation so AI is hidden during exams
+    const observer = new MutationObserver(() => {
+      syncVisibilityAndStatus();
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadHeader, { once: true });
+    document.addEventListener('DOMContentLoaded', () => {
+      loadHeader();
+      initPublicAiAssistant();
+    }, { once: true });
   } else {
     loadHeader();
+    initPublicAiAssistant();
   }
 })();
+
 
 

@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
       documents: document.getElementById('documents-section'),
       app: document.getElementById('app-section'),
       applicationForm: document.getElementById('application-form-section'),
+      publicAi: document.getElementById('public-ai-section'),
     },
     durationInput: document.getElementById('examDuration'),
     saveDurationBtn: document.getElementById('saveExamDuration'),
@@ -225,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'დოკუმენტები': 'documents',
     'დამატება': 'documents',
     'APP': 'app',
+    'საჯარო AI': 'publicAi',
   };
 
   const on = (element, event, handler) => element && element.addEventListener(event, handler);
@@ -384,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return redirectToHome();
   }
 
-  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, appFiles, applicationForm }) {
+  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, appFiles, applicationForm, publicAi }) {
     const setMenu = (open) => {
       DOM.body?.classList.toggle('menu-open', open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -478,6 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
           documents,
           app: appFiles,
           applicationForm,
+          publicAi,
         };
         moduleMap[targetSection]?.render?.();
       });
@@ -563,11 +566,17 @@ document.addEventListener('DOMContentLoaded', () => {
         usersModule.refreshUnseenSummary?.();
       },
     }, { init: noop });
+    const publicAiModule = createModuleWithContext(modules.createPublicAiAdminModule, {
+      ...moduleContextBase,
+      onSettingsSaved: () => {
+        aiAssistantModule.refreshStatus?.();
+      },
+    }, { init: noop, render: noop });
 
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;
 
-    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, appFiles: appFilesModule, applicationForm: applicationFormModule });
+    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, appFiles: appFilesModule, applicationForm: applicationFormModule, publicAi: publicAiModule });
 
     if (isFounderActor()) {
       examSettings.init();
@@ -594,6 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
     appFilesModule.init();
     applicationFormModule.init();
     aiAssistantModule.init();
+    publicAiModule.init();
 
     usersModule.refreshUnseenSummary?.();
 

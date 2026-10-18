@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import base64
 from datetime import date, datetime, timedelta, timezone
+import hashlib
 import io
 import json
+import mimetypes
 import os
 from pathlib import Path
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -14,7 +17,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -27,6 +30,7 @@ from ..models import (
     Comment,
     ExamSchedule,
     ExpertUpload,
+    GuideDocument,
     GuideVideo,
     PlanningLetter,
     PlanningTemplate,
@@ -56,6 +60,7 @@ from .planning_letters import (
 )
 
 router = APIRouter()
+public_router = APIRouter()
 
 MODEL_CATALOG = {
     "gemini-4-argon": {
@@ -269,6 +274,26 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ შპს „საქართ�
 """
 
 
+DEFAULT_PUBLIC_SYSTEM_PROMPT = """შენ ხარ შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის“ (gipc.org.ge, ს/კ: 405773854) ოფიციალური საჯარო ხელოვნური ინტელექტის კონსულტანტი არქიტექტორებისა და ინჟინერ-მშენებლების სერტიფიცირების საკითხებში.
+
+🏛️ ინსტიტუტის ოფიციალური რეკვიზიტები:
+- დასახელება: შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“ (ს/კ: 405773854)
+- იურიდიული მისამართი: საქართველო, ქ. თბილისი, იოსებიძის ქ. №69, ბინა №28
+- ფაქტობრივი (საოფისე და საგამოცდო) მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6
+- საბანკო ანგარიში (IBAN): GE33TB7313736080100014 | ვებგვერდი: gipc.org.ge | ელფოსტა: info@gipc.ge | ტელეფონი: +995 593 222 033
+
+📚 შენი ცოდნის წყარო და მუშაობის მკაცრი წესები:
+1. შენ პასუხობ ნებისმიერი მოქალაქის, კანდიდატისა და დაინტერესებული პირის შეკითხვებს **მხოლოდ და მხოლოდ** ინსტიტუტის ოფიციალური დოკუმენტური ბაზის (`დოკუმენტები` / ცოდნის ბაზა) და საჯარო გზამკვლევის საფუძველზე.
+2. შენს ბაზაში შედის:
+   - საქართველოს მთავრობის 2024 წლის 10 აპრილის №134 დადგენილება („არქიტექტორებისა და ინჟინერ-მშენებლების სერტიფიცირების წესის შესახებ“, 2025 წლის №488 და 2026 წლის №316 ცვლილებებით — სავალდებულო სერტიფიცირების ამოქმედების თარიღი: 2026 წლის 20 დეკემბერი; გარდამავალი პერიოდი: 2029 წლის 1 იანვრამდე);
+   - საერთაშორისო სტანდარტი სსტ ისო/იეკ 17024:2012/2014, აკრედიტაციის წესები და პროცედურები, საქართველოს კანონი პერსონალურ მონაცემთა დაცვის შესახებ;
+   - ინსტიტუტის ოფიციალური დოკუმენტები: სერტიფიკაციის სქემა (`GIPC-SCH-001`), სერტიფიკაციის პროცედურა (`GIPC-PRO-001`), გამოცდის ჩატარების პროცედურა (`GIPC-PRO-002`), საჩივრებისა და აპელაციების პროცედურა (`GIPC-PRO-003`), მიუკერძოებლობისა და კონფიდენციალურობის პოლიტიკები (`GIPC-POL-001`, `GIPC-POL-002`), საგამოცდო და სასერტიფიკაციო ხელშეკრულებები (`GIPC-CON-001..004` — კატეგორიები A, B, C) და ვებგვერდის გზამკვლევი.
+3. შენ **არ გაქვს** კავშირი გარე ინტერნეტთან, არც ადმინისტრატორის კომპიუტერთან და არც რეგისტრირებული მომხმარებლების პირად მონაცემებთან ან საგამოცდო ტესტების კითხვებთან.
+4. ნუ გამოიგონებ წესებს, ვადებს ან ტარიფებს, რომლებიც დოკუმენტურ ბაზაში არ წერია. პასუხი ჩამოაყალიბე გამართული, მკაფიო და სტრუქტურირებული ქართული ენით; სასურველია მიუთითო შესაბამისი დოკუმენტი ან მუხლი/პუნქტი.
+5. თუ შეკითხვა საერთოდ არ უკავშირდება სერტიფიცირებას, არქიტექტურულ/სამშენებლო რეგულაციებს ან ინსტიტუტის საქმიანობას, თავაზიანად განუმარტე მომხმარებელს, რომ ხარ სერტიფიცირების ინსტიტუტის ოფიციალური კონსულტანტი და უპასუხებ მხოლოდ სერტიფიცირებასთან დაკავშირებულ საკითხებზე.
+"""
+
+
 class AISettingsPayload(BaseModel):
     api_key: str | None = Field(default=None)  # Backward-compatible alias for gemini_api_key
     gemini_api_key: str | None = Field(default=None)
@@ -277,6 +302,18 @@ class AISettingsPayload(BaseModel):
     reasoning_level: str | None = Field(default=None)
     system_prompt: str | None = Field(default=None)
     custom_system_prompt: str | None = Field(default=None)
+
+
+class AIPublicSettingsPayload(BaseModel):
+    public_enabled: bool | None = Field(default=None)
+    public_use_shared_key: bool | None = Field(default=None)
+    gemini_api_key: str | None = Field(default=None)
+    openai_api_key: str | None = Field(default=None)
+    public_gemini_api_key: str | None = Field(default=None)
+    public_openai_api_key: str | None = Field(default=None)
+    public_model: str | None = Field(default=None)
+    public_reasoning_level: str | None = Field(default=None)
+    public_system_prompt: str | None = Field(default=None)
 
 
 class AIChatMessage(BaseModel):
@@ -306,22 +343,30 @@ class AIChatRequest(BaseModel):
     computer_files: list[AIComputerFileEntry] = Field(default_factory=list)
 
 
+class AIPublicChatRequest(BaseModel):
+    messages: list[AIChatMessage] = Field(default_factory=list)
+
+
 def _ai_settings_path() -> Path:
     folder = ensure_media_root() / "ai_assistant"
     folder.mkdir(parents=True, exist_ok=True)
     return folder / "settings.json"
 
 
-def _load_ai_settings() -> dict[str, Any]:
+def _load_raw_settings_dict() -> dict[str, Any]:
     path = _ai_settings_path()
-    data: dict[str, Any] = {}
     if path.is_file():
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
-                data = raw
+                return raw
         except Exception:
-            data = {}
+            pass
+    return {}
+
+
+def _load_ai_settings() -> dict[str, Any]:
+    data = _load_raw_settings_dict()
 
     env_gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
     env_openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -353,6 +398,32 @@ def _load_ai_settings() -> dict[str, Any]:
     provider = MODEL_CATALOG[model]["provider"]
     active_key = openai_key if provider == "openai" else gemini_key
 
+    # Public AI settings
+    public_enabled = bool(data.get("public_enabled", True))
+    public_use_shared_key = bool(data.get("public_use_shared_key", True))
+    pub_stored_gemini = str(data.get("public_gemini_api_key") or "").strip()
+    pub_stored_openai = str(data.get("public_openai_api_key") or "").strip()
+
+    public_model = str(data.get("public_model") or model or DEFAULT_MODEL).strip()
+    if public_model not in MODEL_CATALOG:
+        public_model = model
+
+    public_reasoning_level = str(data.get("public_reasoning_level") or reasoning_level or DEFAULT_REASONING_LEVEL).strip().lower()
+    if public_reasoning_level not in REASONING_LEVELS:
+        public_reasoning_level = DEFAULT_REASONING_LEVEL
+
+    if "public_system_prompt" in data and data.get("public_system_prompt") is not None:
+        public_system_prompt = str(data.get("public_system_prompt")).strip()
+        public_system_prompt_customized = True
+    else:
+        public_system_prompt = DEFAULT_PUBLIC_SYSTEM_PROMPT
+        public_system_prompt_customized = False
+
+    public_provider = MODEL_CATALOG[public_model]["provider"]
+    effective_pub_gemini = gemini_key if public_use_shared_key else (pub_stored_gemini or gemini_key)
+    effective_pub_openai = openai_key if public_use_shared_key else (pub_stored_openai or openai_key)
+    public_active_key = effective_pub_openai if public_provider == "openai" else effective_pub_gemini
+
     return {
         "api_key": active_key,
         "gemini_api_key": gemini_key,
@@ -363,6 +434,18 @@ def _load_ai_settings() -> dict[str, Any]:
         "system_prompt": system_prompt,
         "system_prompt_customized": system_prompt_customized,
         "custom_system_prompt": custom_prompt,
+        "public_enabled": public_enabled,
+        "public_use_shared_key": public_use_shared_key,
+        "public_gemini_api_key": pub_stored_gemini,
+        "public_openai_api_key": pub_stored_openai,
+        "public_effective_gemini_key": effective_pub_gemini,
+        "public_effective_openai_key": effective_pub_openai,
+        "public_api_key": public_active_key,
+        "public_model": public_model,
+        "public_provider": public_provider,
+        "public_reasoning_level": public_reasoning_level,
+        "public_system_prompt": public_system_prompt,
+        "public_system_prompt_customized": public_system_prompt_customized,
     }
 
 
@@ -375,7 +458,15 @@ def _save_ai_settings(
     reasoning_level: str | None = None,
     system_prompt: str | None = None,
     custom_system_prompt: str | None = None,
+    public_enabled: bool | None = None,
+    public_use_shared_key: bool | None = None,
+    public_gemini_api_key: str | None = None,
+    public_openai_api_key: str | None = None,
+    public_model: str | None = None,
+    public_reasoning_level: str | None = None,
+    public_system_prompt: str | None = None,
 ) -> dict[str, Any]:
+    raw_disk = _load_raw_settings_dict()
     current = _load_ai_settings()
 
     effective_gemini_key = gemini_api_key if gemini_api_key is not None else api_key
@@ -406,17 +497,60 @@ def _save_ai_settings(
     if custom_system_prompt is not None:
         current["custom_system_prompt"] = custom_system_prompt.strip()
 
+    if public_enabled is not None:
+        current["public_enabled"] = bool(public_enabled)
+
+    if public_use_shared_key is not None:
+        current["public_use_shared_key"] = bool(public_use_shared_key)
+
+    if public_gemini_api_key is not None:
+        cleaned_pg = public_gemini_api_key.strip()
+        if cleaned_pg:
+            current["public_gemini_api_key"] = cleaned_pg
+            if current["public_use_shared_key"]:
+                current["gemini_api_key"] = cleaned_pg
+
+    if public_openai_api_key is not None:
+        cleaned_po = public_openai_api_key.strip()
+        if cleaned_po:
+            current["public_openai_api_key"] = cleaned_po
+            if current["public_use_shared_key"]:
+                current["openai_api_key"] = cleaned_po
+
+    if public_model is not None:
+        cleaned_pm = public_model.strip()
+        if cleaned_pm in MODEL_CATALOG:
+            current["public_model"] = cleaned_pm
+
+    if public_reasoning_level is not None:
+        cleaned_pl = public_reasoning_level.strip().lower()
+        if cleaned_pl in REASONING_LEVELS:
+            current["public_reasoning_level"] = cleaned_pl
+
+    if public_system_prompt is not None:
+        current["public_system_prompt"] = public_system_prompt.strip()
+        current["public_system_prompt_customized"] = True
+
     saved_payload: dict[str, Any] = {
+        **raw_disk,
         "api_key": current["gemini_api_key"],
         "gemini_api_key": current["gemini_api_key"],
         "openai_api_key": current["openai_api_key"],
         "model": current["model"],
         "reasoning_level": current["reasoning_level"],
         "custom_system_prompt": current["custom_system_prompt"],
+        "public_enabled": current["public_enabled"],
+        "public_use_shared_key": current["public_use_shared_key"],
+        "public_gemini_api_key": current["public_gemini_api_key"],
+        "public_openai_api_key": current["public_openai_api_key"],
+        "public_model": current["public_model"],
+        "public_reasoning_level": current["public_reasoning_level"],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     if current.get("system_prompt_customized") or system_prompt is not None:
         saved_payload["system_prompt"] = current["system_prompt"]
+    if current.get("public_system_prompt_customized") or public_system_prompt is not None:
+        saved_payload["public_system_prompt"] = current["public_system_prompt"]
 
     path = _ai_settings_path()
     path.write_text(
@@ -441,6 +575,9 @@ def _mask_key(key: str) -> str | None:
 def _build_status_response(cfg: dict[str, Any], quick_stats: dict[str, int] | None = None) -> dict[str, Any]:
     model_info = MODEL_CATALOG.get(cfg["model"], MODEL_CATALOG[DEFAULT_MODEL])
     level_info = REASONING_LEVELS.get(cfg["reasoning_level"], REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
+    pub_model_info = MODEL_CATALOG.get(cfg["public_model"], MODEL_CATALOG[DEFAULT_MODEL])
+    pub_level_info = REASONING_LEVELS.get(cfg["public_reasoning_level"], REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
+    kb_summary = _get_kb_summary()
     out = {
         "configured": bool(cfg["api_key"]),
         "gemini_configured": bool(cfg["gemini_api_key"]),
@@ -461,6 +598,26 @@ def _build_status_response(cfg: dict[str, Any], quick_stats: dict[str, int] | No
         "system_prompt_customized": cfg["system_prompt_customized"],
         "custom_system_prompt": cfg["custom_system_prompt"],
         "default_system_prompt": DEFAULT_SYSTEM_PROMPT,
+        # Public AI fields
+        "public_enabled": cfg["public_enabled"],
+        "public_configured": bool(cfg["public_api_key"]),
+        "public_use_shared_key": cfg["public_use_shared_key"],
+        "masked_public_gemini_key": _mask_key(cfg["public_effective_gemini_key"]),
+        "masked_public_openai_key": _mask_key(cfg["public_effective_openai_key"]),
+        "public_model": cfg["public_model"],
+        "public_model_label": pub_model_info["label"],
+        "public_provider": cfg["public_provider"],
+        "public_reasoning_level": cfg["public_reasoning_level"],
+        "public_reasoning_level_label": pub_level_info["label"],
+        "public_reasoning_level_short": pub_level_info["short_label"],
+        "public_system_prompt": cfg["public_system_prompt"],
+        "public_system_prompt_customized": cfg["public_system_prompt_customized"],
+        "default_public_system_prompt": DEFAULT_PUBLIC_SYSTEM_PROMPT,
+        "knowledge_base": {
+            "total_files": kb_summary["total_files"],
+            "total_size_bytes": kb_summary["total_size_bytes"],
+            "total_chars": kb_summary["total_chars"],
+        },
     }
     if quick_stats is not None:
         out["quick_stats"] = quick_stats
@@ -1752,6 +1909,7 @@ def _call_gemini_api(
     contents: list[dict[str, Any]],
     reasoning_level: str = DEFAULT_REASONING_LEVEL,
     out_web_sources: list[str] | None = None,
+    allow_web_search: bool = True,
 ) -> str:
     level_cfg = REASONING_LEVELS.get(reasoning_level, REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
     cleaned_contents: list[dict[str, Any]] = []
@@ -1803,14 +1961,14 @@ def _call_gemini_api(
             return json.loads(resp.read().decode("utf-8"))
 
     try:
-        resp_data = _send_gemini(enable_search_tool=True)
+        resp_data = _send_gemini(enable_search_tool=allow_web_search)
     except urllib.error.HTTPError as exc:
         err_body = ""
         try:
             err_body = exc.read().decode("utf-8", errors="replace")
         except Exception:
             pass
-        if exc.code in (400, 404, 500, 501) and "API key" not in err_body:
+        if allow_web_search and exc.code in (400, 404, 500, 501) and "API key" not in err_body:
             try:
                 resp_data = _send_gemini(enable_search_tool=False)
             except urllib.error.HTTPError as exc2:
@@ -1856,7 +2014,7 @@ def _call_gemini_api(
     if not candidates:
         raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
 
-    if out_web_sources is not None:
+    if out_web_sources is not None and allow_web_search:
         gm = candidates[0].get("groundingMetadata") or {}
         queries = gm.get("webSearchQueries") or []
         for q in queries[:3]:
@@ -2026,6 +2184,472 @@ def _call_openai_api(
     return str(choices[0].get("message", {}).get("content") or "").strip()
 
 
+# ==============================================================================
+# Shared AI Knowledge Base (`დოკუმენტები` — Admin & Public AI Document Base)
+# ==============================================================================
+
+_KB_MEMORY_CACHE: dict[str, Any] = {
+    "mtime": 0.0,
+    "items": [],
+    "texts_by_id": {},
+}
+
+_KB_TOPIC_RULES = [
+    {"keywords": ["gipc-sch-001", "სერტიფიკაციის სქემა", "წინაპირობ", "კატეგორია", "გარდამავალი", "სტაჟ", "დიპლომ", "რესერტიფიცირებ", "ბარიერ", "ქულა", "70%", "75%"], "matches": ["01_სერტიფიკაციის_სქემა"]},
+    {"keywords": ["gipc-qm-001", "ხარისხის მართვ", "სახელმძღვანელო"], "matches": ["02_ხარისხის_მართვის_სახელმძღვანელო"]},
+    {"keywords": ["gipc-pol-001", "მიუკერძოებლობ", "ინტერესთა კონფლიქტ"], "matches": ["03_მიუკერძოებლობის_პოლიტიკა", "13_ფორმა_მიუკერძოებლობის"]},
+    {"keywords": ["gipc-pol-002", "კონფიდენციალურ", "პერსონალურ", "მონაცემთა დაცვ"], "matches": ["04_კონფიდენციალურობის_პოლიტიკა", "14_ფორმა_კონფიდენციალურობის", "პერსონალურ მონაცემთა დაცვის"]},
+    {"keywords": ["gipc-pro-001", "სერტიფიკაციის პროცედურ", "განაცხად", "დაშვებ", "უარყოფ", "ვერიფიკაცი", "შეჩერებ", "გაუქმებ", "აღდგენ", "30 კალენდარულ", "30 დღ", "10 სამუშაო"], "matches": ["05_სერტიფიკაციის_პროცედურა", "12_ფორმა_განაცხადი"]},
+    {"keywords": ["gipc-pro-002", "გამოცდის ჩატარებ", "გამოცდ", "ტესტ", "სესი", "გადატან", "დაგვიანებ", "350"], "matches": ["06_გამოცდის_ჩატარების_პროცედურა", "10_საგამოცდო_ხელშეკრულება"]},
+    {"keywords": ["gipc-pro-003", "საჩივარ", "საჩივრ", "აპელაცი", "გასაჩივრებ"], "matches": ["07_საჩივრებისა_და_აპელაციების_პროცედურა", "22_საჩივრების_რეესტრი", "23_აპელაციების_რეესტრი"]},
+    {"keywords": ["gipc-con-001", "არქიტექტორის ხელშეკრულება", "ხელშეკრულება", "3000", "3 000"], "matches": ["08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი"]},
+    {"keywords": ["gipc-con-002", "სპეციალისტის ხელშეკრულება", "ხელშეკრულება", "მუნიციპალიტეტ"], "matches": ["09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი"]},
+    {"keywords": ["gipc-con-003", "ექსპერტის ხელშეკრულება", "ხელშეკრულება", "ექსპერტ"], "matches": ["09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი"]},
+    {"keywords": ["gipc-con-004", "საგამოცდო ხელშეკრულება"], "matches": ["10_საგამოცდო_ხელშეკრულება"]},
+    {"keywords": ["gipc-pro-004", "შიდა აუდიტ", "gipc-frm-020", "ia-2026"], "matches": ["11_შიდა_აუდიტის_პროცედურა", "18_შიდა_აუდიტის_ანგარიში"]},
+    {"keywords": ["gipc-pro-005", "დოკუმენტაციის კონტროლ", "რეესტრ", "gipc-rec-001", "განადგურებ", "განაწილებ", "ცვლილებ"], "matches": ["15_დოკუმენტაციის_კონტროლის_პროცედურა", "26_ხარისხის_დოკუმენტების_რეესტრი", "24_გარე_დოკუმენტების_რეესტრი"]},
+    {"keywords": ["gipc-pro-006", "სიმბოლო", "ლოგო", "აკრედიტაციის სიმბოლო"], "matches": ["20_აკრედიტაციის_სიმბოლოს_გამოყენების_პროცედურა"]},
+    {"keywords": ["gipc-frm-023", "შაბლონ", "წერილ", "შეტყობინებ"], "matches": ["27_შეტყობინებების_შაბლონები"]},
+    {"keywords": ["gipc-web-001", "ვებგვერდ", "საიტ", "საჯარო რეესტრ", "ჩვენს შესახებ", "მისამართ", "საკონტაქტო"], "matches": ["28_ვებგვერდზე_განსათავსებელი_სავალდებულო_ინფორმაცია", "ჩვენს შესახებ"]},
+    {"keywords": ["gipc-jd-001", "gipc-jd-002", "gipc-jd-003", "მენეჯერ", "ზედამხედველ", "თანამდებობრივ", "qm-comp"], "matches": ["16_თანამდებობრივი_ინსტრუქცია", "17_თანამდებობრივი_ინსტრუქცია", "29_თანამდებობრივი_ინსტრუქცია", "qm-comp"]},
+    {"keywords": ["მენეჯმენტის მიმოხილვ", "gipc-frm-022", "mr-2026", "მაკორექტირებელ", "gipc-frm-021", "ca-2026"], "matches": ["19_მენეჯმენტის_მიმოხილვის_ოქმი", "21_ფორმა_მაკორექტირებელი_ქმედება"]},
+    {"keywords": ["134", "დადგენილება", "მთავრობის", "კოდექს", "ინჟინერ", "20 დეკემბ", "2029"], "matches": ["134 დადგ"]},
+    {"keywords": ["17024", "ისო", "iso", "სტანდარტ", "კითხვარ", "მეპინგ"], "matches": ["00_კითხვარის_მეპინგი", "სსტ ისო-იეკ 17024"]},
+    {"keywords": ["აკრედიტაციის ცენტრ", "აკრედიტაციის წეს", "საკ", "gac", "საფასურის განსაზღვრ"], "matches": ["აკრედიტაციის წესები", "საფასურის განსაზღვრის წესი", "განაცხადი"]},
+    {"keywords": ["იურიდიული სტილ", "მართლწერა", "ტერმინოლოგია"], "matches": ["ქართული_იურიდიული_სტილი"]},
+]
+
+
+def _kb_root_dir() -> Path:
+    d = ensure_media_root() / "ai_assistant" / "knowledge_base"
+    (d / "files").mkdir(parents=True, exist_ok=True)
+    (d / "texts").mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _kb_manifest_path() -> Path:
+    return _kb_root_dir() / "manifest.json"
+
+
+def _seed_zip_path() -> Path:
+    return Path(__file__).resolve().parent.parent / "data" / "ai_knowledge_seed.zip"
+
+
+def _make_doc_id(rel_path: str) -> str:
+    norm = rel_path.strip().replace("\\", "/").lower()
+    return "kb_" + hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
+
+
+def _extract_text_from_uploaded_bytes(
+    filename: str,
+    raw_bytes: bytes,
+    companion_texts: dict[str, str] | None = None,
+    rel_path: str = "",
+) -> str:
+    if companion_texts:
+        if rel_path in companion_texts:
+            return companion_texts[rel_path]
+        for k, v in companion_texts.items():
+            if Path(k).name.lower() == Path(filename).name.lower():
+                return v
+
+    suffix = Path(filename).suffix.lower()
+    if suffix in (".md", ".txt", ".csv", ".json", ".html", ".htm"):
+        return raw_bytes.decode("utf-8", errors="replace").strip()
+    if suffix == ".docx":
+        return _extract_docx_text(raw_bytes, max_chars=250000).strip()
+    if suffix == ".pdf":
+        # Try pypdf if available, else return empty string (PDF bytes will be stored for inline_data)
+        try:
+            import pypdf  # type: ignore
+
+            reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+            pages = [p.extract_text() or "" for p in reader.pages]
+            joined = "\n\n".join(p.strip() for p in pages if p.strip())
+            if joined:
+                return joined
+        except Exception:
+            pass
+        return ""
+    return raw_bytes.decode("utf-8", errors="replace").strip()
+
+
+def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
+    manifest_file = _kb_manifest_path()
+    if manifest_file.is_file() and not force:
+        try:
+            raw = json.loads(manifest_file.read_text(encoding="utf-8"))
+            if isinstance(raw, list) and len(raw) > 0:
+                return raw
+        except Exception:
+            pass
+
+    kb_dir = _kb_root_dir()
+    files_dir = kb_dir / "files"
+    texts_dir = kb_dir / "texts"
+
+    existing_items: list[dict[str, Any]] = []
+    if manifest_file.is_file():
+        try:
+            parsed = json.loads(manifest_file.read_text(encoding="utf-8"))
+            if isinstance(parsed, list):
+                existing_items = [it for it in parsed if isinstance(it, dict) and not it.get("is_seed")]
+        except Exception:
+            existing_items = []
+
+    seed_zip = _seed_zip_path()
+    seeded_items: list[dict[str, Any]] = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if seed_zip.is_file():
+        try:
+            with zipfile.ZipFile(seed_zip, "r") as zf:
+                companion_texts: dict[str, str] = {}
+                if "_companion_texts.json" in zf.namelist():
+                    try:
+                        companion_texts = json.loads(zf.read("_companion_texts.json").decode("utf-8"))
+                    except Exception:
+                        companion_texts = {}
+
+                for arcname in sorted(zf.namelist()):
+                    if arcname.endswith("/") or arcname == "_companion_texts.json":
+                        continue
+                    raw_bytes = zf.read(arcname)
+                    norm_rel = arcname.replace("\\", "/").strip("/")
+                    parts = norm_rel.split("/")
+                    folder = parts[0] if len(parts) > 1 else "დოკუმენტები"
+                    fname = parts[-1]
+                    doc_id = _make_doc_id(norm_rel)
+                    ext = Path(fname).suffix.lower() or ".txt"
+                    storage_name = f"{doc_id}{ext}"
+
+                    (files_dir / storage_name).write_bytes(raw_bytes)
+                    extracted_text = _extract_text_from_uploaded_bytes(
+                        fname,
+                        raw_bytes,
+                        companion_texts=companion_texts,
+                        rel_path=norm_rel,
+                    )
+                    (texts_dir / f"{doc_id}.txt").write_text(extracted_text, encoding="utf-8")
+
+                    mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+                    seeded_items.append(
+                        {
+                            "id": doc_id,
+                            "filename": fname,
+                            "folder": folder,
+                            "rel_path": norm_rel,
+                            "storage_name": storage_name,
+                            "mime_type": mime,
+                            "size_bytes": len(raw_bytes),
+                            "char_count": len(extracted_text),
+                            "uploaded_at": now_iso,
+                            "is_seed": True,
+                        }
+                    )
+        except Exception:
+            pass
+
+    by_id = {it["id"]: it for it in seeded_items}
+    for custom_it in existing_items:
+        cid = str(custom_it.get("id") or "")
+        if cid and cid not in by_id:
+            by_id[cid] = custom_it
+
+    final_list = list(by_id.values())
+    manifest_file.write_text(json.dumps(final_list, ensure_ascii=False, indent=2), encoding="utf-8")
+    _KB_MEMORY_CACHE["mtime"] = 0.0
+    return final_list
+
+
+def _load_kb_cache() -> tuple[list[dict[str, Any]], dict[str, str]]:
+    items = _ensure_kb_seeded(force=False)
+    manifest_file = _kb_manifest_path()
+    try:
+        mtime = manifest_file.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+
+    if _KB_MEMORY_CACHE["mtime"] == mtime and _KB_MEMORY_CACHE["items"]:
+        return _KB_MEMORY_CACHE["items"], _KB_MEMORY_CACHE["texts_by_id"]
+
+    texts_dir = _kb_root_dir() / "texts"
+    texts_by_id: dict[str, str] = {}
+    for it in items:
+        doc_id = str(it.get("id") or "")
+        if not doc_id:
+            continue
+        t_path = texts_dir / f"{doc_id}.txt"
+        if t_path.is_file():
+            try:
+                texts_by_id[doc_id] = t_path.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                texts_by_id[doc_id] = ""
+        else:
+            texts_by_id[doc_id] = ""
+
+    _KB_MEMORY_CACHE["mtime"] = mtime
+    _KB_MEMORY_CACHE["items"] = items
+    _KB_MEMORY_CACHE["texts_by_id"] = texts_by_id
+    return items, texts_by_id
+
+
+def _get_kb_summary() -> dict[str, Any]:
+    items, _ = _load_kb_cache()
+    total_size = sum(int(it.get("size_bytes") or 0) for it in items)
+    total_chars = sum(int(it.get("char_count") or 0) for it in items)
+    return {
+        "total_files": len(items),
+        "total_size_bytes": total_size,
+        "total_chars": total_chars,
+        "items": items,
+    }
+
+
+def _strip_internal_annexes_for_public(filename: str, text: str) -> str:
+    if "03_მიუკერძოებლობის_პოლიტიკა" in filename:
+        marker = "დანართი 1"
+        idx = text.find(marker)
+        if idx > 0:
+            return text[:idx].rstrip()
+    return text
+
+
+def _select_relevant_sections_from_large_text(text: str, query_stems: list[str], max_chars: int = 22000) -> str:
+    if len(text) <= max_chars:
+        return text
+    if not query_stems:
+        return text[:max_chars] + "\n...[დოკუმენტის გაგრძელება შემოკლებულია]..."
+
+    # Split into chunks of ~3500 chars along paragraph boundaries
+    paragraphs = re.split(r"\n\s*\n", text)
+    chunks: list[str] = []
+    cur: list[str] = []
+    cur_len = 0
+    for p in paragraphs:
+        p_str = p.strip()
+        if not p_str:
+            continue
+        if cur_len + len(p_str) > 3500 and cur:
+            chunks.append("\n\n".join(cur))
+            cur = [p_str]
+            cur_len = len(p_str)
+        else:
+            cur.append(p_str)
+            cur_len += len(p_str) + 2
+    if cur:
+        chunks.append("\n\n".join(cur))
+
+    scored_chunks: list[tuple[int, int, str]] = []
+    for idx, ch in enumerate(chunks):
+        ch_lower = ch.lower()
+        sc = 0
+        for st in query_stems:
+            if st in ch_lower:
+                sc += 10 + min(ch_lower.count(st), 5) * 2
+        if idx == 0:
+            sc += 5  # Always give a slight boost to document header/intro
+        scored_chunks.append((sc, -idx, ch))
+
+    scored_chunks.sort(reverse=True)
+    selected: list[tuple[int, str]] = []
+    used_chars = 0
+    for sc, neg_idx, ch in scored_chunks:
+        if sc <= 0 and selected:
+            break
+        if used_chars + len(ch) > max_chars:
+            continue
+        selected.append((-neg_idx, ch))
+        used_chars += len(ch) + 10
+        if len(selected) >= 6:
+            break
+
+    selected.sort(key=lambda x: x[0])
+    return "\n\n---\n\n".join(ch for _, ch in selected)
+
+
+def _retrieve_knowledge_base_context(
+    db: Session,
+    query_text: str,
+    *,
+    prior_messages: list[AIChatMessage] | None = None,
+    mode: str = "chat",
+    is_public: bool = False,
+) -> tuple[str, list[dict[str, Any]], list[str]]:
+    items, texts_by_id = _load_kb_cache()
+    if not items:
+        return "", [], []
+
+    combined_query = (query_text or "").strip()
+    if prior_messages:
+        recent_user_turns = [
+            m.content.strip()
+            for m in prior_messages[-4:]
+            if m.role == "user" and m.content.strip()
+        ]
+        if recent_user_turns:
+            combined_query = " ".join(recent_user_turns + [combined_query])
+
+    q_lower = combined_query.lower()
+    raw_words = re.findall(r"[ა-ჰa-zA-Z0-9]{3,}", q_lower)
+    query_stems = list(dict.fromkeys(_ka_stem(w) for w in raw_words if len(_ka_stem(w)) >= 3))
+
+    scored_docs: list[tuple[int, dict[str, Any]]] = []
+    for it in items:
+        doc_id = str(it.get("id") or "")
+        fname = str(it.get("filename") or "")
+        rel_path = str(it.get("rel_path") or fname)
+        fname_lower = fname.lower()
+        doc_text = texts_by_id.get(doc_id, "")
+        doc_text_lower = doc_text[:60000].lower()
+
+        score = 0
+
+        # 1. Core foundational documents always included with baseline priority
+        if any(
+            core_prefix in fname_lower
+            for core_prefix in (
+                "134 დადგ",
+                "01_სერტიფიკაციის_სქემა",
+                "05_სერტიფიკაციის_პროცედურა",
+                "06_გამოცდის_ჩატარების_პროცედურა",
+                "28_ვებგვერდზე_განსათავსებელი",
+                "ჩვენს შესახებ",
+            )
+        ):
+            score += 45
+        elif any(
+            sec_prefix in fname_lower
+            for sec_prefix in (
+                "07_საჩივრებისა_და_აპელაციების",
+                "03_მიუკერძოებლობის_პოლიტიკა",
+                "04_კონფიდენციალურობის_პოლიტიკა",
+                "27_შეტყობინებების_შაბლონები",
+            )
+        ):
+            score += 20
+
+        # 2. Topic rule matching
+        for rule in _KB_TOPIC_RULES:
+            if any(m.lower() in fname_lower for m in rule["matches"]):
+                if any(kw in q_lower for kw in rule["keywords"]):
+                    score += 85
+
+        # 3. Direct filename / stem matching
+        for st in query_stems:
+            if st in fname_lower:
+                score += 40
+            elif st in doc_text_lower:
+                score += 6
+
+        scored_docs.append((score, it))
+
+    scored_docs.sort(key=lambda x: x[0], reverse=True)
+
+    catalog_lines = [
+        f"- [{it.get('folder', 'დოკუმენტები')}] {it.get('filename')}"
+        for it in items
+    ]
+    blocks: list[str] = [
+        "=== ინსტიტუტის ერთიანი დოკუმენტური ცოდნის ბაზა (AI Knowledge Base — სულ "
+        f"{len(items)} დოკუმენტი) ===\n"
+        "ატვირთული დოკუმენტების სრული კატალოგი:\n"
+        + "\n".join(catalog_lines)
+    ]
+
+    # Include public GuideDocument (`გზამკვლევი`) if present in DB
+    try:
+        guide_doc = db.scalar(select(GuideDocument).order_by(GuideDocument.id.asc()))
+        if guide_doc and guide_doc.content:
+            clean_guide = re.sub(r"<[^>]+>", " ", str(guide_doc.content))
+            clean_guide = re.sub(r"\s+", " ", clean_guide).strip()[:20000]
+            if clean_guide:
+                blocks.append(
+                    f"=== საიტის ოფიციალური გზამკვლევი ({guide_doc.title or 'გზამკვლევი'}) ===\n{clean_guide}"
+                )
+    except Exception:
+        pass
+
+    total_char_budget = 165000 if is_public else 135000
+    used_chars = 0
+    inspected_labels: list[str] = []
+    inline_parts: list[dict[str, Any]] = []
+
+    max_docs = 12 if is_public else 9
+    for score, it in scored_docs[:max_docs]:
+        if score <= 0 and used_chars > 40000:
+            break
+        doc_id = str(it.get("id") or "")
+        fname = str(it.get("filename") or "")
+        folder = str(it.get("folder") or "დოკუმენტები")
+        raw_text = texts_by_id.get(doc_id, "").strip()
+        if is_public:
+            raw_text = _strip_internal_annexes_for_public(fname, raw_text)
+
+        if raw_text:
+            if len(raw_text) > 26000:
+                excerpt = _select_relevant_sections_from_large_text(
+                    raw_text, query_stems, max_chars=22000
+                )
+            else:
+                excerpt = raw_text
+
+            if used_chars + len(excerpt) > total_char_budget:
+                remaining = total_char_budget - used_chars
+                if remaining < 2500:
+                    break
+                excerpt = excerpt[:remaining]
+
+            blocks.append(
+                f"=== დოკუმენტი ცოდნის ბაზიდან: [{folder}] {fname} ===\n{excerpt}"
+            )
+            used_chars += len(excerpt)
+            inspected_labels.append(f"📚 {fname}")
+        elif fname.lower().endswith(".pdf") and score >= 40 and len(inline_parts) < 2:
+            # Binary PDF without extracted text — pass as inline_data
+            storage_name = str(it.get("storage_name") or "")
+            pdf_path = _kb_root_dir() / "files" / storage_name
+            if pdf_path.is_file() and pdf_path.stat().st_size <= 5 * 1024 * 1024:
+                try:
+                    b64_pdf = base64.b64encode(pdf_path.read_bytes()).decode("ascii")
+                    inline_parts.append(
+                        {"text": f"📄 ცოდნის ბაზის PDF დოკუმენტი: '{fname}'"}
+                    )
+                    inline_parts.append(
+                        {
+                            "inline_data": {
+                                "mime_type": "application/pdf",
+                                "data": b64_pdf,
+                                "filename": fname,
+                            }
+                        }
+                    )
+                    inspected_labels.append(f"📚 {fname}")
+                except Exception:
+                    pass
+
+    return "\n\n".join(blocks), inline_parts, inspected_labels
+
+
+# Simple in-memory rate limiter for Public AI chat (per IP)
+_PUBLIC_AI_RATE_BUCKETS: dict[str, list[float]] = {}
+
+
+def _check_public_ai_rate_limit(client_ip: str) -> None:
+    now = time.time()
+    window_sec = 300.0  # 5 minutes
+    max_requests = 30
+    bucket = _PUBLIC_AI_RATE_BUCKETS.get(client_ip, [])
+    bucket = [t for t in bucket if now - t < window_sec]
+    if len(bucket) >= max_requests:
+        raise HTTPException(
+            429,
+            "დროებით გადაჭარბებულია შეტყობინებების ლიმიტი. გთხოვთ სცადოთ რამდენიმე წუთში.",
+        )
+    bucket.append(now)
+    _PUBLIC_AI_RATE_BUCKETS[client_ip] = bucket
+
+
 @router.get("/ai/status")
 def get_ai_status(
     authorization: str | None = Header(None),
@@ -2061,6 +2685,163 @@ def update_ai_settings(
         custom_system_prompt=payload.custom_system_prompt,
     )
     return _build_status_response(cfg)
+
+
+@router.get("/ai/public-settings")
+def get_public_ai_settings_admin(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    cfg = _load_ai_settings()
+    return _build_status_response(cfg)
+
+
+@router.put("/ai/public-settings")
+def update_public_ai_settings_admin(
+    payload: AIPublicSettingsPayload,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    cfg = _save_ai_settings(
+        gemini_api_key=payload.gemini_api_key,
+        openai_api_key=payload.openai_api_key,
+        public_enabled=payload.public_enabled,
+        public_use_shared_key=payload.public_use_shared_key,
+        public_gemini_api_key=payload.public_gemini_api_key,
+        public_openai_api_key=payload.public_openai_api_key,
+        public_model=payload.public_model,
+        public_reasoning_level=payload.public_reasoning_level,
+        public_system_prompt=payload.public_system_prompt,
+    )
+    return _build_status_response(cfg)
+
+
+@router.get("/ai/knowledge-base")
+def list_ai_knowledge_base(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    return _get_kb_summary()
+
+
+@router.post("/ai/knowledge-base/upload")
+async def upload_ai_knowledge_base_files(
+    files: list[UploadFile] = File(...),
+    folder_name: str = Form("ატვირთული"),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    if not files:
+        raise HTTPException(400, "ასატვირთი ფაილები არ არის არჩეული.")
+
+    items = _ensure_kb_seeded(force=False)
+    by_id = {str(it.get("id")): it for it in items if it.get("id")}
+
+    kb_dir = _kb_root_dir()
+    files_dir = kb_dir / "files"
+    texts_dir = kb_dir / "texts"
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    uploaded_count = 0
+    for uf in files:
+        raw_name = (uf.filename or "").strip().replace("\\", "/").lstrip("/")
+        if not raw_name:
+            continue
+        fname = Path(raw_name).name
+        if fname.startswith(".") or fname.startswith("~$"):
+            continue
+        ext = Path(fname).suffix.lower()
+        if ext not in (".md", ".txt", ".docx", ".pdf", ".csv", ".json", ".html", ".htm"):
+            continue
+
+        raw_bytes = await uf.read()
+        if not raw_bytes or len(raw_bytes) > 25 * 1024 * 1024:
+            continue
+
+        parts = raw_name.split("/")
+        if len(parts) > 1:
+            folder = parts[0]
+            rel_path = raw_name
+        else:
+            folder = (folder_name or "ატვირთული").strip() or "ატვირთული"
+            rel_path = f"{folder}/{fname}"
+
+        doc_id = _make_doc_id(rel_path)
+        storage_name = f"{doc_id}{ext}"
+        (files_dir / storage_name).write_bytes(raw_bytes)
+
+        extracted_text = _extract_text_from_uploaded_bytes(fname, raw_bytes, rel_path=rel_path)
+        (texts_dir / f"{doc_id}.txt").write_text(extracted_text, encoding="utf-8")
+
+        mime = uf.content_type or mimetypes.guess_type(fname)[0] or "application/octet-stream"
+        by_id[doc_id] = {
+            "id": doc_id,
+            "filename": fname,
+            "folder": folder,
+            "rel_path": rel_path,
+            "storage_name": storage_name,
+            "mime_type": mime,
+            "size_bytes": len(raw_bytes),
+            "char_count": len(extracted_text),
+            "uploaded_at": now_iso,
+            "is_seed": bool(by_id.get(doc_id, {}).get("is_seed", False)),
+        }
+        uploaded_count += 1
+
+    final_list = list(by_id.values())
+    _kb_manifest_path().write_text(
+        json.dumps(final_list, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    _KB_MEMORY_CACHE["mtime"] = 0.0
+    summary = _get_kb_summary()
+    summary["uploaded_count"] = uploaded_count
+    return summary
+
+
+@router.delete("/ai/knowledge-base/{doc_id}")
+def delete_ai_knowledge_base_file(
+    doc_id: str,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    items = _ensure_kb_seeded(force=False)
+    target = next((it for it in items if str(it.get("id")) == doc_id), None)
+    if not target:
+        raise HTTPException(404, "დოკუმენტი ვერ მოიძებნა ცოდნის ბაზაში.")
+
+    kb_dir = _kb_root_dir()
+    storage_name = str(target.get("storage_name") or "")
+    if storage_name:
+        try:
+            (kb_dir / "files" / storage_name).unlink(missing_ok=True)
+        except Exception:
+            pass
+    try:
+        (kb_dir / "texts" / f"{doc_id}.txt").unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    remaining = [it for it in items if str(it.get("id")) != doc_id]
+    _kb_manifest_path().write_text(
+        json.dumps(remaining, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    _KB_MEMORY_CACHE["mtime"] = 0.0
+    return _get_kb_summary()
+
+
+@router.post("/ai/knowledge-base/restore-defaults")
+def restore_ai_knowledge_base_defaults(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    _ensure_kb_seeded(force=True)
+    return _get_kb_summary()
 
 
 @router.get("/ai/files/{source_type}/{source_id}")
@@ -2134,6 +2915,21 @@ def ai_chat(
             last_user_message=last_user_msg,
         )
     )
+
+    # Inject Shared AI Knowledge Base (`დოკუმენტები`) into Admin AI context as well
+    kb_context_str, kb_inline_parts, kb_labels = _retrieve_knowledge_base_context(
+        db,
+        last_user_msg,
+        prior_messages=payload.messages[:-1] if payload.messages else None,
+        mode=mode,
+        is_public=False,
+    )
+    if kb_context_str:
+        context_str += "\n\n" + kb_context_str
+    if kb_labels:
+        for lbl in kb_labels:
+            if lbl not in inspected_labels:
+                inspected_labels.append(lbl)
 
     if payload.computer_files:
         comp_list = [
@@ -2229,6 +3025,8 @@ def ai_chat(
             contents.append({"role": role, "parts": [{"text": text}]})
 
     final_parts: list[dict[str, Any]] = [{"text": context_str}]
+    if kb_inline_parts:
+        final_parts.extend(kb_inline_parts)
     if attachment_parts:
         final_parts.extend(attachment_parts)
     if user_uploaded_parts:
@@ -2255,6 +3053,7 @@ def ai_chat(
             contents=contents,
             reasoning_level=cfg["reasoning_level"],
             out_web_sources=grounded_web_sources,
+            allow_web_search=True,
         )
     if grounded_web_sources:
         inspected_labels.extend(grounded_web_sources)
@@ -2285,3 +3084,133 @@ def ai_chat(
         "reasoning_level": cfg["reasoning_level"],
         "reasoning_level_label": level_info["short_label"],
     }
+
+
+# ==============================================================================
+# Public AI Assistant Endpoints (`/guide/ai/status` & `/guide/ai/chat`)
+# Strictly isolated: ONLY connected to Shared Knowledge Base documents (`დოკუმენტები`)
+# ==============================================================================
+
+@public_router.get("/guide/ai/status")
+def get_public_ai_status():
+    cfg = _load_ai_settings()
+    pub_model_info = MODEL_CATALOG.get(cfg["public_model"], MODEL_CATALOG[DEFAULT_MODEL])
+    pub_level_info = REASONING_LEVELS.get(cfg["public_reasoning_level"], REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
+    kb_summary = _get_kb_summary()
+    return {
+        "enabled": bool(cfg["public_enabled"]),
+        "configured": bool(cfg["public_api_key"]),
+        "model": cfg["public_model"],
+        "model_label": pub_model_info["label"],
+        "reasoning_level": cfg["public_reasoning_level"],
+        "reasoning_level_short": pub_level_info["short_label"],
+        "knowledge_base_files_count": kb_summary["total_files"],
+    }
+
+
+@public_router.post("/guide/ai/chat")
+def public_ai_chat(
+    payload: AIPublicChatRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    cfg = _load_ai_settings()
+    if not cfg.get("public_enabled", True):
+        raise HTTPException(403, "საჯარო AI ასისტენტი დროებით გამორთულია ადმინისტრატორის მიერ.")
+
+    pub_model = cfg["public_model"]
+    pub_provider = cfg["public_provider"]
+    pub_level = cfg["public_reasoning_level"]
+    pub_api_key = cfg["public_api_key"]
+
+    pub_model_info = MODEL_CATALOG.get(pub_model, MODEL_CATALOG[DEFAULT_MODEL])
+    pub_level_info = REASONING_LEVELS.get(pub_level, REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
+
+    if not pub_api_key:
+        raise HTTPException(
+            503,
+            "AI კონსულტანტი დროებით მიუწვდომელია (საჭიროა API გასაღების კონფიგურაცია ადმინის პანელში).",
+        )
+
+    client_ip = (
+        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+    _check_public_ai_rate_limit(client_ip)
+
+    last_user_msg = ""
+    for m in reversed(payload.messages):
+        if m.role == "user" and m.content.strip():
+            last_user_msg = m.content.strip()[:4000]
+            break
+
+    if not last_user_msg:
+        raise HTTPException(422, "შეტყობინება ცარიელია.")
+
+    kb_context_str, kb_inline_parts, kb_labels = _retrieve_knowledge_base_context(
+        db,
+        last_user_msg,
+        prior_messages=payload.messages[:-1] if payload.messages else None,
+        mode="chat",
+        is_public=True,
+    )
+
+    base_pub_prompt = str(cfg.get("public_system_prompt") or DEFAULT_PUBLIC_SYSTEM_PROMPT).strip()
+    system_instruction = (
+        base_pub_prompt
+        + f"\n\nაქტიური მოდელი: {pub_model_info['label']} | {pub_level_info['prompt_directive']}"
+    )
+
+    contents: list[dict[str, Any]] = []
+    prior_messages = payload.messages[:-1] if payload.messages else []
+    for m in prior_messages[-8:]:
+        role = "model" if m.role in ("assistant", "model") else "user"
+        text = m.content.strip()[:4000]
+        if text:
+            contents.append({"role": role, "parts": [{"text": text}]})
+
+    final_parts: list[dict[str, Any]] = [{"text": kb_context_str}]
+    if kb_inline_parts:
+        final_parts.extend(kb_inline_parts)
+    final_parts.append(
+        {
+            "text": (
+                "მომხმარებლის შეკითხვა (უპასუხე მხოლოდ ზემოთ მოცემული ოფიციალური დოკუმენტური ბაზის საფუძველზე):\n"
+                + last_user_msg
+            )
+        }
+    )
+    contents.append({"role": "user", "parts": final_parts})
+
+    if pub_provider == "openai":
+        raw_reply = _call_openai_api(
+            api_key=pub_api_key,
+            model=pub_model,
+            system_instruction=system_instruction,
+            contents=contents,
+            reasoning_level=pub_level,
+        )
+    else:
+        raw_reply = _call_gemini_api(
+            api_key=pub_api_key,
+            model=pub_model,
+            system_instruction=system_instruction,
+            contents=contents,
+            reasoning_level=pub_level,
+            out_web_sources=None,
+            allow_web_search=False,  # Strictly NO internet access for Public AI
+        )
+
+    # Strip any accidental admin tags if ever generated
+    clean_reply = _PROPOSED_LETTER_RE.sub("", raw_reply)
+    clean_reply = _DOWNLOAD_FILE_RE.sub("", clean_reply).strip()
+
+    return {
+        "reply": clean_reply,
+        "inspected_attachments": kb_labels,
+        "model": pub_model,
+        "model_label": pub_model_info["label"],
+        "reasoning_level": pub_level,
+        "reasoning_level_label": pub_level_info["short_label"],
+    }
+

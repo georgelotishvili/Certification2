@@ -143,6 +143,7 @@ def create_app() -> FastAPI:
     app.include_router(exam_schedules.router, prefix="/admin", tags=["admin"])
     app.include_router(planning_letters.router, prefix="/admin", tags=["admin"])
     app.include_router(ai_assistant.router, prefix="/admin", tags=["admin-ai"])
+    app.include_router(ai_assistant.public_router, tags=["public-ai"])
     app.include_router(taxonomy.router, prefix="/taxonomy", tags=["taxonomy"])
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])
