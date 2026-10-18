@@ -35,7 +35,7 @@ from ..schemas import (
 from ..services.bounded_upload import (
     DEFAULT_UPLOAD_MAX_BYTES,
     UploadTooLarge,
-    save_upload_stream,
+    save_async_upload,
 )
 from ..services.contract_assembler import (
     docx_bytes_to_html,
@@ -230,7 +230,7 @@ async def _upsert_guide_document(
         unique_name = f"guide_{uuid.uuid4().hex[:12]}{ext}"
         file_path = _resolve_guide_path(_guide_root() / unique_name)
         try:
-            file_size = await save_upload_stream(
+            file_size = await save_async_upload(
                 file, file_path, max_bytes=GUIDE_UPLOAD_MAX_BYTES
             )
         except UploadTooLarge as exc:
