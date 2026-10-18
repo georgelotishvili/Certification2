@@ -235,6 +235,24 @@
       syncResetFiltersButton();
     }
 
+    function hasSentLetterFilter() {
+      return !!(
+        DOM.sentLettersDate?.value
+        || DOM.filterSentExam?.checked
+        || DOM.filterSentRejection?.checked
+        || DOM.filterSentCertificate?.checked
+        || DOM.filterSentFail?.checked
+        || DOM.filterSentCustom?.checked
+      );
+    }
+
+    function syncSentLetterFilterControls() {
+      if (DOM.clearSentLettersDate) {
+        DOM.clearSentLettersDate.disabled = !DOM.sentLettersDate?.value;
+      }
+      syncResetFiltersButton();
+    }
+
     function hasExamScheduleFilter() {
       return !!(
         DOM.examScheduleDate?.value
@@ -284,6 +302,7 @@
         || DOM.filterPendingStatements?.checked
         || DOM.filterAllStatements?.checked
         || selectedStatementsDate()
+        || hasSentLetterFilter()
         || hasExamScheduleFilter()
         || hasExamResultFilter()
       );
@@ -309,6 +328,12 @@
       if (DOM.filterPendingStatements) DOM.filterPendingStatements.checked = false;
       if (DOM.filterAllStatements) DOM.filterAllStatements.checked = false;
       if (DOM.statementsDate) DOM.statementsDate.value = '';
+      if (DOM.filterSentExam) DOM.filterSentExam.checked = false;
+      if (DOM.filterSentRejection) DOM.filterSentRejection.checked = false;
+      if (DOM.filterSentCertificate) DOM.filterSentCertificate.checked = false;
+      if (DOM.filterSentFail) DOM.filterSentFail.checked = false;
+      if (DOM.filterSentCustom) DOM.filterSentCustom.checked = false;
+      if (DOM.sentLettersDate) DOM.sentLettersDate.value = '';
       if (DOM.filterExamMorning) DOM.filterExamMorning.checked = false;
       if (DOM.filterExamEvening) DOM.filterExamEvening.checked = false;
       if (DOM.filterCertificateHandover) DOM.filterCertificateHandover.checked = false;
@@ -319,6 +344,7 @@
       if (DOM.filterPendingFailLetter) DOM.filterPendingFailLetter.checked = false;
       if (DOM.examResultDate) DOM.examResultDate.value = '';
       syncStatementFilterControls();
+      syncSentLetterFilterControls();
       syncExamScheduleFilterControls();
       syncExamResultFilterControls();
       syncResetFiltersButton();
@@ -463,6 +489,12 @@
       if (DOM.filterPendingPassLetter?.checked) params.set('pending_pass_letter', 'true');
       if (DOM.filterPendingFailLetter?.checked) params.set('pending_fail_letter', 'true');
       if (DOM.examResultDate?.value) params.set('exam_result_date', DOM.examResultDate.value);
+      if (DOM.filterSentExam?.checked) params.set('sent_exam_letter', 'true');
+      if (DOM.filterSentRejection?.checked) params.set('sent_rejection_letter', 'true');
+      if (DOM.filterSentCertificate?.checked) params.set('sent_certificate_letter', 'true');
+      if (DOM.filterSentFail?.checked) params.set('sent_fail_letter', 'true');
+      if (DOM.filterSentCustom?.checked) params.set('sent_custom_letter', 'true');
+      if (DOM.sentLettersDate?.value) params.set('sent_letter_date', DOM.sentLettersDate.value);
       params.set('sort', DOM.usersSort?.value || 'date_desc');
       const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, {
         headers: { ...getAdminHeaders(), ...getActorHeaders() },
@@ -584,7 +616,7 @@
           }
           return;
         }
-        const dateMembershipChanged = (selectedStatementsDate() || hasExamScheduleFilter() || hasExamResultFilter()) && (
+        const dateMembershipChanged = (selectedStatementsDate() || hasExamScheduleFilter() || hasExamResultFilter() || hasSentLetterFilter()) && (
           items.length !== cachedItems.length ||
           items.some((user, index) => String(user.id) !== String(cachedItems[index]?.id))
         );
@@ -1643,6 +1675,28 @@
         return render();
       });
       syncExamResultFilterControls();
+      [
+        DOM.filterSentExam,
+        DOM.filterSentRejection,
+        DOM.filterSentCertificate,
+        DOM.filterSentFail,
+        DOM.filterSentCustom,
+      ].filter(Boolean).forEach((checkbox) => {
+        on(checkbox, 'change', () => {
+          syncSentLetterFilterControls();
+          return render();
+        });
+      });
+      on(DOM.sentLettersDate, 'change', () => {
+        syncSentLetterFilterControls();
+        return render();
+      });
+      on(DOM.clearSentLettersDate, 'click', () => {
+        if (DOM.sentLettersDate) DOM.sentLettersDate.value = '';
+        syncSentLetterFilterControls();
+        return render();
+      });
+      syncSentLetterFilterControls();
       const qualificationCheckboxes = [
         DOM.filterArchitects,
         DOM.filterExperts,

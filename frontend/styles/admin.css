@@ -1179,6 +1179,32 @@ main {
   box-shadow: 0 2px 6px rgba(100, 116, 139, 0.14);
 }
 
+.users-filter-label.is-warning-chip:hover {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.users-filter-label.is-warning-chip:has(input:checked) {
+  border-color: #d97706;
+  background: #fef3c7;
+  color: #92400e;
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.16);
+}
+
+.users-filter-label.is-purple-chip:hover {
+  border-color: #8b5cf6;
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+
+.users-filter-label.is-purple-chip:has(input:checked) {
+  border-color: #7c3aed;
+  background: #ede9fe;
+  color: #5b21b6;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.16);
+}
+
 .users-filter-label input[type="checkbox"] {
   width: 15px;
   height: 15px;
@@ -1244,6 +1270,31 @@ main {
 .filter-color-dot.is-exam-failed {
   background: #dc2626;
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+
+.filter-color-dot.is-sent-exam {
+  background: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.filter-color-dot.is-sent-rejection {
+  background: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.18);
+}
+
+.filter-color-dot.is-sent-certificate {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
+}
+
+.filter-color-dot.is-sent-fail {
+  background: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.2);
+}
+
+.filter-color-dot.is-sent-custom {
+  background: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
 }
 
 .users-filter-label.has-unseen-alert {
@@ -1372,7 +1423,8 @@ main {
 
 .users-statements-filter,
 .users-exam-date-filter,
-.users-exam-results-date-filter {
+.users-exam-results-date-filter,
+.users-sent-letters-date-filter {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1381,6 +1433,20 @@ main {
   min-width: 0;
   max-width: 100%;
   flex-shrink: 0;
+}
+
+.users-sent-letters-row .users-filter-chips-group {
+  gap: 5px 6px;
+}
+
+.users-sent-letters-row .users-filter-label {
+  padding: 4px 8px;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.users-sent-letters-row .users-filter-label span {
+  font-size: 12px;
 }
 
 .users-date-field-label {

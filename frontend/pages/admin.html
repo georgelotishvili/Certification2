@@ -18,13 +18,13 @@
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
     <script src="../scripts/admin/certificate.js?v=20261018-cand1" defer></script>
     <script src="../scripts/admin/exam-schedules.js?v=20261018-reply2" defer></script>
-    <script src="../scripts/admin/users.js?v=20261018-stmtall1" defer></script>
+    <script src="../scripts/admin/users.js?v=20261018-sent1" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
     <script src="../scripts/admin/documents.js?v=20261018-docs1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261018-stmtall1" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261018-sent1" />
   </head>
   <body>
     <header>
@@ -256,7 +256,44 @@
               </div>
             </div>
 
-            <!-- რიგი 3: დაგეგმილი გამოცდები და სერტიფიკატის გადაცემა -->
+            <!-- რიგი 4: ჩვენგან გაგზავნილი პასუხები / წერილები -->
+            <div class="users-filters-checkboxes users-sent-letters-row">
+              <span class="users-filter-group-title">გაგზავნილი:</span>
+              <div class="users-filter-chips-group">
+                <label class="users-filter-label is-info-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდის დაგეგმვის / გამოცდაზე დაშვების წერილი">
+                  <input id="filterSentExam" type="checkbox" />
+                  <span class="filter-color-dot is-sent-exam" aria-hidden="true"></span>
+                  <span>გამოცდ. დაგეგმვა</span>
+                </label>
+                <label class="users-filter-label is-danger-chip" title="პირები, რომლებსაც გაეგზავნათ განაცხადზე უარყოფითი პასუხის წერილი">
+                  <input id="filterSentRejection" type="checkbox" />
+                  <span class="filter-color-dot is-sent-rejection" aria-hidden="true"></span>
+                  <span>უარყოფითი პასუხი</span>
+                </label>
+                <label class="users-filter-label is-success-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდის ჩაბარებისა და სერტიფიკატის გადაცემის წერილი">
+                  <input id="filterSentCertificate" type="checkbox" />
+                  <span class="filter-color-dot is-sent-certificate" aria-hidden="true"></span>
+                  <span>სერტიფ. გადაცემა</span>
+                </label>
+                <label class="users-filter-label is-warning-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდაზე ჩაჭრის შეტყობინება">
+                  <input id="filterSentFail" type="checkbox" />
+                  <span class="filter-color-dot is-sent-fail" aria-hidden="true"></span>
+                  <span>ჩაჭრის შეტყ.</span>
+                </label>
+                <label class="users-filter-label is-purple-chip" title="პირები, რომლებსაც გაეგზავნათ სხვა შეტყობინება (შაბლონის გარეშე)">
+                  <input id="filterSentCustom" type="checkbox" />
+                  <span class="filter-color-dot is-sent-custom" aria-hidden="true"></span>
+                  <span>სხვა შეტყ.</span>
+                </label>
+              </div>
+              <div class="users-sent-letters-date-filter">
+                <label class="users-date-field-label" for="sentLettersDate">გაგზავნის თარიღი:</label>
+                <input id="sentLettersDate" class="users-filter-date" type="date" aria-label="წერილის გაგზავნის თარიღი" title="აირჩიეთ წერილის გაგზავნის თარიღი (თბილისის დროით 00:00–24:00)" />
+                <button id="clearSentLettersDate" class="users-filter-date-clear" type="button" aria-label="გაგზავნის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
+              </div>
+            </div>
+
+            <!-- რიგი 5: დაგეგმილი გამოცდები და სერტიფიკატის გადაცემა -->
             <div class="users-filters-checkboxes users-exam-filters">
               <span class="users-filter-group-title">დაგეგმვა:</span>
               <div class="users-filter-chips-group">
@@ -892,6 +929,6 @@
       </div>
     </footer>
 
-    <script src="../scripts/admin.js?v=20261018-stmtall1" defer></script>
+    <script src="../scripts/admin.js?v=20261018-sent1" defer></script>
   </body>
 </html>

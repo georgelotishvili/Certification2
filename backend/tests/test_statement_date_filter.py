@@ -10,10 +10,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 try:
-    from backend.app.models import Base, Statement, User
+    from backend.app.models import Base, PlanningLetter, Statement, User
     from backend.app.routers import admin
 except ModuleNotFoundError:
-    from app.models import Base, Statement, User
+    from app.models import Base, PlanningLetter, Statement, User
     from app.routers import admin
 
 
@@ -66,6 +66,35 @@ class StatementDateFilterTests(unittest.TestCase):
         self.db.add(statement)
         self.db.flush()
         return statement
+
+    def add_letter(
+        self,
+        user: User,
+        *,
+        kind: str = "exam",
+        period: str | None = "morning",
+        sent_at: datetime,
+    ) -> PlanningLetter:
+        req_id = f"req-{user.id}-{kind}-{period}-{int(sent_at.timestamp())}"
+        letter = PlanningLetter(
+            user_id=user.id,
+            kind=kind,
+            period=period,
+            event_date=date(2026, 10, 20),
+            event_time="11:00",
+            request_id=req_id[:36],
+            request_fingerprint=req_id[:64],
+            to_email=user.email,
+            subject="Test subject",
+            body="Test letter",
+            status="sent",
+            created_by="admin@example.test",
+            sent_at=sent_at,
+            created_at=sent_at,
+        )
+        self.db.add(letter)
+        self.db.flush()
+        return letter
 
     def list_users(self, **kwargs):
         return admin.admin_users(authorization=None, db=self.db, **kwargs)
@@ -185,6 +214,38 @@ class StatementDateFilterTests(unittest.TestCase):
         )
         self.assertEqual([item.id for item in dated_res.items], [late_reg_early_stmt.id])
 
+    def test_sent_letter_filters_and_sent_date(self):
+        u_none = self.add_user(name="NoLetter")
+        u_exam = self.add_user(name="ExamLetter")
+        u_rej = self.add_user(name="RejLetter")
+        u_cert = self.add_user(name="CertLetter")
+        u_fail = self.add_user(name="FailLetter")
+        u_cust = self.add_user(name="CustomLetter")
+
+        self.add_letter(u_exam, kind="exam", period="morning", sent_at=datetime(2026, 10, 10, 8))
+        self.add_letter(u_rej, kind="exam", period="rejection", sent_at=datetime(2026, 10, 11, 8))
+        self.add_letter(u_cert, kind="certificate", period="morning", sent_at=datetime(2026, 10, 12, 8))
+        self.add_letter(u_fail, kind="exam", period="exam_fail", sent_at=datetime(2026, 10, 13, 8))
+        self.add_letter(u_cust, kind="exam", period="custom", sent_at=datetime(2026, 10, 14, 8))
+
+        self.assertEqual([u.id for u in self.list_users(sent_exam_letter=True).items], [u_exam.id])
+        self.assertEqual([u.id for u in self.list_users(sent_rejection_letter=True).items], [u_rej.id])
+        self.assertEqual([u.id for u in self.list_users(sent_certificate_letter=True).items], [u_cert.id])
+        self.assertEqual([u.id for u in self.list_users(sent_fail_letter=True).items], [u_fail.id])
+        self.assertEqual([u.id for u in self.list_users(sent_custom_letter=True).items], [u_cust.id])
+
+        # Combining multiple sent-letter checkboxes returns matching users ordered by latest sent_at
+        combined = self.list_users(
+            sent_exam_letter=True, sent_custom_letter=True, sort="date_desc"
+        )
+        self.assertEqual([u.id for u in combined.items], [u_cust.id, u_exam.id])
+        self.assertNotIn(u_none.id, [u.id for u in combined.items])
+
+        # Date alone filters all users who received any letter on that date
+        by_date = self.list_users(sent_letter_date=date(2026, 10, 12))
+        self.assertEqual([u.id for u in by_date.items], [u_cert.id])
+
 
 if __name__ == "__main__":
     unittest.main()
+

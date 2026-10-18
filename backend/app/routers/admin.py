@@ -1473,6 +1473,12 @@ def admin_users(
     pending_fail_letter: bool = False,
     exam_candidate: bool = False,
     cert_candidate: bool = False,
+    sent_exam_letter: bool = False,
+    sent_rejection_letter: bool = False,
+    sent_certificate_letter: bool = False,
+    sent_fail_letter: bool = False,
+    sent_custom_letter: bool = False,
+    sent_letter_date: date | None = None,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
@@ -1595,6 +1601,71 @@ def admin_users(
             )
         )
 
+    has_sent_type_filter = (
+        sent_exam_letter
+        or sent_rejection_letter
+        or sent_certificate_letter
+        or sent_fail_letter
+        or sent_custom_letter
+    )
+    letter_match_cond = None
+    letter_ts_expr = func.coalesce(PlanningLetter.sent_at, PlanningLetter.created_at)
+    if has_sent_type_filter or sent_letter_date is not None:
+        rej_periods = ("rejection", "rej_send_only", "rejection_send_only")
+        fail_periods = ("exam_fail", "fail_send_only")
+        custom_periods = ("custom", "cust_send_only")
+        non_exam_periods = rej_periods + fail_periods + custom_periods
+        type_conds = []
+        if sent_exam_letter:
+            type_conds.append(
+                (PlanningLetter.kind == "exam")
+                & or_(
+                    PlanningLetter.period.is_(None),
+                    ~PlanningLetter.period.in_(non_exam_periods),
+                )
+            )
+        if sent_rejection_letter:
+            type_conds.append(PlanningLetter.period.in_(rej_periods))
+        if sent_certificate_letter:
+            type_conds.append(
+                (PlanningLetter.kind == "certificate")
+                & or_(
+                    PlanningLetter.period.is_(None),
+                    PlanningLetter.period.in_(("morning", "evening", "cert_am_send", "cert_pm_send")),
+                )
+            )
+        if sent_fail_letter:
+            type_conds.append(PlanningLetter.period.in_(fail_periods))
+        if sent_custom_letter:
+            type_conds.append(PlanningLetter.period.in_(custom_periods))
+        if not type_conds:
+            type_conds.append(
+                or_(
+                    PlanningLetter.period.is_(None),
+                    PlanningLetter.period != "cert_issued",
+                )
+            )
+
+        letter_match_cond = or_(*type_conds)
+        if sent_letter_date is not None:
+            try:
+                sent_day_start = datetime.combine(
+                    sent_letter_date, time.min, tzinfo=timezone(timedelta(hours=4))
+                ).astimezone(timezone.utc).replace(tzinfo=None)
+                sent_day_end = sent_day_start + timedelta(days=1)
+            except OverflowError:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="sent_letter_date is outside the supported range",
+                )
+            letter_match_cond = letter_match_cond & (letter_ts_expr >= sent_day_start) & (letter_ts_expr < sent_day_end)
+
+        stmt = stmt.where(
+            User.id.in_(
+                select(PlanningLetter.user_id).where(letter_match_cond)
+            )
+        )
+
     global_pending_pass_users = sum(
         1
         for h in exam_histories.values()
@@ -1658,7 +1729,17 @@ def admin_users(
         else:
             stmt = stmt.where(User.id == -1)
 
-    if all_statements and sort in ("date_desc", "date_asc"):
+    if letter_match_cond is not None and sort in ("date_desc", "date_asc"):
+        sent_ts_subq = (
+            select(func.max(letter_ts_expr))
+            .where(PlanningLetter.user_id == User.id, letter_match_cond)
+            .scalar_subquery()
+        )
+        if sort == "date_asc":
+            stmt = stmt.order_by(sent_ts_subq.asc(), User.created_at.asc())
+        else:
+            stmt = stmt.order_by(sent_ts_subq.desc(), User.created_at.desc())
+    elif all_statements and sort in ("date_desc", "date_asc"):
         stmt_ts_query = select(func.max(Statement.created_at)).where(Statement.user_id == User.id)
         if statement_date is not None:
             stmt_ts_query = stmt_ts_query.where(
