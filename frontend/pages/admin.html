@@ -18,14 +18,14 @@
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
     <script src="../scripts/admin/certificate.js?v=20261018-cand1" defer></script>
     <script src="../scripts/admin/exam-schedules.js?v=20261018-cert30d" defer></script>
-    <script src="../scripts/admin/users.js?v=20261018-sent1" defer></script>
+    <script src="../scripts/admin/users.js?v=20261018-contracts1" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
-    <script src="../scripts/admin/documents.js?v=20261018-docs1" defer></script>
+    <script src="../scripts/admin/documents.js?v=20261018-contracts1" defer></script>
     <script src="../scripts/admin/ai-assistant.js?v=20261018-doc2live1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261018-uiredesign1" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261018-contracts1" />
   </head>
   <body>
     <header>
@@ -455,7 +455,14 @@
       </section>
       <section id="documents-section" class="exam-settings" style="display:none;">
         <div class="exam-content">
-          <div class="exam-blocks-header" aria-label="დოკუმენტები">
+          <div class="exam-blocks-header" aria-label="ხელშეკრულებების მართვა">
+            <h2 class="exam-blocks-title">ხელშეკრულებების ატვირთვა (4 ძირითადი ხელშეკრულება)</h2>
+          </div>
+          <div class="contract-slots-panel" id="contractSlotsGrid" aria-label="ოთხივე ხელშეკრულების ატვირთვის ველი">
+            <!-- 4 ხელშეკრულების სლოტი იტვირთება JS-ით (exam, cert_a, cert_b, cert_c) -->
+          </div>
+
+          <div class="exam-blocks-header" aria-label="დოკუმენტები" style="margin-top:28px;">
             <h2 class="exam-blocks-title">საიტის დოკუმენტები (დოკუმენტების გვერდი)</h2>
           </div>
           <!-- დოკუმენტის დამატების ფორმა -->
@@ -465,16 +472,16 @@
               <input type="text" id="documentTitle" class="document-input" placeholder="დოკუმენტის სათაური" />
             </div>
             <div class="document-form-row">
-              <label class="document-label">ფაილი (.docx ან .pdf):</label>
+              <label class="document-label">ფაილი (.docx, .md ან .pdf):</label>
               <div class="document-file-upload">
-                <input type="file" id="documentFile" accept=".docx,.pdf" style="display:none;" />
+                <input type="file" id="documentFile" accept=".docx,.md,.pdf" style="display:none;" />
                 <button type="button" id="documentFileChoose" class="file-choose-btn">ფაილის არჩევა</button>
                 <span id="documentFileName" class="file-name-display">ფაილი არჩეული არ არის</span>
               </div>
             </div>
             <div class="document-form-row">
               <label class="document-label">შიგთავსი (preview/რედაქტირება):</label>
-              <div id="documentContent" class="document-editor" contenteditable="true" placeholder="აირჩიეთ Word ფაილი ან ჩაწერეთ ტექსტი..."></div>
+              <div id="documentContent" class="document-editor" contenteditable="true" placeholder="აირჩიეთ Word/Markdown ფაილი ან ჩაწერეთ ტექსტი..."></div>
             </div>
             <div class="document-form-actions">
               <button type="button" id="documentAddBtn" class="primary-btn">დამატება</button>
@@ -924,12 +931,34 @@
       </div>
     </div>
 
+    <div id="userContractPreviewOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal results-modal--wide" role="dialog" aria-modal="true" aria-labelledby="userContractPreviewTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="userContractPreviewTitle">აწყობილი ხელშეკრულება</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="userContractPreviewUserMeta"></span>
+              <span class="meta-item" id="userContractPreviewDateMeta"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="secondary-btn" id="userContractDownloadDocx">⬇ Word (.docx)</button>
+            <button type="button" class="primary-btn" id="userContractDownloadPdf">⬇ PDF ჩამოტვირთვა</button>
+            <button type="button" class="modal-close" id="userContractPreviewClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div id="userContractPreviewBody" class="admin-contract-preview-sheet"></div>
+        </div>
+      </div>
+    </div>
+
     <footer>
       <div class="footer-bottom">
         <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია</p>
       </div>
     </footer>
 
-    <script src="../scripts/admin.js?v=20261018-noexam1" defer></script>
+    <script src="../scripts/admin.js?v=20261018-contracts1" defer></script>
   </body>
 </html>

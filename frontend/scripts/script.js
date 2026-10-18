@@ -830,6 +830,8 @@ document.addEventListener('DOMContentLoaded', () => {
             id: updated.id ?? existingUser.id,
             firstName: updated.first_name || newFirst,
             lastName: updated.last_name || newLast,
+            personalId: updated.personal_id ?? existingUser.personalId,
+            phone: updated.phone ?? existingUser.phone,
             code: updated.code ?? existingUser.code,
             isAdmin: updated.is_admin !== undefined ? !!updated.is_admin : !!existingUser.isAdmin,
             email: updated.email ?? existingUser.email,
@@ -899,6 +901,8 @@ document.addEventListener('DOMContentLoaded', () => {
           id: userData.id,
           firstName: userData.first_name,
           lastName: userData.last_name,
+          personalId: userData.personal_id || '',
+          phone: userData.phone || '',
           code: userData.code,
           isAdmin: !!userData.is_admin,
           email: userData.email,
@@ -907,6 +911,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveCurrentUser(normalizedUser);
         updateBanner();
         updateAdminLinkVisibility();
+        document.dispatchEvent(new CustomEvent('user:refreshed', { detail: { user: normalizedUser } }));
         checkAndEnforceGeorgianName(normalizedUser);
       } catch (error) {
         console.error('Failed to refresh user data:', error);
@@ -1074,6 +1079,8 @@ document.addEventListener('DOMContentLoaded', () => {
             id: userData.id,
             firstName: userData.first_name,
             lastName: userData.last_name,
+            personalId: userData.personal_id || '',
+            phone: userData.phone || '',
             code: userData.code,
             isAdmin: !!userData.is_admin,
             email: userData.email,
@@ -1407,6 +1414,8 @@ document.addEventListener('DOMContentLoaded', () => {
           id: data.id,
           firstName: data.first_name || registerData.firstName,
           lastName: data.last_name || registerData.lastName,
+          personalId: data.personal_id || registerData.personalId || '',
+          phone: data.phone || registerData.phone || '',
           code: data.code,
           isAdmin: !!data.is_admin,
           email: data.email,

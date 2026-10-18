@@ -138,7 +138,12 @@
         if (window.SiteDocuments?.fetchSiteDocuments) {
           docs = await window.SiteDocuments.fetchSiteDocuments(true);
         } else {
-          const response = await fetch(`${getApiBase()}/documents`, { cache: 'no-cache' });
+          const headers = {};
+          try {
+            const token = window.Auth?.getToken?.() || localStorage.getItem('access_token');
+            if (token) headers.Authorization = `Bearer ${token}`;
+          } catch {}
+          const response = await fetch(`${getApiBase()}/documents`, { cache: 'no-cache', headers });
           if (!response.ok) throw new Error('Failed to load documents');
           const data = await response.json();
           docs = data.items || [];
@@ -150,7 +155,8 @@
         try {
           const urlParams = new URLSearchParams(window.location.search);
           const requestedDocId = urlParams.get('doc');
-          if (requestedDocId) {
+          if (requestedDocId && !loadDocuments._openedInitialDoc) {
+            loadDocuments._openedInitialDoc = true;
             const openRequested = () => {
               window.SiteDocuments?.openDocumentById?.(requestedDocId);
             };
@@ -221,6 +227,10 @@
         }
       }
     });
+
+    document.addEventListener('auth:login', () => { void loadDocuments(); });
+    document.addEventListener('auth:logout', () => { void loadDocuments(); });
+    document.addEventListener('user:refreshed', () => { void loadDocuments(); });
 
     void loadDocuments();
   }

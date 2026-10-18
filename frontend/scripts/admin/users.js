@@ -13,6 +13,8 @@
       handleAdminErrorResponse = () => {},
       openOverlay = () => {},
       closeOverlay = () => {},
+      loadExternalScript = () => Promise.resolve(),
+      arrayBufferToBase64 = () => '',
       examSchedules,
     } = context;
     const { onShowResults, onShowStatements, onShowCertificate, onShowMultiApartmentResults, onShowMultiFunctionalResults } = context;
@@ -864,6 +866,7 @@
                     </div>
                   </div>
                 </div>
+                <section class="user-contracts-section" aria-label="ხელშეკრულებები"></section>
                 <section class="user-exam-schedules" aria-label="გამოცდის დაგეგმვა"></section>
               </div>
             </div>
@@ -899,7 +902,11 @@
         });
         const targetCard = findUserCard(id);
         if (targetCard) {
-          syncCandidateControls(targetCard, cachedUsersById.get(id) || updated);
+          const freshUser = cachedUsersById.get(id) || updated;
+          syncCandidateControls(targetCard, freshUser);
+          if (targetCard.classList.contains('open')) {
+            void renderUserContractsSection(targetCard, freshUser);
+          }
         }
         await render({ preserveExisting: true, keepPage: true });
         return true;
@@ -916,14 +923,17 @@
       const schedulesController = examSchedules?.mount?.(card.querySelector('.user-exam-schedules'), user, {
         onChanged: refreshAfterScheduleChange,
       });
+      mountUserContractsEvents(card, user);
       const toggle = card.querySelector('.head-toggle');
       toggle?.addEventListener('click', () => {
         const isOpen = card.classList.contains('open');
         card.classList.toggle('open', !isOpen);
         card.querySelector('.block-questions')?.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
         toggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-        if (!isOpen) schedulesController?.load?.();
-        else if (listIsStale) void refreshLiveUserStates({ force: true });
+        if (!isOpen) {
+          schedulesController?.load?.();
+          void renderUserContractsSection(card, cachedUsersById.get(String(user.id)) || user);
+        } else if (listIsStale) void refreshLiveUserStates({ force: true });
       });
 
       const candCheckbox = card.querySelector('.chk-candidate-status');
@@ -1335,6 +1345,9 @@
       if (deletePhoto) deletePhoto.style.display = user.photo_filename ? 'inline-flex' : 'none';
       updateUserCardColor(user.id, user.certificate || user.certificate_info, false);
       syncExamOutcomeUI(card, user);
+      if (card.classList.contains('open')) {
+        void renderUserContractsSection(card, user);
+      }
     }
 
     function normalizeUserValue(value) {
@@ -1959,6 +1972,585 @@
         }
       });
     }
+
+    // ----------------- Assembled Contracts per User Card -----------------
+    const USER_CONTRACT_SLOTS = [
+      {
+        key: 'exam',
+        code: 'GIPC-CON-004',
+        badge: 'საგამოცდო',
+        badgeClass: 'is-exam',
+        shortTitle: 'საგამოცდო ხელშეკრულება',
+        category: null,
+      },
+      {
+        key: 'cert_a',
+        code: 'GIPC-CON-001',
+        badge: 'კატეგორია A',
+        badgeClass: 'is-cert-a',
+        shortTitle: 'სასერტიფიკაციო — შენობა-ნაგებობის არქიტექტორი',
+        category: 'A',
+      },
+      {
+        key: 'cert_b',
+        code: 'GIPC-CON-002',
+        badge: 'კატეგორია B',
+        badgeClass: 'is-cert-b',
+        shortTitle: 'სასერტიფიკაციო — პროექტის შემსწავლელი სპეციალისტი',
+        category: 'B',
+      },
+      {
+        key: 'cert_c',
+        code: 'GIPC-CON-003',
+        badge: 'კატეგორია C',
+        badgeClass: 'is-cert-c',
+        shortTitle: 'სასერტიფიკაციო — არქიტექტურული პროექტის ექსპერტი',
+        category: 'C',
+      },
+    ];
+
+    let cachedContractDocs = null;
+    let contractDocsPromise = null;
+    let activeContractModalState = null;
+    let contractModalBound = false;
+    let contractPdfFontPromise = null;
+
+    function formatTodayGeorgianDate() {
+      try {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Asia/Tbilisi',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }).formatToParts(new Date());
+        const d = parts.find((p) => p.type === 'day')?.value || '01';
+        const m = parts.find((p) => p.type === 'month')?.value || '01';
+        const y = parts.find((p) => p.type === 'year')?.value || '2026';
+        return `${d}.${m}.${y}`;
+      } catch {
+        const now = new Date();
+        const d = String(now.getDate()).padStart(2, '0');
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        return `${d}.${m}.${now.getFullYear()}`;
+      }
+    }
+
+    function extractUserContractFields(user) {
+      const first = String(user?.first_name || user?.firstName || '').trim();
+      const last = String(user?.last_name || user?.lastName || '').trim();
+      const fullName = `${first} ${last}`.trim();
+      return {
+        full_name: fullName,
+        personal_id: String(user?.personal_id || user?.personalId || '').trim(),
+        phone: String(user?.phone || '').trim(),
+        email: String(user?.email || '').trim(),
+        date: formatTodayGeorgianDate(),
+      };
+    }
+
+    function populateContractHtmlForUser(rawHtml, user) {
+      if (!rawHtml || !user) return rawHtml || '';
+      const fields = extractUserContractFields(user);
+      let out = String(rawHtml);
+      const rules = [
+        [
+          /(სახელი(?:\s*,|\s+და)\s*გვარი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+          fields.full_name,
+        ],
+        [
+          /(პირადი\s+ნომერი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+          fields.personal_id,
+        ],
+        [
+          /(ტელეფონი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+          fields.phone,
+        ],
+        [
+          /(ელ\.?\s*ფოსტა\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+          fields.email,
+        ],
+        [
+          /(თარიღი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+          fields.date,
+        ],
+      ];
+      rules.forEach(([regex, val]) => {
+        if (!val) return;
+        const safeVal = escapeHtml(val);
+        out = out.replace(regex, (_, prefix) => `${prefix}<strong class="contract-filled-value">${safeVal}</strong>`);
+      });
+      return out;
+    }
+
+    async function fetchContractTemplates(force = false) {
+      if (!force && Array.isArray(cachedContractDocs)) return cachedContractDocs;
+      if (!force && contractDocsPromise) return contractDocsPromise;
+      contractDocsPromise = (async () => {
+        try {
+          const resp = await fetch(`${API_BASE}/admin/documents`, {
+            headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          });
+          if (!resp.ok) return cachedContractDocs || [];
+          const data = await resp.json();
+          cachedContractDocs = Array.isArray(data?.items) ? data.items : [];
+          return cachedContractDocs;
+        } catch {
+          return cachedContractDocs || [];
+        } finally {
+          contractDocsPromise = null;
+        }
+      })();
+      return contractDocsPromise;
+    }
+
+    function findTemplateDocForSlot(docs, slotDef) {
+      if (!Array.isArray(docs)) return null;
+      return (
+        docs.find(
+          (d) =>
+            d.contract_type === slotDef.key ||
+            (d.title && d.title.includes(slotDef.code)) ||
+            (d.content && d.content.includes(slotDef.code))
+        ) || null
+      );
+    }
+
+    function resolveUserPreferredCategory(user) {
+      const certLevel = (user?.certificate?.level || user?.certificate_info?.level || '').toLowerCase();
+      if (certLevel === 'architect' || certLevel === 'architect_expert') return 'A';
+      if (certLevel === 'municipal') return 'B';
+      if (certLevel === 'expert') return 'C';
+      const candCat = String(user?.candidate_category || user?.requested_category || '').toUpperCase().trim();
+      if (candCat === 'A' || candCat === 'B' || candCat === 'C') return candCat;
+      return null;
+    }
+
+    async function renderUserContractsSection(card, user) {
+      const container = card?.querySelector('.user-contracts-section');
+      if (!container || !user) return;
+      if (!container.innerHTML) {
+        container.innerHTML = '<div class="user-contracts-loading">ხელშეკრულებები იტვირთება...</div>';
+      }
+      const docs = await fetchContractTemplates(false);
+      const fields = extractUserContractFields(user);
+      const prefCategory = resolveUserPreferredCategory(user);
+
+      const cardsHtml = USER_CONTRACT_SLOTS.map((slot) => {
+        const doc = findTemplateDocForSlot(docs, slot);
+        const isRecommended = Boolean(slot.category && prefCategory === slot.category);
+        const recBadge = isRecommended
+          ? '<span class="user-contract-rec-badge" title="პირის არჩეული / მინიჭებული კატეგორია">★ შესაბამისი კატეგორია</span>'
+          : '';
+        if (!doc) {
+          return `
+            <div class="user-contract-card is-missing" data-contract-slot="${escapeHtml(slot.key)}">
+              <div class="user-contract-card-top">
+                <span class="contract-slot-badge ${escapeHtml(slot.badgeClass)}">${escapeHtml(slot.badge)}</span>
+                <span class="user-contract-code">${escapeHtml(slot.code)}</span>
+              </div>
+              <div class="user-contract-title">${escapeHtml(slot.shortTitle)}</div>
+              <div class="user-contract-empty">შაბლონი არ არის ატვირთული</div>
+            </div>
+          `;
+        }
+        return `
+          <div class="user-contract-card${isRecommended ? ' is-recommended' : ''}" data-contract-slot="${escapeHtml(slot.key)}" data-doc-id="${escapeHtml(String(doc.id))}">
+            <div class="user-contract-card-top">
+              <span class="contract-slot-badge ${escapeHtml(slot.badgeClass)}">${escapeHtml(slot.badge)}</span>
+              ${recBadge}
+              <span class="user-contract-code">${escapeHtml(slot.code)}</span>
+            </div>
+            <div class="user-contract-title" data-contract-action="preview" role="button" tabindex="0">${escapeHtml(slot.shortTitle)}</div>
+            <div class="user-contract-ready-meta">✓ აწყობილია: <strong>${escapeHtml(fields.full_name || '—')}</strong> · ${escapeHtml(fields.date)}</div>
+            <div class="user-contract-actions">
+              <button type="button" class="user-contract-btn is-preview" data-contract-action="preview">ნახვა</button>
+              <button type="button" class="user-contract-btn is-docx" data-contract-action="docx" title="აწყობილი Word (.docx) ფაილის ჩამოტვირთვა">⬇ Word</button>
+              <button type="button" class="user-contract-btn is-pdf" data-contract-action="pdf" title="აწყობილი PDF ფაილის ჩამოტვირთვა">⬇ PDF</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="user-contracts-header">
+          <div class="user-section-title">ხელშეკრულებები (აწყობილი პირის მონაცემებითა და თარიღით)</div>
+          <div class="user-contracts-prefill-bar">
+            <span><strong>სახელი, გვარი:</strong> ${escapeHtml(fields.full_name || '—')}</span>
+            <span><strong>პ/ნ:</strong> ${escapeHtml(fields.personal_id || '—')}</span>
+            <span><strong>ტელ:</strong> ${escapeHtml(fields.phone || '—')}</span>
+            <span><strong>ელ. ფოსტა:</strong> ${escapeHtml(fields.email || '—')}</span>
+            <span><strong>თარიღი:</strong> ${escapeHtml(fields.date)}</span>
+          </div>
+        </div>
+        <div class="user-contracts-grid">${cardsHtml}</div>
+      `;
+    }
+
+    function downloadUserContractDocx(doc, user) {
+      if (!doc?.id || !user?.id) return;
+      let token = '';
+      try {
+        token = localStorage.getItem('auth_token') || '';
+      } catch {}
+      const params = new URLSearchParams({ user_id: String(user.id) });
+      if (token) params.set('token', token);
+      const url = `${API_BASE}/documents/${doc.id}/download?${params.toString()}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    async function downloadUserContractPdf(doc, user, triggerBtn = null) {
+      if (!doc || !user) return;
+      if (triggerBtn) triggerBtn.disabled = true;
+      try {
+        if (!global.jspdf?.jsPDF) {
+          await loadExternalScript('../vendor/jspdf.umd.min.js');
+        }
+        const jsPDF = global.jspdf?.jsPDF;
+        if (!jsPDF) throw new Error('jsPDF unavailable');
+
+        const pdf = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+        const fontName = 'DejaVuSansUnicode';
+        if (!pdf.getFontList?.()?.[fontName]) {
+          if (!contractPdfFontPromise) {
+            const fontUrl = new URL('../assets/fonts/dejavu-sans.ttf', global.location.href).toString();
+            contractPdfFontPromise = fetch(fontUrl)
+              .then((r) => {
+                if (!r.ok) throw new Error('Font download failed');
+                return r.arrayBuffer();
+              })
+              .then((buf) => arrayBufferToBase64(buf))
+              .catch((err) => {
+                contractPdfFontPromise = null;
+                throw err;
+              });
+          }
+          const base64 = await contractPdfFontPromise;
+          pdf.addFileToVFS('DejaVuSans.ttf', base64);
+          pdf.addFont('DejaVuSans.ttf', fontName, 'normal');
+          pdf.addFont('DejaVuSans.ttf', fontName, 'bold');
+          pdf.addFont('DejaVuSans.ttf', fontName, 'italic');
+          pdf.addFont('DejaVuSans.ttf', fontName, 'bolditalic');
+        }
+        pdf.setFont(fontName, 'normal');
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const marginX = 48;
+        const marginTop = 52;
+        const marginBottom = 54;
+        const usableWidth = pageWidth - marginX * 2;
+        let cursorY = marginTop;
+
+        const ensureSpace = (neededHeight) => {
+          if (cursorY + neededHeight > pageHeight - marginBottom) {
+            pdf.addPage();
+            cursorY = marginTop;
+          }
+        };
+
+        const assembledHtml = populateContractHtmlForUser(doc.content || '', user);
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = assembledHtml;
+
+        const docTitle = String(doc.title || 'ხელშეკრულება').replace(/\s+/g, ' ').trim();
+
+        pdf.setFont(fontName, 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text('საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)', marginX, cursorY);
+        cursorY += 18;
+
+        pdf.setFont(fontName, 'bold');
+        pdf.setFontSize(14);
+        pdf.setTextColor(28, 70, 140);
+        const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
+        titleLines.forEach((line) => {
+          ensureSpace(19);
+          pdf.text(line, marginX, cursorY);
+          cursorY += 19;
+        });
+
+        cursorY += 4;
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.75);
+        pdf.line(marginX, cursorY, pageWidth - marginX, cursorY);
+        cursorY += 16;
+
+        const writeWrappedBlock = (text, opts = {}) => {
+          const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+          if (!normalized) return;
+          const {
+            x = marginX,
+            width = usableWidth,
+            fontStyle = 'normal',
+            fontSize = 10.5,
+            lineHeight = 16,
+            color = [30, 41, 59],
+            spaceBefore = 0,
+            spaceAfter = 7,
+            prefix = '',
+            prefixX = marginX,
+          } = opts;
+
+          if (spaceBefore > 0 && cursorY > marginTop + 10) cursorY += spaceBefore;
+          pdf.setFont(fontName, fontStyle);
+          pdf.setFontSize(fontSize);
+          pdf.setTextColor(color[0], color[1], color[2]);
+
+          const lines = pdf.splitTextToSize(normalized, width);
+          if (!lines.length) return;
+          if (fontStyle === 'bold' && spaceBefore >= 8) {
+            ensureSpace(Math.min(lines.length * lineHeight + 24, 90));
+          }
+          lines.forEach((line, idx) => {
+            ensureSpace(lineHeight);
+            if (idx === 0 && prefix) pdf.text(prefix, prefixX, cursorY);
+            pdf.text(line, x, cursorY);
+            cursorY += lineHeight;
+          });
+          cursorY += spaceAfter;
+        };
+
+        const renderTableNode = (tableEl) => {
+          const rows = Array.from(tableEl.querySelectorAll('tr'));
+          if (!rows.length) return;
+          let maxCols = 0;
+          const parsedRows = rows.map((tr) => {
+            const cells = Array.from(tr.querySelectorAll('th, td'));
+            if (cells.length > maxCols) maxCols = cells.length;
+            const isHeader = cells.every((c) => c.tagName === 'TH');
+            return {
+              isHeader,
+              texts: cells.map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()),
+            };
+          });
+          if (!maxCols) return;
+          const colWidth = usableWidth / maxCols;
+          const cellPadX = 6;
+          const cellPadY = 5;
+          const lineH = 13.5;
+          if (cursorY > marginTop + 10) cursorY += 6;
+
+          parsedRows.forEach((row) => {
+            pdf.setFont(fontName, row.isHeader ? 'bold' : 'normal');
+            pdf.setFontSize(9.5);
+            const cellLines = [];
+            let maxLines = 1;
+            for (let c = 0; c < maxCols; c++) {
+              const txt = row.texts[c] || '';
+              const wrapped = pdf.splitTextToSize(txt, Math.max(24, colWidth - cellPadX * 2));
+              cellLines.push(wrapped);
+              if (wrapped.length > maxLines) maxLines = wrapped.length;
+            }
+            const rowHeight = maxLines * lineH + cellPadY * 2;
+            ensureSpace(rowHeight + 4);
+            for (let c = 0; c < maxCols; c++) {
+              const cellX = marginX + c * colWidth;
+              pdf.setDrawColor(203, 213, 225);
+              pdf.setLineWidth(0.5);
+              if (row.isHeader) {
+                pdf.setFillColor(248, 250, 252);
+                pdf.rect(cellX, cursorY, colWidth, rowHeight, 'FD');
+                pdf.setTextColor(28, 70, 140);
+              } else {
+                pdf.rect(cellX, cursorY, colWidth, rowHeight, 'S');
+                pdf.setTextColor(30, 41, 59);
+              }
+              const lines = cellLines[c] || [];
+              lines.forEach((ln, idx) => {
+                pdf.text(ln, cellX + cellPadX, cursorY + cellPadY + 9.5 + idx * lineH);
+              });
+            }
+            cursorY += rowHeight;
+          });
+          cursorY += 10;
+        };
+
+        const renderDomNodes = (parent) => {
+          Array.from(parent.childNodes).forEach((node) => {
+            if (node.nodeType === 3) {
+              const txt = (node.nodeValue || '').replace(/\s+/g, ' ').trim();
+              if (txt) writeWrappedBlock(txt);
+              return;
+            }
+            if (node.nodeType !== 1) return;
+            const tag = (node.tagName || '').toUpperCase();
+            const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!text && tag !== 'TABLE') return;
+
+            if (tag === 'H1' || tag === 'H2') {
+              writeWrappedBlock(text, {
+                fontStyle: 'bold',
+                fontSize: 12,
+                lineHeight: 17,
+                color: [28, 70, 140],
+                spaceBefore: 10,
+                spaceAfter: 6,
+              });
+              return;
+            }
+            if (tag === 'H3' || tag === 'H4') {
+              writeWrappedBlock(text, {
+                fontStyle: 'bold',
+                fontSize: 11,
+                lineHeight: 16,
+                color: [15, 23, 42],
+                spaceBefore: 8,
+                spaceAfter: 5,
+              });
+              return;
+            }
+            if (tag === 'TABLE') {
+              renderTableNode(node);
+              return;
+            }
+            if (tag === 'UL' || tag === 'OL') {
+              const items = Array.from(node.children).filter((el) => el.tagName === 'LI');
+              items.forEach((li, idx) => {
+                const liText = (li.textContent || '').replace(/\s+/g, ' ').trim();
+                if (!liText) return;
+                writeWrappedBlock(liText, {
+                  x: marginX + 18,
+                  width: usableWidth - 18,
+                  prefix: tag === 'OL' ? `${idx + 1}.` : '•',
+                  prefixX: marginX + 4,
+                  spaceAfter: 5,
+                });
+              });
+              return;
+            }
+            writeWrappedBlock(text);
+          });
+        };
+
+        renderDomNodes(tempContainer);
+
+        const totalPages = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          pdf.setPage(i);
+          const footerY = pageHeight - 26;
+          pdf.setDrawColor(226, 232, 240);
+          pdf.setLineWidth(0.5);
+          pdf.line(marginX, footerY - 12, pageWidth - marginX, footerY - 12);
+          pdf.setFont(fontName, 'normal');
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(100, 116, 139);
+          pdf.text('gipc.org.ge', marginX, footerY);
+          const pageLabel = `გვერდი ${i} / ${totalPages}`;
+          const pageLabelWidth = pdf.getTextWidth(pageLabel);
+          pdf.text(pageLabel, pageWidth - marginX - pageLabelWidth, footerY);
+        }
+
+        const fields = extractUserContractFields(user);
+        const safeName = `${docTitle}_${fields.full_name || user.id}`
+          .replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ')
+          .replace(/\s+/g, '_')
+          .slice(0, 120);
+        pdf.save(`${safeName}.pdf`);
+      } catch (err) {
+        console.error('Error generating contract PDF:', err);
+        showToast('PDF ფაილის ჩამოტვირთვა ვერ მოხერხდა', 'error');
+      } finally {
+        if (triggerBtn) triggerBtn.disabled = false;
+      }
+    }
+
+    function ensureContractPreviewModalBound() {
+      if (contractModalBound) return;
+      const overlay = document.getElementById('userContractPreviewOverlay');
+      if (!overlay) return;
+      contractModalBound = true;
+
+      const closeBtn = document.getElementById('userContractPreviewClose');
+      const docxBtn = document.getElementById('userContractDownloadDocx');
+      const pdfBtn = document.getElementById('userContractDownloadPdf');
+
+      closeBtn?.addEventListener('click', () => closeOverlay(overlay));
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeOverlay(overlay);
+      });
+      docxBtn?.addEventListener('click', () => {
+        if (activeContractModalState) {
+          downloadUserContractDocx(activeContractModalState.doc, activeContractModalState.user);
+        }
+      });
+      pdfBtn?.addEventListener('click', () => {
+        if (activeContractModalState) {
+          void downloadUserContractPdf(activeContractModalState.doc, activeContractModalState.user, pdfBtn);
+        }
+      });
+    }
+
+    function openUserContractPreviewModal(slotDef, doc, user) {
+      ensureContractPreviewModalBound();
+      const overlay = document.getElementById('userContractPreviewOverlay');
+      const titleEl = document.getElementById('userContractPreviewTitle');
+      const userMetaEl = document.getElementById('userContractPreviewUserMeta');
+      const dateMetaEl = document.getElementById('userContractPreviewDateMeta');
+      const bodyEl = document.getElementById('userContractPreviewBody');
+      if (!overlay || !bodyEl) return;
+
+      const fields = extractUserContractFields(user);
+      activeContractModalState = { slotDef, doc, user };
+
+      if (titleEl) titleEl.textContent = doc.title || slotDef?.shortTitle || 'ხელშეკრულება';
+      if (userMetaEl) {
+        userMetaEl.textContent = `${fields.full_name || '—'} (პ/ნ: ${fields.personal_id || '—'})`;
+      }
+      if (dateMetaEl) {
+        dateMetaEl.textContent = `თარიღი: ${fields.date}`;
+      }
+
+      bodyEl.innerHTML = populateContractHtmlForUser(doc.content || '', user);
+      openOverlay(overlay);
+    }
+
+    function mountUserContractsEvents(card, user) {
+      const container = card.querySelector('.user-contracts-section');
+      if (!container) return;
+
+      container.addEventListener('click', async (event) => {
+        const actionEl = event.target.closest('[data-contract-action]');
+        if (!actionEl) return;
+        const contractCard = actionEl.closest('.user-contract-card');
+        if (!contractCard) return;
+
+        const slotKey = contractCard.getAttribute('data-contract-slot');
+        const slotDef = USER_CONTRACT_SLOTS.find((s) => s.key === slotKey);
+        const docs = await fetchContractTemplates(false);
+        const doc = slotDef ? findTemplateDocForSlot(docs, slotDef) : null;
+        if (!doc) {
+          showToast('ხელშეკრულების შაბლონი არ არის ატვირთული', 'error');
+          return;
+        }
+
+        const currentUser = cachedUsersById.get(String(card.dataset.id)) || user;
+        const action = actionEl.getAttribute('data-contract-action');
+
+        if (action === 'preview') {
+          openUserContractPreviewModal(slotDef, doc, currentUser);
+        } else if (action === 'docx') {
+          downloadUserContractDocx(doc, currentUser);
+        } else if (action === 'pdf') {
+          await downloadUserContractPdf(doc, currentUser, actionEl);
+        }
+      });
+    }
+
+    global.addEventListener('admin:contractsChanged', () => {
+      cachedContractDocs = null;
+      cardsById.forEach((card, id) => {
+        if (card.classList.contains('open')) {
+          const u = cachedUsersById.get(String(id));
+          if (u) void renderUserContractsSection(card, u);
+        }
+      });
+    });
 
     return {
       init,

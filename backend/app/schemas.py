@@ -1083,6 +1083,7 @@ class SiteDocumentOut(BaseModel):
     title: str
     content: str
     order_index: int
+    contract_type: Optional[str] = None
     filename: Optional[str] = None
     file_size_bytes: Optional[int] = None
     download_url: Optional[str] = None

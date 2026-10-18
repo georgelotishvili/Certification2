@@ -116,20 +116,132 @@
     return 'http://127.0.0.1:8000';
   }
 
+  function getOptionalAuthHeaders() {
+    try {
+      const token = window.Auth?.getToken?.() || localStorage.getItem('access_token');
+      if (token) return { Authorization: `Bearer ${token}` };
+    } catch {}
+    return {};
+  }
+
+  function getCurrentUserForContract() {
+    try {
+      if (!isLoggedIn()) return null;
+      const raw = localStorage.getItem('currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function formatTodayDateKa() {
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    return `${dd}.${mm}.${yyyy}`;
+  }
+
+  function populateContractHtmlForCurrentUser(html) {
+    if (!html) return '';
+    const user = getCurrentUserForContract();
+    if (!user) return String(html);
+
+    const first = String(user.firstName || user.first_name || '').trim();
+    const last = String(user.lastName || user.last_name || '').trim();
+    const fullName = `${first} ${last}`.trim();
+    const personalId = String(user.personalId || user.personal_id || '').trim();
+    const phone = String(user.phone || '').trim();
+    const email = String(user.email || '').trim();
+    const dateStr = formatTodayDateKa();
+
+    let out = String(html);
+    out = out.replace(/\[თარიღი\]/g, escapeHtml(dateStr));
+    if (fullName) {
+      out = out.replace(/\[სახელი,\s*გვარი\]/g, escapeHtml(fullName));
+      out = out.replace(/\[სახელი\s+გვარი\]/g, escapeHtml(fullName));
+    }
+    if (personalId) {
+      out = out.replace(/\[პირადი\s*ნომერი\]/g, escapeHtml(personalId));
+    }
+    if (phone) {
+      out = out.replace(/\[ტელეფონი\]/g, escapeHtml(phone));
+    }
+    if (email) {
+      out = out.replace(/\[ელ\.?\s*ფოსტა\]/g, escapeHtml(email));
+    }
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(out, 'text/html');
+      doc.querySelectorAll('tr').forEach((tr) => {
+        const cells = tr.querySelectorAll('td, th');
+        if (cells.length < 2) return;
+        const label = (cells[0].textContent || '').replace(/\s+/g, ' ').trim();
+        const valText = (cells[1].textContent || '').replace(/\s+/g, ' ').trim();
+        const isPlaceholder = !valText || /^\[.*\]$/.test(valText) || /^_{2,}$/.test(valText) || valText === '—' || valText === '-';
+        if (!isPlaceholder) return;
+        if (label.includes('სახელი') && label.includes('გვარი') && fullName) {
+          cells[1].textContent = fullName;
+        } else if (label.includes('პირადი ნომერი') && personalId) {
+          cells[1].textContent = personalId;
+        } else if (label.includes('ტელეფონ') && phone) {
+          cells[1].textContent = phone;
+        } else if ((label.includes('ელ. ფოსტა') || label.includes('ელ-ფოსტა') || label.includes('ელფოსტა')) && email) {
+          cells[1].textContent = email;
+        }
+      });
+      out = doc.body.innerHTML;
+    } catch {}
+
+    return out;
+  }
+
   // Site Documents - dynamic loading from API with sessionStorage cache
   let cachedDocuments = null;
+  let cachedDocumentsKey = null;
   let currentModalDoc = null;
-  const SITE_DOCS_CACHE_KEY = 'gipc_site_docs_v1';
+  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v2_';
+
+  function getSiteDocsCacheKey() {
+    const user = getCurrentUserForContract();
+    const uid = user?.id || user?.email || 'guest';
+    return `${SITE_DOCS_CACHE_PREFIX}${uid}`;
+  }
+
+  function invalidateSiteDocumentsCache() {
+    cachedDocuments = null;
+    cachedDocumentsKey = null;
+    try {
+      Object.keys(sessionStorage).forEach((k) => {
+        if (k.startsWith('gipc_site_docs_')) sessionStorage.removeItem(k);
+      });
+    } catch {}
+  }
+
+  document.addEventListener('auth:login', invalidateSiteDocumentsCache);
+  document.addEventListener('auth:logout', invalidateSiteDocumentsCache);
+  document.addEventListener('user:refreshed', invalidateSiteDocumentsCache);
 
   async function fetchSiteDocuments(forceRefresh = false) {
-    if (!forceRefresh && cachedDocuments) return cachedDocuments;
+    const cacheKey = getSiteDocsCacheKey();
+    if (!forceRefresh && cachedDocuments && cachedDocumentsKey === cacheKey) {
+      return cachedDocuments.map((d) => ({
+        ...d,
+        content: populateContractHtmlForCurrentUser(d.content || ''),
+      }));
+    }
     if (!forceRefresh) {
       try {
-        const stored = sessionStorage.getItem(SITE_DOCS_CACHE_KEY);
+        const stored = sessionStorage.getItem(cacheKey);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
-            cachedDocuments = parsed;
+            cachedDocuments = parsed.map((d) => ({
+              ...d,
+              content: populateContractHtmlForCurrentUser(d.content || ''),
+            }));
+            cachedDocumentsKey = cacheKey;
             return cachedDocuments;
           }
         }
@@ -137,12 +249,20 @@
     }
     try {
       const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/documents`, { cache: forceRefresh ? 'no-cache' : 'default' });
+      const response = await fetch(`${API_BASE}/documents`, {
+        cache: forceRefresh ? 'no-cache' : 'default',
+        headers: { ...getOptionalAuthHeaders() },
+      });
       if (!response.ok) return [];
       const data = await response.json();
-      cachedDocuments = data.items || [];
+      const items = Array.isArray(data.items) ? data.items : [];
+      cachedDocuments = items.map((d) => ({
+        ...d,
+        content: populateContractHtmlForCurrentUser(d.content || ''),
+      }));
+      cachedDocumentsKey = cacheKey;
       try {
-        sessionStorage.setItem(SITE_DOCS_CACHE_KEY, JSON.stringify(cachedDocuments));
+        sessionStorage.setItem(cacheKey, JSON.stringify(cachedDocuments));
       } catch {}
       return cachedDocuments;
     } catch (err) {
@@ -465,7 +585,8 @@
     };
 
     const tempContainer = document.createElement('div');
-    renderSafeDocumentHtml(tempContainer, doc.content || '');
+    const populatedHtml = populateContractHtmlForCurrentUser(doc.content || '');
+    renderSafeDocumentHtml(tempContainer, populatedHtml);
     sanitizeWordStyles(tempContainer);
 
     const docTitle = String(doc.title || 'დოკუმენტი').replace(/\s+/g, ' ').trim();
@@ -719,25 +840,37 @@
       let doc = null;
 
       if (typeof docOrId === 'object' && docOrId !== null && docOrId.id) {
-        doc = docOrId;
-        // If content wasn't loaded or we want fresh details, fetch by id when needed
-        if (!doc.content && !(doc.download_url && String(doc.filename || '').toLowerCase().endsWith('.pdf'))) {
-          const resp = await fetch(`${API_BASE}/documents/${doc.id}`, { cache: 'no-cache' });
+        doc = { ...docOrId };
+        // Always fetch fresh document with auth headers if it's a contract or if content is missing
+        if (doc.contract_type || (!doc.content && !(doc.download_url && String(doc.filename || '').toLowerCase().endsWith('.pdf')))) {
+          const resp = await fetch(`${API_BASE}/documents/${doc.id}`, {
+            cache: 'no-cache',
+            headers: { ...getOptionalAuthHeaders() },
+          });
           if (resp.ok) doc = await resp.json();
         }
       } else if (docOrId) {
-        const resp = await fetch(`${API_BASE}/documents/${docOrId}`, { cache: 'no-cache' });
+        const resp = await fetch(`${API_BASE}/documents/${docOrId}`, {
+          cache: 'no-cache',
+          headers: { ...getOptionalAuthHeaders() },
+        });
         if (!resp.ok) throw new Error('Document not found');
         doc = await resp.json();
       }
 
       if (!doc) throw new Error('Document not found');
 
-      // Option B: If a ready-made .pdf file is attached, download it directly
+      doc = {
+        ...doc,
+        content: populateContractHtmlForCurrentUser(doc.content || ''),
+      };
+
+      // Option B: If a ready-made .pdf file is attached (and not a dynamically populated contract with HTML), download it directly
+      const hasHtmlContent = Boolean((doc.content || '').replace(/<[^>]*>/g, '').trim());
       const hasDirectPdf = Boolean(
         doc.download_url && String(doc.filename || '').toLowerCase().endsWith('.pdf')
       );
-      if (hasDirectPdf) {
+      if (hasDirectPdf && (!doc.contract_type || !hasHtmlContent)) {
         const link = document.createElement('a');
         link.href = `${API_BASE}${doc.download_url}`;
         link.download = doc.filename || sanitizePdfFilename(doc.title);
@@ -780,9 +913,16 @@
       }
 
       const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/documents/${docId}`, { cache: 'no-cache' });
+      const response = await fetch(`${API_BASE}/documents/${docId}`, {
+        cache: 'no-cache',
+        headers: { ...getOptionalAuthHeaders() },
+      });
       if (!response.ok) throw new Error('Document not found');
-      const doc = await response.json();
+      const rawDoc = await response.json();
+      const doc = {
+        ...rawDoc,
+        content: populateContractHtmlForCurrentUser(rawDoc.content || ''),
+      };
       currentModalDoc = doc;
 
       if (els.title) els.title.textContent = doc.title || 'დოკუმენტი';
@@ -1232,6 +1372,7 @@
     downloadDocumentPdf,
     renderSafeDocumentHtml,
     sanitizeWordStyles,
+    populateContractHtmlForCurrentUser,
   };
 
   const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-stmt-tabs2';

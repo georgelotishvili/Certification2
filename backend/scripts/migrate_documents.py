@@ -34,6 +34,7 @@ def run() -> None:
                         title VARCHAR(255) NOT NULL DEFAULT '',
                         content TEXT NOT NULL DEFAULT '',
                         order_index INTEGER NOT NULL DEFAULT 0,
+                        contract_type VARCHAR(32),
                         file_path VARCHAR(1024),
                         filename VARCHAR(255),
                         file_size_bytes INTEGER,
@@ -49,6 +50,10 @@ def run() -> None:
                 # ცხრილი არსებობს - შევამოწმოთ ახალი ველები
                 columns = {col["name"] for col in inspector.get_columns("site_documents")}
                 
+                if "contract_type" not in columns:
+                    statements.append(
+                        "ALTER TABLE site_documents ADD COLUMN contract_type VARCHAR(32)"
+                    )
                 if "file_path" not in columns:
                     statements.append(
                         "ALTER TABLE site_documents ADD COLUMN file_path VARCHAR(1024)"
