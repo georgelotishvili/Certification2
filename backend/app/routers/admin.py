@@ -1464,6 +1464,7 @@ def admin_users(
     live: bool = False,
     new_statements: bool = False,
     pending_statements: bool = False,
+    all_statements: bool = False,
     qualification: str | None = None,
     exam_passed: bool = False,
     exam_failed: bool = False,
@@ -1529,20 +1530,24 @@ def admin_users(
             cand_statuses.append("cert_candidate")
         stmt = stmt.where(User.candidate_status.in_(cand_statuses))
 
-    if statement_date is None and (new_statements or pending_statements):
-        has_new = select(Statement.id).where(
-            Statement.user_id == User.id, Statement.seen_at.is_(None)
-        ).exists()
-        has_pending = select(Statement.id).where(
-            Statement.user_id == User.id, Statement.seen_at.is_not(None),
-            Statement.answered_at.is_(None),
-        ).exists()
-        colors = []
-        if new_statements:
-            colors.append(has_new)
-        if pending_statements:
-            colors.append(~has_new & has_pending)
-        stmt = stmt.where(or_(*colors))
+    if statement_date is None and (new_statements or pending_statements or all_statements):
+        if all_statements:
+            has_any_stmt = select(Statement.id).where(Statement.user_id == User.id).exists()
+            stmt = stmt.where(has_any_stmt)
+        else:
+            has_new = select(Statement.id).where(
+                Statement.user_id == User.id, Statement.seen_at.is_(None)
+            ).exists()
+            has_pending = select(Statement.id).where(
+                Statement.user_id == User.id, Statement.seen_at.is_not(None),
+                Statement.answered_at.is_(None),
+            ).exists()
+            colors = []
+            if new_statements:
+                colors.append(has_new)
+            if pending_statements:
+                colors.append(~has_new & has_pending)
+            stmt = stmt.where(or_(*colors))
 
     if exam_date is not None or exam_morning or exam_evening or certificate_handover:
         target_schedule_date = exam_date if exam_date is not None else _today_in_tbilisi()
@@ -1653,7 +1658,19 @@ def admin_users(
         else:
             stmt = stmt.where(User.id == -1)
 
-    if sort == "date_asc":
+    if all_statements and sort in ("date_desc", "date_asc"):
+        stmt_ts_query = select(func.max(Statement.created_at)).where(Statement.user_id == User.id)
+        if statement_date is not None:
+            stmt_ts_query = stmt_ts_query.where(
+                Statement.created_at >= day_start,
+                Statement.created_at < day_end,
+            )
+        stmt_ts_subq = stmt_ts_query.scalar_subquery()
+        if sort == "date_asc":
+            stmt = stmt.order_by(stmt_ts_subq.asc(), User.created_at.asc())
+        else:
+            stmt = stmt.order_by(stmt_ts_subq.desc(), User.created_at.desc())
+    elif sort == "date_asc":
         stmt = stmt.order_by(User.created_at.asc())
     elif sort == "name_asc":
         stmt = stmt.order_by(User.last_name.asc(), User.first_name.asc())
@@ -1778,11 +1795,17 @@ def admin_users(
             Statement.seen_at.is_not(None),
             Statement.answered_at.is_(None),
         ).exists()
+        has_any_stmt_count = select(Statement.id).where(
+            Statement.user_id == User.id
+        ).exists()
         global_unseen_users = int(db.scalar(
             select(func.count(User.id)).where(has_unseen_stmt)
         ) or 0)
         global_pending_users = int(db.scalar(
             select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
+        ) or 0)
+        global_all_statement_users = int(db.scalar(
+            select(func.count(User.id)).where(has_any_stmt_count)
         ) or 0)
         global_exam_candidates = int(db.scalar(
             select(func.count(User.id)).where(User.candidate_status == "exam_candidate")
@@ -1817,6 +1840,7 @@ def admin_users(
             "paginated": True, "live": live,
             "global_unseen_users": global_unseen_users,
             "global_pending_users": global_pending_users,
+            "global_all_statement_users": global_all_statement_users,
             "global_pending_pass_users": global_pending_pass_users,
             "global_pending_fail_users": global_pending_fail_users,
             "global_exam_candidates": global_exam_candidates,
@@ -2472,11 +2496,17 @@ def admin_statements_summary(
         Statement.seen_at.is_not(None),
         Statement.answered_at.is_(None),
     ).exists()
+    has_any_stmt = select(Statement.id).where(
+        Statement.user_id == User.id
+    ).exists()
     unseen_users = int(db.scalar(
         select(func.count(User.id)).where(has_unseen_stmt)
     ) or 0)
     pending_users = int(db.scalar(
         select(func.count(User.id)).where(~has_unseen_stmt, has_pending_stmt)
+    ) or 0)
+    all_statement_users = int(db.scalar(
+        select(func.count(User.id)).where(has_any_stmt)
     ) or 0)
     exam_histories = _compute_all_exam_histories(db)
     sync_all_user_candidates(db, exam_histories)
@@ -2503,6 +2533,7 @@ def admin_statements_summary(
         "unseen_total": total_unseen,
         "unseen_users": unseen_users,
         "pending_users": pending_users,
+        "all_statement_users": all_statement_users,
         "pending_pass_users": pending_pass_users,
         "pending_fail_users": pending_fail_users,
         "exam_candidates": exam_candidates,

@@ -46,6 +46,7 @@
     let paginatedList = false;
     let globalUnseenUsers = null;
     let globalPendingUsers = null;
+    let globalAllStatementUsers = null;
     let globalPendingPassUsers = null;
     let globalPendingFailUsers = null;
     let globalExamCandidates = null;
@@ -281,6 +282,7 @@
         || DOM.filterCertCandidates?.checked
         || DOM.filterStatements?.checked
         || DOM.filterPendingStatements?.checked
+        || DOM.filterAllStatements?.checked
         || selectedStatementsDate()
         || hasExamScheduleFilter()
         || hasExamResultFilter()
@@ -305,6 +307,7 @@
       if (DOM.filterCertCandidates) DOM.filterCertCandidates.checked = false;
       if (DOM.filterStatements) DOM.filterStatements.checked = false;
       if (DOM.filterPendingStatements) DOM.filterPendingStatements.checked = false;
+      if (DOM.filterAllStatements) DOM.filterAllStatements.checked = false;
       if (DOM.statementsDate) DOM.statementsDate.value = '';
       if (DOM.filterExamMorning) DOM.filterExamMorning.checked = false;
       if (DOM.filterExamEvening) DOM.filterExamEvening.checked = false;
@@ -322,7 +325,7 @@
       return render();
     }
 
-    function updateStatementFilterBadges(unseenUsersCount, pendingUsersCount) {
+    function updateStatementFilterBadges(unseenUsersCount, pendingUsersCount, allStatementUsersCount) {
       if (DOM.filterStatementsBadge) {
         const n = Math.max(0, Number(unseenUsersCount) || 0);
         DOM.filterStatementsBadge.textContent = String(n);
@@ -332,6 +335,11 @@
         const m = Math.max(0, Number(pendingUsersCount) || 0);
         DOM.filterPendingStatementsBadge.textContent = String(m);
         DOM.filterPendingStatementsBadge.hidden = m === 0;
+      }
+      if (DOM.filterAllStatementsBadge && allStatementUsersCount != null) {
+        const totalStmtUsers = Math.max(0, Number(allStatementUsersCount) || 0);
+        DOM.filterAllStatementsBadge.textContent = String(totalStmtUsers);
+        DOM.filterAllStatementsBadge.hidden = totalStmtUsers === 0;
       }
     }
 
@@ -435,6 +443,7 @@
       if (live) params.set('live', 'true');
       if (DOM.filterStatements?.checked) params.set('new_statements', 'true');
       if (DOM.filterPendingStatements?.checked) params.set('pending_statements', 'true');
+      if (DOM.filterAllStatements?.checked) params.set('all_statements', 'true');
       const qualification = DOM.filterSuspendedExpired?.checked ? 'suspended_expired'
         : DOM.filterCertified?.checked ? 'certified'
           : DOM.filterArchitects?.checked ? 'architect'
@@ -510,6 +519,9 @@
         if (data.global_pending_users != null) {
           globalPendingUsers = data.global_pending_users;
         }
+        if (data.global_all_statement_users != null) {
+          globalAllStatementUsers = data.global_all_statement_users;
+        }
         if (data.global_pending_pass_users != null) {
           globalPendingPassUsers = data.global_pending_pass_users;
         }
@@ -523,7 +535,7 @@
           globalCertCandidates = data.global_cert_candidates;
         }
         updateNavBadge(globalUnseenUsers > 0);
-        updateStatementFilterBadges(globalUnseenUsers, globalPendingUsers);
+        updateStatementFilterBadges(globalUnseenUsers, globalPendingUsers, globalAllStatementUsers);
         updateExamOutcomeFilterBadges(globalPendingPassUsers, globalPendingFailUsers);
         updateCandidateFilterBadges(globalExamCandidates, globalCertCandidates);
       }
@@ -1547,8 +1559,25 @@
       });
       on(DOM.usersSort, 'change', render);
       on(DOM.onlyAdmins, 'change', render);
-      on(DOM.filterStatements, 'change', render);
-      on(DOM.filterPendingStatements, 'change', render);
+      on(DOM.filterStatements, 'change', () => {
+        if (DOM.filterStatements?.checked && DOM.filterAllStatements) {
+          DOM.filterAllStatements.checked = false;
+        }
+        return render();
+      });
+      on(DOM.filterPendingStatements, 'change', () => {
+        if (DOM.filterPendingStatements?.checked && DOM.filterAllStatements) {
+          DOM.filterAllStatements.checked = false;
+        }
+        return render();
+      });
+      on(DOM.filterAllStatements, 'change', () => {
+        if (DOM.filterAllStatements?.checked) {
+          if (DOM.filterStatements) DOM.filterStatements.checked = false;
+          if (DOM.filterPendingStatements) DOM.filterPendingStatements.checked = false;
+        }
+        return render();
+      });
       on(DOM.statementsDate, 'change', () => {
         syncStatementFilterControls();
         return render();
@@ -1679,7 +1708,7 @@
         ? cachedItems.filter((item) => !item.has_unseen_statements && item.has_pending_statements).length
         : globalPendingUsers;
       updateNavBadge(computedUnseen > 0);
-      updateStatementFilterBadges(computedUnseen, computedPending);
+      updateStatementFilterBadges(computedUnseen, computedPending, globalAllStatementUsers);
       if (paginatedList) void render({ preserveExisting: true, keepPage: true });
     }
 
@@ -1742,6 +1771,7 @@
         if (statementVersion !== statementsStateVersion || requestVersion !== usersRenderVersion) return;
         if (data?.unseen_users != null) globalUnseenUsers = Number(data.unseen_users) || 0;
         if (data?.pending_users != null) globalPendingUsers = Number(data.pending_users) || 0;
+        if (data?.all_statement_users != null) globalAllStatementUsers = Number(data.all_statement_users) || 0;
         if (data?.pending_pass_users != null) globalPendingPassUsers = Number(data.pending_pass_users) || 0;
         if (data?.pending_fail_users != null) globalPendingFailUsers = Number(data.pending_fail_users) || 0;
         if (data?.exam_candidates != null) globalExamCandidates = Number(data.exam_candidates) || 0;
@@ -1749,7 +1779,8 @@
         updateNavBadge(!!data?.has_unseen);
         updateStatementFilterBadges(
           globalUnseenUsers ?? (data?.has_unseen ? 1 : 0),
-          globalPendingUsers ?? 0
+          globalPendingUsers ?? 0,
+          globalAllStatementUsers
         );
         updateExamOutcomeFilterBadges(
           globalPendingPassUsers ?? 0,

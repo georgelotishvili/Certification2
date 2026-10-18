@@ -164,6 +164,27 @@ class StatementDateFilterTests(unittest.TestCase):
 
         self.assertEqual(caught.exception.status_code, 422)
 
+    def test_all_statements_filter_orders_by_statement_date_and_filters_by_day(self):
+        no_stmt_user = self.add_user(name="NoStmt")
+        early_reg_late_stmt = self.add_user(name="EarlyReg")
+        late_reg_early_stmt = self.add_user(name="LateReg")
+        st1 = self.add_statement(late_reg_early_stmt, datetime(2026, 10, 5, 10), seen=True)
+        st1.answered_at = datetime(2026, 10, 5, 12)
+        self.add_statement(early_reg_late_stmt, datetime(2026, 10, 8, 10))
+        self.db.flush()
+
+        all_res = self.list_users(all_statements=True, sort="date_desc")
+        self.assertEqual(
+            [item.id for item in all_res.items],
+            [early_reg_late_stmt.id, late_reg_early_stmt.id],
+        )
+        self.assertNotIn(no_stmt_user.id, [item.id for item in all_res.items])
+
+        dated_res = self.list_users(
+            all_statements=True, statement_date=date(2026, 10, 5), sort="date_desc"
+        )
+        self.assertEqual([item.id for item in dated_res.items], [late_reg_early_stmt.id])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -92,6 +92,8 @@ document.addEventListener('DOMContentLoaded', () => {
     filterStatementsBadge: document.getElementById('filterStatementsBadge'),
     filterPendingStatements: document.getElementById('filterPendingStatements'),
     filterPendingStatementsBadge: document.getElementById('filterPendingStatementsBadge'),
+    filterAllStatements: document.getElementById('filterAllStatements'),
+    filterAllStatementsBadge: document.getElementById('filterAllStatementsBadge'),
     statementsDate: document.getElementById('statementsDate'),
     clearStatementsDate: document.getElementById('clearStatementsDate'),
     filterExamMorning: document.getElementById('filterExamMorning'),
