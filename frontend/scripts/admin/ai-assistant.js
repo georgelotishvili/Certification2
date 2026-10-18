@@ -191,11 +191,78 @@
       });
     }
 
+    const IDB_NAME = 'gipc_ai_local_fs_v1';
+    const IDB_STORE = 'handles';
+    const IDB_KEY = 'computer_dir_handle';
+    let savedHandleNeedsPermission = false;
+
+    function openHandleDb() {
+      return new Promise((resolve, reject) => {
+        if (!global.indexedDB) {
+          reject(new Error('IndexedDB unavailable'));
+          return;
+        }
+        const req = global.indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            db.createObjectStore(IDB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function saveDirHandleToIdb(dirHandle) {
+      try {
+        const db = await openHandleDb();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).put(dirHandle, IDB_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch {}
+    }
+
+    async function loadDirHandleFromIdb() {
+      try {
+        const db = await openHandleDb();
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readonly');
+          const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+      } catch {
+        return null;
+      }
+    }
+
+    async function restoreSavedComputerFolder() {
+      if (localComputerFiles.length > 0) return;
+      const savedHandle = await loadDirHandleFromIdb();
+      if (!savedHandle || typeof savedHandle.queryPermission !== 'function') return;
+      try {
+        localComputerDirHandle = savedHandle;
+        localComputerFolderName = savedHandle.name || 'doc 2';
+        const perm = await savedHandle.queryPermission({ mode: 'read' });
+        if (perm === 'granted') {
+          savedHandleNeedsPermission = false;
+          localComputerFiles = await scanDirectoryHandle(savedHandle);
+        } else {
+          savedHandleNeedsPermission = true;
+        }
+        syncComputerBtnUI();
+      } catch {}
+    }
+
     async function scanDirectoryHandle(dirHandle, prefix = '', depth = 0, out = []) {
       if (depth > 3 || out.length >= 400) return out;
       for await (const [name, handle] of dirHandle.entries()) {
         if (out.length >= 400) break;
-        if (name.startsWith('.')) continue;
+        if (name.startsWith('.') || name.startsWith('~$')) continue;
         const relPath = prefix ? `${prefix}/${name}` : name;
         if (handle.kind === 'file') {
           try {
@@ -204,6 +271,7 @@
               path: relPath,
               name: file.name,
               size_bytes: file.size,
+              last_modified: file.lastModified || 0,
               mime_type: file.type || '',
               handle,
               file,
@@ -221,15 +289,43 @@
       if (localComputerFiles.length > 0) {
         computerConnectBtnEl.classList.add('is-connected');
         computerConnectBtnEl.innerHTML = `${ICONS.folder}<span>${escapeHtml(localComputerFolderName || 'კომპიუტერი')} (${localComputerFiles.length})</span>`;
-        computerConnectBtnEl.title = `დაკავშირებულია კომპიუტერის საქაღალდე: ${localComputerFolderName} (${localComputerFiles.length} ფაილი). დააჭირეთ სხვა საქაღალდის ასარჩევად.`;
+        computerConnectBtnEl.title = `დაკავშირებულია ცოცხალ რეჟიმში: "${localComputerFolderName}" (${localComputerFiles.length} ფაილი). ყოველი შეტყობინებისას იკითხება უახლესი ვერსია. დააჭირეთ სხვა საქაღალდის ასარჩევად.`;
+      } else if (savedHandleNeedsPermission && localComputerDirHandle) {
+        computerConnectBtnEl.classList.remove('is-connected');
+        computerConnectBtnEl.innerHTML = `${ICONS.folder}<span>${escapeHtml(localComputerFolderName)} (ჩართვა)</span>`;
+        computerConnectBtnEl.title = `დამახსოვრებულია საქაღალდე "${localComputerFolderName}". დააჭირეთ წვდომის გასააქტიურებლად (ან Shift+კლიკი სხვა საქაღალდის ასარჩევად).`;
       } else {
         computerConnectBtnEl.classList.remove('is-connected');
         computerConnectBtnEl.innerHTML = `${ICONS.folder}<span>კომპიუტერი</span>`;
-        computerConnectBtnEl.title = 'კომპიუტერის საქაღალდესთან წვდომის ჩართვა (ფაილების ძებნა, წაკითხვა, ჩამოწერა და წერილზე მიბმა)';
+        computerConnectBtnEl.title = 'კომპიუტერის საქაღალდესთან (მაგ. doc 2) ცოცხალი წვდომის ჩართვა';
       }
     }
 
-    async function connectLocalComputerFolder() {
+    async function connectLocalComputerFolder(event) {
+      if (
+        savedHandleNeedsPermission &&
+        localComputerDirHandle &&
+        !event?.shiftKey &&
+        typeof localComputerDirHandle.requestPermission === 'function'
+      ) {
+        try {
+          let perm = await localComputerDirHandle.requestPermission({ mode: 'readwrite' });
+          if (perm !== 'granted') {
+            perm = await localComputerDirHandle.requestPermission({ mode: 'read' });
+          }
+          if (perm === 'granted') {
+            savedHandleNeedsPermission = false;
+            localComputerFiles = await scanDirectoryHandle(localComputerDirHandle);
+            syncComputerBtnUI();
+            showToast(
+              `საქაღალდე "${localComputerFolderName}" გააქტიურდა (${localComputerFiles.length} ფაილი — ცოცხალი სინქრონიზაცია)`
+            );
+            renderMessages();
+            return;
+          }
+        } catch {}
+      }
+
       if (typeof global.showDirectoryPicker === 'function') {
         try {
           let dirHandle;
@@ -240,10 +336,12 @@
           }
           localComputerDirHandle = dirHandle;
           localComputerFolderName = dirHandle.name || 'საქაღალდე';
+          savedHandleNeedsPermission = false;
+          await saveDirHandleToIdb(dirHandle);
           localComputerFiles = await scanDirectoryHandle(dirHandle);
           syncComputerBtnUI();
           showToast(
-            `კომპიუტერის საქაღალდე "${localComputerFolderName}" დაკავშირებულია (${localComputerFiles.length} ფაილი)`
+            `კომპიუტერის საქაღალდე "${localComputerFolderName}" დაკავშირებულია (${localComputerFiles.length} ფაილი — ცოცხალი წაკითხვა)`
           );
           renderMessages();
           return;
@@ -270,14 +368,17 @@
           (f) => f.name.toLowerCase().includes(target) || target.includes(f.name.toLowerCase())
         );
       if (!match) return null;
-      if (match.file) return match.file;
+      // Always read fresh from handle first so live edits on disk are immediately reflected
       if (match.handle) {
         try {
-          return await match.handle.getFile();
-        } catch {
-          return null;
-        }
+          const freshFile = await match.handle.getFile();
+          match.file = freshFile;
+          match.size_bytes = freshFile.size;
+          match.last_modified = freshFile.lastModified || 0;
+          return freshFile;
+        } catch {}
       }
+      if (match.file) return match.file;
       return null;
     }
 
@@ -621,8 +722,8 @@
       on(headerConfigBtnEl, 'click', () => {
         openSettingsModal();
       });
-      on(computerConnectBtnEl, 'click', () => {
-        void connectLocalComputerFolder();
+      on(computerConnectBtnEl, 'click', (e) => {
+        void connectLocalComputerFolder(e);
       });
       on(panelEl.querySelector('.ai-chat-attach-btn'), 'click', () => {
         attachFileInputEl?.click();
@@ -1319,30 +1420,136 @@
       messagesContainerEl.scrollTop = messagesContainerEl.scrollHeight;
     }
 
-    async function collectMatchingComputerAttachments(userText) {
-      if (!localComputerFiles.length || !userText) return [];
-      const lower = userText.toLowerCase();
-      const matched = [];
+    const DOC_CODE_TO_PREFIX = [
+      { codes: ['gipc-sch-001', 'სერტიფიკაციის სქემა', 'წინაპირობ', 'კატეგორია', 'გარდამავალი', 'სტაჟ', 'დიპლომ', 'რესერტიფიცირებ'], prefixes: ['01_სერტიფიკაციის_სქემა'] },
+      { codes: ['gipc-qm-001', 'ხარისხის მართვ', 'სახელმძღვანელო'], prefixes: ['02_ხარისხის_მართვის_სახელმძღვანელო'] },
+      { codes: ['gipc-pol-001', 'მიუკერძოებლობ', 'ინტერესთა კონფლიქტ'], prefixes: ['03_მიუკერძოებლობის_პოლიტიკა', '13_ფორმა_მიუკერძოებლობის'] },
+      { codes: ['gipc-pol-002', 'კონფიდენციალურ', 'პერსონალურ'], prefixes: ['04_კონფიდენციალურობის_პოლიტიკა', '14_ფორმა_კონფიდენციალურობის'] },
+      { codes: ['gipc-pro-001', 'სერტიფიკაციის პროცედურ', 'განაცხად', 'დაშვებ', 'უარყოფ', 'ვერიფიკაცი', 'შეჩერებ', 'გაუქმებ', 'აღდგენ', '30 კალენდარულ', '30 დღ', '30-დღ'], prefixes: ['05_სერტიფიკაციის_პროცედურა', '12_ფორმა_განაცხადი'] },
+      { codes: ['gipc-pro-002', 'გამოცდის ჩატარებ', 'გამოცდ', 'ტესტ', 'სესი', 'გადატან', 'დაგვიანებ', '350'], prefixes: ['06_გამოცდის_ჩატარების_პროცედურა', '10_საგამოცდო_ხელშეკრულება'] },
+      { codes: ['gipc-pro-003', 'საჩივარ', 'საჩივრ', 'აპელაცი', 'გასაჩივრებ'], prefixes: ['07_საჩივრებისა_და_აპელაციების_პროცედურა'] },
+      { codes: ['gipc-con-001', 'არქიტექტორის ხელშეკრულება', 'ხელშეკრულება', '3000', '3 000'], prefixes: ['08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი'] },
+      { codes: ['gipc-con-002', 'სპეციალისტის ხელშეკრულება', 'ხელშეკრულება'], prefixes: ['09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი'] },
+      { codes: ['gipc-con-003', 'ექსპერტის ხელშეკრულება', 'ხელშეკრულება'], prefixes: ['09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი'] },
+      { codes: ['gipc-con-004', 'საგამოცდო ხელშეკრულება'], prefixes: ['10_საგამოცდო_ხელშეკრულება'] },
+      { codes: ['gipc-pro-004', 'შიდა აუდიტ', 'gipc-frm-020', 'ia-2026'], prefixes: ['11_შიდა_აუდიტის_პროცედურა', '18_შიდა_აუდიტის_ანგარიში'] },
+      { codes: ['gipc-pro-005', 'დოკუმენტაციის კონტროლ', 'რეესტრ', 'gipc-rec-001', 'განადგურებ', 'განაწილებ', 'ცვლილებ'], prefixes: ['15_დოკუმენტაციის_კონტროლის_პროცედურა', '26_ხარისხის_დოკუმენტების_რეესტრი', '24_გარე_დოკუმენტების_რეესტრი'] },
+      { codes: ['gipc-pro-006', 'სიმბოლო', 'ლოგო', 'აკრედიტაციის სიმბოლო'], prefixes: ['20_აკრედიტაციის_სიმბოლოს_გამოყენების_პროცედურა'] },
+      { codes: ['gipc-frm-023', 'შაბლონ', 'წერილ', 'შეტყობინებ'], prefixes: ['27_შეტყობინებების_შაბლონები'] },
+      { codes: ['gipc-web-001', 'ვებგვერდ', 'საიტ', 'საჯარო რეესტრ', 'ჩვენს შესახებ'], prefixes: ['28_ვებგვერდზე_განსათავსებელი_სავალდებულო_ინფორმაცია', 'ჩვენს შესახებ'] },
+      { codes: ['gipc-jd-001', 'gipc-jd-002', 'gipc-jd-003', 'მენეჯერ', 'ზედამხედველ', 'თანამდებობრივ', 'qm-comp'], prefixes: ['16_თანამდებობრივი_ინსტრუქცია_ხარისხის_მენეჯერი', '17_თანამდებობრივი_ინსტრუქცია_საგამოცდო_მენეჯერი', '29_თანამდებობრივი_ინსტრუქცია_საგამოცდო_ზედამხედველი'] },
+      { codes: ['მენეჯმენტის მიმოხილვ', 'gipc-frm-022', 'mr-2026', 'მაკორექტირებელ', 'gipc-frm-021', 'ca-2026'], prefixes: ['19_მენეჯმენტის_მიმოხილვის_ოქმი', '21_ფორმა_მაკორექტირებელი_ქმედება'] },
+      { codes: ['კითხვარ', 'მეპინგ', '17024', 'ისო'], prefixes: ['00_კითხვარის_მეპინგი'] },
+    ];
+
+    function normalizeDocKey(filename) {
+      return String(filename || '')
+        .toLowerCase()
+        .replace(/\.[^.]+$/, '')
+        .replace(/_არგონ$/i, '');
+    }
+
+    async function collectMatchingComputerAttachments(userText, mode = 'chat') {
+      if (localComputerDirHandle && !savedHandleNeedsPermission) {
+        try {
+          localComputerFiles = await scanDirectoryHandle(localComputerDirHandle);
+          syncComputerBtnUI();
+        } catch {}
+      }
+      if (!localComputerFiles.length) return [];
+
+      // Group files by canonical document base key so if both .docx and _არგონ.md exist,
+      // we pick the most recently modified version (or .md if timestamps are equal/older).
+      const groups = new Map();
       for (const entry of localComputerFiles) {
-        if (matched.length >= 3) break;
-        const nameLower = entry.name.toLowerCase();
-        const stem = nameLower.replace(/\.[^.]+$/, '');
-        if (
-          nameLower.length >= 3 &&
-          (lower.includes(nameLower) || (stem.length >= 4 && lower.includes(stem)))
-        ) {
-          const fileObj = await resolveComputerFileObj(entry.path);
-          if (fileObj && fileObj.size <= 12 * 1024 * 1024) {
-            try {
-              const dataUrl = await readFileAsDataUrl(fileObj);
-              const commaIdx = dataUrl.indexOf(',');
-              matched.push({
-                filename: fileObj.name,
-                mime_type: fileObj.type || 'application/octet-stream',
-                data_base64: commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl,
-              });
-            } catch {}
+        const lowerName = entry.name.toLowerCase();
+        if (!lowerName.endsWith('.md') && !lowerName.endsWith('.docx') && !lowerName.endsWith('.pdf') && !lowerName.endsWith('.txt')) {
+          continue;
+        }
+        const key = normalizeDocKey(entry.name);
+        if (!groups.has(key)) {
+          groups.set(key, { key, md: null, docx: null, other: null });
+        }
+        const g = groups.get(key);
+        if (lowerName.endsWith('.md')) g.md = entry;
+        else if (lowerName.endsWith('.docx')) g.docx = entry;
+        else g.other = entry;
+      }
+
+      function pickFreshestEntry(g) {
+        if (g.docx && g.md) {
+          // If the .docx file was edited more recently than the .md file, read the live .docx!
+          if ((g.docx.last_modified || 0) > (g.md.last_modified || 0) + 2000) {
+            return g.docx;
           }
+          return g.md;
+        }
+        return g.md || g.docx || g.other;
+      }
+
+      const lower = String(userText || '').toLowerCase();
+      const scored = [];
+
+      for (const g of groups.values()) {
+        const entry = pickFreshestEntry(g);
+        if (!entry) continue;
+        let score = 0;
+        const keyLower = g.key;
+        const nameLower = entry.name.toLowerCase();
+
+        // Direct filename or stem match
+        if (lower && (lower.includes(nameLower) || (keyLower.length >= 4 && lower.includes(keyLower)))) {
+          score += 100;
+        }
+
+        // Topic / GIPC document code match
+        for (const rule of DOC_CODE_TO_PREFIX) {
+          if (rule.prefixes.some((pref) => keyLower.startsWith(pref.toLowerCase()))) {
+            if (rule.codes.some((kw) => lower.includes(kw))) {
+              score += 50;
+            }
+          }
+        }
+
+        // Mode-based core operational documents
+        if (mode === 'site_analysis' || mode === 'statements_analysis' || mode === 'exam_analysis') {
+          if (
+            keyLower.startsWith('01_სერტიფიკაციის_სქემა') ||
+            keyLower.startsWith('05_სერტიფიკაციის_პროცედურა') ||
+            keyLower.startsWith('27_შეტყობინებების_შაბლონები') ||
+            keyLower.startsWith('28_ვებგვერდზე_განსათავსებელი')
+          ) {
+            score += 35;
+          }
+        } else if (
+          keyLower.startsWith('27_შეტყობინებების_შაბლონები') ||
+          keyLower.startsWith('28_ვებგვერდზე_განსათავსებელი') ||
+          keyLower.startsWith('05_სერტიფიკაციის_პროცედურა')
+        ) {
+          // Always give a small baseline score to the 3 core reference documents when a folder is connected
+          score += 10;
+        }
+
+        if (score > 0) {
+          scored.push({ entry, score });
+        }
+      }
+
+      scored.sort((a, b) => b.score - a.score);
+
+      const matched = [];
+      for (const item of scored.slice(0, 5)) {
+        const fileObj = await resolveComputerFileObj(item.entry.path);
+        if (fileObj && fileObj.size <= 12 * 1024 * 1024) {
+          try {
+            const dataUrl = await readFileAsDataUrl(fileObj);
+            const commaIdx = dataUrl.indexOf(',');
+            matched.push({
+              filename: fileObj.name,
+              mime_type: fileObj.type || 'application/octet-stream',
+              data_base64: commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl,
+            });
+          } catch {}
         }
       }
       return matched;
@@ -1383,7 +1590,7 @@
       renderMessages();
 
       try {
-        const autoMatchedComputerAttachments = await collectMatchingComputerAttachments(text);
+        const autoMatchedComputerAttachments = await collectMatchingComputerAttachments(text, mode);
         const combinedAttachments = [
           ...currentAttachments.map((a) => ({
             filename: a.filename,
@@ -1391,7 +1598,7 @@
             data_base64: a.data_base64,
           })),
           ...autoMatchedComputerAttachments,
-        ].slice(0, 6);
+        ].slice(0, 8);
 
         const apiMessages = messages.map((m) => ({
           role: m.role,
@@ -1493,6 +1700,7 @@
       loadHistory();
       buildUI();
       void fetchStatus();
+      void restoreSavedComputerFolder();
 
       global.addEventListener('admin:sectionChanged', (event) => {
         const sec = event?.detail?.section || '';
