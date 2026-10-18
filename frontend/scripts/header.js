@@ -225,7 +225,7 @@
   let cachedDocuments = null;
   let cachedDocumentsKey = null;
   let currentModalDoc = null;
-  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v3_';
+  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v4_';
 
   function getSiteDocsCacheKey() {
     const user = getCurrentUserForContract();
@@ -443,14 +443,24 @@
           el.style.fontSize = '';
           el.style.fontFamily = '';
           el.style.marginLeft = '';
+          el.style.marginRight = '';
+          el.style.paddingLeft = '';
+          el.style.paddingRight = '';
           el.style.textIndent = '';
           el.style.color = '';
           el.style.backgroundColor = '';
+          const tag = (el.tagName || '').toUpperCase();
+          if ((tag === 'P' || tag === 'LI') && !(el.textContent || '').includes('___')) {
+            el.style.textAlign = '';
+          }
           if (el.style.cssText) {
             el.style.cssText = el.style.cssText.replace(/mso-[^;]+;?/gi, '');
           }
         }
         el.removeAttribute('class');
+        el.removeAttribute('align');
+        el.removeAttribute('color');
+        el.removeAttribute('bgcolor');
       });
 
       // ბულეტიანი აბზაცების კონვერტაცია <ul>/<li>-ში (მხოლოდ სტრიქონის დასაწყისში)
@@ -629,7 +639,7 @@
         if (words.length > 1) {
           const wordsWidth = words.reduce((sum, w) => sum + pdf.getTextWidth(w), 0);
           const extra = targetWidth - wordsWidth;
-          if (extra > 0 && wordsWidth >= targetWidth * 0.62) {
+          if (extra > 0) {
             const gap = extra / (words.length - 1);
             let curX = x;
             words.forEach((word) => {
@@ -665,7 +675,10 @@
     }
 
     const writeWrappedBlock = (text, opts = {}) => {
-      const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+      const normalized = String(text || '')
+        .replace(/([ა-ჰa-zA-Z0-9])\/([ა-ჰa-zA-Z0-9])/g, '$1 / $2')
+        .replace(/\s+/g, ' ')
+        .trim();
       if (!normalized) return;
       const {
         x = marginX,
@@ -675,8 +688,6 @@
         lineHeight = 16,
         spaceBefore = 0,
         spaceAfter = 7,
-        prefix = '',
-        prefixX = marginX,
         align = 'justify',
         bottomBorder = false,
       } = opts;
@@ -699,9 +710,6 @@
 
       lines.forEach((line, idx) => {
         ensureSpace(lineHeight);
-        if (idx === 0 && prefix) {
-          pdf.text(prefix, prefixX, cursorY);
-        }
         const isLast = idx === lines.length - 1;
         drawFormattedLine(line, x, cursorY, width, isLast, align);
         cursorY += lineHeight;
@@ -847,19 +855,17 @@
           items.forEach((li, idx) => {
             const liText = (li.textContent || '').replace(/\s+/g, ' ').trim();
             if (!liText) return;
-            const prefix = tag === 'OL' ? `${idx + 1}.` : '–';
-            writeWrappedBlock(liText, {
-              x: marginX + 16,
-              width: usableWidth - 16,
-              prefix,
-              prefixX: marginX + 2,
+            const prefix = tag === 'OL' ? `${idx + 1}. ` : '– ';
+            writeWrappedBlock(`${prefix}${liText}`, {
+              x: marginX,
+              width: usableWidth,
               fontSize: 10.5,
-              lineHeight: 15.5,
-              spaceAfter: 4,
+              lineHeight: 16,
+              spaceAfter: 5,
               align: 'justify',
             });
           });
-          cursorY += 3;
+          cursorY += 2;
           return;
         }
 
@@ -922,14 +928,12 @@
 
       if (typeof docOrId === 'object' && docOrId !== null && docOrId.id) {
         doc = { ...docOrId };
-        // Always fetch fresh document with auth headers if it's a contract or if content is missing
-        if (doc.contract_type || (!doc.content && !(doc.download_url && String(doc.filename || '').toLowerCase().endsWith('.pdf')))) {
-          const resp = await fetch(`${API_BASE}/documents/${doc.id}`, {
-            cache: 'no-cache',
-            headers: { ...getOptionalAuthHeaders() },
-          });
-          if (resp.ok) doc = await resp.json();
-        }
+        // Always fetch fresh document from API so all documents (not just contracts) have latest content
+        const resp = await fetch(`${API_BASE}/documents/${doc.id}`, {
+          cache: 'no-cache',
+          headers: { ...getOptionalAuthHeaders() },
+        });
+        if (resp.ok) doc = await resp.json();
       } else if (docOrId) {
         const resp = await fetch(`${API_BASE}/documents/${docOrId}`, {
           cache: 'no-cache',
@@ -1456,8 +1460,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-stmt-tabs2';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_stmt_tabs2';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261019-bw1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261019_bw1';
 
   function syncHeaderInitialAuthUI() {
     try {

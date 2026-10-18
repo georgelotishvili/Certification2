@@ -2298,7 +2298,7 @@
             if (words.length > 1) {
               const wordsWidth = words.reduce((sum, w) => sum + pdf.getTextWidth(w), 0);
               const extra = targetWidth - wordsWidth;
-              if (extra > 0 && wordsWidth >= targetWidth * 0.62) {
+              if (extra > 0) {
                 const gap = extra / (words.length - 1);
                 let curX = x;
                 words.forEach((word) => {
@@ -2333,7 +2333,10 @@
         }
 
         const writeWrappedBlock = (text, opts = {}) => {
-          const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+          const normalized = String(text || '')
+            .replace(/([ა-ჰa-zA-Z0-9])\/([ა-ჰa-zA-Z0-9])/g, '$1 / $2')
+            .replace(/\s+/g, ' ')
+            .trim();
           if (!normalized) return;
           const {
             x = marginX,
@@ -2343,8 +2346,6 @@
             lineHeight = 16,
             spaceBefore = 0,
             spaceAfter = 7,
-            prefix = '',
-            prefixX = marginX,
             align = 'justify',
             bottomBorder = false,
           } = opts;
@@ -2361,7 +2362,6 @@
           }
           lines.forEach((line, idx) => {
             ensureSpace(lineHeight);
-            if (idx === 0 && prefix) pdf.text(prefix, prefixX, cursorY);
             const isLast = idx === lines.length - 1;
             drawFormattedLine(line, x, cursorY, width, isLast, align);
             cursorY += lineHeight;
@@ -2502,16 +2502,15 @@
               items.forEach((li, idx) => {
                 const liText = (li.textContent || '').replace(/\s+/g, ' ').trim();
                 if (!liText) return;
-                writeWrappedBlock(liText, {
-                  x: marginX + 16,
-                  width: usableWidth - 16,
-                  prefix: tag === 'OL' ? `${idx + 1}.` : '–',
-                  prefixX: marginX + 2,
-                  spaceAfter: 4,
+                const prefix = tag === 'OL' ? `${idx + 1}. ` : '– ';
+                writeWrappedBlock(`${prefix}${liText}`, {
+                  x: marginX,
+                  width: usableWidth,
+                  spaceAfter: 5,
                   align: 'justify',
                 });
               });
-              cursorY += 3;
+              cursorY += 2;
               return;
             }
             const isLeftField = text.includes('___') || /^(სახელი|პირადი|ტელეფონი|ელ\.?\s*ფოსტა|თარიღი|ხელმოწერა|საიდენტიფიკაციო|იურიდიული|წარმომადგენელი)/.test(text);

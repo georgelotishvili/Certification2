@@ -9333,10 +9333,11 @@ body.modal-open {
 .admin-contract-preview-sheet li,
 .document-editor p,
 .document-editor li {
-  margin: 0 0 8px;
-  text-align: justify;
-  text-justify: inter-word;
-  color: #000000;
+  margin: 0 0 8px !important;
+  padding-left: 0 !important;
+  text-align: justify !important;
+  text-justify: inter-word !important;
+  color: #000000 !important;
 }
 
 .admin-contract-preview-sheet p[style*="left"],
@@ -9348,8 +9349,14 @@ body.modal-open {
 .admin-contract-preview-sheet ol,
 .document-editor ul,
 .document-editor ol {
-  margin: 8px 0 14px 22px;
-  padding-left: 0;
+  margin: 8px 0 12px 0 !important;
+  padding-left: 0 !important;
+  list-style: none !important;
+}
+
+.admin-contract-preview-sheet ul > li::before,
+.document-editor ul > li::before {
+  content: "– ";
 }
 
 .admin-contract-preview-sheet table,

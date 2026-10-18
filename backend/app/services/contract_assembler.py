@@ -721,7 +721,7 @@ def build_docx_elements_from_md(md_text: str) -> list[ET.Element]:
                         before="0",
                         after="50",
                         line="276",
-                        hanging_indent=True,
+                        hanging_indent=False,
                     )
                 )
                 i += 1
@@ -829,6 +829,18 @@ def _minimal_docx_From_elements(elements: list[ET.Element]) -> bytes:
     return buf.getvalue()
 
 
+def _sanitize_docx_styles_xml(xml_bytes: bytes) -> bytes:
+    try:
+        text = xml_bytes.decode("utf-8")
+        text = re.sub(r'\s+w:theme(?:Color|Shade|Tint|Fill|FillShade|FillTint)="[^"]*"', "", text)
+        text = re.sub(r'w:color\s+w:val="(?!FFFFFF"[,\s/>])[^"]*"', 'w:color w:val="000000"', text)
+        text = re.sub(r'w:color="(?!FFFFFF"|auto")[^"]*"', 'w:color="000000"', text)
+        text = re.sub(r'w:fill="(?!FFFFFF"|auto")[^"]*"', 'w:fill="FFFFFF"', text)
+        return text.encode("utf-8")
+    except Exception:
+        return xml_bytes
+
+
 def markdown_to_docx_bytes(md_text: str, template_docx: Path | bytes | None = None) -> bytes:
     """Convert contract Markdown (.md) into a styled Word (.docx) binary."""
     elements = build_docx_elements_from_md(md_text)
@@ -852,6 +864,8 @@ def markdown_to_docx_bytes(md_text: str, template_docx: Path | bytes | None = No
                         for item in zin.infolist():
                             if item.filename == "word/document.xml":
                                 zout.writestr(item, updated_xml)
+                            elif item.filename in ("word/styles.xml", "word/stylesWithEffects.xml"):
+                                zout.writestr(item, _sanitize_docx_styles_xml(zin.read(item.filename)))
                             else:
                                 zout.writestr(item, zin.read(item.filename))
                     return out_mem.getvalue()
