@@ -18,46 +18,27 @@
     <script src="../scripts/header.js?v=20261018-contracts1" defer></script>
     <link rel="stylesheet" href="../styles/styles.css?v=20261017-smooth1" />
     <link rel="stylesheet" href="../styles/header.css?v=20261018-stmt-tabs2" />
-    <link rel="stylesheet" href="../styles/documents.css?v=20261018-blueprint1" />
+    <link rel="stylesheet" href="../styles/documents.css?v=20261018-clean2" />
   </head>
   <body class="documents-document">
     <!-- Shared header loaded dynamically by header.js -->
     <main class="documents-page" id="documentsPage">
-      <nav class="documents-breadcrumb" aria-label="გვერდის მდებარეობა">
-        <a href="index.html">მთავარი გვერდი</a>
-        <span aria-hidden="true">/</span>
-        <span aria-current="page">დოკუმენტები</span>
-      </nav>
-
-      <section class="documents-intro" aria-labelledby="documentsTitle">
-        <div class="documents-intro-copy">
-          <p class="documents-kicker">საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი</p>
+      <section class="documents-toolbar" aria-labelledby="documentsTitle">
+        <div class="documents-title-group">
           <h1 id="documentsTitle">ოფიციალური დოკუმენტები</h1>
-          <p class="documents-description">აკრედიტაციისა და სერტიფიცირების პროცესთან დაკავშირებული ოფიციალური დოკუმენტაცია, ხელშეკრულების ნიმუშები, მუშაობის პრინციპები, საგამოცდო და სერტიფიკატის გაცემის პროცედურები.</p>
+          <span id="documentsResultsCount" class="documents-count-badge" role="status" aria-live="polite" aria-atomic="true">—</span>
         </div>
-        <div class="documents-total" aria-label="დოკუმენტების რაოდენობა">
-          <strong id="documentsTotalCount">—</strong>
-          <span>დოკუმენტი</span>
-        </div>
-      </section>
-
-      <section class="documents-controls" aria-label="დოკუმენტების ძიება">
         <div class="documents-search-field">
-          <label class="documents-field-label" for="documentsSearch">დოკუმენტის ძიება</label>
+          <label class="sr-only" for="documentsSearch">დოკუმენტის ძიება</label>
           <div class="documents-search-wrap">
-            <input type="search" id="documentsSearch" class="documents-search" placeholder="მოძებნეთ დოკუმენტი დასახელებით ან შინაარსით..." autocomplete="off" maxlength="200" />
+            <svg class="documents-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="search" id="documentsSearch" class="documents-search" placeholder="დოკუმენტის ძიება..." autocomplete="off" maxlength="200" />
             <button type="button" id="documentsSearchClear" class="documents-search-clear" hidden aria-label="ძიების გასუფთავება">×</button>
           </div>
         </div>
       </section>
 
-      <section class="documents-results" aria-labelledby="documentsResultsTitle">
-        <div class="documents-results-head">
-          <div>
-            <h2 id="documentsResultsTitle">დოკუმენტების ჩამონათვალი</h2>
-            <p id="documentsResultsCount" class="documents-results-count" role="status" aria-live="polite" aria-atomic="true">დოკუმენტები იტვირთება...</p>
-          </div>
-        </div>
+      <section class="documents-results" aria-label="ოფიციალური დოკუმენტების ჩამონათვალი">
         <div id="documentsError" class="documents-error" role="alert" hidden></div>
         <div class="documents-grid" id="documentsGrid" role="list" aria-label="ოფიციალური დოკუმენტები" aria-busy="true"></div>
       </section>
@@ -86,8 +67,8 @@
         <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია <a href="admin.html" class="admin-link" style="display:none">/ ადმინ გვერდი</a></p>
       </div>
     </footer>
-    <script src="../scripts/registry.mini.js?v=20261008-perf1" defer></script>
-    <script src="../scripts/documents.js?v=20261018-contracts1" defer></script>
+    <script src="../scripts/registry.mini.js?v=20261018-clean2" defer></script>
+    <script src="../scripts/documents.js?v=20261018-clean2" defer></script>
     <script src="../scripts/script.js?v=20261018-contracts1" defer></script>
   </body>
 </html>

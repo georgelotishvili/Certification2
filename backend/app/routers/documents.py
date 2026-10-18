@@ -268,7 +268,13 @@ def _ensure_default_contracts(db: Session) -> None:
             needs_refresh = (
                 matched is None
                 or not _stored_file_exists(matched.file_path)
-                or (item.get("strip_annex_1") and "IMP-2026-001" in (matched.content or ""))
+                or (
+                    item.get("strip_annex_1")
+                    and (
+                        "IMP-2026-001" in (matched.content or "")
+                        or "შიდა მოხმარების" in (matched.content or "")
+                    )
+                )
             )
             if not needs_refresh:
                 continue

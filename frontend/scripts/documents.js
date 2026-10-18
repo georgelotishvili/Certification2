@@ -20,27 +20,19 @@
       .replace(/'/g, '&#039;');
   }
 
-  function extractPlainPreview(doc) {
-    const rawHtml = String(doc?.content || '');
-    const title = String(doc?.title || '').replace(/\s+/g, ' ').trim();
-    if (!rawHtml) {
-      if (doc?.filename && String(doc.filename).toLowerCase().endsWith('.pdf')) {
-        return 'ოფიციალური PDF დოკუმენტი';
-      }
-      return 'ოფიციალური დოკუმენტი';
+  function parseDocumentTitleAndCode(doc) {
+    const rawTitle = String(doc?.title || 'უსათაურო დოკუმენტი').replace(/\s+/g, ' ').trim();
+    const codeMatch = rawTitle.match(/\(([A-Z]{2,}-[A-Z0-9-]+)\)\s*$/);
+    if (codeMatch) {
+      const cleanTitle = rawTitle.slice(0, codeMatch.index).trim() || rawTitle;
+      return { title: cleanTitle, code: codeMatch[1], fullTitle: rawTitle };
     }
-    try {
-      const parsed = new DOMParser().parseFromString(rawHtml, 'text/html');
-      let text = (parsed.body?.textContent || '').replace(/\s+/g, ' ').trim();
-      if (title && text.startsWith(title)) {
-        text = text.slice(title.length).replace(/^[\s.:;,\-–—]+/, '').trim();
-      }
-      if (!text) return 'ოფიციალური დოკუმენტი';
-      return text.length > 220 ? `${text.slice(0, 217)}...` : text;
-    } catch {
-      const fallback = rawHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-      return fallback.length > 220 ? `${fallback.slice(0, 217)}...` : (fallback || 'ოფიციალური დოკუმენტი');
-    }
+    const contentMatch = String(doc?.content || '').match(/GIPC-[A-Z]+-\d+/);
+    return {
+      title: rawTitle,
+      code: contentMatch ? contentMatch[0] : '',
+      fullTitle: rawTitle,
+    };
   }
 
   function initDocumentsPage() {
@@ -63,11 +55,11 @@
 
       if (DOM.resultsCount) {
         if (!total) {
-          DOM.resultsCount.textContent = 'დოკუმენტები ჯერ არ არის დამატებული';
+          DOM.resultsCount.textContent = '0 დოკუმენტი';
         } else if (query) {
-          DOM.resultsCount.textContent = `ნაპოვნია ${items.length} დოკუმენტი (სულ ${total})`;
+          DOM.resultsCount.textContent = `${items.length} / ${total}`;
         } else {
-          DOM.resultsCount.textContent = `სულ წარმოდგენილია ${total} ოფიციალური დოკუმენტი`;
+          DOM.resultsCount.textContent = `${total} დოკუმენტი`;
         }
       }
 
@@ -87,21 +79,23 @@
           const originalIdx = allDocuments.indexOf(doc);
           const displayNumber = String((originalIdx >= 0 ? originalIdx : idx) + 1).padStart(2, '0');
           const safeId = escapeHtml(String(doc.id));
-          const safeTitle = escapeHtml(doc.title || 'უსათაურო დოკუმენტი');
-          const safePreview = escapeHtml(extractPlainPreview(doc));
+          const parsed = parseDocumentTitleAndCode(doc);
+          const safeTitle = escapeHtml(parsed.title);
+          const safeFullTitle = escapeHtml(parsed.fullTitle);
+          const safeCode = parsed.code ? escapeHtml(parsed.code) : '';
 
           return `
-            <article class="doc-public-card" role="listitem" tabindex="0" data-doc-card-id="${safeId}" aria-label="${safeTitle}">
+            <article class="doc-public-card" role="listitem" tabindex="0" data-doc-card-id="${safeId}" aria-label="${safeFullTitle}">
               <div class="doc-public-index" aria-hidden="true">${displayNumber}</div>
               <div class="doc-public-body">
-                <h3 class="doc-public-title">${safeTitle}</h3>
-                <p class="doc-public-preview">${safePreview}</p>
+                <h2 class="doc-public-title">${safeTitle}</h2>
+                ${safeCode ? `<span class="doc-public-code">${safeCode}</span>` : ''}
               </div>
               <div class="doc-public-actions">
                 <button type="button" class="doc-public-view-btn" data-open-doc="${safeId}">
                   <span>დოკუმენტის ნახვა</span>
                 </button>
-                <button type="button" class="doc-public-pdf-btn" data-download-pdf="${safeId}" aria-label="${safeTitle} — PDF ჩამოტვირთვა">
+                <button type="button" class="doc-public-pdf-btn" data-download-pdf="${safeId}" aria-label="${safeFullTitle} — PDF ჩამოტვირთვა">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   <span>PDF ჩამოტვირთვა</span>
                 </button>

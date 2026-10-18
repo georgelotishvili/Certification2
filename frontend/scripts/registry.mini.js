@@ -158,13 +158,15 @@
         DOM.clearSearch = clear;
       }
 
-      const checkboxes = DOM.overlay.querySelector('.registry-checkboxes');
-      if (checkboxes && !DOM.filterBadge) {
-        const badge = document.createElement('span');
-        badge.className = 'registry-filter-count';
-        badge.hidden = true;
-        checkboxes.appendChild(badge);
-        DOM.filterBadge = badge;
+      if (!pageMode) {
+        const checkboxes = DOM.overlay.querySelector('.registry-checkboxes');
+        if (checkboxes && !DOM.filterBadge) {
+          const badge = document.createElement('span');
+          badge.className = 'registry-filter-count';
+          badge.hidden = true;
+          checkboxes.appendChild(badge);
+          DOM.filterBadge = badge;
+        }
       }
     }
 
@@ -196,9 +198,20 @@
       ].filter(([, input]) => input?.checked).map(([key]) => key);
     }
 
+    function hasActiveFilters() {
+      return Boolean(
+        normalizeText(DOM.search?.value) ||
+        selectedQualifications().length > 0 ||
+        (DOM.sort && DOM.sort.value && DOM.sort.value !== 'date_desc')
+      );
+    }
+
     function updateControls() {
       if (DOM.clearSearch) DOM.clearSearch.hidden = !normalizeText(DOM.search?.value);
       updateFilterBadge(selectedQualifications().length);
+      if (DOM.resetFilters) {
+        DOM.resetFilters.hidden = !hasActiveFilters();
+      }
     }
 
     function cancelRequest() {
@@ -216,7 +229,6 @@
       updateControls();
       STATE.loading = true;
       DOM.list?.setAttribute('aria-busy', 'true');
-      if (DOM.resultsCount) DOM.resultsCount.textContent = 'მონაცემები ახლდება...';
       updatePagination();
       STATE.searchTimer = setTimeout(() => {
         STATE.searchTimer = null;
@@ -247,7 +259,7 @@
       STATE.failed = false;
       if (DOM.error) { DOM.error.hidden = true; DOM.error.innerHTML = ''; }
       DOM.list.setAttribute('aria-busy', 'true');
-      if (DOM.resultsCount) DOM.resultsCount.textContent = STATE.loaded ? 'მონაცემები ახლდება...' : 'მონაცემები იტვირთება...';
+      if (DOM.resultsCount && !STATE.loaded) DOM.resultsCount.textContent = '—';
       if (!STATE.loaded) renderSkeleton();
       updatePagination();
       STATE.pending = loadPage(params, requestId, STATE.controller?.signal);
@@ -280,7 +292,7 @@
         if (requestId !== STATE.requestId || error?.name === 'AbortError') return;
         STATE.failed = true;
         if (DOM.resultsCount) DOM.resultsCount.textContent = STATE.loaded
-          ? 'განახლება ვერ მოხერხდა — ნაჩვენებია წინა შედეგები' : 'მონაცემების ჩატვირთვა ვერ მოხერხდა';
+          ? `${STATE.total} ჩანაწერი` : '—';
         const target = STATE.loaded && DOM.error ? DOM.error : DOM.list;
         target.hidden = false;
         target.innerHTML = `<div class="registry-empty">
@@ -389,7 +401,7 @@
     function renderSkeleton() {
       if (!DOM.list) return;
       const fragment = document.createDocumentFragment();
-      for (let i = 0; i < 7; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         const item = document.createElement('div');
         item.className = 'registry-card registry-skeleton-card';
         item.setAttribute('aria-hidden', 'true');
@@ -410,8 +422,14 @@
       STATE.filtered = items;
       if (DOM.totalCount) DOM.totalCount.textContent = String(STATE.total);
       if (DOM.resultsCount) {
-        const range = items.length ? `${STATE.offset + 1}–${STATE.offset + items.length}` : '0';
-        DOM.resultsCount.textContent = `ნაჩვენებია ${range} / ${STATE.filteredTotal} ჩანაწერი · სულ ${STATE.total}`;
+        if (STATE.filteredTotal !== STATE.total) {
+          DOM.resultsCount.textContent = `${STATE.filteredTotal} / ${STATE.total}`;
+        } else if (STATE.filteredTotal > STATE.limit) {
+          const range = items.length ? `${STATE.offset + 1}–${STATE.offset + items.length}` : '0';
+          DOM.resultsCount.textContent = `${range} / ${STATE.total}`;
+        } else {
+          DOM.resultsCount.textContent = `${STATE.total} ჩანაწერი`;
+        }
       }
       if (!items.length) {
         DOM.list.innerHTML = '<div class="registry-empty"><strong>ჩანაწერები ვერ მოიძებნა</strong><p>შეცვალეთ საძიებო სიტყვა ან გაასუფთავეთ ფილტრები.</p></div>';
@@ -499,12 +517,11 @@
             <span class="registry-qualification">${escapeHtml(qualifications[person.qualification] || 'სერტიფიცირებული პირი')}</span>
             <span class="registry-status"><span aria-hidden="true"></span>${escapeHtml(statuses[person.certificate_status] || 'სტატუსი მითითებული არ არის')}</span>
           </div>
-          <h3 class="registry-name"><a class="registry-profile-link" href="${escapeHtml(profileUrl)}">${fullName}</a></h3>
+          <h2 class="registry-name"><a class="registry-profile-link" href="${escapeHtml(profileUrl)}">${fullName}</a></h2>
           <div class="registry-card-bottom">
             <div class="registry-code"><span>სერტიფიცირების კოდი</span><strong>${escapeHtml(person.unique_code || '—')}</strong></div>
             <span class="registry-rating" aria-label="რეიტინგი">⭐ ${formatRating(person.rating)}</span>
           </div>
-          <span class="registry-profile-hint" aria-hidden="true">პროფილის ნახვა <span>↗</span></span>
         </div>`;
       const avatarButton = card.querySelector('button.registry-avatar');
       avatarButton?.addEventListener('click', () => showPhotoModal(person.photo_url, person.full_name, avatarButton));
@@ -532,5 +549,3 @@
 
   window.Registry = { init };
 })();
-
-

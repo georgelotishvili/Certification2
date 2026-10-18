@@ -33,34 +33,24 @@
     <script src="../scripts/header.js?v=20261018-contracts1" defer></script>
     <link rel="stylesheet" href="../styles/styles.css?v=20261017-smooth1" />
     <link rel="stylesheet" href="../styles/header.css?v=20261018-stmt-tabs2" />
-    <link rel="stylesheet" href="../styles/registry.css?v=20261018-blueprint1" />
+    <link rel="stylesheet" href="../styles/registry.css?v=20261018-clean2" />
   </head>
   <body class="registry-document">
     <!-- The same shared header used by the homepage and personal page. -->
     <main class="registry-page" id="registryPage">
-      <nav class="registry-breadcrumb" aria-label="გვერდის მდებარეობა">
-        <a href="index.html">მთავარი გვერდი</a>
-        <span aria-hidden="true">/</span>
-        <span aria-current="page">რეესტრი</span>
-      </nav>
-
-      <section class="registry-intro" aria-labelledby="registryTitle">
-        <div class="registry-intro-copy">
-          <p class="registry-kicker">საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი</p>
-          <h1 id="registryTitle">სერტიფიცირებული პირების რეესტრი</h1>
-          <p class="registry-description">არქიტექტორები, არქიტექტორი ექსპერტები და მუნიციპალიტეტის სპეციალისტები. მოძებნეთ პირი სახელით, გვარით ან სერტიფიცირების კოდით და გაეცანით მის პროფილს.</p>
+      <section class="registry-controls" aria-labelledby="registryTitle">
+        <div class="registry-toolbar-head">
+          <div class="registry-title-group">
+            <h1 id="registryTitle">სერტიფიცირებული პირების რეესტრი</h1>
+            <span id="registryResultsCount" class="registry-count-badge" role="status" aria-live="polite" aria-atomic="true">—</span>
+          </div>
+          <button type="button" id="registryResetFilters" class="registry-reset" hidden>ფილტრების გასუფთავება</button>
         </div>
-        <div class="registry-total" aria-label="რეესტრში ჩანაწერების რაოდენობა">
-          <strong id="registryTotalCount">—</strong>
-          <span>ჩანაწერი</span>
-        </div>
-      </section>
 
-      <section class="registry-controls" aria-label="რეესტრში ძიება და ფილტრები">
         <div class="registry-control-row">
           <div class="registry-search-field">
             <label class="registry-field-label" for="registrySearch">პირის ძიება</label>
-            <input type="search" id="registrySearch" class="registry-search" placeholder="სახელი, გვარი ან სერტიფიცირების კოდი" autocomplete="off" maxlength="300" />
+            <input type="search" id="registrySearch" class="registry-search" placeholder="სახელი, გვარი ან სერტიფიცირების კოდი..." autocomplete="off" maxlength="300" />
           </div>
           <label class="registry-sort" for="registrySort">
             <span class="registry-field-label">დალაგება</span>
@@ -74,18 +64,19 @@
             </select>
           </label>
         </div>
+
         <fieldset class="registry-filter-fieldset">
           <legend class="registry-field-label">კვალიფიკაცია</legend>
           <div class="registry-checkboxes">
-            <label class="registry-check">
+            <label class="registry-check" data-qual="architect">
               <input type="checkbox" id="registryFilterArchitect" />
               <span>არქიტექტორი</span>
             </label>
-            <label class="registry-check">
+            <label class="registry-check" data-qual="expert">
               <input type="checkbox" id="registryFilterExpert" />
               <span>არქიტექტორი ექსპერტი</span>
             </label>
-            <label class="registry-check">
+            <label class="registry-check" data-qual="municipal">
               <input type="checkbox" id="registryFilterMunicipal" />
               <span>მუნიციპალიტეტის სპეციალისტი</span>
             </label>
@@ -93,14 +84,7 @@
         </fieldset>
       </section>
 
-      <section class="registry-results" aria-labelledby="registryResultsTitle">
-        <div class="registry-results-head">
-          <div>
-            <h2 id="registryResultsTitle">რეესტრის ჩანაწერები</h2>
-            <p id="registryResultsCount" class="registry-results-count" role="status" aria-live="polite" aria-atomic="true">მონაცემები იტვირთება...</p>
-          </div>
-          <button type="button" id="registryResetFilters" class="registry-reset">ფილტრების გასუფთავება</button>
-        </div>
+      <section class="registry-results" aria-label="რეესტრის ჩანაწერები">
         <noscript>
           <p class="registry-noscript">ჩანაწერების ჩასატვირთად და მოსაძებნად ჩართეთ JavaScript თქვენს ბრაუზერში. ინფორმაციისთვის დაგვიკავშირდით: <a href="mailto:info@gipc.ge">info@gipc.ge</a>.</p>
         </noscript>
@@ -111,7 +95,6 @@
           <span id="registryPageNumber" role="status" aria-live="polite"></span>
           <button id="registryNext" type="button">შემდეგი</button>
         </nav>
-        <p class="registry-status-note">ჩანაწერში მითითებულია სერტიფიკატის მიმდინარე სტატუსი. რეესტრში შეიძლება გამოჩნდეს მოქმედი, შეჩერებული ან ვადაგასული სერტიფიკატი.</p>
       </section>
     </main>
 
@@ -138,7 +121,7 @@
         <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია <a href="admin.html" class="admin-link" style="display:none">/ ადმინ გვერდი</a></p>
       </div>
     </footer>
-    <script src="../scripts/registry.mini.js?v=20261008-perf1" defer></script>
+    <script src="../scripts/registry.mini.js?v=20261018-clean2" defer></script>
     <script src="../scripts/script.js?v=20261018-contracts1" defer></script>
   </body>
 </html>

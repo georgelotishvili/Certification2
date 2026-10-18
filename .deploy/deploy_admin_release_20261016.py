@@ -86,6 +86,7 @@ CANDIDATE_FILES = [
     "frontend/scripts/documents.js",
     "frontend/scripts/header.js",
     "frontend/scripts/my.js",
+    "frontend/scripts/registry.mini.js",
     "frontend/scripts/script.js",
     "frontend/styles/admin.css",
     "frontend/styles/documents.css",

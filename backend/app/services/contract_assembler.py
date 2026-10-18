@@ -121,7 +121,9 @@ def strip_internal_annexes(md_text: str, force: bool = False) -> str:
         or "GIPC-PRO-003" in normalized
         or "ვებგვერდზე არ ქვეყნდება" in normalized
     ):
-        return _INTERNAL_ANNEX_RE.sub("", normalized).rstrip() + "\n"
+        cleaned = _INTERNAL_ANNEX_RE.sub("", normalized)
+        cleaned = re.sub(r"\s*\(დანართი\s*№\s*1\s*[—–-]\s*შიდა\s+მოხმარების\)", "", cleaned)
+        return cleaned.rstrip() + "\n"
     return normalized
 
 
