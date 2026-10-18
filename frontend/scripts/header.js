@@ -1234,8 +1234,8 @@
     sanitizeWordStyles,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-stmt-tabs1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_stmt_tabs1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-stmt-tabs2';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_stmt_tabs2';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1680,6 +1680,27 @@
       renderExamFilesList();
     }
 
+    function syncExamSelectionState(changedInput) {
+      if (!statementsDOM.examForm) return;
+      const categoryInputs = Array.from(
+        statementsDOM.examForm.querySelectorAll?.('input[name="exam_category"]') || []
+      );
+      if (changedInput && changedInput.name === 'exam_category' && changedInput.checked) {
+        categoryInputs.forEach((inp) => {
+          if (inp !== changedInput) inp.checked = false;
+        });
+      }
+      categoryInputs.forEach((inp) => {
+        const optionLabel = inp.closest?.('.exam-category-option');
+        optionLabel?.classList?.toggle?.('is-selected', !!inp.checked);
+      });
+      if (statementsDOM.examConfirmCheckbox) {
+        const confirmLabel = statementsDOM.examConfirmCheckbox.closest?.('.exam-confirm-option')
+          || document.getElementById('examConfirmLabel');
+        confirmLabel?.classList?.toggle?.('is-selected', !!statementsDOM.examConfirmCheckbox.checked);
+      }
+    }
+
     async function handleExamApplicationSubmit(event) {
       event.preventDefault();
       if (!statementsDOM.examForm) return;
@@ -1766,6 +1787,7 @@
         const docNumNotice = data?.doc_number ? ` (დოკუმენტის №: ${data.doc_number})` : '';
         alert(`თქვენი განაცხადი მიღებულია!${docNumNotice}`);
         statementsDOM.examForm.reset?.();
+        syncExamSelectionState();
         examSelectedFiles = [];
         renderExamFilesList();
         setMetaFromUser();
@@ -1855,6 +1877,7 @@
       cache = [];
       examSelectedFiles = [];
       renderExamFilesList();
+      syncExamSelectionState();
       if (overlayOpen) {
         closeOverlay();
       }
@@ -1889,6 +1912,9 @@
       }
       if (statementsDOM.examForm) {
         on(statementsDOM.examForm, 'submit', handleExamApplicationSubmit);
+        on(statementsDOM.examForm, 'change', (event) => {
+          syncExamSelectionState(event?.target || null);
+        });
       }
       if (statementsDOM.examFilesChoose) {
         on(statementsDOM.examFilesChoose, 'click', () => {

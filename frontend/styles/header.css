@@ -1974,14 +1974,20 @@ body.modal-open {
   color: #334155;
 }
 
+#userStatementsOverlay .exam-app-section,
 #userStatementsOverlay .exam-app-section-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+#userStatementsOverlay .exam-app-section textarea {
+  min-height: 92px;
+  margin-top: 2px;
 }
 
 #userStatementsOverlay .exam-app-lead {
-  margin: 2px 0 4px;
+  margin: 0;
   font-size: 13.5px;
   font-weight: 600;
   color: #1e293b;
@@ -1994,60 +2000,48 @@ body.modal-open {
   gap: 8px;
 }
 
-#userStatementsOverlay .exam-category-option {
+#userStatementsOverlay .exam-category-option,
+#userStatementsOverlay .exam-confirm-option {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 11px;
   padding: 11px 13px;
   border: 1px solid #cbd5e1;
   background: #ffffff;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #0f172a;
   cursor: pointer;
+  user-select: none;
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-#userStatementsOverlay .exam-category-option:hover {
+#userStatementsOverlay .exam-category-option:hover,
+#userStatementsOverlay .exam-confirm-option:hover {
   border-color: #88add6;
   background: #f8fbff;
 }
 
-#userStatementsOverlay .exam-category-option.is-selected {
+#userStatementsOverlay .exam-category-option.is-selected,
+#userStatementsOverlay .exam-category-option:has(input:checked),
+#userStatementsOverlay .exam-confirm-option.is-selected,
+#userStatementsOverlay .exam-confirm-option:has(input:checked) {
   border-color: #1C468C;
   background: #eef4fc;
   box-shadow: 0 0 0 1px #1C468C;
 }
 
-#userStatementsOverlay .exam-category-option input[type="radio"] {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
-}
-
-#userStatementsOverlay .exam-category-box {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+#userStatementsOverlay .exam-category-option input[type="checkbox"],
+#userStatementsOverlay .exam-confirm-option input[type="checkbox"] {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
   width: 18px;
   height: 18px;
-  margin-top: 2px;
-  border: 1.5px solid #64748b;
-  background: #ffffff;
-  color: transparent;
-  font-size: 12px;
-  font-weight: 700;
+  margin: 2px 0 0;
+  accent-color: #1C468C;
+  cursor: pointer;
   flex-shrink: 0;
-  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
-}
-
-#userStatementsOverlay .exam-category-option.is-selected .exam-category-box {
-  border-color: #1C468C;
-  background: #1C468C;
-  color: #ffffff;
-}
-
-#userStatementsOverlay .exam-category-box::after {
-  content: "✓";
 }
 
 #userStatementsOverlay .exam-category-text {
@@ -2086,7 +2080,7 @@ body.modal-open {
 }
 
 #userStatementsOverlay .exam-doc-requirements {
-  margin: 2px 0 6px 18px;
+  margin: 0 0 2px 18px;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -2109,7 +2103,7 @@ body.modal-open {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 4px;
   padding: 10px 12px;
   border: 1px solid #cbd8e8;
   background: #ffffff;
@@ -2191,28 +2185,6 @@ body.modal-open {
   border-color: #fca5a5;
   background: #fef2f2;
   color: #b91c1c;
-}
-
-#userStatementsOverlay .exam-confirm-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: #0f172a;
-  cursor: pointer;
-}
-
-#userStatementsOverlay .exam-confirm-option input[type="checkbox"] {
-  width: 17px;
-  height: 17px;
-  margin-top: 2px;
-  accent-color: #1C468C;
-  flex-shrink: 0;
-  cursor: pointer;
 }
 
 #userStatementsOverlay .exam-applicant-signature {

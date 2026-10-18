@@ -189,7 +189,10 @@
 
         <!-- Tab 1: Exam Admission Application Form (Default Active) -->
         <form id="examApplicationForm" class="statement-compose statement-exam-compose" role="tabpanel" aria-labelledby="statementTabExam">
-          <div class="exam-app-header-banner">სერტიფიცირების განაცხადი</div>
+          <div class="exam-app-header-banner">
+            <div class="exam-app-header-title">სერტიფიცირების განაცხადი</div>
+            <p class="exam-app-header-sub">შეავსეთ ქვემოთ მოცემული ველები სასერტიფიკაციო გამოცდაზე დაშვებისთვის.</p>
+          </div>
 
           <!-- Section 1: Category -->
           <div class="statement-message-field exam-app-section">
@@ -198,31 +201,26 @@
               <span class="statement-required-badge">სავალდებულო</span>
             </div>
             <p class="exam-app-lead">ვითხოვ სასერტიფიკაციო გამოცდაზე დაშვებას და ქვემოთ მონიშნული კატეგორიის სერტიფიკატის გაცემას:</p>
-            <div class="exam-category-list" role="radiogroup" aria-label="მოთხოვნილი სერტიფიკატის კატეგორია">
+            <div class="exam-category-list" role="group" aria-label="მოთხოვნილი სერტიფიკატის კატეგორია">
               <label class="exam-category-option">
-                <input type="radio" name="exam_category" value="1) კატეგორია A — შენობა-ნაგებობის არქიტექტორი" />
-                <span class="exam-category-box" aria-hidden="true"></span>
-                <span class="exam-category-text">1) კატეგორია A — შენობა-ნაგებობის არქიტექტორი</span>
+                <input type="checkbox" name="exam_category" value="1) კატეგორია A — შენობა-ნაგებობის არქიტექტორი" />
+                <span class="exam-category-text"><strong>1) კატეგორია A</strong> — შენობა-ნაგებობის არქიტექტორი</span>
               </label>
               <label class="exam-category-option">
-                <input type="radio" name="exam_category" value="2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
-                <span class="exam-category-box" aria-hidden="true"></span>
-                <span class="exam-category-text">2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
+                <input type="checkbox" name="exam_category" value="2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
+                <span class="exam-category-text"><strong>2) კატეგორია C ან A</strong> (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
               </label>
               <label class="exam-category-option">
-                <input type="radio" name="exam_category" value="3) კატეგორია B ან A (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
-                <span class="exam-category-box" aria-hidden="true"></span>
-                <span class="exam-category-text">3) კატეგორია B ან A (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
+                <input type="checkbox" name="exam_category" value="3) კატეგორია B ან A (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
+                <span class="exam-category-text"><strong>3) კატეგორია B ან A</strong> (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
               </label>
               <label class="exam-category-option">
-                <input type="radio" name="exam_category" value="4) კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი" />
-                <span class="exam-category-box" aria-hidden="true"></span>
-                <span class="exam-category-text">4) კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი</span>
+                <input type="checkbox" name="exam_category" value="4) კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი" />
+                <span class="exam-category-text"><strong>4) კატეგორია B</strong> — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი</span>
               </label>
               <label class="exam-category-option">
-                <input type="radio" name="exam_category" value="5) კატეგორია C — არქიტექტურული პროექტის ექსპერტი" />
-                <span class="exam-category-box" aria-hidden="true"></span>
-                <span class="exam-category-text">5) კატეგორია C — არქიტექტურული პროექტის ექსპერტი</span>
+                <input type="checkbox" name="exam_category" value="5) კატეგორია C — არქიტექტურული პროექტის ექსპერტი" />
+                <span class="exam-category-text"><strong>5) კატეგორია C</strong> — არქიტექტურული პროექტის ექსპერტი</span>
               </label>
             </div>
             <div class="exam-app-warning" role="note">
@@ -237,9 +235,9 @@
               <span class="statement-optional">არასავალდებულო</span>
             </div>
             <ul class="exam-doc-requirements">
-              <li>პირადობის მოწმობის ან პასპორტის ასლი;</li>
-              <li>არქიტექტურაში უმაღლესი განათლების დიპლომის ასლი (A და B კატეგორიისთვის — არანაკლებ ბაკალავრის ან მასთან გათანაბრებული აკადემიური ხარისხი; C კატეგორიისთვის — მაგისტრის ან მასთან გათანაბრებული აკადემიური ხარისხი; 2029 წლის 1 იანვრამდე A და B კატეგორიაზე გარდამავალი წესით უდიპლომოდ გასვლისას დიპლომის წარდგენა სავალდებულო არ არის);</li>
-              <li>სამუშაო გამოცდილების დამადასტურებელი დოკუმენტი (A და B კატეგორიისთვის — არანაკლებ 3 წელი, მათ შორის ბოლო 2 წლის უწყვეტი პრაქტიკა; C კატეგორიისთვის — არანაკლებ 10 წელი, მათ შორის ბოლო 2 წლის უწყვეტი საექსპერტო პრაქტიკა).</li>
+              <li><strong>პირადობის დამადასტურებელი დოკუმენტის ასლი</strong> (პირადობის მოწმობა ან პასპორტი);</li>
+              <li><strong>უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი</strong> <span class="exam-doc-req-note">(A და B კატეგორიისთვის — არანაკლებ ბაკალავრის ან მასთან გათანაბრებული აკადემიური ხარისხი; C კატეგორიისთვის — მაგისტრის ან მასთან გათანაბრებული აკადემიური ხარისხი; 2029 წლის 1 იანვრამდე A და B კატეგორიაზე გარდამავალი წესით უდიპლომოდ გასვლისას დიპლომის წარდგენა სავალდებულო არ არის)</span>;</li>
+              <li><strong>სპეციალობით მუშაობის / საექსპერტო პრაქტიკის დამადასტურებელი დოკუმენტ(ებ)ი</strong> <span class="exam-doc-req-note">(A და B კატეგორიისთვის — არანაკლებ 3 წელი, მათ შორის ბოლო 2 წლის უწყვეტი პრაქტიკა; C კატეგორიისთვის — არანაკლებ 10 წელი, მათ შორის ბოლო 2 წლის უწყვეტი საექსპერტო პრაქტიკა)</span>.</li>
             </ul>
             <div class="statement-file-controls" id="examFileControls">
               <button type="button" class="statement-file-choose" id="examFilesChoose" aria-describedby="examFilesHint">
@@ -250,7 +248,9 @@
               <input type="text" class="statement-file-display" id="examFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="არჩეული ფაილების რაოდენობა" readonly />
             </div>
             <div class="exam-uploaded-files-wrap" id="examFilesListWrap" hidden>
-              <span class="exam-uploaded-files-label">ატვირთული ფაილ(ებ)ი:</span>
+              <div class="exam-uploaded-files-head">
+                <span class="exam-uploaded-files-title">ატვირთული ფაილ(ებ)ი:</span>
+              </div>
               <ul class="exam-uploaded-files-list" id="examFilesList"></ul>
             </div>
             <p id="examFilesHint" class="statement-hint">შეგიძლიათ აირჩიოთ ერთი ან რამდენიმე ფაილი (PDF, JPG, JPEG, PNG, DOC, DOCX, ZIP, RAR · ჯამში მაქსიმუმ 100 მბ)</p>
@@ -271,12 +271,11 @@
               <span class="statement-field-label">4. განმცხადებლის დადასტურება</span>
               <span class="statement-required-badge">სავალდებულო</span>
             </div>
-            <label class="exam-confirm-option">
+            <label class="exam-confirm-option" id="examConfirmLabel">
               <input type="checkbox" id="examConfirmCheckbox" name="exam_confirm" />
-              <span class="exam-category-box" aria-hidden="true"></span>
               <span class="exam-category-text">ვადასტურებ, რომ გავეცანი საიტზე gipc.org.ge გამოქვეყნებულ სერტიფიცირების პირობებს, წარმოდგენილი დოკუმენტები უტყუარია, ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები, წარვადგინო შეფასებისთვის საჭირო ნებისმიერი ინფორმაცია და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.</span>
             </label>
-            <div class="exam-app-warning exam-app-deadline-note" role="note">
+            <div class="exam-app-warning exam-app-deadline-warning" role="note">
               <strong>განაცხადის განხილვის ვადა:</strong> განაცხადი განიხილება წარდგენიდან არაუმეტეს 10 სამუშაო დღის ვადაში, რის შესახებაც გეცნობებათ ელექტრონულად.
             </div>
             <div class="exam-applicant-signature" id="examApplicantSignature">
@@ -285,7 +284,7 @@
           </div>
 
           <div class="compose-actions">
-            <p class="statement-hint">გაგზავნილი განაცხადი მიიღებს უნიკალურ ნომერს და შეინახება ისტორიაში.</p>
+            <p class="compose-archive-note">გაგზავნილი განაცხადი მიიღებს უნიკალურ ნომერს და შეინახება ისტორიაში.</p>
             <button type="submit" class="submit" id="examApplicationSubmit">განაცხადის გაგზავნა</button>
           </div>
         </form>
