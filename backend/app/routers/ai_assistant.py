@@ -967,6 +967,20 @@ def _parse_proposed_letters(
     return cleaned, proposals
 
 
+_WORKING_GEMINI_MODEL_BY_KEY: dict[str, str] = {}
+
+GEMINI_FALLBACK_CHAIN = (
+    "gemini-4-argon",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+)
+
+
 def _discover_available_gemini_model(api_key: str, preferred: str = "gemini-4-argon") -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models?key={urllib.parse.quote(api_key)}"
     try:
@@ -983,6 +997,9 @@ def _discover_available_gemini_model(api_key: str, preferred: str = "gemini-4-ar
             short_name = raw_name.split("/", 1)[-1] if "/" in raw_name else raw_name
             if short_name:
                 names.append(short_name)
+        for cand in GEMINI_FALLBACK_CHAIN:
+            if cand != preferred and cand in names:
+                return cand
         for n in names:
             if "argon" in n.lower() or "gemini-4" in n.lower():
                 return n
@@ -1043,45 +1060,69 @@ def _call_gemini_api(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=35) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
-    try:
-        resp_data = _send_for_model(model)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            resolved_model = _discover_available_gemini_model(api_key, preferred=model)
-            if resolved_model and resolved_model != model:
-                try:
-                    resp_data = _send_for_model(resolved_model)
-                except urllib.error.HTTPError as retry_exc:
-                    exc = retry_exc
-                else:
-                    candidates = resp_data.get("candidates") or []
-                    if not candidates:
-                        raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
-                    parts = candidates[0].get("content", {}).get("parts") or []
-                    text_chunks = [str(p.get("text") or "") for p in parts if "text" in p]
-                    return "\n".join(text_chunks).strip()
-        err_body = ""
-        try:
-            err_body = exc.read().decode("utf-8", errors="replace")
-            err_json = json.loads(err_body)
-            err_msg = err_json.get("error", {}).get("message") or err_body
-        except Exception:
-            err_msg = err_body or str(exc)
-        if exc.code in (400, 401, 403) and "API key" in err_msg:
-            raise HTTPException(400, "Gemini API Key არასწორია ან არააქტიურია. გადაამოწმეთ გასაღები პარამეტრებში.")
-        raise HTTPException(502, f"Gemini 4 Argon API შეცდომა ({exc.code}): {err_msg[:300]}")
-    except Exception as exc:
-        raise HTTPException(502, f"Gemini 4 Argon-თან დაკავშირება ვერ მოხერხდა: {exc}")
+    def _extract_reply(data: dict[str, Any]) -> str:
+        candidates = data.get("candidates") or []
+        if not candidates:
+            raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
+        parts = candidates[0].get("content", {}).get("parts") or []
+        text_chunks = [str(p.get("text") or "") for p in parts if "text" in p]
+        return "\n".join(text_chunks).strip()
 
-    candidates = resp_data.get("candidates") or []
-    if not candidates:
-        raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
-    parts = candidates[0].get("content", {}).get("parts") or []
-    text_chunks = [str(p.get("text") or "") for p in parts if "text" in p]
-    return "\n".join(text_chunks).strip()
+    key_hash = f"{api_key[:8]}:{model}"
+    cached_working = _WORKING_GEMINI_MODEL_BY_KEY.get(key_hash)
+
+    models_to_try: list[str] = []
+    if cached_working:
+        models_to_try.append(cached_working)
+    if model not in models_to_try:
+        models_to_try.append(model)
+    for fallback_m in GEMINI_FALLBACK_CHAIN:
+        if fallback_m not in models_to_try:
+            models_to_try.append(fallback_m)
+
+    last_exc: Exception | None = None
+    last_err_body = ""
+
+    for idx, target_model in enumerate(models_to_try):
+        try:
+            resp_data = _send_for_model(target_model)
+            _WORKING_GEMINI_MODEL_BY_KEY[key_hash] = target_model
+            return _extract_reply(resp_data)
+        except urllib.error.HTTPError as exc:
+            last_exc = exc
+            err_body = ""
+            try:
+                err_body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            last_err_body = err_body
+            if exc.code in (400, 401, 403) and "API key" in err_body:
+                raise HTTPException(
+                    400,
+                    "Gemini API Key არასწორია ან არააქტიურია. გადაამოწმეთ გასაღები პარამეტრებში.",
+                )
+            if exc.code in (404, 429, 500, 503):
+                if idx == 0 and exc.code == 404:
+                    discovered = _discover_available_gemini_model(api_key, preferred=model)
+                    if discovered and discovered not in models_to_try:
+                        models_to_try.insert(idx + 1, discovered)
+                continue
+            break
+        except Exception as exc:
+            last_exc = exc
+            continue
+
+    if isinstance(last_exc, urllib.error.HTTPError):
+        try:
+            err_json = json.loads(last_err_body)
+            err_msg = err_json.get("error", {}).get("message") or last_err_body
+        except Exception:
+            err_msg = last_err_body or str(last_exc)
+        raise HTTPException(502, f"Gemini 4 Argon API შეცდომა ({last_exc.code}): {err_msg[:300]}")
+    raise HTTPException(502, f"Gemini 4 Argon-თან დაკავშირება ვერ მოხერხდა: {last_exc}")
 
 
 def _discover_available_openai_model(api_key: str, preferred: str) -> str:
