@@ -178,10 +178,123 @@
         </div>
       </div>
       <div class="results-modal-body">
-        <form id="userStatementForm" class="statement-compose">
+        <div class="statement-tabs" role="tablist" aria-label="განაცხადის ტიპი">
+          <button type="button" class="statement-tab is-active" id="statementTabExam" role="tab" aria-selected="true" aria-controls="examApplicationForm" data-statement-tab="exam">
+            გამოცდაზე დაშვების განაცხადი
+          </button>
+          <button type="button" class="statement-tab" id="statementTabOther" role="tab" aria-selected="false" aria-controls="userStatementForm" data-statement-tab="other">
+            სხვა განაცხადი
+          </button>
+        </div>
+
+        <!-- Tab 1: Exam Admission Application Form (Default Active) -->
+        <form id="examApplicationForm" class="statement-compose statement-exam-compose" role="tabpanel" aria-labelledby="statementTabExam">
+          <div class="exam-app-header-banner">სერტიფიცირების განაცხადი</div>
+
+          <!-- Section 1: Category -->
+          <div class="statement-message-field exam-app-section">
+            <div class="statement-field-heading">
+              <span class="statement-field-label">1. მოთხოვნილი სერტიფიკატის კატეგორია</span>
+              <span class="statement-required-badge">სავალდებულო</span>
+            </div>
+            <p class="exam-app-lead">ვითხოვ სასერტიფიკაციო გამოცდაზე დაშვებას და ქვემოთ მონიშნული კატეგორიის სერტიფიკატის გაცემას:</p>
+            <div class="exam-category-list" role="radiogroup" aria-label="მოთხოვნილი სერტიფიკატის კატეგორია">
+              <label class="exam-category-option">
+                <input type="radio" name="exam_category" value="1) კატეგორია A — შენობა-ნაგებობის არქიტექტორი" />
+                <span class="exam-category-box" aria-hidden="true"></span>
+                <span class="exam-category-text">1) კატეგორია A — შენობა-ნაგებობის არქიტექტორი</span>
+              </label>
+              <label class="exam-category-option">
+                <input type="radio" name="exam_category" value="2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
+                <span class="exam-category-box" aria-hidden="true"></span>
+                <span class="exam-category-text">2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
+              </label>
+              <label class="exam-category-option">
+                <input type="radio" name="exam_category" value="3) კატეგორია B ან A (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
+                <span class="exam-category-box" aria-hidden="true"></span>
+                <span class="exam-category-text">3) კატეგორია B ან A (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
+              </label>
+              <label class="exam-category-option">
+                <input type="radio" name="exam_category" value="4) კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი" />
+                <span class="exam-category-box" aria-hidden="true"></span>
+                <span class="exam-category-text">4) კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი</span>
+              </label>
+              <label class="exam-category-option">
+                <input type="radio" name="exam_category" value="5) კატეგორია C — არქიტექტურული პროექტის ექსპერტი" />
+                <span class="exam-category-box" aria-hidden="true"></span>
+                <span class="exam-category-text">5) კატეგორია C — არქიტექტურული პროექტის ექსპერტი</span>
+              </label>
+            </div>
+            <div class="exam-app-warning" role="note">
+              <strong>გაითვალისწინეთ:</strong> თუ წარმოდგენილი დოკუმენტებით (განათლებითა და სამუშაო გამოცდილებით) ვერ დააკმაყოფილებთ მოთხოვნილ კატეგორიას, განაცხადზე მიიღებთ უარს.
+            </div>
+          </div>
+
+          <!-- Section 2: Attached Documents -->
+          <div class="statement-file exam-app-section">
+            <div class="statement-field-heading">
+              <span class="statement-field-label">2. თანდართული დოკუმენტები</span>
+              <span class="statement-optional">არასავალდებულო</span>
+            </div>
+            <ul class="exam-doc-requirements">
+              <li>პირადობის მოწმობის ან პასპორტის ასლი;</li>
+              <li>არქიტექტურაში უმაღლესი განათლების დიპლომის ასლი (A და B კატეგორიისთვის — არანაკლებ ბაკალავრის ან მასთან გათანაბრებული აკადემიური ხარისხი; C კატეგორიისთვის — მაგისტრის ან მასთან გათანაბრებული აკადემიური ხარისხი; 2029 წლის 1 იანვრამდე A და B კატეგორიაზე გარდამავალი წესით უდიპლომოდ გასვლისას დიპლომის წარდგენა სავალდებულო არ არის);</li>
+              <li>სამუშაო გამოცდილების დამადასტურებელი დოკუმენტი (A და B კატეგორიისთვის — არანაკლებ 3 წელი, მათ შორის ბოლო 2 წლის უწყვეტი პრაქტიკა; C კატეგორიისთვის — არანაკლებ 10 წელი, მათ შორის ბოლო 2 წლის უწყვეტი საექსპერტო პრაქტიკა).</li>
+            </ul>
+            <div class="statement-file-controls" id="examFileControls">
+              <button type="button" class="statement-file-choose" id="examFilesChoose" aria-describedby="examFilesHint">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+                ფაილ(ებ)ის არჩევა
+              </button>
+              <input type="file" id="examFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="თანდართული დოკუმენტები" aria-describedby="examFilesHint" tabindex="-1" />
+              <input type="text" class="statement-file-display" id="examFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="არჩეული ფაილების რაოდენობა" readonly />
+            </div>
+            <div class="exam-uploaded-files-wrap" id="examFilesListWrap" hidden>
+              <span class="exam-uploaded-files-label">ატვირთული ფაილ(ებ)ი:</span>
+              <ul class="exam-uploaded-files-list" id="examFilesList"></ul>
+            </div>
+            <p id="examFilesHint" class="statement-hint">შეგიძლიათ აირჩიოთ ერთი ან რამდენიმე ფაილი (PDF, JPG, JPEG, PNG, DOC, DOCX, ZIP, RAR · ჯამში მაქსიმუმ 100 მბ)</p>
+          </div>
+
+          <!-- Section 3: Additional Info -->
+          <div class="statement-message-field exam-app-section">
+            <div class="statement-field-heading">
+              <label for="examAdditionalInfo" class="statement-field-label">3. დამატებითი ინფორმაცია / სპეციალური საჭიროება გამოცდაზე (არსებობისას)</label>
+              <span class="statement-optional">არასავალდებულო</span>
+            </div>
+            <textarea id="examAdditionalInfo" name="additional_info" placeholder="მიუთითეთ დამატებითი ინფორმაცია ან სპეციალური საჭიროება გამოცდაზე (არსებობისას)…" rows="3"></textarea>
+          </div>
+
+          <!-- Section 4: Applicant Confirmation -->
+          <div class="statement-message-field exam-app-section">
+            <div class="statement-field-heading">
+              <span class="statement-field-label">4. განმცხადებლის დადასტურება</span>
+              <span class="statement-required-badge">სავალდებულო</span>
+            </div>
+            <label class="exam-confirm-option">
+              <input type="checkbox" id="examConfirmCheckbox" name="exam_confirm" />
+              <span class="exam-category-box" aria-hidden="true"></span>
+              <span class="exam-category-text">ვადასტურებ, რომ გავეცანი საიტზე gipc.org.ge გამოქვეყნებულ სერტიფიცირების პირობებს, წარმოდგენილი დოკუმენტები უტყუარია, ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები, წარვადგინო შეფასებისთვის საჭირო ნებისმიერი ინფორმაცია და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.</span>
+            </label>
+            <div class="exam-app-warning exam-app-deadline-note" role="note">
+              <strong>განაცხადის განხილვის ვადა:</strong> განაცხადი განიხილება წარდგენიდან არაუმეტეს 10 სამუშაო დღის ვადაში, რის შესახებაც გეცნობებათ ელექტრონულად.
+            </div>
+            <div class="exam-applicant-signature" id="examApplicantSignature">
+              განმცხადებელი: — (დადასტურებულია ელექტრონულად).
+            </div>
+          </div>
+
+          <div class="compose-actions">
+            <p class="statement-hint">გაგზავნილი განაცხადი მიიღებს უნიკალურ ნომერს და შეინახება ისტორიაში.</p>
+            <button type="submit" class="submit" id="examApplicationSubmit">განაცხადის გაგზავნა</button>
+          </div>
+        </form>
+
+        <!-- Tab 2: Other Statement Form -->
+        <form id="userStatementForm" class="statement-compose" role="tabpanel" aria-labelledby="statementTabOther" hidden>
           <div class="statement-message-field">
             <div class="statement-field-heading">
-              <label for="userStatementMessage" class="statement-field-label">ახალი განცხადება</label>
+              <label for="userStatementMessage" class="statement-field-label">სხვა განაცხადი / შეტყობინება</label>
               <span class="statement-required-badge">სავალდებულო</span>
             </div>
             <p id="statementMessageHint" class="statement-hint">მოგვწერეთ თქვენი საკითხის შესახებ.</p>
@@ -202,7 +315,7 @@
             </div>
             <p id="statementFileHint" class="statement-hint">ZIP, RAR, PDF, JPG, JPEG, DOC, DOCX · მაქსიმუმ 100 მბ</p>
           </div>
-          <div class="statement-app-form">
+          <div class="statement-app-form" hidden style="display:none;">
             <div class="statement-app-form-info">
               <span class="statement-app-form-label">განაცხადის ფორმა</span>
               <p class="statement-hint">საჭიროების შემთხვევაში ჩამოტვირთეთ და შეავსეთ.</p>

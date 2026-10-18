@@ -538,6 +538,7 @@ class StatementCreate(BaseModel):
 
 class StatementOut(BaseModel):
     id: int
+    doc_number: str | None = None
     message: str
     created_at: datetime
     attachment_filename: str | None = None
@@ -545,6 +546,7 @@ class StatementOut(BaseModel):
 
 class AdminStatementOut(BaseModel):
     id: int
+    doc_number: str | None = None
     user_id: int
     user_first_name: str | None = None
     user_last_name: str | None = None

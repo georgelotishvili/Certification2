@@ -304,6 +304,48 @@ class StatementAnsweredTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             StatementAnsweredRequest(answered="not-a-boolean")
 
+    def test_doc_number_assigned_and_searchable_in_admin_users(self):
+        from backend.app.models import PlanningLetter
+
+        statement = self.add_statement(seen=True, created_at=datetime(2026, 10, 18, 9, 0))
+        expected_in = f"IN-2026-{statement.id:04d}"
+        self.assertEqual(statement.doc_number, expected_in)
+
+        stmt_list = admin.admin_user_statements(
+            self.candidate.id, authorization=self.auth, db=self.db,
+        )
+        self.assertEqual(stmt_list.items[0].doc_number, expected_in)
+
+        found_by_in = admin.admin_users(
+            search=expected_in, authorization=self.auth, db=self.db,
+        )
+        self.assertEqual([u.id for u in found_by_in.items], [self.candidate.id])
+
+        letter = PlanningLetter(
+            user_id=self.candidate.id,
+            kind="exam",
+            event_date=date(2026, 10, 25),
+            event_time="10:00",
+            period="morning",
+            request_id="req-docnum-test-0001",
+            request_fingerprint="fp-docnum-test-0001",
+            to_email=self.candidate.email,
+            subject="გამოცდაზე დაშვება",
+            body="ტესტ წერილი",
+            status="sent",
+            created_by=self.staff.email,
+            created_at=datetime(2026, 10, 18, 10, 0),
+        )
+        self.db.add(letter)
+        self.db.commit()
+        expected_out = f"OUT-2026-{letter.id:04d}"
+        self.assertEqual(letter.doc_number, expected_out)
+
+        found_by_out = admin.admin_users(
+            search=expected_out, authorization=self.auth, db=self.db,
+        )
+        self.assertEqual([u.id for u in found_by_out.items], [self.candidate.id])
+
 
 class StatementAnsweredMigrationTests(unittest.TestCase):
     def test_migration_twice_preserves_statements_files_and_other_tables(self):

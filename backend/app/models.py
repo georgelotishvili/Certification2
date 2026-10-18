@@ -18,9 +18,10 @@ from sqlalchemy import (
     UniqueConstraint,
     Float,
     Numeric,
+    event,
     text,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session as OrmSession, mapped_column, relationship
 
 
 def _generate_gate_password() -> str:
@@ -416,6 +417,7 @@ class PlanningLetter(Base):
     attachment_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    doc_number: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="planning_letters")
 
@@ -436,8 +438,61 @@ class Statement(Base):
     attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     attachment_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    doc_number: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="statements")
+
+
+def format_statement_doc_number(statement: Statement | None) -> str | None:
+    if statement is None:
+        return None
+    existing = (getattr(statement, "doc_number", None) or "").strip()
+    if existing:
+        return existing
+    if getattr(statement, "id", None) is None:
+        return None
+    dt = getattr(statement, "created_at", None) or datetime.utcnow()
+    year = dt.year if hasattr(dt, "year") else datetime.utcnow().year
+    return f"IN-{year}-{int(statement.id):04d}"
+
+
+def format_letter_doc_number(letter: PlanningLetter | None) -> str | None:
+    if letter is None:
+        return None
+    existing = (getattr(letter, "doc_number", None) or "").strip()
+    if existing:
+        return existing
+    if getattr(letter, "id", None) is None:
+        return None
+    dt = getattr(letter, "created_at", None) or getattr(letter, "event_date", None) or datetime.utcnow()
+    year = dt.year if hasattr(dt, "year") else datetime.utcnow().year
+    return f"OUT-{year}-{int(letter.id):04d}"
+
+
+@event.listens_for(Statement, "after_insert")
+def _assign_statement_doc_number(mapper, connection, target: Statement) -> None:
+    if not (target.doc_number or "").strip() and target.id is not None:
+        doc_num = format_statement_doc_number(target)
+        if doc_num:
+            target.doc_number = doc_num
+            connection.execute(
+                Statement.__table__.update()
+                .where(Statement.__table__.c.id == target.id)
+                .values(doc_number=doc_num)
+            )
+
+
+@event.listens_for(PlanningLetter, "after_insert")
+def _assign_letter_doc_number(mapper, connection, target: PlanningLetter) -> None:
+    if not (target.doc_number or "").strip() and target.id is not None:
+        doc_num = format_letter_doc_number(target)
+        if doc_num:
+            target.doc_number = doc_num
+            connection.execute(
+                PlanningLetter.__table__.update()
+                .where(PlanningLetter.__table__.c.id == target.id)
+                .values(doc_number=doc_num)
+            )
 
 
 class UserSession(Base):

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..config import get_settings
 from ..database import get_db
 from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
-from ..models import ExamSchedule, PlanningLetter, MultiApartmentEvaluation, MultiFunctionalEvaluation
+from ..models import ExamSchedule, PlanningLetter, MultiApartmentEvaluation, MultiFunctionalEvaluation, format_statement_doc_number
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -1470,7 +1470,7 @@ def admin_users(
 
     stmt = select(User)
     if search:
-        q = f"%{search.lower()}%"
+        q = f"%{search.strip().lower()}%"
         stmt = stmt.where(
             or_(
                 User.first_name.ilike(q),
@@ -1479,6 +1479,8 @@ def admin_users(
                 User.phone.ilike(q),
                 User.personal_id.ilike(q),
                 User.code.ilike(q),
+                User.id.in_(select(Statement.user_id).where(Statement.doc_number.ilike(q))),
+                User.id.in_(select(PlanningLetter.user_id).where(PlanningLetter.doc_number.ilike(q))),
             )
         )
     if only_admins:
@@ -2246,6 +2248,7 @@ def admin_delete_all_users(
 def _admin_statement_payload(statement: Statement, user: User) -> AdminStatementOut:
     return AdminStatementOut(
         id=statement.id,
+        doc_number=format_statement_doc_number(statement),
         user_id=user.id,
         user_first_name=user.first_name,
         user_last_name=user.last_name,

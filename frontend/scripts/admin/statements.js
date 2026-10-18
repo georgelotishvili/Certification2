@@ -195,6 +195,14 @@
         date.textContent = formatDateTime(item.created_at);
         summary.appendChild(date);
 
+        const docNumberText = (item.doc_number || '').trim();
+        if (docNumberText) {
+          const docNum = document.createElement('span');
+          docNum.className = 'statement-doc-number';
+          docNum.textContent = docNumberText;
+          summary.appendChild(docNum);
+        }
+
         const previewText = (item.message || '').replace(/\s+/g, ' ').trim();
         if (previewText) {
           const preview = document.createElement('span');
@@ -215,7 +223,9 @@
 
         const message = document.createElement('div');
         message.className = 'statement-message-text';
-        message.textContent = item.message || '';
+        message.textContent = docNumberText
+          ? `დოკუმენტის №: ${docNumberText}\n\n${item.message || ''}`
+          : (item.message || '');
         messageWrapper.appendChild(message);
 
         const actions = document.createElement('div');
@@ -495,10 +505,18 @@
       const email = targetUser.email || '';
       const code = targetUser.code || '';
       const createdAt = formatDateTime(statement.created_at);
+      const docNumber = (statement.doc_number || '').trim() || (
+        statement.id != null
+          ? `IN-${new Date(statement.created_at || Date.now()).getFullYear()}-${String(statement.id).padStart(4, '0')}`
+          : ''
+      );
 
       writeHeading('განცხადება');
       doc.setFontSize(12);
 
+      if (docNumber) {
+        writeField('დოკუმენტის №', docNumber);
+      }
       writeField('სახელი, გვარი', fullName || '—');
       writeField('პირადი ნომერი', personalId);
       writeField('ტელეფონი', phone);

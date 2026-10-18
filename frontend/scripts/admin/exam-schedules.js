@@ -612,11 +612,17 @@
           const pending = !unseen && stmt.answered_at == null;
           const msgText = String(stmt.message || '').trim();
           const previewLine = msgText.replace(/\s+/g, ' ');
+          const docNumber = (stmt.doc_number || '').trim() || (
+            stmt.id != null
+              ? `IN-${new Date(createdAtRaw || Date.now()).getFullYear()}-${String(stmt.id).padStart(4, '0')}`
+              : ''
+          );
           combined.push({
             key: `stmt-${stmt.id}`,
             isIncomingStatement: true,
             statementId: stmt.id,
             statementRaw: stmt,
+            docNumber,
             mode: 'statement',
             filterType: 'statement',
             typeLabel: '↙ შემოსული განცხადება',
@@ -653,8 +659,16 @@
           }
           if (letter) matchedLetterIds.add(letter.id);
           const sentAtRaw = letter ? (letter.sent_at || letter.created_at || sched.created_at || null) : (sched.created_at || null);
+          const docNumber = letter
+            ? ((letter.doc_number || '').trim() || (
+                letter.id != null
+                  ? `OUT-${new Date(sentAtRaw || Date.now()).getFullYear()}-${String(letter.id).padStart(4, '0')}`
+                  : ''
+              ))
+            : '';
           combined.push({
             key: `sched-${sched.id}`,
+            docNumber,
             mode: 'exam',
             filterType: 'exam',
             typeLabel: MODE_META.exam.historyTypeLabel,
@@ -686,8 +700,14 @@
           const typeLabel = isCertIssued ? 'სერტიფიკატის გააქტიურება' : meta.historyTypeLabel;
           const rowClass = isCertIssued ? 'is-cert-issued-row' : meta.rowClass;
           const sentAtRaw = letter.sent_at || letter.created_at || null;
+          const docNumber = (letter.doc_number || '').trim() || (
+            letter.id != null
+              ? `OUT-${new Date(sentAtRaw || Date.now()).getFullYear()}-${String(letter.id).padStart(4, '0')}`
+              : ''
+          );
           combined.push({
             key: `letter-${letter.id}`,
+            docNumber,
             mode,
             filterType,
             typeLabel,
@@ -1855,7 +1875,7 @@
                     <input
                       type="search"
                       class="exam-list-search-input"
-                      placeholder="ძებნა ნებისმიერი სიმბოლოთი (სათაური, ტექსტი, თარიღი, ფაილი, სტატუსი)..."
+                      placeholder="ძებნა ნებისმიერი სიმბოლოთი (დოკუმენტის №, სათაური, ტექსტი, თარიღი, ფაილი, სტატუსი)..."
                       autocomplete="off"
                       aria-label="ძებნა განცხადებებსა და წერილებში"
                     >
@@ -2148,6 +2168,7 @@
               const dateLabel = formatDisplayDate(item.examDate);
               const periodLabel = periodLabelText(item.period);
               const searchable = [
+                item.docNumber,
                 item.typeLabel,
                 item.examDate,
                 dateLabel,
@@ -2242,6 +2263,14 @@
             typePill.textContent = item.isIncomingStatement ? item.typeLabel : `↗ ${item.typeLabel}`;
             headLeft.appendChild(typePill);
 
+            if (item.docNumber) {
+              const docNumPill = document.createElement('span');
+              docNumPill.className = 'exam-schedule-doc-num';
+              docNumPill.textContent = item.docNumber;
+              docNumPill.title = `დოკუმენტის უნიკალური ნომერი: ${item.docNumber}`;
+              headLeft.appendChild(docNumPill);
+            }
+
             const badgeInfo = statusBadgeMeta(item);
             const badge = document.createElement('span');
             badge.className = `exam-schedule-badge ${badgeInfo.cls}`;
@@ -2283,6 +2312,13 @@
 
             const bodyMeta = document.createElement('div');
             bodyMeta.className = 'exam-schedule-body-meta';
+
+            if (item.docNumber) {
+              const docMeta = document.createElement('span');
+              docMeta.className = 'exam-schedule-meeting-pill exam-schedule-doc-meta';
+              docMeta.textContent = `№ ${item.docNumber}`;
+              bodyMeta.appendChild(docMeta);
+            }
 
             const showTimeAndPeriod = !item.isIncomingStatement && meta.hasTimeAndPeriod && item.filterType !== 'cert_issued';
             if (showTimeAndPeriod) {
@@ -2331,9 +2367,10 @@
             const actionsWrap = document.createElement('div');
             actionsWrap.className = 'exam-schedule-row-actions';
 
+            const docHeaderLine = item.docNumber ? `დოკუმენტის №: ${item.docNumber}\n\n` : '';
             const fullText = item.isIncomingStatement
-              ? (item.body || '(ტექსტის გარეშე)')
-              : `${item.subject ? `სათაური: ${item.subject}\n\n` : ''}${item.body || ''}`;
+              ? `${docHeaderLine}${item.body || '(ტექსტის გარეშე)'}`
+              : `${docHeaderLine}${item.subject ? `სათაური: ${item.subject}\n\n` : ''}${item.body || ''}`;
 
             if (item.isIncomingStatement) {
               const answeredLabel = document.createElement('label');
@@ -2397,7 +2434,7 @@
               copyBtn.textContent = '📋 კოპირება';
               copyBtn.addEventListener('click', async () => {
                 try {
-                  await navigator.clipboard.writeText(item.body || fullText);
+                  await navigator.clipboard.writeText(fullText);
                   showToast('ტექსტი დაკოპირდა');
                 } catch {
                   showToast('კოპირება ვერ მოხერხდა', 'error');
@@ -2432,7 +2469,9 @@
             if (item.isIncomingStatement || item.body) {
               const pre = document.createElement('pre');
               pre.className = 'exam-schedule-confirm-preview-text';
-              pre.textContent = item.body || '(ტექსტის გარეშე)';
+              pre.textContent = item.docNumber
+                ? `დოკუმენტის №: ${item.docNumber}\n\n${item.body || '(ტექსტის გარეშე)'}`
+                : (item.body || '(ტექსტის გარეშე)');
               bodyWrap.appendChild(pre);
             }
 
@@ -2459,7 +2498,8 @@
             });
 
             const matchesInsideText = needle && (
-              String(item.subject || '').toLowerCase().includes(needle)
+              String(item.docNumber || '').toLowerCase().includes(needle)
+              || String(item.subject || '').toLowerCase().includes(needle)
               || String(item.body || '').toLowerCase().includes(needle)
             );
             if (expandAllTexts || matchesInsideText) {

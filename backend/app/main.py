@@ -38,6 +38,7 @@ try:
     from backend.scripts.migrate_fix_answers_fk import run as run_fix_answers_fk_migration
     from backend.scripts.migrate_taxonomy import run as run_taxonomy_migration
     from backend.scripts.migrate_documents import run as run_documents_migration
+    from backend.scripts.migrate_doc_numbers import run as run_doc_numbers_migration
 except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.main:app`
     from scripts.migrate_results_cols import run as run_results_migration  # type: ignore
     from scripts.migrate_media_table import run as run_media_migration  # type: ignore
@@ -58,6 +59,7 @@ except ImportError:  # pragma: no cover - fallback for `cd backend; uvicorn app.
     from scripts.migrate_fix_answers_fk import run as run_fix_answers_fk_migration  # type: ignore
     from scripts.migrate_taxonomy import run as run_taxonomy_migration  # type: ignore
     from scripts.migrate_documents import run as run_documents_migration  # type: ignore
+    from scripts.migrate_doc_numbers import run as run_doc_numbers_migration  # type: ignore
 
 
 def create_app() -> FastAPI:
@@ -96,6 +98,7 @@ def create_app() -> FastAPI:
     # Fail startup visibly if its required table/indexes cannot be created.
     run_exam_schedules_migration()
     run_planning_letters_migration()
+    run_doc_numbers_migration()
     # Independent stage grants are authoritative for every exam start/result.
     # Run after the legacy permission/project migrations and fail visibly if
     # the required columns, indexes, or lossless backfill cannot be created.

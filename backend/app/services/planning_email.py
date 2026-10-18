@@ -37,7 +37,11 @@ def deliver_letter(letter) -> tuple[str, str | None]:
         # SMTP recipients will deduplicate messages automatically.
         sender_domain = str(config["from_address"]).rsplit("@", 1)[-1]
         msg["Message-ID"] = f"<planning-{letter.request_id}@{sender_domain}>"
-        msg.set_content(letter.body, charset="utf-8")
+        doc_num = (getattr(letter, "doc_number", None) or "").strip()
+        email_body = letter.body or ""
+        if doc_num and doc_num not in email_body:
+            email_body = f"დოკუმენტის №: {doc_num}\n\n{email_body}"
+        msg.set_content(email_body, charset="utf-8")
         if letter.attachment_path:
             path = resolve_storage_path(letter.attachment_path)
             with path.open("rb") as source:

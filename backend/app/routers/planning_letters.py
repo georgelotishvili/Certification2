@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import ExamSchedule, PlanningLetter, PlanningTemplate, User
+from ..models import ExamSchedule, PlanningLetter, PlanningTemplate, User, format_letter_doc_number
 from ..services.bounded_upload import UploadTooLarge, save_upload_stream
 from ..services.media_storage import ensure_media_root, relative_storage_path, resolve_storage_path
 from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
@@ -211,6 +211,7 @@ def _letter_out(letter: PlanningLetter):
             "attachment_filename", "attachment_size_bytes", "attempts",
         )
     }
+    out["doc_number"] = format_letter_doc_number(letter)
     if letter.attempts == 0 and letter.sent_at is None:
         out["status"] = "saved"
     return out
@@ -612,6 +613,8 @@ def send_letter(
             or prior_edit_letter.exam_schedule_id == letter.exam_schedule_id
             or (prior_edit_letter.attempts == 0 and prior_edit_letter.sent_at is None)
         ):
+            if prior_edit_letter.doc_number:
+                letter.doc_number = prior_edit_letter.doc_number
             old_letter_path = prior_edit_letter.attachment_path
             db.delete(prior_edit_letter)
             db.flush()
@@ -619,6 +622,9 @@ def send_letter(
                 _remove_file(old_letter_path, namespace)
 
         db.add(letter)
+        db.flush()
+        if not letter.doc_number:
+            letter.doc_number = format_letter_doc_number(letter)
         db.commit()
     except IntegrityError as exc:
         db.rollback()

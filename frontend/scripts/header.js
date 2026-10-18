@@ -1234,8 +1234,8 @@
     sanitizeWordStyles,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-auth2';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_auth2';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-stmt-tabs1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_stmt_tabs1';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1332,11 +1332,47 @@
       statementFileChoose: document.getElementById('statementFileChoose'),
       statementFileInput: document.getElementById('statementFileInput'),
       statementFileDisplay: document.getElementById('statementFileDisplay'),
+      tabExam: document.getElementById('statementTabExam'),
+      tabOther: document.getElementById('statementTabOther'),
+      examForm: document.getElementById('examApplicationForm'),
+      examFileControls: document.getElementById('examFileControls'),
+      examFilesChoose: document.getElementById('examFilesChoose'),
+      examFilesInput: document.getElementById('examFilesInput'),
+      examFilesDisplay: document.getElementById('examFilesDisplay'),
+      examFilesListWrap: document.getElementById('examFilesListWrap'),
+      examFilesList: document.getElementById('examFilesList'),
+      examAdditionalInfo: document.getElementById('examAdditionalInfo'),
+      examConfirmCheckbox: document.getElementById('examConfirmCheckbox'),
+      examApplicantSignature: document.getElementById('examApplicantSignature'),
+      examSubmitBtn: document.getElementById('examApplicationSubmit'),
     };
 
     let overlayOpen = false;
     let isLoading = false;
     let cache = [];
+    let examSelectedFiles = [];
+    let activeTab = 'exam';
+
+    function switchStatementTab(tabKey) {
+      activeTab = tabKey === 'other' ? 'other' : 'exam';
+      const isExam = activeTab === 'exam';
+      if (statementsDOM.tabExam) {
+        statementsDOM.tabExam.classList.toggle('is-active', isExam);
+        statementsDOM.tabExam.setAttribute('aria-selected', isExam ? 'true' : 'false');
+      }
+      if (statementsDOM.tabOther) {
+        statementsDOM.tabOther.classList.toggle('is-active', !isExam);
+        statementsDOM.tabOther.setAttribute('aria-selected', !isExam ? 'true' : 'false');
+      }
+      if (statementsDOM.examForm) {
+        if (isExam) statementsDOM.examForm.removeAttribute('hidden');
+        else statementsDOM.examForm.setAttribute('hidden', '');
+      }
+      if (statementsDOM.statementsForm) {
+        if (!isExam) statementsDOM.statementsForm.removeAttribute('hidden');
+        else statementsDOM.statementsForm.setAttribute('hidden', '');
+      }
+    }
 
     function isLoggedIn() {
       try {
@@ -1378,15 +1414,19 @@
     }
 
     function setMetaFromUser() {
-      if (!statementsDOM.statementsMeta) return;
       const user = getCurrentUser();
-      const parts = [];
-      if (user) {
-        const name = `${user.firstName || user.first_name || ''} ${user.lastName || user.last_name || ''}`.trim();
+      const name = user
+        ? `${user.firstName || user.first_name || ''} ${user.lastName || user.last_name || ''}`.trim()
+        : '';
+      if (statementsDOM.statementsMeta) {
+        const parts = [];
         if (name) parts.push(name);
-        if (user.code) parts.push(user.code);
+        if (user?.code) parts.push(user.code);
+        statementsDOM.statementsMeta.textContent = parts.join(' - ');
       }
-      statementsDOM.statementsMeta.textContent = parts.join(' - ');
+      if (statementsDOM.examApplicantSignature) {
+        statementsDOM.examApplicantSignature.textContent = `განმცხადებელი: ${name || '—'} (დადასტურებულია ელექტრონულად).`;
+      }
     }
 
     function openOverlay() {
@@ -1435,6 +1475,15 @@
         details.setAttribute('role', 'listitem');
         const summary = document.createElement('summary');
         summary.className = 'statement-summary';
+
+        const docNumber = (item.doc_number || '').toString().trim();
+        if (docNumber) {
+          const docNumSpan = document.createElement('span');
+          docNumSpan.className = 'statement-doc-number';
+          docNumSpan.textContent = docNumber;
+          summary.appendChild(docNumSpan);
+        }
+
         const dateSpan = document.createElement('span');
         dateSpan.className = 'statement-date';
         dateSpan.textContent = window.Utils?.formatDateTime?.(item.created_at);
@@ -1456,7 +1505,10 @@
         details.appendChild(summary);
         const message = document.createElement('div');
         message.className = 'statement-message';
-        message.textContent = item.message || '';
+        const rawMsg = item.message || '';
+        message.textContent = docNumber && !rawMsg.includes(docNumber)
+          ? `დოკუმენტის №: ${docNumber}\n\n${rawMsg}`
+          : rawMsg;
         details.appendChild(message);
         
         if (item.attachment_filename) {
@@ -1550,6 +1602,7 @@
         return;
       }
       setMetaFromUser();
+      switchStatementTab('exam');
       openOverlay();
       renderPlaceholder('იტვირთება...', 'statements-loading');
       fetchStatements();
@@ -1558,6 +1611,169 @@
     function handleBackdropClick(event) {
       if (event.target === statementsDOM.statementsOverlay) {
         closeOverlay();
+      }
+    }
+
+    function renderExamFilesList() {
+      if (!statementsDOM.examFilesDisplay) return;
+      if (!examSelectedFiles.length) {
+        statementsDOM.examFilesDisplay.value = '';
+        statementsDOM.examFileControls?.classList?.remove?.('has-file');
+        if (statementsDOM.examFilesListWrap) statementsDOM.examFilesListWrap.setAttribute('hidden', '');
+        if (statementsDOM.examFilesList) statementsDOM.examFilesList.innerHTML = '';
+        return;
+      }
+      statementsDOM.examFilesDisplay.value = examSelectedFiles.length === 1
+        ? examSelectedFiles[0].name
+        : `არჩეულია ${examSelectedFiles.length} ფაილი`;
+      statementsDOM.examFileControls?.classList?.add?.('has-file');
+      if (statementsDOM.examFilesListWrap) statementsDOM.examFilesListWrap.removeAttribute('hidden');
+      if (statementsDOM.examFilesList) {
+        const frag = document.createDocumentFragment();
+        examSelectedFiles.forEach((file, idx) => {
+          const li = document.createElement('li');
+          li.className = 'exam-uploaded-file-item';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'exam-uploaded-file-name';
+          nameSpan.textContent = file.name;
+          const removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'exam-uploaded-file-remove';
+          removeBtn.textContent = '×';
+          removeBtn.setAttribute('aria-label', `ფაილის წაშლა: ${file.name}`);
+          removeBtn.addEventListener('click', () => {
+            examSelectedFiles.splice(idx, 1);
+            renderExamFilesList();
+          });
+          li.appendChild(nameSpan);
+          li.appendChild(removeBtn);
+          frag.appendChild(li);
+        });
+        statementsDOM.examFilesList.innerHTML = '';
+        statementsDOM.examFilesList.appendChild(frag);
+      }
+    }
+
+    function handleExamFilesChange() {
+      if (!statementsDOM.examFilesInput) return;
+      const incoming = Array.from(statementsDOM.examFilesInput.files || []);
+      if (!incoming.length) return;
+      let currentTotal = examSelectedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+      for (const file of incoming) {
+        if (!/\.(zip|rar|pdf|jpg|jpeg|png|doc|docx)$/i.test(file.name || '')) {
+          alert(`ფაილის ტიპი არ არის დაშვებული (${file.name}). დასაშვებია: PDF, JPG, JPEG, PNG, DOC, DOCX, ZIP, RAR`);
+          statementsDOM.examFilesInput.value = '';
+          return;
+        }
+        if ((file.size || 0) + currentTotal > 100 * 1024 * 1024) {
+          alert('ფაილების ჯამური ზომა აღემატება 100MB-ს');
+          statementsDOM.examFilesInput.value = '';
+          return;
+        }
+        const exists = examSelectedFiles.some((f) => f.name === file.name && f.size === file.size);
+        if (!exists) {
+          examSelectedFiles.push(file);
+          currentTotal += (file.size || 0);
+        }
+      }
+      statementsDOM.examFilesInput.value = '';
+      renderExamFilesList();
+    }
+
+    async function handleExamApplicationSubmit(event) {
+      event.preventDefault();
+      if (!statementsDOM.examForm) return;
+      if (!isLoggedIn()) {
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        return;
+      }
+      const actorEmail = getActorEmail();
+      if (!actorEmail) {
+        alert('ავტორიზაცია ვერ დადასტურდა');
+        return;
+      }
+
+      const checkedCategoryInput = statementsDOM.examForm.querySelector?.('input[name="exam_category"]:checked');
+      const selectedCategory = (checkedCategoryInput?.value || '').toString().trim();
+      if (!selectedCategory) {
+        alert('გთხოვთ მონიშნოთ მოთხოვნილი სერტიფიკატის კატეგორია (პუნქტი 1)');
+        return;
+      }
+
+      if (!statementsDOM.examConfirmCheckbox?.checked) {
+        alert('გთხოვთ მონიშნოთ განმცხადებლის დადასტურება (პუნქტი 4)');
+        return;
+      }
+
+      const user = getCurrentUser();
+      const fullName = user
+        ? `${user.firstName || user.first_name || ''} ${user.lastName || user.last_name || ''}`.trim()
+        : '';
+      const filesLine = examSelectedFiles.length
+        ? examSelectedFiles.map((f) => f.name).join(', ')
+        : 'არ არის წარმოდგენილი';
+      const extraInfo = (statementsDOM.examAdditionalInfo?.value || '').toString().trim() || '—';
+
+      const message = [
+        'სერტიფიცირების განაცხადი',
+        '',
+        '1. მოთხოვნილი სერტიფიკატის კატეგორია',
+        'ვითხოვ სასერტიფიკაციო გამოცდაზე დაშვებას და ქვემოთ მონიშნული კატეგორიის სერტიფიკატის გაცემას:',
+        `☑ ${selectedCategory}`,
+        '',
+        '2. თანდართული დოკუმენტები',
+        `ატვირთული ფაილ(ებ)ი: ${filesLine}`,
+        '',
+        '3. დამატებითი ინფორმაცია / სპეციალური საჭიროება გამოცდაზე (არსებობისას)',
+        extraInfo,
+        '',
+        '4. განმცხადებლის დადასტურება',
+        '☑ ვადასტურებ, რომ გავეცანი საიტზე gipc.org.ge გამოქვეყნებულ სერტიფიცირების პირობებს, წარმოდგენილი დოკუმენტები უტყუარია, ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები, წარვადგინო შეფასებისთვის საჭირო ნებისმიერი ინფორმაცია და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.',
+        '',
+        `განმცხადებელი: ${fullName || '—'} (დადასტურებულია ელექტრონულად).`,
+      ].join('\n');
+
+      const body = new FormData();
+      body.set('message', message);
+      if (examSelectedFiles.length === 1) {
+        body.set('attachment', examSelectedFiles[0]);
+      } else if (examSelectedFiles.length > 1) {
+        examSelectedFiles.forEach((f) => {
+          if (typeof body.append === 'function') body.append('attachments', f);
+        });
+      }
+
+      const submitBtn = statementsDOM.examSubmitBtn || statementsDOM.examForm.querySelector?.('button[type="submit"]');
+      submitBtn?.setAttribute('disabled', 'true');
+      try {
+        const response = await fetch(`${API_BASE}/statements`, {
+          method: 'POST',
+          headers: { ...getActorHeaders() },
+          body,
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          let detail = '';
+          try {
+            const json = await response.clone().json();
+            detail = json?.detail || '';
+          } catch {
+            try { detail = (await response.clone().text()).trim(); } catch {}
+          }
+          throw new Error(detail || 'გაგზავნა ვერ შესრულდა');
+        }
+        const data = await response.json();
+        const docNumNotice = data?.doc_number ? ` (დოკუმენტის №: ${data.doc_number})` : '';
+        alert(`თქვენი განაცხადი მიღებულია!${docNumNotice}`);
+        statementsDOM.examForm.reset?.();
+        examSelectedFiles = [];
+        renderExamFilesList();
+        setMetaFromUser();
+        handleNewStatement(data);
+      } catch (error) {
+        alert(error.message || 'გაგზავნა ვერ შესრულდა');
+      } finally {
+        submitBtn?.removeAttribute('disabled');
       }
     }
 
@@ -1585,8 +1801,8 @@
           alert('ფაილი აღემატება 100MB-ს');
           return;
         }
-        if (!/\.(zip|rar|pdf|jpg|jpeg|doc|docx)$/i.test(file.name || '')) {
-          alert('დასაშვებია: ZIP, RAR, PDF, JPEG, WORD');
+        if (!/\.(zip|rar|pdf|jpg|jpeg|png|doc|docx)$/i.test(file.name || '')) {
+          alert('დასაშვებია: ZIP, RAR, PDF, JPEG, PNG, WORD');
           return;
         }
       }
@@ -1615,7 +1831,8 @@
           throw new Error(detail || 'გაგზავნა ვერ შესრულდა');
         }
         const data = await response.json();
-        alert('თქვენი განცხადება მიღებულია!');
+        const docNumNotice = data?.doc_number ? ` (დოკუმენტის №: ${data.doc_number})` : '';
+        alert(`თქვენი განცხადება მიღებულია!${docNumNotice}`);
         statementsDOM.statementsForm.reset();
         updateFileDisplay();
         handleNewStatement(data);
@@ -1636,6 +1853,8 @@
 
     function reset() {
       cache = [];
+      examSelectedFiles = [];
+      renderExamFilesList();
       if (overlayOpen) {
         closeOverlay();
       }
@@ -1662,6 +1881,23 @@
       on(statementsDOM.statementsForm, 'submit', handleComposeSubmit);
       on(statementsDOM.statementsTextarea, 'mousedown', ensureAuthForCompose);
       on(statementsDOM.statementsTextarea, 'focus', ensureAuthForCompose);
+      if (statementsDOM.tabExam) {
+        on(statementsDOM.tabExam, 'click', () => switchStatementTab('exam'));
+      }
+      if (statementsDOM.tabOther) {
+        on(statementsDOM.tabOther, 'click', () => switchStatementTab('other'));
+      }
+      if (statementsDOM.examForm) {
+        on(statementsDOM.examForm, 'submit', handleExamApplicationSubmit);
+      }
+      if (statementsDOM.examFilesChoose) {
+        on(statementsDOM.examFilesChoose, 'click', () => {
+          if (statementsDOM.examFilesInput) statementsDOM.examFilesInput.click();
+        });
+      }
+      if (statementsDOM.examFilesInput) {
+        on(statementsDOM.examFilesInput, 'change', handleExamFilesChange);
+      }
       if (statementsDOM.statementFileChoose) {
         on(statementsDOM.statementFileChoose, 'click', () => {
           if (statementsDOM.statementFileInput) statementsDOM.statementFileInput.click();
@@ -1705,10 +1941,10 @@
     });
   }
 
-  if (document.body) {
-    loadHeader();
-  } else {
+  if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', loadHeader, { once: true });
+  } else {
+    loadHeader();
   }
 })();
 
