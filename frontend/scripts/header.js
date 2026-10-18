@@ -2293,11 +2293,6 @@
             <span class="ai-panel-brand-badge">${ICONS.sparkle}</span>
             <h3 class="ai-panel-title">AI კონსულტანტი</h3>
           </div>
-          <span class="ai-header-kb-pill" id="publicAiHeaderPill" title="პასუხობს მხოლოდ ინსტიტუტის ოფიციალური დოკუმენტური ბაზის საფუძველზე">
-            <span class="ai-header-config-dot is-ready" id="publicAiHeaderDot"></span>
-            ${ICONS.book}
-            <span id="publicAiHeaderText">ოფიციალური ბაზა</span>
-          </span>
         </div>
         <div class="ai-panel-header-actions">
           <button type="button" class="ai-panel-icon-btn ai-btn-expand" title="ფანჯრის გაფართოება / დაპატარავება">${ICONS.expand}</button>
@@ -2321,15 +2316,13 @@
       <div class="ai-messages-container" id="publicAiMessages"></div>
 
       <form class="ai-input-bar" id="publicAiForm">
-        <textarea class="ai-chat-input" id="publicAiInput" rows="1" placeholder="დასვით შეკითხვა სერტიფიცირების, გამოცდის ან დოკუმენტების შესახებ..."></textarea>
+        <textarea class="ai-chat-input" id="publicAiInput" rows="1" placeholder="დასვით კითხვა..."></textarea>
         <button type="submit" class="ai-chat-send-btn" id="publicAiSendBtn"><span>გაგზავნა</span>${ICONS.send}</button>
       </form>
     `;
     document.body.appendChild(panelEl);
 
     const fabDotEl = fabEl.querySelector('.ai-fab-status-dot');
-    const headerDotEl = document.getElementById('publicAiHeaderDot');
-    const headerTextEl = document.getElementById('publicAiHeaderText');
     const messagesEl = document.getElementById('publicAiMessages');
     const formEl = document.getElementById('publicAiForm');
     const inputEl = document.getElementById('publicAiInput');
@@ -2356,13 +2349,6 @@
       const ready = Boolean(pubStatus.configured);
       if (fabDotEl) {
         fabDotEl.className = `ai-fab-status-dot ${ready ? 'is-ready' : 'is-unconfigured'}`;
-      }
-      if (headerDotEl) {
-        headerDotEl.className = `ai-header-config-dot ${ready ? 'is-ready' : 'is-unconfigured'}`;
-      }
-      if (headerTextEl) {
-        const count = Number(pubStatus.knowledge_base_files_count || 45);
-        headerTextEl.textContent = `ოფიციალური ბაზა (${count} დოკ.)`;
       }
     }
 
@@ -2397,15 +2383,6 @@
 
         const bubble = document.createElement('div');
         bubble.className = 'ai-msg-bubble';
-
-        if (Array.isArray(msg.inspected_attachments) && msg.inspected_attachments.length > 0) {
-          const filesBar = document.createElement('div');
-          filesBar.className = 'ai-msg-files-inspected';
-          filesBar.innerHTML = `მოძიებული დოკუმენტები: <strong>${escapeHtmlSafe(
-            msg.inspected_attachments.slice(0, 5).join(', ')
-          )}</strong>`;
-          bubble.appendChild(filesBar);
-        }
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'ai-msg-content';
@@ -2520,11 +2497,22 @@
       });
     });
 
+    function syncInputHeight() {
+      if (!inputEl) return;
+      inputEl.style.height = '40px';
+      const nextH = Math.min(110, Math.max(40, inputEl.scrollHeight));
+      inputEl.style.height = `${nextH}px`;
+      inputEl.style.overflowY = inputEl.scrollHeight > 110 ? 'auto' : 'hidden';
+    }
+
+    on(inputEl, 'input', syncInputHeight);
+
     on(formEl, 'submit', (e) => {
       e.preventDefault();
       const text = String(inputEl?.value || '').trim();
       if (!text || isSending) return;
       inputEl.value = '';
+      syncInputHeight();
       void sendQuestion(text);
     });
 
