@@ -18,9 +18,11 @@ from ..database import get_db
 from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate, Statement, User, format_letter_doc_number
 from ..services.bounded_upload import UploadTooLarge, save_upload_stream
 from ..services.candidate_status import (
+    NON_EXAM_LETTER_PERIODS,
     VALID_CANDIDATE_CATEGORIES,
     get_user_latest_requested_category,
     normalize_cert_category,
+    reconcile_user_candidate_status_after_delete,
 )
 from ..services.media_storage import ensure_media_root, relative_storage_path, resolve_storage_path
 from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
@@ -52,10 +54,11 @@ DEFAULT_TEMPLATES = {
             "ადრესატი: {name}\n\n"
             "მოგესალმებით,\n\n"
             "გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და მიღებულია გადაწყვეტილება თქვენთვის [კატეგორია] სერტიფიკატის მინიჭების შესახებ.\n\n"
-            "სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში:\n"
+            "სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის ვადაში:\n"
             "- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});\n"
             "- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.\n\n"
             "საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.\n\n"
+            "გთხოვთ გაითვალისწინოთ, რომ დადგენილი წესის შესაბამისად, გამოცდის დადებითი შედეგი სერტიფიკატის მისაღებად მოქმედებს წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის განმავლობაში, ხოლო აღნიშნული ვადის გასვლის შემთხვევაში საგამოცდო შედეგი ძალას კარგავს.\n\n"
             "გთხოვთ წინასწარ გაეცნოთ შესაბამის სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
             "პატივისცემით,\n"
             "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
@@ -162,6 +165,7 @@ def _is_legacy_body(body: str | None) -> bool:
         or "GIPC-FRM-" in raw
         or "შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“" in raw
         or 'შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"' in raw
+        or "წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში" in raw
     )
 
 
@@ -232,7 +236,7 @@ def _text(subject: str, body: str, *, final: bool):
     if not body.strip() or len(body) > 10000 or "\x00" in body:
         raise HTTPException(422, "წერილის ტექსტი აუცილებელია (მაქსიმუმ 10000 სიმბოლო).")
     if final and re.search(
-        r"\{(?:name|date|time|code|personal_id|period)\}|\[(?:სახელი და გვარი|გამოცდის თარიღი|საათი|უნიკალური კოდი|პირადი ნომერი|შეავსეთ[^\]]*|IBAN)\]",
+        r"\{(?:name|date|time|code|personal_id|period)\}|\[(?:სახელი და გვარი|სახელი,\s*გვარი|გამოცდის თარიღი|საათი|უნიკალური კოდი|პირადი ნომერი|შეავსეთ[^\]]*|IBAN|IBAN ანგარიში|მისამართი)\]",
         subject + "\n" + body,
         re.IGNORECASE,
     ):
@@ -719,8 +723,17 @@ def letter_attachment(user_id: int, letter_id: int, authorization: str | None = 
 def delete_letter(user_id: int, letter_id: int, authorization: str | None = Header(None), db: Session = Depends(get_db)):
     _require_admin(db, authorization)
     letter = _user_letter(db, user_id, letter_id)
+    user = db.get(User, user_id)
     old_path = letter.attachment_path
+    if letter.kind == "certificate" and letter.period != "cert_issued":
+        deleted_kind = "certificate_letter"
+    elif letter.kind == "exam" and (letter.period is None or letter.period not in NON_EXAM_LETTER_PERIODS):
+        deleted_kind = "exam_letter"
+    else:
+        deleted_kind = "other_letter"
     db.delete(letter)
+    db.flush()
+    reconcile_user_candidate_status_after_delete(db, user, deleted_kind=deleted_kind)
     db.commit()
     if old_path:
         _remove_file(old_path, f"letters/{user_id}")

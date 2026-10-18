@@ -39,11 +39,13 @@
     '',
     'გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და მიღებულია გადაწყვეტილება თქვენთვის [კატეგორია] სერტიფიკატის მინიჭების შესახებ.',
     '',
-    'სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში:',
+    'სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის ვადაში:',
     '- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});',
     '- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.',
     '',
     'საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.',
+    '',
+    'გთხოვთ გაითვალისწინოთ, რომ დადგენილი წესის შესაბამისად, გამოცდის დადებითი შედეგი სერტიფიკატის მისაღებად მოქმედებს წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის განმავლობაში, ხოლო აღნიშნული ვადის გასვლის შემთხვევაში საგამოცდო შედეგი ძალას კარგავს.',
     '',
     'გთხოვთ წინასწარ გაეცნოთ შესაბამის სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.',
     '',
@@ -475,6 +477,9 @@
       let result = String(text || '');
       const replacements = [
         [/\{name\}|\[სახელი და გვარი\]|\[სახელი,\s*გვარი\]/gi, tokens.name],
+        [/სახელი და გვარი(?=\))/gi, tokens.name],
+        [/\[IBAN ანგარიში\]|\[IBAN\]/gi, 'GE33TB7313736080100014'],
+        [/\[მისამართი\]/gi, 'ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6'],
         [/\{personal_id\}|\[პირადი ნომერი\]/gi, tokens.personal_id],
         [/\{code\}|\[უნიკალური კოდი\]/gi, tokens.code],
         [/\{date\}|\[გამოცდის თარიღი\]|\[თარიღი\]/gi, tokens.date],
@@ -552,7 +557,8 @@
         raw.includes('GIPC-CON-') ||
         raw.includes('GIPC-FRM-') ||
         raw.includes('შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“') ||
-        raw.includes('შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"')
+        raw.includes('შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"') ||
+        raw.includes('წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში')
       );
     }
 
@@ -943,6 +949,15 @@
             if (outcomeData) {
               examOutcome = outcomeData;
               user.exam_outcome = outcomeData;
+              if ('candidate_status' in outcomeData) {
+                user.candidate_status = outcomeData.candidate_status ?? null;
+              }
+              if ('candidate_category' in outcomeData) {
+                user.candidate_category = outcomeData.candidate_category ?? null;
+              }
+              if ('requested_category' in outcomeData) {
+                user.requested_category = outcomeData.requested_category ?? null;
+              }
             }
           }
           updateCardButtonBadge();
@@ -2401,9 +2416,8 @@
             await load();
             if (item.isIncomingStatement) {
               notifyStatementState();
-            } else {
-              await notifyChanged();
             }
+            await notifyChanged();
             renderModalList();
             setListStatus('ჩანაწერი წაიშალა.');
             showToast(item.isIncomingStatement ? 'განცხადება წაიშალა' : 'ჩანაწერი წაიშალა');
@@ -2567,16 +2581,6 @@
               void openReplyTemplateChooserModal(item, { returnToHistory: true });
             };
 
-            if (item.isIncomingStatement) {
-              const quickReplyBtn = document.createElement('button');
-              quickReplyBtn.type = 'button';
-              quickReplyBtn.className = 'exam-stmt-quick-reply-btn';
-              quickReplyBtn.textContent = '↩ პასუხის გაცემა';
-              quickReplyBtn.title = 'პასუხის გაცემა განცხადებაზე სტანდარტული შაბლონის არჩევით';
-              quickReplyBtn.addEventListener('click', triggerReplyForStatement);
-              headRight.appendChild(quickReplyBtn);
-            }
-
             const dateLabel = formatDisplayDate(item.examDate);
             const timeDisplay = item.sentAtDisplay || dateLabel;
             if (timeDisplay) {
@@ -2676,6 +2680,31 @@
               replyBtn.title = 'პასუხის გაცემა სტანდარტული შაბლონის არჩევით';
               replyBtn.addEventListener('click', triggerReplyForStatement);
               actionsWrap.appendChild(replyBtn);
+
+              const aiBtn = document.createElement('button');
+              aiBtn.type = 'button';
+              aiBtn.className = 'exam-stmt-ai-btn';
+              aiBtn.textContent = '✨ AI ანალიზი';
+              aiBtn.title = 'განცხადებისა და მიბმული დოკუმენტის შეფასება Gemini AI-ით';
+              aiBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                if (item.seenAt == null && item.statementId != null) {
+                  void markStatementSeenInModal(item.statementId, item, row, badge);
+                }
+                global.dispatchEvent(
+                  new CustomEvent('admin:aiAnalyzeStatement', {
+                    detail: {
+                      statementId: item.statementId,
+                      docNumber: item.docNumber,
+                      userId: user.id,
+                      userName: candidateName,
+                      hasAttachment: Boolean(item.attachmentFilename),
+                      attachmentFilename: item.attachmentFilename || null,
+                    },
+                  })
+                );
+              });
+              actionsWrap.appendChild(aiBtn);
 
               const answeredLabel = document.createElement('label');
               answeredLabel.className = 'exam-stmt-answered-label';
@@ -2777,18 +2806,6 @@
                 ? `დოკუმენტის №: ${item.docNumber}\n\n${item.body || '(ტექსტის გარეშე)'}`
                 : (item.body || '(ტექსტის გარეშე)');
               bodyWrap.appendChild(pre);
-            }
-
-            if (item.isIncomingStatement) {
-              const bottomReplyBar = document.createElement('div');
-              bottomReplyBar.className = 'exam-stmt-bottom-reply-bar';
-              const bottomReplyBtn = document.createElement('button');
-              bottomReplyBtn.type = 'button';
-              bottomReplyBtn.className = 'btn-primary exam-stmt-bottom-reply-btn';
-              bottomReplyBtn.textContent = '↩ პასუხის გაცემა (შაბლონის არჩევა)';
-              bottomReplyBtn.addEventListener('click', triggerReplyForStatement);
-              bottomReplyBar.appendChild(bottomReplyBtn);
-              bodyWrap.appendChild(bottomReplyBar);
             }
 
             row.appendChild(bodyWrap);

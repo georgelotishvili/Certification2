@@ -1,0 +1,616 @@
+document.addEventListener('DOMContentLoaded', () => {
+  const API_BASE = (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string')
+    ? window.APP_CONFIG.API_BASE
+    : 'http://127.0.0.1:8000';
+  const KEYS = {
+    AUTH: 'authLoggedIn',
+    SAVED_EMAIL: 'savedEmail',
+    CURRENT_USER: 'currentUser',
+    EXAM_DURATION: 'examDuration',
+    ADMIN_PWD: 'adminGatePassword',
+    BLOCKS: 'examBlocks_v1',
+  };
+  const FOUNDER_EMAIL = 'naormala@gmail.com';
+
+  const DOM = {
+    body: document.body,
+    burger: document.querySelector('.burger'),
+    overlay: document.querySelector('.overlay'),
+    drawerClose: document.querySelector('.drawer-close'),
+    loginBtn: document.querySelector('.login-btn'),
+    drawerLoginBtn: document.querySelector('.drawer-login'),
+    drawerLinks: Array.from(document.querySelectorAll('.drawer-nav a:not(.drawer-other-trigger)')),
+    navLinks: Array.from(document.querySelectorAll('.nav a:not(.other-trigger), .drawer-nav a:not(.drawer-other-trigger)')),
+    sections: {
+      exam: document.getElementById('exam-settings'),
+      registrations: document.getElementById('registrations-section'),
+      multiApartment: document.getElementById('multi-apartment-section'),
+      multiFunctional: document.getElementById('multi-functional-section'),
+      guide: document.getElementById('guide-section'),
+      regulations: document.getElementById('regulations-section'),
+      documents: document.getElementById('documents-section'),
+      app: document.getElementById('app-section'),
+      applicationForm: document.getElementById('application-form-section'),
+    },
+    durationInput: document.getElementById('examDuration'),
+    saveDurationBtn: document.getElementById('saveExamDuration'),
+    durationFlash: document.getElementById('durationFlash'),
+    gatePwdInput: document.getElementById('adminGatePassword'),
+    gatePwdSaveBtn: document.getElementById('saveAdminGatePassword'),
+    taxonomyChapterSelect: document.getElementById('taxonomyChapterSelect'),
+    taxonomyChapterDropdown: document.getElementById('taxonomyChapterDropdown'),
+    taxonomyChapterLabel: document.getElementById('taxonomyChapterLabel'),
+    taxonomyChapterMenu: document.getElementById('taxonomyChapterMenu'),
+    taxonomyOpenChapterCreator: document.getElementById('openTaxonomyChapterCreator'),
+    taxonomyChapterCreator: document.getElementById('taxonomyChapterCreator'),
+    taxonomyChapterName: document.getElementById('taxonomyChapterName'),
+    taxonomySaveChapterBtn: document.getElementById('saveTaxonomyChapter'),
+    taxonomyCloseChapterCreator: document.getElementById('closeTaxonomyChapterCreator'),
+    taxonomySubchapterSelect: document.getElementById('taxonomySubchapterSelect'),
+    taxonomySubchapterDropdown: document.getElementById('taxonomySubchapterDropdown'),
+    taxonomySubchapterLabel: document.getElementById('taxonomySubchapterLabel'),
+    taxonomySubchapterMenu: document.getElementById('taxonomySubchapterMenu'),
+    taxonomyOpenSubchapterCreator: document.getElementById('openTaxonomySubchapterCreator'),
+    taxonomySubchapterCreator: document.getElementById('taxonomySubchapterCreator'),
+    taxonomySubchapterName: document.getElementById('taxonomySubchapterName'),
+    taxonomySaveSubchapterBtn: document.getElementById('saveTaxonomySubchapter'),
+    taxonomyCloseSubchapterCreator: document.getElementById('closeTaxonomySubchapterCreator'),
+    // Multi-apartment settings
+    multiApartmentDurationInput: document.getElementById('multiApartmentDuration'),
+    multiApartmentDurationSaveBtn: document.getElementById('saveMultiApartmentDuration'),
+    multiApartmentDurationFlash: document.getElementById('multiApartmentDurationFlash'),
+    multiApartmentGatePwdInput: document.getElementById('multiApartmentAdminGatePassword'),
+    multiApartmentGatePwdSaveBtn: document.getElementById('saveMultiApartmentAdminGatePassword'),
+    multiApartmentGatePwdFlash: document.getElementById('multiApartmentGatePwdFlash'),
+    // Multi-functional settings
+    multiFunctionalDurationInput: document.getElementById('multiFunctionalDuration'),
+    multiFunctionalDurationSaveBtn: document.getElementById('saveMultiFunctionalDuration'),
+    multiFunctionalDurationFlash: document.getElementById('multiFunctionalDurationFlash'),
+    multiFunctionalGatePwdInput: document.getElementById('multiFunctionalAdminGatePassword'),
+    multiFunctionalGatePwdSaveBtn: document.getElementById('saveMultiFunctionalAdminGatePassword'),
+    multiFunctionalGatePwdFlash: document.getElementById('multiFunctionalGatePwdFlash'),
+    blocksGrid: document.querySelector('.exam-blocks-grid'),
+    blocksCount: document.getElementById('adminBlocksCount'),
+    questionsCount: document.getElementById('adminQuestionsCount'),
+    usersGrid: document.getElementById('usersGrid'),
+    usersSearch: document.getElementById('usersSearch'),
+    usersSort: document.getElementById('usersSort'),
+    resetUsersFilters: document.getElementById('resetUsersFilters'),
+    onlyAdmins: document.getElementById('onlyAdmins'),
+    filterArchitects: document.getElementById('filterArchitects'),
+    filterExperts: document.getElementById('filterExperts'),
+    filterMunicipal: document.getElementById('filterMunicipal'),
+    filterCertified: document.getElementById('filterCertified'),
+    filterSuspendedExpired: document.getElementById('filterSuspendedExpired'),
+    filterExamCandidates: document.getElementById('filterExamCandidates'),
+    filterExamCandidatesChip: document.getElementById('filterExamCandidatesChip'),
+    filterExamCandidatesBadge: document.getElementById('filterExamCandidatesBadge'),
+    filterCertCandidates: document.getElementById('filterCertCandidates'),
+    filterCertCandidatesChip: document.getElementById('filterCertCandidatesChip'),
+    filterCertCandidatesBadge: document.getElementById('filterCertCandidatesBadge'),
+    filterStatements: document.getElementById('filterStatements'),
+    filterStatementsBadge: document.getElementById('filterStatementsBadge'),
+    filterPendingStatements: document.getElementById('filterPendingStatements'),
+    filterPendingStatementsBadge: document.getElementById('filterPendingStatementsBadge'),
+    filterAllStatements: document.getElementById('filterAllStatements'),
+    filterAllStatementsBadge: document.getElementById('filterAllStatementsBadge'),
+    statementsDate: document.getElementById('statementsDate'),
+    clearStatementsDate: document.getElementById('clearStatementsDate'),
+    filterSentExam: document.getElementById('filterSentExam'),
+    filterSentRejection: document.getElementById('filterSentRejection'),
+    filterSentCertificate: document.getElementById('filterSentCertificate'),
+    filterSentFail: document.getElementById('filterSentFail'),
+    filterSentCustom: document.getElementById('filterSentCustom'),
+    sentLettersDate: document.getElementById('sentLettersDate'),
+    clearSentLettersDate: document.getElementById('clearSentLettersDate'),
+    filterExamMorning: document.getElementById('filterExamMorning'),
+    filterExamEvening: document.getElementById('filterExamEvening'),
+    filterCertificateHandover: document.getElementById('filterCertificateHandover'),
+    examScheduleDate: document.getElementById('examScheduleDate'),
+    clearExamScheduleDate: document.getElementById('clearExamScheduleDate'),
+    filterExamPassed: document.getElementById('filterExamPassed'),
+    filterExamFailed: document.getElementById('filterExamFailed'),
+    filterPendingPassLetter: document.getElementById('filterPendingPassLetter'),
+    filterPendingPassLetterChip: document.getElementById('filterPendingPassLetterChip'),
+    filterPendingPassLetterBadge: document.getElementById('filterPendingPassLetterBadge'),
+    filterPendingFailLetter: document.getElementById('filterPendingFailLetter'),
+    filterPendingFailLetterChip: document.getElementById('filterPendingFailLetterChip'),
+    filterPendingFailLetterBadge: document.getElementById('filterPendingFailLetterBadge'),
+    examResultDate: document.getElementById('examResultDate'),
+    clearExamResultDate: document.getElementById('clearExamResultDate'),
+    candidateResultsOverlay: document.getElementById('candidateResultsOverlay'),
+    candidateResultsList: document.getElementById('candidateResultsList'),
+    candidateResultsFullName: document.getElementById('candidateResultsFullName'),
+    candidateResultsCode: document.getElementById('candidateResultsCode'),
+    candidateResultsPersonalId: document.getElementById('candidateResultsPersonalId'),
+    candidateResultsClose: document.getElementById('candidateResultsClose'),
+    userStatementsOverlay: document.getElementById('userStatementsOverlay'),
+    userStatementsList: document.getElementById('userStatementsList'),
+    userStatementsMeta: document.getElementById('userStatementsMeta'),
+    userStatementsClose: document.getElementById('userStatementsClose'),
+    userCertificateOverlay: document.getElementById('userCertificateOverlay'),
+    userCertificateClose: document.getElementById('userCertificateClose'),
+    userCertificateDownload: document.getElementById('userCertificateDownload'),
+    certificateCard: document.getElementById('certificateCard'),
+    certificateStatusBadge: document.getElementById('certificateStatusBadge'),
+    userCertificateDelete: document.getElementById('userCertificateDelete'),
+    certificateEditBtn: document.getElementById('certificateEditBtn'),
+    certificateEmptyState: document.getElementById('certificateEmptyState'),
+    certificateEmptyCreate: document.getElementById('certificateEmptyCreate'),
+    certificateForm: document.getElementById('certificateForm'),
+    certificateFormCode: document.getElementById('certificateFormCode'),
+    certificateFormCodeDisplay: document.getElementById('certificateFormCodeDisplay'),
+    certificateFormLevel: document.getElementById('certificateFormLevel'),
+    certificateFormStatus: document.getElementById('certificateFormStatus'),
+    certificateFormIssueDate: document.getElementById('certificateFormIssueDate'),
+    certificateFormValidityTerm: document.getElementById('certificateFormValidityTerm'),
+    certificateFormValidUntil: document.getElementById('certificateFormValidUntil'),
+    certificateFormValidUntilDisplay: document.getElementById('certificateFormValidUntilDisplay'),
+    certificateFormNotifyEditor: document.getElementById('certificateFormNotifyEditor'),
+    certificateFormNotifyEditBtn: document.getElementById('certificateFormNotifyEditBtn'),
+    certificateFormNotifyReset: document.getElementById('certificateFormNotifyReset'),
+    certificateFormNotifySaveTemplate: document.getElementById('certificateFormNotifySaveTemplate'),
+    certificateFormNotifySubject: document.getElementById('certificateFormNotifySubject'),
+    certificateFormNotifyBody: document.getElementById('certificateFormNotifyBody'),
+    certificateFormSendNotification: document.getElementById('certificateFormSendNotification'),
+    certificateFormSubmit: document.getElementById('certificateFormSubmit'),
+    certificateFormName: document.getElementById('certificateFormName'),
+    certificateFormPhone: document.getElementById('certificateFormPhone'),
+    certificateFormEmail: document.getElementById('certificateFormEmail'),
+    resultDetailOverlay: document.getElementById('resultDetailOverlay'),
+    resultDetailExamTitle: document.getElementById('resultDetailExamTitle'),
+    resultDetailStatus: document.getElementById('resultDetailStatus'),
+    resultDetailCandidate: document.getElementById('resultDetailCandidate'),
+    resultDetailPersonalId: document.getElementById('resultDetailPersonalId'),
+    resultDetailCode: document.getElementById('resultDetailCode'),
+    resultDetailStartedAt: document.getElementById('resultDetailStartedAt'),
+    resultDetailFinishedAt: document.getElementById('resultDetailFinishedAt'),
+    resultDetailDuration: document.getElementById('resultDetailDuration'),
+    resultDetailScore: document.getElementById('resultDetailScore'),
+    resultBlockStats: document.getElementById('resultBlockStats'),
+    resultDetailStatusBanner: document.getElementById('resultDetailStatusBanner'),
+    resultDetailSummary: document.getElementById('resultDetailSummary'),
+    resultQuestionList: document.getElementById('resultQuestionList'),
+    resultDetailDownloadShort: document.getElementById('resultDetailDownloadShort'),
+    resultDetailDownload: document.getElementById('resultDetailDownload'),
+    resultDetailMedia: document.getElementById('resultDetailMedia'),
+    resultDetailScreenMedia: document.getElementById('resultDetailScreenMedia'),
+    resultDetailClose: document.getElementById('resultDetailClose'),
+    resultMediaSection: document.getElementById('resultMediaSection'),
+    resultMediaPlayer: document.getElementById('resultMediaPlayer'),
+    resultMediaDownload: document.getElementById('resultMediaDownload'),
+    resultMediaInfo: document.getElementById('resultMediaInfo'),
+    // Project results (multi-apartment/multi-functional)
+    projectResultsOverlay: document.getElementById('projectResultsOverlay'),
+    projectResultsList: document.getElementById('projectResultsList'),
+    projectResultsFullName: document.getElementById('projectResultsFullName'),
+    projectResultsType: document.getElementById('projectResultsType'),
+    projectResultsClose: document.getElementById('projectResultsClose'),
+    projectDetailOverlay: document.getElementById('projectDetailOverlay'),
+    projectDetailProjectName: document.getElementById('projectDetailProjectName'),
+    projectDetailStatus: document.getElementById('projectDetailStatus'),
+    projectDetailCandidate: document.getElementById('projectDetailCandidate'),
+    projectDetailProjectCode: document.getElementById('projectDetailProjectCode'),
+    projectDetailStartedAt: document.getElementById('projectDetailStartedAt'),
+    projectDetailFinishedAt: document.getElementById('projectDetailFinishedAt'),
+    projectDetailDuration: document.getElementById('projectDetailDuration'),
+    projectDetailScore: document.getElementById('projectDetailScore'),
+    projectDetailStatusBanner: document.getElementById('projectDetailStatusBanner'),
+    projectDetailSummary: document.getElementById('projectDetailSummary'),
+    projectAnswerList: document.getElementById('projectAnswerList'),
+    projectDetailDownloadShort: document.getElementById('projectDetailDownloadShort'),
+    projectDetailDownload: document.getElementById('projectDetailDownload'),
+    projectDetailClose: document.getElementById('projectDetailClose'),
+    userEditOverlay: document.getElementById('userEditOverlay'),
+    userEditForm: document.getElementById('userEditForm'),
+    userEditClose: document.getElementById('userEditClose'),
+    userEditCancel: document.getElementById('userEditCancel'),
+    userEditTitle: document.getElementById('userEditTitle'),
+    userEditFirstName: document.getElementById('userEditFirstName'),
+    userEditLastName: document.getElementById('userEditLastName'),
+    userEditPersonalId: document.getElementById('userEditPersonalId'),
+    userEditPhone: document.getElementById('userEditPhone'),
+    userEditEmail: document.getElementById('userEditEmail'),
+    userEditCode: document.getElementById('userEditCode'),
+    userEditSave: document.getElementById('userEditSave'),
+  };
+
+  const NAV_TARGETS = {
+    'გამოცდა': 'exam',
+    'რეგისტრაციები': 'registrations',
+    'რეგისტრირებული პირები': 'registrations',
+    'მრავალბინიანი': 'multiApartment',
+    'მრავალფუნქციური': 'multiFunctional',
+    'გზამკვლევი': 'guide',
+    'დოკუმენტები': 'documents',
+    'დამატება': 'documents',
+    'APP': 'app',
+  };
+
+  const on = (element, event, handler) => element && element.addEventListener(event, handler);
+  const activeOverlays = new Set();
+
+  const shared = window.AdminShared || {};
+  const modules = window.AdminModules || {};
+  const {
+    showToast = () => {},
+    formatDateTime = (value) => String(value ?? ''),
+    formatDuration = () => '—',
+    arrayBufferToBase64 = () => '',
+    loadExternalScript = () => Promise.resolve(),
+    escapeHtml = (value) => String(value ?? ''),
+    handleAdminErrorResponse = async () => {},
+    deliverPdf = async () => false,
+    preparePdfSaveHandle = async () => ({ handle: null, aborted: false }),
+  } = shared;
+
+  function getNavTarget(link) {
+    if (!link) return null;
+    const explicit = String(link.getAttribute('data-target') || '').trim();
+    if (explicit) return explicit;
+    const label = (link.textContent || '').trim();
+    return NAV_TARGETS[label] || null;
+  }
+
+  function openOverlay(element) {
+    if (!element) return;
+    activeOverlays.add(element);
+    element.classList.add('open');
+    element.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+  }
+
+  function closeOverlay(element) {
+    if (!element) return;
+    activeOverlays.delete(element);
+    element.classList.remove('open');
+    element.setAttribute('aria-hidden', 'true');
+    if (!activeOverlays.size) {
+      document.body.classList.remove('modal-open');
+    }
+  }
+
+  const FOUNDER_ONLY_SECTIONS = new Set(['exam', 'multiApartment', 'multiFunctional']);
+  let verifiedIsFounder = null;
+
+  function showSection(name) {
+    const activeName = typeof name === 'string' ? name : null;
+    if (activeName && FOUNDER_ONLY_SECTIONS.has(activeName) && !isFounderActor()) {
+      return;
+    }
+    Object.entries(DOM.sections).forEach(([key, el]) => {
+      if (!el) return;
+      el.style.display = activeName && key === activeName ? 'block' : 'none';
+    });
+
+    DOM.navLinks.forEach((link) => {
+      const target = getNavTarget(link);
+      const isActive = !!activeName && target === activeName;
+      link.classList.toggle('active', isActive);
+      if (isActive) {
+        link.setAttribute('aria-current', 'page');
+      } else {
+        link.removeAttribute('aria-current');
+      }
+    });
+
+    const otherChildTargets = new Set(['guide', 'regulations', 'applicationForm']);
+    const isOtherChildActive = !!activeName && otherChildTargets.has(activeName);
+    document.querySelector('.other-trigger')?.classList.toggle('active', isOtherChildActive);
+    document.querySelector('.drawer-other-trigger')?.classList.toggle('active', isOtherChildActive);
+  }
+
+  function getCurrentUser() {
+    try {
+      const raw = localStorage.getItem(KEYS.CURRENT_USER);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function getSavedEmail() {
+    try { return (window.Auth?.getSavedEmail?.() || localStorage.getItem(KEYS.SAVED_EMAIL) || '').trim(); } catch { return ''; }
+  }
+
+  function isLoggedIn() {
+    try { return !!(window.Auth?.isLoggedIn?.() || (localStorage.getItem(KEYS.AUTH) === 'true')); } catch { return false; }
+  }
+
+  function isFounderActor() {
+    if (typeof verifiedIsFounder === 'boolean') return verifiedIsFounder;
+    try {
+      if (window.Auth?.isFounder?.()) return true;
+      const cur = getCurrentUser();
+      if (cur && (cur.isFounder === true || cur.is_founder === true)) return true;
+      return getSavedEmail().toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+    } catch {
+      return false;
+    }
+  }
+
+  function getAdminHeaders() {
+    return {};
+  }
+
+  function getActorEmail() { return getSavedEmail(); }
+
+  function getActorHeaders() {
+    // Try window.Auth first, fallback to direct localStorage access
+    if (window.Auth?.getAuthHeaders) {
+      return window.Auth.getAuthHeaders();
+    }
+    // Fallback: get token directly from localStorage
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      return { 'Authorization': 'Bearer ' + token };
+    }
+    return {};
+  }
+
+  async function ensureAdminAccess() {
+    const redirectToHome = () => {
+      alert('ადმინისტრატორის გვერდზე დაშვება აქვს მხოლოდ ადმინს');
+      window.location.href = 'index.html';
+      return false;
+    };
+
+    const loggedIn = isLoggedIn();
+    const savedEmail = getSavedEmail().toLowerCase();
+    const isLocalAdmin = !!getCurrentUser()?.isAdmin;
+    const isFounder = isFounderActor();
+
+    if (!loggedIn || !savedEmail || (!isFounder && !isLocalAdmin)) {
+      return redirectToHome();
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/admin/auth/verify`, {
+        headers: { ...getAdminHeaders(), ...getActorHeaders(), 'Cache-Control': 'no-cache' },
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const founderHdr = (response.headers?.get?.('X-Is-Founder') || '').toLowerCase();
+        if (founderHdr === 'true' || founderHdr === 'false') {
+          verifiedIsFounder = founderHdr === 'true';
+        }
+        return true;
+      }
+      if (response.status === 401) return redirectToHome();
+    } catch {}
+
+    showToast('ადმინის ავტორიზაცია ვერ დადასტურდა', 'error');
+    return redirectToHome();
+  }
+
+  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, appFiles, applicationForm }) {
+    const setMenu = (open) => {
+      DOM.body?.classList.toggle('menu-open', open);
+      if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    const closeMenu = () => setMenu(false);
+    const toggleMenu = () => setMenu(!DOM.body?.classList.contains('menu-open'));
+
+    on(DOM.burger, 'click', toggleMenu);
+    on(DOM.overlay, 'click', closeMenu);
+    on(DOM.drawerClose, 'click', closeMenu);
+    DOM.drawerLinks.forEach((link) => {
+      on(link, 'click', (event) => {
+        const targetSection = getNavTarget(link);
+        if (targetSection && FOUNDER_ONLY_SECTIONS.has(targetSection) && !isFounderActor()) {
+          event.preventDefault();
+          return;
+        }
+        closeMenu();
+      });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeMenu();
+        closeOtherDropdown();
+        closeDrawerOtherSubmenu();
+      }
+    });
+
+    const goHome = () => { window.location.href = 'index.html'; };
+    on(DOM.loginBtn, 'click', goHome);
+    on(DOM.drawerLoginBtn, 'click', goHome);
+
+    // "სხვადასხვა" dropdown handling
+    const navOther = document.querySelector('.nav-other');
+    const otherTrigger = document.querySelector('.other-trigger');
+    const otherDropdown = document.querySelector('.other-dropdown');
+    const drawerOtherTrigger = document.querySelector('.drawer-other-trigger');
+    const drawerOtherSubmenu = document.querySelector('.drawer-other-submenu');
+
+    function closeOtherDropdown() {
+      otherDropdown?.classList.remove('show');
+      navOther?.classList.remove('open');
+      otherTrigger?.setAttribute('aria-expanded', 'false');
+    }
+    function toggleOtherDropdown(e) {
+      e?.preventDefault();
+      e?.stopPropagation();
+      const willOpen = !otherDropdown?.classList.contains('show');
+      otherDropdown?.classList.toggle('show', willOpen);
+      navOther?.classList.toggle('open', willOpen);
+      otherTrigger?.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      otherTrigger?.blur?.();
+    }
+    function closeDrawerOtherSubmenu() {
+      if (drawerOtherSubmenu) drawerOtherSubmenu.hidden = true;
+    }
+    function toggleDrawerOtherSubmenu(e) {
+      e?.preventDefault();
+      e?.stopPropagation();
+      if (drawerOtherSubmenu) drawerOtherSubmenu.hidden = !drawerOtherSubmenu.hidden;
+    }
+
+    on(otherTrigger, 'click', toggleOtherDropdown);
+    on(drawerOtherTrigger, 'click', toggleDrawerOtherSubmenu);
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.nav-other')) closeOtherDropdown();
+    });
+
+    DOM.navLinks.forEach((link) => {
+      on(link, 'click', (event) => {
+        const targetSection = getNavTarget(link);
+        if (!targetSection) return;
+        event.preventDefault();
+        link.blur?.();
+        if (FOUNDER_ONLY_SECTIONS.has(targetSection) && !isFounderActor()) {
+          return;
+        }
+        closeMenu();
+        closeOtherDropdown();
+        closeDrawerOtherSubmenu();
+        showSection(targetSection);
+        const moduleMap = {
+          registrations: users,
+          multiApartment,
+          multiFunctional,
+          guide,
+          regulations,
+          documents,
+          app: appFiles,
+          applicationForm,
+        };
+        moduleMap[targetSection]?.render?.();
+      });
+    });
+  }
+
+  const statementsEventHandlers = [];
+  window.addEventListener('admin:statementsSeen', (event) => {
+    statementsEventHandlers.forEach((handler) => {
+      try { handler(event); } catch {}
+    });
+  });
+
+  void bootstrapAdmin();
+
+  async function bootstrapAdmin() {
+    const moduleContextBase = {
+      DOM,
+      API_BASE,
+      on,
+      showToast,
+      escapeHtml,
+      formatDateTime,
+      formatDuration,
+      arrayBufferToBase64,
+      loadExternalScript,
+      handleAdminErrorResponse,
+      deliverPdf,
+      preparePdfSaveHandle,
+      getAdminHeaders,
+      getActorHeaders,
+      getActorEmail,
+      openOverlay,
+      closeOverlay,
+      isFounderActor,
+    };
+
+    const noop = () => {};
+    const noopObj = { init: noop };
+    const createModule = (factory, fallback = noopObj) => factory ? factory(moduleContextBase) : fallback;
+    const createModuleWithContext = (factory, context, fallback = noopObj) => factory ? factory(context) : fallback;
+
+    const examSettings = createModule(modules.createExamSettingsModule, { init: noop });
+    const blocksModule = createModule(modules.createBlocksModule, { init: noop, render: noop, reload: noop });
+    const resultsModule = createModule(modules.createResultsModule, { init: noop, open: noop, close: noop });
+    const projectResultsModule = createModuleWithContext(modules.createProjectResultsModule, { ...moduleContextBase },
+      { init: noop, open: noop, openMultiApartment: noop, openMultiFunctional: noop, close: noop });
+    const statementsModule = createModuleWithContext(modules.createStatementsModule, { ...moduleContextBase }, 
+      { init: noop, open: noop, close: noop, downloadStatementPdf: noop, markStatementsSeen: noop });
+    
+    const certificateModule = createModuleWithContext(modules.createCertificateModule, {
+      ...moduleContextBase,
+      onUserCertificateUpdated: (userId, certificateData) => {
+        usersModule.updateUserCardColor?.(userId, certificateData);
+      },
+    }, { init: noop, open: noop, close: noop });
+
+    const examSchedulesModule = createModuleWithContext(modules.createExamSchedulesModule, {
+      ...moduleContextBase,
+      downloadStatementPdf: statementsModule.downloadStatementPdf,
+    }, { mount: noop });
+    const usersModule = createModuleWithContext(modules.createUsersModule, {
+      ...moduleContextBase,
+      examSchedules: examSchedulesModule,
+      onShowResults: resultsModule.open,
+      onShowStatements: statementsModule.open,
+      onShowCertificate: certificateModule.open,
+      onShowMultiApartmentResults: projectResultsModule.openMultiApartment,
+      onShowMultiFunctionalResults: projectResultsModule.openMultiFunctional,
+    }, { init: noop, render: noop, updateUserCardColor: noop });
+
+    const multiApartmentModule = createModule(modules.createMultiApartmentModule, { init: noop, render: noop });
+    const multiFunctionalModule = createModule(modules.createMultiFunctionalModule, { init: noop, render: noop });
+    const guideModule = createModule(modules.createGuideModule, { init: noop, render: noop, reload: noop });
+    const regulationsModule = createModule(modules.createRegulationsModule, { init: noop, render: noop, reload: noop });
+    const appFilesModule = createModule(modules.createAppFilesModule, { init: noop, render: noop, reload: noop });
+    const applicationFormModule = createModule(modules.createApplicationFormModule, { init: noop, render: noop, reload: noop });
+    const documentsModule = createModule(modules.createDocumentsModule, { init: noop, render: noop });
+    const aiAssistantModule = createModuleWithContext(modules.createAiAssistantModule, {
+      ...moduleContextBase,
+      onLetterSent: () => {
+        usersModule.refreshLiveUserStates?.({ force: true });
+        usersModule.refreshUnseenSummary?.();
+      },
+    }, { init: noop });
+
+    const hasAccess = await ensureAdminAccess();
+    if (!hasAccess) return;
+
+    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, appFiles: appFilesModule, applicationForm: applicationFormModule });
+
+    if (isFounderActor()) {
+      examSettings.init();
+      blocksModule.init();
+      multiApartmentModule.init();
+      multiFunctionalModule.init();
+    } else {
+      FOUNDER_ONLY_SECTIONS.forEach((secKey) => {
+        const secEl = DOM.sections[secKey];
+        if (secEl) {
+          secEl.style.display = 'none';
+          secEl.innerHTML = '';
+        }
+      });
+    }
+    resultsModule.init();
+    projectResultsModule.init();
+    statementsModule.init();
+    certificateModule.init();
+    usersModule.init();
+    guideModule.init();
+    regulationsModule.init();
+    documentsModule.init();
+    appFilesModule.init();
+    applicationFormModule.init();
+    aiAssistantModule.init();
+
+    usersModule.refreshUnseenSummary?.();
+
+    statementsEventHandlers.push((event) => {
+      const detail = event.detail || {};
+      if (detail.userId != null) {
+        usersModule.updateUserUnseenStatus?.(detail.userId, detail.hasUnseen, detail.remainingCount, detail.hasPending, detail.pendingCount);
+        usersModule.refreshLiveUserStates?.({ force: true });
+      }
+      if (detail.refreshSummary !== false) {
+        usersModule.refreshUnseenSummary?.();
+      }
+    });
+
+    // Default landing section (matches the first nav item in admin.html)
+    showSection('registrations');
+    usersModule.render?.();
+  }
+});
+
+

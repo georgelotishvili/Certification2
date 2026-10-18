@@ -1,6 +1,6 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "deployed_at": "2026-10-18T09:15:48.995773+00:00",
+  "deployed_at": "2026-10-18T17:58:09.955850+00:00",
   "remote": {
     "ok": true,
     "service": "active",
@@ -8,10 +8,7 @@
     "has_admin_users_route": true,
     "has_planning_templates_route": true,
     "verified_files": {
-      "backend/app/routers/planning_letters.py": true,
       "frontend/pages/admin.html": true,
-      "frontend/scripts/admin/exam-schedules.js": true,
-      "frontend/scripts/admin/statements.js": true,
       "frontend/styles/admin.css": true
     }
   },
@@ -19,22 +16,12 @@
     "https://gipc.org.ge/pages/admin.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "49925dfee822f6c367d5b03639c90be1e3f42e4a900822a80982feb7061025a0"
-    },
-    "https://gipc.org.ge/scripts/admin/exam-schedules.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "8cf94c1eee45696afc7ebb4c332e3b5585cf50ef8bf945b362e75c92effcd649"
-    },
-    "https://gipc.org.ge/scripts/admin/statements.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "dd6ae89a8f29a94fb76d11477550fe2b6521b507a00f6af3d0188758e22351a7"
+      "sha256": "92588e8e585175d1d1f88701249be34cee0320c080ef3e604683133ab0fe4b26"
     },
     "https://gipc.org.ge/styles/admin.css": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "445195ba3425a77d780a9f73c0ac7309ced04ffd56ee4fb51f3b7a425996a389"
+      "sha256": "d4dd3b23b7a23a05ef13924badf9b2f73361fb4f56186999fc0bb3c0b550fb4b"
     }
   }
 }

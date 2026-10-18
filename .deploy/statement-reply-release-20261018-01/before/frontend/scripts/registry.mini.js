@@ -1,0 +1,536 @@
+// frontend/scripts/registry.mini.js
+// Shared registry data/filter logic; the public registry has its own page.
+// Exposes: window.Registry.init({ api, triggers, beforeOpen, onCardClick, refreshRating })
+(function () {
+  function init(options = {}) {
+    const apiBase =
+      options.api ||
+      (window.APP_CONFIG && typeof window.APP_CONFIG.API_BASE === 'string'
+        ? window.APP_CONFIG.API_BASE
+        : 'http://127.0.0.1:8000');
+
+    const triggers = options.triggers || ['.nav-registry', '.drawer-registry'];
+    const beforeOpen = typeof options.beforeOpen === 'function' ? options.beforeOpen : null;
+    const onCardClick = typeof options.onCardClick === 'function' ? options.onCardClick : null;
+    // Ratings arrive with each page; legacy refreshRating callers no longer
+    // need an additional HTTP request per displayed person.
+    const pageRoot = document.getElementById('registryPage');
+    const pageMode = !!pageRoot;
+
+    const DOM = {
+      body: document.body,
+      overlay: pageRoot || document.getElementById('registryOverlay'),
+      closeBtn: document.getElementById('registryClose'),
+      list: document.getElementById('registryList'),
+      search: document.getElementById('registrySearch'),
+      filterArchitect: document.getElementById('registryFilterArchitect'),
+      filterExpert: document.getElementById('registryFilterExpert'),
+      filterMunicipal: document.getElementById('registryFilterMunicipal'),
+      sort: document.getElementById('registrySort'),
+      resultsCount: document.getElementById('registryResultsCount'),
+      totalCount: document.getElementById('registryTotalCount'),
+      resetFilters: document.getElementById('registryResetFilters'),
+      pagination: document.getElementById('registryPagination'),
+      previous: document.getElementById('registryPrevious'),
+      next: document.getElementById('registryNext'),
+      pageNumber: document.getElementById('registryPageNumber'),
+      error: document.getElementById('registryError'),
+      clearSearch: null,
+      filterBadge: null,
+    };
+
+    const STATE = {
+      open: false,
+      loading: false,
+      loaded: false,
+      failed: false,
+      items: [],
+      filtered: [],
+      total: 0,
+      filteredTotal: 0,
+      offset: 0,
+      limit: 50,
+      requestId: 0,
+      controller: null,
+      requestKey: '',
+      loadedKey: '',
+      pending: null,
+      searchTimer: null,
+    };
+
+    // Utils
+    const toNumber = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const normalizeText = (value) => String(value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+    const escapeHtml = (value) =>
+      String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const formatRating = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+    };
+
+    function bindEvents() {
+      if (!DOM.overlay) return;
+      enhanceControls();
+
+      // Dedicated-page navigation stays native (including open-in-new-tab).
+      // Retain modal compatibility only for pages that still contain its markup.
+      if (!pageMode) document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!target) return;
+        const matched = triggers.map((sel) => target.closest(sel)).find(Boolean);
+        if (!matched) return;
+        event.preventDefault();
+        beforeOpen?.(matched);
+        open();
+      });
+
+      DOM.closeBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        close();
+      });
+
+      if (!pageMode) DOM.overlay?.addEventListener('click', (event) => {
+        if (event.target === DOM.overlay) close();
+      });
+
+      DOM.search?.addEventListener('input', scheduleSearch);
+      DOM.filterArchitect?.addEventListener('change', () => applyFilters());
+      DOM.filterExpert?.addEventListener('change', () => applyFilters());
+      DOM.filterMunicipal?.addEventListener('change', () => applyFilters());
+      DOM.sort?.addEventListener('change', () => applyFilters());
+      DOM.previous?.addEventListener('click', () => {
+        if (!STATE.loading && STATE.offset > 0) return ensureData(true, Math.max(0, STATE.offset - STATE.limit));
+      });
+      DOM.next?.addEventListener('click', () => {
+        if (!STATE.loading && STATE.offset + STATE.items.length < STATE.filteredTotal) return ensureData(true, STATE.offset + STATE.limit);
+      });
+      DOM.resetFilters?.addEventListener('click', () => {
+        if (DOM.search) DOM.search.value = '';
+        [DOM.filterArchitect, DOM.filterExpert, DOM.filterMunicipal].forEach((input) => {
+          if (input) input.checked = false;
+        });
+        if (DOM.sort) DOM.sort.value = 'date_desc';
+        return applyFilters();
+      });
+    }
+
+    function createClearIcon() {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M18 6L6 18"></path>
+          <path d="M6 6l12 12"></path>
+        </svg>`;
+    }
+
+    function enhanceControls() {
+      if (DOM.search && DOM.search.dataset.clearReady !== 'true') {
+        DOM.search.dataset.clearReady = 'true';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'registry-search-wrap';
+        DOM.search.parentNode.insertBefore(wrapper, DOM.search);
+        wrapper.appendChild(DOM.search);
+
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'registry-search-clear';
+        clear.title = 'ძებნის გასუფთავება';
+        clear.setAttribute('aria-label', 'ძებნის გასუფთავება');
+        clear.hidden = true;
+        clear.innerHTML = createClearIcon();
+        clear.addEventListener('click', (event) => {
+          event.preventDefault();
+          DOM.search.value = '';
+          DOM.search.focus();
+          return applyFilters();
+        });
+        wrapper.appendChild(clear);
+        DOM.clearSearch = clear;
+      }
+
+      const checkboxes = DOM.overlay.querySelector('.registry-checkboxes');
+      if (checkboxes && !DOM.filterBadge) {
+        const badge = document.createElement('span');
+        badge.className = 'registry-filter-count';
+        badge.hidden = true;
+        checkboxes.appendChild(badge);
+        DOM.filterBadge = badge;
+      }
+    }
+
+    function setOpen(value) {
+      if (pageMode || !DOM.overlay) return;
+      STATE.open = !!value;
+      DOM.overlay?.classList.toggle('is-open', STATE.open);
+      DOM.overlay?.setAttribute('aria-hidden', STATE.open ? 'false' : 'true');
+      DOM.body?.classList.toggle('registry-open', STATE.open);
+    }
+
+    function open() {
+      if (pageMode) return ensureData();
+      if (!DOM.overlay) return;
+      if (STATE.open) return;
+      setOpen(true);
+      ensureData();
+    }
+
+    function close() {
+      if (pageMode) return;
+      if (!STATE.open) return;
+      setOpen(false);
+    }
+
+    function selectedQualifications() {
+      return [
+        ['architect', DOM.filterArchitect], ['expert', DOM.filterExpert], ['municipal', DOM.filterMunicipal],
+      ].filter(([, input]) => input?.checked).map(([key]) => key);
+    }
+
+    function updateControls() {
+      if (DOM.clearSearch) DOM.clearSearch.hidden = !normalizeText(DOM.search?.value);
+      updateFilterBadge(selectedQualifications().length);
+    }
+
+    function cancelRequest() {
+      STATE.requestId += 1;
+      STATE.controller?.abort();
+      STATE.loading = false;
+      STATE.pending = null;
+    }
+
+    function scheduleSearch() {
+      clearTimeout(STATE.searchTimer);
+      // Invalidate immediately, not only after debounce: an older response
+      // must never replace results for text the visitor has already changed.
+      cancelRequest();
+      updateControls();
+      STATE.loading = true;
+      DOM.list?.setAttribute('aria-busy', 'true');
+      if (DOM.resultsCount) DOM.resultsCount.textContent = 'მონაცემები ახლდება...';
+      updatePagination();
+      STATE.searchTimer = setTimeout(() => {
+        STATE.searchTimer = null;
+        STATE.loading = false;
+        void ensureData(true, 0);
+      }, 250);
+    }
+
+    function ensureData(force = false, offset = STATE.offset) {
+      if (!DOM.list) return Promise.resolve();
+      clearTimeout(STATE.searchTimer);
+      STATE.searchTimer = null;
+      updateControls();
+      const params = new URLSearchParams({
+        limit: String(STATE.limit), offset: String(offset),
+        q: normalizeText(DOM.search?.value),
+        qualifications: selectedQualifications().join(','),
+        sort: DOM.sort?.value || 'date_desc',
+      });
+      const key = params.toString();
+      if (STATE.loading && STATE.requestKey === key && STATE.pending) return STATE.pending;
+      if (STATE.loaded && !STATE.failed && !force && STATE.loadedKey === key) return Promise.resolve();
+      cancelRequest();
+      const requestId = STATE.requestId;
+      STATE.controller = typeof AbortController === 'function' ? new AbortController() : null;
+      STATE.requestKey = key;
+      STATE.loading = true;
+      STATE.failed = false;
+      if (DOM.error) { DOM.error.hidden = true; DOM.error.innerHTML = ''; }
+      DOM.list.setAttribute('aria-busy', 'true');
+      if (DOM.resultsCount) DOM.resultsCount.textContent = STATE.loaded ? 'მონაცემები ახლდება...' : 'მონაცემები იტვირთება...';
+      if (!STATE.loaded) renderSkeleton();
+      updatePagination();
+      STATE.pending = loadPage(params, requestId, STATE.controller?.signal);
+      return STATE.pending;
+    }
+
+    async function loadPage(params, requestId, signal) {
+      try {
+        const response = await fetch(`${apiBase}/certified-persons/registry/page?${params.toString()}`, {
+          headers: { 'Cache-Control': 'no-cache' }, signal,
+        });
+        if (!response.ok) throw new Error('registry failed');
+        const data = await response.json();
+        if (requestId !== STATE.requestId) return;
+        if (!data || !Array.isArray(data.items) || !Number.isInteger(data.total)
+          || !Number.isInteger(data.filtered_total) || !Number.isInteger(data.offset)
+          || !Number.isInteger(data.limit) || data.limit < 1 || data.limit > 100
+          || data.total < 0 || data.filtered_total < 0 || data.filtered_total > data.total
+          || data.offset < 0 || data.items.length > data.limit) throw new Error('invalid registry page');
+        STATE.items = data.items.map(normalizePerson);
+        STATE.total = data.total;
+        STATE.filteredTotal = data.filtered_total;
+        STATE.offset = data.offset;
+        STATE.limit = data.limit;
+        params.set('offset', String(data.offset));
+        STATE.loadedKey = params.toString();
+        STATE.loaded = true;
+        renderList(STATE.items);
+      } catch (error) {
+        if (requestId !== STATE.requestId || error?.name === 'AbortError') return;
+        STATE.failed = true;
+        if (DOM.resultsCount) DOM.resultsCount.textContent = STATE.loaded
+          ? 'განახლება ვერ მოხერხდა — ნაჩვენებია წინა შედეგები' : 'მონაცემების ჩატვირთვა ვერ მოხერხდა';
+        const target = STATE.loaded && DOM.error ? DOM.error : DOM.list;
+        target.hidden = false;
+        target.innerHTML = `<div class="registry-empty">
+          <strong>რეესტრი ვერ ჩაიტვირთა</strong><p>გთხოვთ, სცადოთ ხელახლა.</p>
+          <button type="button" class="registry-retry">კიდევ სცადე</button></div>`;
+        target.querySelector('.registry-retry')?.addEventListener('click', (event) => {
+          event.preventDefault();
+          return ensureData(true, Number(params.get('offset')) || 0);
+        });
+      } finally {
+        if (requestId === STATE.requestId) {
+          STATE.loading = false;
+          STATE.pending = null;
+          DOM.list.setAttribute('aria-busy', 'false');
+          updatePagination();
+        }
+      }
+    }
+
+    function normalizePerson(person) {
+      return {
+        id: person?.id,
+        full_name: (person?.full_name || '').trim(),
+        photo_url: (person?.photo_url || '').trim(),
+        unique_code: (person?.unique_code || '').trim(),
+        qualification: (person?.qualification || '').trim().toLowerCase(),
+        certificate_status: (person?.certificate_status || '').trim().toLowerCase(),
+        rating: toNumber(person?.rating),
+        registration_date: person?.registration_date || person?.created_at || null,
+      };
+    }
+
+    // Default profile icon SVG
+    const DEFAULT_PROFILE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:100%;height:100%;color:#9ca3af;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+    </svg>`;
+
+    // Photo modal for enlarged view
+    let photoModal = null;
+    let photoTrigger = null;
+    function closePhotoModal() {
+      photoModal?.classList.remove('open');
+      photoModal?.setAttribute('aria-hidden', 'true');
+      photoTrigger?.focus?.();
+    }
+    function showPhotoModal(photoUrl, altText, trigger) {
+      photoTrigger = trigger || null;
+      if (!photoModal) {
+        photoModal = document.createElement('div');
+        photoModal.className = 'photo-modal-overlay';
+        photoModal.setAttribute('role', 'dialog');
+        photoModal.setAttribute('aria-modal', 'true');
+        photoModal.setAttribute('aria-label', 'ფოტოს გადიდება');
+        photoModal.innerHTML = `
+          <div class="photo-modal-content">
+            <button type="button" class="photo-modal-close" aria-label="დახურვა">×</button>
+            <img class="photo-modal-img" src="" alt="" />
+          </div>
+        `;
+        document.body.appendChild(photoModal);
+        
+        photoModal.addEventListener('click', (e) => {
+          if (e.target === photoModal || e.target.classList.contains('photo-modal-close')) {
+            closePhotoModal();
+          }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && photoModal.classList.contains('open')) {
+            closePhotoModal();
+          } else if (e.key === 'Tab' && photoModal.classList.contains('open')) {
+            // The close button is the only interactive control in this dialog.
+            e.preventDefault();
+            photoModal.querySelector('.photo-modal-close')?.focus();
+          }
+        });
+      }
+      
+      const img = photoModal.querySelector('.photo-modal-img');
+      if (img) {
+        img.src = photoUrl;
+        img.alt = altText || 'ფოტო';
+      }
+      photoModal.classList.add('open');
+      photoModal.setAttribute('aria-hidden', 'false');
+      photoModal.querySelector('.photo-modal-close')?.focus();
+    }
+
+    function applyFilters() {
+      return ensureData(true, 0);
+    }
+
+    function updatePagination() {
+      if (DOM.pagination) DOM.pagination.hidden = STATE.filteredTotal <= STATE.limit;
+      if (DOM.previous) DOM.previous.disabled = STATE.loading || STATE.failed || STATE.offset === 0;
+      if (DOM.next) DOM.next.disabled = STATE.loading || STATE.failed || STATE.offset + STATE.items.length >= STATE.filteredTotal;
+      if (DOM.pageNumber) DOM.pageNumber.textContent = `გვერდი ${Math.floor(STATE.offset / STATE.limit) + 1} / ${Math.max(1, Math.ceil(STATE.filteredTotal / STATE.limit))}`;
+    }
+
+    function updateFilterBadge(count) {
+      if (!DOM.filterBadge) return;
+      DOM.filterBadge.hidden = !count;
+      DOM.filterBadge.textContent = count ? `${count} ფილტრი` : '';
+    }
+
+    function renderSkeleton() {
+      if (!DOM.list) return;
+      const fragment = document.createDocumentFragment();
+      for (let i = 0; i < 7; i += 1) {
+        const item = document.createElement('div');
+        item.className = 'registry-card registry-skeleton-card';
+        item.setAttribute('aria-hidden', 'true');
+        item.innerHTML = `
+          <div class="registry-skeleton-avatar"></div>
+          <div class="registry-skeleton-info">
+            <span></span>
+            <span></span>
+          </div>`;
+        fragment.appendChild(item);
+      }
+      DOM.list.innerHTML = '';
+      DOM.list.appendChild(fragment);
+    }
+
+    function renderList(items) {
+      if (!DOM.list) return;
+      STATE.filtered = items;
+      if (DOM.totalCount) DOM.totalCount.textContent = String(STATE.total);
+      if (DOM.resultsCount) {
+        const range = items.length ? `${STATE.offset + 1}–${STATE.offset + items.length}` : '0';
+        DOM.resultsCount.textContent = `ნაჩვენებია ${range} / ${STATE.filteredTotal} ჩანაწერი · სულ ${STATE.total}`;
+      }
+      if (!items.length) {
+        DOM.list.innerHTML = '<div class="registry-empty"><strong>ჩანაწერები ვერ მოიძებნა</strong><p>შეცვალეთ საძიებო სიტყვა ან გაასუფთავეთ ფილტრები.</p></div>';
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      items.forEach((person) => fragment.appendChild(createCard(person)));
+      DOM.list.innerHTML = '';
+      DOM.list.appendChild(fragment);
+    }
+
+    function createCard(person) {
+      if (pageMode) return createPageCard(person);
+      const card = document.createElement('article');
+      card.className = 'registry-card';
+      card.dataset.qualification = person.qualification || '';
+      card.dataset.status = person.certificate_status || '';
+      card.setAttribute('role', 'listitem');
+      
+      const hasPhoto = !!(person.photo_url && person.photo_url.trim());
+      const avatarContent = hasPhoto
+        ? `<img src="${escapeHtml(person.photo_url)}" alt="${escapeHtml(person.full_name || 'სერტიფიცირებული პირი')}" class="registry-avatar-img" />`
+        : DEFAULT_PROFILE_ICON;
+      
+      card.innerHTML = `
+        <div class="registry-avatar${hasPhoto ? ' has-photo' : ''}">
+          ${avatarContent}
+        </div>
+          <div class="registry-info">
+          <div class="registry-title">
+            <div class="registry-name">${escapeHtml(person.full_name || '—')}</div>
+            <div class="registry-code">${escapeHtml(person.unique_code || '—')}</div>
+          </div>
+          <div class="registry-meta">
+            <span class="registry-rating" aria-label="რეიტინგი">⭐ ${formatRating(person.rating)}</span>
+          </div>
+        </div>`;
+
+      // Photo click to enlarge (only if has photo)
+      if (hasPhoto) {
+        const avatar = card.querySelector('.registry-avatar');
+        avatar?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showPhotoModal(person.photo_url, person.full_name, avatar);
+        });
+      }
+
+      card.addEventListener('click', () => {
+        if (onCardClick) {
+          onCardClick(person);
+          return;
+        }
+        const id = person?.id;
+        window.location.href = id ? `my.html?userId=${encodeURIComponent(id)}` : 'my.html';
+      });
+
+      return card;
+    }
+
+    function createPageCard(person) {
+      const card = document.createElement('article');
+      card.className = 'registry-card';
+      card.dataset.qualification = person.qualification || '';
+      card.dataset.status = person.certificate_status || '';
+      card.setAttribute('role', 'listitem');
+      const qualifications = {
+        architect: 'არქიტექტორი',
+        expert: 'არქიტექტორი ექსპერტი',
+        municipal: 'მუნიციპალიტეტის სპეციალისტი',
+      };
+      const statuses = {
+        active: 'მოქმედი',
+        suspended: 'შეჩერებული',
+        expired: 'ვადაგასული',
+      };
+      const fullName = escapeHtml(person.full_name || '—');
+      const profileUrl = person.id != null ? `my.html?userId=${encodeURIComponent(person.id)}` : 'my.html';
+      const avatar = person.photo_url
+        ? `<button type="button" class="registry-avatar has-photo" aria-label="${fullName} — ფოტოს გადიდება"><img src="${escapeHtml(person.photo_url)}" alt="${fullName}" class="registry-avatar-img" loading="lazy" decoding="async" /></button>`
+        : `<div class="registry-avatar" aria-hidden="true">${DEFAULT_PROFILE_ICON}</div>`;
+      card.innerHTML = `
+        ${avatar}
+        <div class="registry-info">
+          <div class="registry-card-top">
+            <span class="registry-qualification">${escapeHtml(qualifications[person.qualification] || 'სერტიფიცირებული პირი')}</span>
+            <span class="registry-status"><span aria-hidden="true"></span>${escapeHtml(statuses[person.certificate_status] || 'სტატუსი მითითებული არ არის')}</span>
+          </div>
+          <h3 class="registry-name"><a class="registry-profile-link" href="${escapeHtml(profileUrl)}">${fullName}</a></h3>
+          <div class="registry-card-bottom">
+            <div class="registry-code"><span>სერტიფიცირების კოდი</span><strong>${escapeHtml(person.unique_code || '—')}</strong></div>
+            <span class="registry-rating" aria-label="რეიტინგი">⭐ ${formatRating(person.rating)}</span>
+          </div>
+          <span class="registry-profile-hint" aria-hidden="true">პროფილის ნახვა <span>↗</span></span>
+        </div>`;
+      const avatarButton = card.querySelector('button.registry-avatar');
+      avatarButton?.addEventListener('click', () => showPhotoModal(person.photo_url, person.full_name, avatarButton));
+      if (onCardClick) {
+        card.querySelector('.registry-profile-link')?.addEventListener('click', (event) => {
+          if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0) return;
+          event.preventDefault();
+          onCardClick(person);
+        });
+      }
+      return card;
+    }
+
+    // Wire up events on load
+    bindEvents();
+    if (pageMode) void ensureData();
+
+    return {
+      open,
+      close,
+      refresh: ensureData,
+      isOpen: () => STATE.open,
+    };
+  }
+
+  window.Registry = { init };
+})();
+
+

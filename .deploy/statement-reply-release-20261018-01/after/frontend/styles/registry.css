@@ -1,0 +1,703 @@
+/* Public registry page — clean architectural CAD/Blueprint layout */
+html:has(body.registry-document),
+body.registry-document {
+  height: auto !important;
+  min-height: 100vh;
+  background-color: #f4f7fb;
+  background-image:
+    radial-gradient(circle at 15% 10%, rgba(28, 70, 140, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 85% 15%, rgba(37, 99, 235, 0.045) 0%, transparent 40%),
+    linear-gradient(90deg, rgba(28, 70, 140, 0.045) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(28, 70, 140, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28, 70, 140, 0.018) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(28, 70, 140, 0.018) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    120px 120px,
+    120px 120px,
+    24px 24px,
+    24px 24px;
+  background-attachment: fixed;
+  color: #1e293b;
+}
+
+body.registry-document {
+  display: flex;
+  flex-direction: column;
+}
+
+main.registry-page {
+  position: relative;
+  z-index: 1;
+  flex: 1 0 auto;
+  width: 84%;
+  max-width: 1160px;
+  margin: 70px auto 0;
+  padding: 96px 0 56px;
+  background: none;
+  aspect-ratio: auto;
+}
+
+body.registry-document > footer {
+  position: relative;
+  z-index: 1;
+}
+
+.registry-page [hidden] {
+  display: none !important;
+}
+
+.registry-page a,
+.registry-page button,
+.registry-page input,
+.registry-page select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.registry-page a:focus-visible,
+.registry-page button:focus-visible,
+.registry-page input:focus-visible,
+.registry-page select:focus-visible {
+  outline: 2px solid #1C468C;
+  outline-offset: 2px;
+}
+
+/* Unified Top Control Panel */
+.registry-page .registry-controls {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding: 20px 24px;
+  border: 1px solid #cbd5e1;
+  border-top: 3px solid #1C468C;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.registry-page .registry-toolbar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.registry-page .registry-title-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.registry-page h1 {
+  margin: 0;
+  color: #0f172a;
+  font-family: 'BPG Nino Mtavruli Bold', 'DejaVu Sans', sans-serif;
+  font-size: clamp(20px, 2vw, 24px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+.registry-page .registry-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  background: #eef4fb;
+  border: 1px solid #cbd8e8;
+  color: #1C468C;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.registry-page .registry-reset {
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.registry-page .registry-reset:hover,
+.registry-page .registry-reset:focus-visible {
+  color: #1C468C;
+  background: #eef4fb;
+  border-color: #93b4dc;
+}
+
+.registry-page .registry-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 280px);
+  gap: 18px;
+}
+
+.registry-page .registry-search-field,
+.registry-page .registry-sort {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.registry-page .registry-field-label {
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.registry-page .registry-search,
+.registry-page .registry-sort select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 13px;
+  box-shadow: none;
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.registry-page .registry-search:hover,
+.registry-page .registry-sort select:hover {
+  border-color: #94a3b8;
+  background: #ffffff;
+}
+
+.registry-page .registry-search {
+  padding-right: 40px;
+}
+
+.registry-page .registry-search::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+.registry-page .registry-search-clear {
+  right: 8px;
+}
+
+.registry-page .registry-search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+.registry-page .registry-search:focus-visible,
+.registry-page .registry-sort select:focus-visible {
+  border-color: #1C468C;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(28, 70, 140, 0.12);
+  outline: none;
+}
+
+.registry-page .registry-filter-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.registry-page .registry-filter-fieldset legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+.registry-page .registry-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.registry-page .registry-check {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+}
+
+.registry-page .registry-check[data-qual="architect"] {
+  border-left: 3px solid #3a5c9e;
+}
+
+.registry-page .registry-check[data-qual="expert"] {
+  border-left: 3px solid #9e3a3a;
+}
+
+.registry-page .registry-check[data-qual="municipal"] {
+  border-left: 3px solid #5a9e3a;
+}
+
+.registry-page .registry-check span {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.registry-page .registry-check:hover {
+  border-color: #94a3b8;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.registry-page .registry-check:has(input:checked) {
+  border-color: #1C468C;
+  color: #1C468C;
+  background: #eef4fb;
+}
+
+.registry-page .registry-check input {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  accent-color: #1C468C;
+  margin: 0;
+}
+
+/* Registry List & Cards */
+.registry-page .registry-results {
+  margin-top: 0;
+}
+
+.registry-page .registry-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.registry-page .registry-card {
+  --registry-type-color: #1C468C;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 78px;
+  padding: 15px 20px;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #cbd5e1;
+  border-left: 4px solid var(--registry-type-color);
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+  cursor: default;
+  opacity: 1;
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.registry-page .registry-card[data-qualification="architect"] {
+  --registry-type-color: #3a5c9e;
+}
+
+.registry-page .registry-card[data-qualification="expert"] {
+  --registry-type-color: #9e3a3a;
+}
+
+.registry-page .registry-card[data-qualification="municipal"] {
+  --registry-type-color: #5a9e3a;
+}
+
+.registry-page .registry-card:hover {
+  transform: translateY(-1px);
+  border-color: #93b4dc;
+  border-left-color: var(--registry-type-color);
+  background: #fbfdff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+}
+
+.registry-page .registry-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 56px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.registry-page .registry-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.registry-page .registry-avatar.has-photo:hover {
+  transform: none;
+  border-color: #1C468C;
+}
+
+.registry-page button.registry-avatar {
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+}
+
+.registry-page .registry-info {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.55fr) max-content;
+  grid-template-areas:
+    'name code status'
+    'qualification code rating';
+  align-items: center;
+  gap: 4px 24px;
+}
+
+.registry-page .registry-card-top,
+.registry-page .registry-card-bottom {
+  display: contents;
+}
+
+.registry-page .registry-name {
+  grid-area: name;
+  margin: 0;
+  color: #0f172a;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: normal;
+  overflow-wrap: anywhere;
+}
+
+.registry-page .registry-profile-link {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  transition: color 0.16s ease;
+}
+
+.registry-page .registry-profile-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.registry-page .registry-card:focus-within {
+  border-color: #1C468C;
+}
+
+.registry-page .registry-card:hover .registry-profile-link {
+  color: #1C468C;
+}
+
+.registry-page .registry-qualification {
+  grid-area: qualification;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.registry-page .registry-code {
+  grid-area: code;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #64748b;
+  font-size: 11.5px;
+}
+
+.registry-page .registry-code span {
+  font-size: 11.5px;
+}
+
+.registry-page .registry-code strong {
+  color: #1e293b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.registry-page .registry-status {
+  grid-area: status;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  color: #166534;
+  background: #e8f5ee;
+  border: 1px solid #b7dfc6;
+  border-radius: 0;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.registry-page .registry-card[data-status="suspended"] .registry-status {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.registry-page .registry-card[data-status="expired"] .registry-status {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.registry-page .registry-rating {
+  grid-area: rating;
+  justify-self: end;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pagination & Empty States */
+.registry-page .registry-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.registry-page .registry-pagination[hidden] {
+  display: none;
+}
+
+.registry-page .registry-pagination button,
+.registry-page .registry-refresh-error button {
+  min-height: 36px;
+  padding: 7px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  background: #ffffff;
+  color: #1C468C;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.registry-page .registry-pagination button:hover:not(:disabled),
+.registry-page .registry-refresh-error button:hover:not(:disabled) {
+  background: #1C468C;
+  color: #ffffff;
+  border-color: #1C468C;
+}
+
+.registry-page .registry-pagination button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.registry-page .registry-pagination span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  text-align: center;
+}
+
+.registry-page .registry-refresh-error {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid #fecaca;
+  border-radius: 0;
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.registry-page .registry-refresh-error p {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.registry-page .registry-empty,
+.registry-page .registry-noscript {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 36px 24px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  background: #ffffff;
+  color: #52637a;
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.registry-page .registry-empty strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.registry-page .registry-empty button {
+  min-height: 36px;
+  margin-top: 10px;
+  padding: 7px 16px;
+  border-radius: 0;
+  color: #1C468C;
+  background: #f8fafc;
+  border: 1px solid #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.registry-page .registry-noscript {
+  margin-bottom: 16px;
+}
+
+.registry-page .registry-noscript a {
+  color: #1C468C;
+  text-decoration: underline;
+}
+
+.registry-page .registry-skeleton-card {
+  align-items: center;
+}
+
+.registry-page .registry-skeleton-avatar {
+  width: 46px;
+  height: 56px;
+  border-radius: 0;
+}
+
+.registry-page .registry-skeleton-info {
+  gap: 12px;
+}
+
+.registry-page .registry-skeleton-info span {
+  background: #e9eef3;
+}
+
+@media (max-width: 1180px) {
+  main.registry-page {
+    width: 90%;
+    padding-top: 88px;
+  }
+}
+
+@media (max-width: 900px) {
+  .registry-page .registry-info {
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 0.55fr) max-content;
+    column-gap: 16px;
+  }
+
+  .registry-page .registry-control-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+@media (max-width: 730px) {
+  main.registry-page {
+    width: 92%;
+    margin-top: 40px;
+    padding-top: 72px;
+    padding-bottom: 40px;
+  }
+
+  .registry-page .registry-controls {
+    padding: 16px 18px;
+    gap: 14px;
+  }
+
+  .registry-page .registry-card {
+    padding: 14px 16px;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .registry-page .registry-info {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas:
+      'name name'
+      'qualification qualification'
+      'code status'
+      'code rating';
+    gap: 4px 10px;
+  }
+
+  .registry-page .registry-code {
+    margin-top: 4px;
+  }
+}
+
+@media (max-width: 450px) {
+  .registry-page .registry-controls {
+    padding: 14px;
+  }
+
+  .registry-page .registry-check {
+    width: 100%;
+    padding: 8px 12px;
+  }
+
+  .registry-page .registry-card {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .registry-page .registry-avatar {
+    width: 40px;
+    height: 48px;
+  }
+
+  .registry-page .registry-reset {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .registry-page *,
+  .registry-page *::before,
+  .registry-page *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

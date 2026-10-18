@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate, User, format_letter_doc_number
+from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate, Statement, User, format_letter_doc_number
 from ..services.bounded_upload import UploadTooLarge, save_upload_stream
 from ..services.candidate_status import (
     VALID_CANDIDATE_CATEGORIES,
@@ -52,10 +52,11 @@ DEFAULT_TEMPLATES = {
             "ადრესატი: {name}\n\n"
             "მოგესალმებით,\n\n"
             "გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და მიღებულია გადაწყვეტილება თქვენთვის [კატეგორია] სერტიფიკატის მინიჭების შესახებ.\n\n"
-            "სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში:\n"
+            "სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის ვადაში:\n"
             "- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});\n"
             "- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.\n\n"
             "საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.\n\n"
+            "გთხოვთ გაითვალისწინოთ, რომ დადგენილი წესის შესაბამისად, გამოცდის დადებითი შედეგი სერტიფიკატის მისაღებად მოქმედებს წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის განმავლობაში, ხოლო აღნიშნული ვადის გასვლის შემთხვევაში საგამოცდო შედეგი ძალას კარგავს.\n\n"
             "გთხოვთ წინასწარ გაეცნოთ შესაბამის სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
             "პატივისცემით,\n"
             "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
@@ -162,6 +163,7 @@ def _is_legacy_body(body: str | None) -> bool:
         or "GIPC-FRM-" in raw
         or "შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“" in raw
         or 'შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"' in raw
+        or "წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში" in raw
     )
 
 
@@ -232,7 +234,7 @@ def _text(subject: str, body: str, *, final: bool):
     if not body.strip() or len(body) > 10000 or "\x00" in body:
         raise HTTPException(422, "წერილის ტექსტი აუცილებელია (მაქსიმუმ 10000 სიმბოლო).")
     if final and re.search(
-        r"\{(?:name|date|time|code|personal_id|period)\}|\[(?:სახელი და გვარი|გამოცდის თარიღი|საათი|უნიკალური კოდი|პირადი ნომერი|შეავსეთ[^\]]*|IBAN)\]",
+        r"\{(?:name|date|time|code|personal_id|period)\}|\[(?:სახელი და გვარი|სახელი,\s*გვარი|გამოცდის თარიღი|საათი|უნიკალური კოდი|პირადი ნომერი|შეავსეთ[^\]]*|IBAN|IBAN ანგარიში|მისამართი)\]",
         subject + "\n" + body,
         re.IGNORECASE,
     ):
@@ -464,6 +466,7 @@ def send_letter(
     edit_letter_id: int | None = Form(None),
     keep_existing_attachment: bool = Form(False),
     candidate_category: str | None = Form(None),
+    statement_id: int | None = Form(None),
     authorization: str | None = Header(None), db: Session = Depends(get_db),
 ):
     actor = _require_admin(db, authorization)
@@ -654,6 +657,27 @@ def send_letter(
             )
             user.candidate_updated_at = now
             db.add(user)
+
+        # Automatically mark the replied statement (or latest unanswered statement) as seen & answered
+        target_stmt = None
+        if statement_id is not None:
+            target_stmt = db.scalar(
+                select(Statement).where(Statement.id == statement_id, Statement.user_id == user_id)
+            )
+        if target_stmt is None:
+            target_stmt = db.scalar(
+                select(Statement)
+                .where(Statement.user_id == user_id, Statement.answered_at.is_(None))
+                .order_by(Statement.created_at.desc(), Statement.id.desc())
+            )
+        if target_stmt is not None:
+            if target_stmt.seen_at is None:
+                target_stmt.seen_at = now
+                target_stmt.seen_by = actor.email
+            if target_stmt.answered_at is None:
+                target_stmt.answered_at = now
+                target_stmt.answered_by = actor.email
+            db.add(target_stmt)
 
         db.add(letter)
         db.flush()

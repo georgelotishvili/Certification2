@@ -17,14 +17,15 @@
     <script src="../scripts/vendor/qrcode-generator.js?v=1" defer></script>
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
     <script src="../scripts/admin/certificate.js?v=20261018-cand1" defer></script>
-    <script src="../scripts/admin/exam-schedules.js?v=20261018-reply1" defer></script>
-    <script src="../scripts/admin/users.js?v=20261018-cand1" defer></script>
+    <script src="../scripts/admin/exam-schedules.js?v=20261018-candcleanup1" defer></script>
+    <script src="../scripts/admin/users.js?v=20261018-candcleanup1" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
-    <script src="../scripts/admin/documents.js?v=20261018-docs1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261018-reply1" />
+    <script src="../scripts/admin/documents.js?v=20261018-contracts1" defer></script>
+    <script src="../scripts/admin/ai-assistant.js?v=20261018-promptboard1" defer></script>
+    <link rel="stylesheet" href="../styles/admin.css?v=20261018-dateclean1" />
   </head>
   <body>
     <header>
@@ -94,7 +95,7 @@
           <div id="durationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
           <div class="duration-group">
             <label for="adminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
-            <input id="adminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <input id="adminGatePassword" name="gipc_admin_gate_code" class="duration-input" type="text" placeholder="მაგ: cpig" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
             <button id="saveAdminGatePassword" class="duration-save">შენახვა</button>
           </div>
           <div id="gatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
@@ -143,7 +144,7 @@
               <span class="stat stat-blocks"><span class="label">ბლოკი</span> <span id="adminBlocksCount">0</span></span>
               <span class="stat stat-questions"><span class="label">კითხვა</span> <span id="adminQuestionsCount">0</span></span>
             </div>
-            <input id="examBlocksSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="საგამოცდო ბლოკების ძებნა" />
+            <input id="examBlocksSearch" name="gipc_exam_blocks_search_nofill" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="საგამოცდო ბლოკების ძებნა" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
           </div>
 
           <div class="exam-blocks-grid">
@@ -161,7 +162,7 @@
             <div class="users-filters-header">
               <h2 class="exam-blocks-title">რეგისტრირებული პირები</h2>
               <div class="users-filters-controls">
-                <input id="usersSearch" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი, გვარი, ელფოსტა, ტელეფონი, კოდი, პირადი №, დოკუმენტის №)" />
+                <input id="usersSearch" name="gipc_users_search_nofill" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი, გვარი, ელფოსტა, ტელეფონი, კოდი, პირადი №, დოკუმენტის №)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" readonly />
                 <label class="users-filter-label users-admin-role-chip" title="მხოლოდ ადმინისტრატორის სტატუსის მქონე პირების ჩვენება">
                   <input id="onlyAdmins" type="checkbox" />
                   <span>მხოლოდ ადმინისტრატორები</span>
@@ -204,22 +205,29 @@
                   <span class="filter-color-dot is-suspended" aria-hidden="true"></span>
                   <span>შეჩერებული / ვადაგასული</span>
                 </label>
+              </div>
+            </div>
+
+            <!-- რიგი 2: კანდიდატები -->
+            <div class="users-filters-checkboxes users-candidates-filters">
+              <span class="users-filter-group-title">კანდიდატები:</span>
+              <div class="users-filter-chips-group">
                 <label id="filterExamCandidatesChip" class="users-filter-label is-info-chip" title="გამოცდის კანდიდატები — პირები, რომლებსაც დაუდასტურდათ გამოცდაზე დაშვება">
                   <input id="filterExamCandidates" type="checkbox" />
                   <span class="filter-color-dot is-exam-candidate" aria-hidden="true"></span>
-                  <span>გამოცდის კანდ.</span>
+                  <span>გამოცდის კანდიდატები</span>
                   <span id="filterExamCandidatesBadge" class="users-filter-count-badge is-exam-cand" hidden>0</span>
                 </label>
                 <label id="filterCertCandidatesChip" class="users-filter-label is-success-chip" title="სერტიფიკატის კანდიდატები — პირები, რომლებმაც წარმატებით ჩააბარეს გამოცდა და ელოდებიან სერტიფიკატის გაცემას">
                   <input id="filterCertCandidates" type="checkbox" />
                   <span class="filter-color-dot is-cert-candidate" aria-hidden="true"></span>
-                  <span>სერტიფიკატის კანდ.</span>
+                  <span>სერტიფიკატის კანდიდატები</span>
                   <span id="filterCertCandidatesBadge" class="users-filter-count-badge is-cert-cand" hidden>0</span>
                 </label>
               </div>
             </div>
 
-            <!-- რიგი 2: შემოსული განცხადებები -->
+            <!-- რიგი 3: შემოსული განცხადებები -->
             <div class="users-filters-checkboxes users-statements-row">
               <span class="users-filter-group-title">განცხადებები:</span>
               <div class="users-filter-chips-group">
@@ -235,15 +243,56 @@
                   <span>უპასუხო განცხადებები</span>
                   <span id="filterPendingStatementsBadge" class="users-filter-count-badge is-pending" hidden>0</span>
                 </label>
+                <label class="users-filter-label" title="ყველა პირი, ვისაც ოდესმე გამოგზავნილი აქვს განცხადება (მიღების თარიღის მითითებისას — მხოლოდ იმ თარიღის)">
+                  <input id="filterAllStatements" type="checkbox" />
+                  <span class="filter-color-dot is-all-stmt" aria-hidden="true"></span>
+                  <span>ყველა განცხადება</span>
+                  <span id="filterAllStatementsBadge" class="users-filter-count-badge is-all-stmt" hidden>0</span>
+                </label>
               </div>
               <div class="users-statements-filter">
-                <label class="users-date-field-label" for="statementsDate">მიღების თარიღი:</label>
                 <input id="statementsDate" class="users-filter-date" type="date" aria-label="განცხადების მიღების თარიღი" title="არჩეული დღე თბილისის დროით, 00:00–24:00; ჩანს იმ დღეს მიღებული ყველა განცხადების გამომგზავნი, სტატუსის ფილტრების მიუხედავად" />
                 <button id="clearStatementsDate" class="users-filter-date-clear" type="button" aria-label="განცხადების თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
             </div>
 
-            <!-- რიგი 3: დაგეგმილი გამოცდები და სერტიფიკატის გადაცემა -->
+            <!-- რიგი 4: ჩვენგან გაგზავნილი პასუხები / წერილები -->
+            <div class="users-filters-checkboxes users-sent-letters-row">
+              <span class="users-filter-group-title">გაგზავნილი:</span>
+              <div class="users-filter-chips-group">
+                <label class="users-filter-label is-info-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდის დაგეგმვის / გამოცდაზე დაშვების წერილი">
+                  <input id="filterSentExam" type="checkbox" />
+                  <span class="filter-color-dot is-sent-exam" aria-hidden="true"></span>
+                  <span>გამოცდ. დაგეგმვა</span>
+                </label>
+                <label class="users-filter-label is-danger-chip" title="პირები, რომლებსაც გაეგზავნათ განაცხადზე უარყოფითი პასუხის წერილი">
+                  <input id="filterSentRejection" type="checkbox" />
+                  <span class="filter-color-dot is-sent-rejection" aria-hidden="true"></span>
+                  <span>უარყოფითი პასუხი</span>
+                </label>
+                <label class="users-filter-label is-success-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდის ჩაბარებისა და სერტიფიკატის გადაცემის წერილი">
+                  <input id="filterSentCertificate" type="checkbox" />
+                  <span class="filter-color-dot is-sent-certificate" aria-hidden="true"></span>
+                  <span>სერტიფ. გადაცემა</span>
+                </label>
+                <label class="users-filter-label is-warning-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდაზე ჩაჭრის შეტყობინება">
+                  <input id="filterSentFail" type="checkbox" />
+                  <span class="filter-color-dot is-sent-fail" aria-hidden="true"></span>
+                  <span>ჩაჭრის შეტყ.</span>
+                </label>
+                <label class="users-filter-label is-purple-chip" title="პირები, რომლებსაც გაეგზავნათ სხვა შეტყობინება (შაბლონის გარეშე)">
+                  <input id="filterSentCustom" type="checkbox" />
+                  <span class="filter-color-dot is-sent-custom" aria-hidden="true"></span>
+                  <span>სხვა შეტყ.</span>
+                </label>
+              </div>
+              <div class="users-sent-letters-date-filter">
+                <input id="sentLettersDate" class="users-filter-date" type="date" aria-label="წერილის გაგზავნის თარიღი" title="აირჩიეთ წერილის გაგზავნის თარიღი (თბილისის დროით 00:00–24:00)" />
+                <button id="clearSentLettersDate" class="users-filter-date-clear" type="button" aria-label="გაგზავნის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
+              </div>
+            </div>
+
+            <!-- რიგი 5: დაგეგმილი გამოცდები და სერტიფიკატის გადაცემა -->
             <div class="users-filters-checkboxes users-exam-filters">
               <span class="users-filter-group-title">დაგეგმვა:</span>
               <div class="users-filter-chips-group">
@@ -262,7 +311,6 @@
                 </label>
               </div>
               <div class="users-exam-date-filter">
-                <label class="users-date-field-label" for="examScheduleDate">დაგეგმვის თარიღი:</label>
                 <input id="examScheduleDate" class="users-filter-date" type="date" aria-label="გამოცდის თარიღი" title="აირჩიეთ წარსული ან მომავალი დღე; თარიღის გარეშე ჯგუფი დღევანდელი დღის მიხედვით იფილტრება თბილისის დროით" />
                 <button id="clearExamScheduleDate" class="users-filter-date-clear" type="button" aria-label="გამოცდის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
@@ -296,7 +344,6 @@
                 </label>
               </div>
               <div class="users-exam-results-date-filter">
-                <label class="users-date-field-label" for="examResultDate">გამოცდის თარიღი:</label>
                 <input id="examResultDate" class="users-filter-date" type="date" aria-label="გამოცდის შედეგის თარიღი" title="აირჩიეთ გამოცდის თარიღი — გამოჩნდებიან ამ თარიღში ჩაბარებული ან ჩაჭრილი პირები" />
                 <button id="clearExamResultDate" class="users-filter-date-clear" type="button" aria-label="გამოცდის შედეგის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
@@ -324,7 +371,7 @@
           <div id="multiApartmentDurationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
           <div class="duration-group">
             <label for="multiApartmentAdminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
-            <input id="multiApartmentAdminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <input id="multiApartmentAdminGatePassword" name="gipc_ma_gate_code" class="duration-input" type="text" placeholder="მაგ: cpig" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
             <button id="saveMultiApartmentAdminGatePassword" class="duration-save">შენახვა</button>
           </div>
           <div id="multiApartmentGatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
@@ -336,7 +383,7 @@
             <div class="exam-blocks-stats">
               <span class="stat stat-blocks"><span class="label">პროექტი</span> <span id="multiApartmentBlocksCount">0</span></span>
             </div>
-            <input id="multiApartmentSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალბინიანის ძებნა" />
+            <input id="multiApartmentSearch" name="gipc_ma_search_nofill" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალბინიანის ძებნა" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
           </div>
 
           <div class="exam-blocks-grid" id="multiApartmentGrid">
@@ -358,7 +405,7 @@
           <div id="multiFunctionalDurationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
           <div class="duration-group">
             <label for="multiFunctionalAdminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
-            <input id="multiFunctionalAdminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <input id="multiFunctionalAdminGatePassword" name="gipc_mf_gate_code" class="duration-input" type="text" placeholder="მაგ: cpig" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
             <button id="saveMultiFunctionalAdminGatePassword" class="duration-save">შენახვა</button>
           </div>
           <div id="multiFunctionalGatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
@@ -370,7 +417,7 @@
             <div class="exam-blocks-stats">
               <span class="stat stat-blocks"><span class="label">პროექტი</span> <span id="multiFunctionalBlocksCount">0</span></span>
             </div>
-            <input id="multiFunctionalSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალფუნქციურის ძებნა" />
+            <input id="multiFunctionalSearch" name="gipc_mf_search_nofill" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალფუნქციურის ძებნა" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
           </div>
 
           <div class="exam-blocks-grid" id="multiFunctionalGrid">
@@ -404,7 +451,14 @@
       </section>
       <section id="documents-section" class="exam-settings" style="display:none;">
         <div class="exam-content">
-          <div class="exam-blocks-header" aria-label="დოკუმენტები">
+          <div class="exam-blocks-header" aria-label="ხელშეკრულებების მართვა">
+            <h2 class="exam-blocks-title">ხელშეკრულებების ატვირთვა (4 ძირითადი ხელშეკრულება)</h2>
+          </div>
+          <div class="contract-slots-panel" id="contractSlotsGrid" aria-label="ოთხივე ხელშეკრულების ატვირთვის ველი">
+            <!-- 4 ხელშეკრულების სლოტი იტვირთება JS-ით (exam, cert_a, cert_b, cert_c) -->
+          </div>
+
+          <div class="exam-blocks-header" aria-label="დოკუმენტები" style="margin-top:28px;">
             <h2 class="exam-blocks-title">საიტის დოკუმენტები (დოკუმენტების გვერდი)</h2>
           </div>
           <!-- დოკუმენტის დამატების ფორმა -->
@@ -414,16 +468,16 @@
               <input type="text" id="documentTitle" class="document-input" placeholder="დოკუმენტის სათაური" />
             </div>
             <div class="document-form-row">
-              <label class="document-label">ფაილი (.docx ან .pdf):</label>
+              <label class="document-label">ფაილი (.docx, .md ან .pdf):</label>
               <div class="document-file-upload">
-                <input type="file" id="documentFile" accept=".docx,.pdf" style="display:none;" />
+                <input type="file" id="documentFile" accept=".docx,.md,.pdf" style="display:none;" />
                 <button type="button" id="documentFileChoose" class="file-choose-btn">ფაილის არჩევა</button>
                 <span id="documentFileName" class="file-name-display">ფაილი არჩეული არ არის</span>
               </div>
             </div>
             <div class="document-form-row">
               <label class="document-label">შიგთავსი (preview/რედაქტირება):</label>
-              <div id="documentContent" class="document-editor" contenteditable="true" placeholder="აირჩიეთ Word ფაილი ან ჩაწერეთ ტექსტი..."></div>
+              <div id="documentContent" class="document-editor" contenteditable="true" placeholder="აირჩიეთ Word/Markdown ფაილი ან ჩაწერეთ ტექსტი..."></div>
             </div>
             <div class="document-form-actions">
               <button type="button" id="documentAddBtn" class="primary-btn">დამატება</button>
@@ -873,12 +927,34 @@
       </div>
     </div>
 
+    <div id="userContractPreviewOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal results-modal--wide" role="dialog" aria-modal="true" aria-labelledby="userContractPreviewTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="userContractPreviewTitle">აწყობილი ხელშეკრულება</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="userContractPreviewUserMeta"></span>
+              <span class="meta-item" id="userContractPreviewDateMeta"></span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="secondary-btn" id="userContractDownloadDocx">⬇ Word (.docx)</button>
+            <button type="button" class="primary-btn" id="userContractDownloadPdf">⬇ PDF ჩამოტვირთვა</button>
+            <button type="button" class="modal-close" id="userContractPreviewClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body">
+          <div id="userContractPreviewBody" class="admin-contract-preview-sheet"></div>
+        </div>
+      </div>
+    </div>
+
     <footer>
       <div class="footer-bottom">
         <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია</p>
       </div>
     </footer>
 
-    <script src="../scripts/admin.js?v=20261018-cand1" defer></script>
+    <script src="../scripts/admin.js?v=20261018-contracts1" defer></script>
   </body>
 </html>
