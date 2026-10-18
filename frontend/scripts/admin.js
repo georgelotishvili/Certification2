@@ -555,6 +555,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const appFilesModule = createModule(modules.createAppFilesModule, { init: noop, render: noop, reload: noop });
     const applicationFormModule = createModule(modules.createApplicationFormModule, { init: noop, render: noop, reload: noop });
     const documentsModule = createModule(modules.createDocumentsModule, { init: noop, render: noop });
+    const aiAssistantModule = createModuleWithContext(modules.createAiAssistantModule, {
+      ...moduleContextBase,
+      onLetterSent: () => {
+        usersModule.refreshLiveUserStates?.({ force: true });
+        usersModule.refreshUnseenSummary?.();
+      },
+    }, { init: noop });
 
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;
@@ -585,6 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
     documentsModule.init();
     appFilesModule.init();
     applicationFormModule.init();
+    aiAssistantModule.init();
 
     usersModule.refreshUnseenSummary?.();
 

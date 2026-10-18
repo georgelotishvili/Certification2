@@ -30,9 +30,11 @@ SSH = [
 ]
 
 CANDIDATE_FILES = [
+    "backend/app/config.py",
     "backend/app/main.py",
     "backend/app/models.py",
     "backend/app/routers/admin.py",
+    "backend/app/routers/ai_assistant.py",
     "backend/app/routers/documents.py",
     "backend/app/routers/exam_schedules.py",
     "backend/app/routers/planning_letters.py",
@@ -54,6 +56,7 @@ CANDIDATE_FILES = [
     "frontend/partials/header.html",
     "frontend/partials/site-info/guide.html",
     "frontend/scripts/admin.js",
+    "frontend/scripts/admin/ai-assistant.js",
     "frontend/scripts/admin/app-files.js",
     "frontend/scripts/admin/certificate.js",
     "frontend/scripts/admin/documents.js",

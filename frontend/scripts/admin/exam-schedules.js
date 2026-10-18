@@ -2667,6 +2667,31 @@
               replyBtn.addEventListener('click', triggerReplyForStatement);
               actionsWrap.appendChild(replyBtn);
 
+              const aiBtn = document.createElement('button');
+              aiBtn.type = 'button';
+              aiBtn.className = 'exam-stmt-ai-btn';
+              aiBtn.textContent = '✨ AI ანალიზი';
+              aiBtn.title = 'განცხადებისა და მიბმული დოკუმენტის შეფასება Gemini AI-ით';
+              aiBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                if (item.seenAt == null && item.statementId != null) {
+                  void markStatementSeenInModal(item.statementId, item, row, badge);
+                }
+                global.dispatchEvent(
+                  new CustomEvent('admin:aiAnalyzeStatement', {
+                    detail: {
+                      statementId: item.statementId,
+                      docNumber: item.docNumber,
+                      userId: user.id,
+                      userName: candidateName,
+                      hasAttachment: Boolean(item.attachmentFilename),
+                      attachmentFilename: item.attachmentFilename || null,
+                    },
+                  })
+                );
+              });
+              actionsWrap.appendChild(aiBtn);
+
               const answeredLabel = document.createElement('label');
               answeredLabel.className = 'exam-stmt-answered-label';
               const answeredChk = document.createElement('input');

@@ -135,13 +135,14 @@ def create_app() -> FastAPI:
     )
 
     from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents, taxonomy
-    from .routers import exam_schedules, planning_letters
+    from .routers import exam_schedules, planning_letters, ai_assistant
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
     app.include_router(exam_schedules.router, prefix="/admin", tags=["admin"])
     app.include_router(planning_letters.router, prefix="/admin", tags=["admin"])
+    app.include_router(ai_assistant.router, prefix="/admin", tags=["admin-ai"])
     app.include_router(taxonomy.router, prefix="/taxonomy", tags=["taxonomy"])
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])

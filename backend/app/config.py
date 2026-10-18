@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     mail_encryption: Optional[str] = None
     mail_from_address: Optional[str] = None
     mail_from_name: Optional[str] = None
+    gemini_api_key: Optional[str] = None
 
     class Config:
         env_file = ".env"
