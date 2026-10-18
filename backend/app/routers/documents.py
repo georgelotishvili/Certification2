@@ -41,12 +41,14 @@ from ..services.bounded_upload import (
 )
 from ..services.contract_assembler import (
     CONTRACT_SLOTS,
+    PUBLIC_DOCUMENTS,
     docx_bytes_to_html,
     extract_user_fields,
     markdown_to_docx_bytes,
     markdown_to_html,
     populate_contract_docx_bytes,
     populate_contract_html,
+    strip_internal_annexes,
 )
 
 
@@ -58,8 +60,7 @@ DOCUMENTS_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 DOCUMENT_UPLOAD_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
 
 BUNDLED_CONTRACTS_DIR = Path(__file__).resolve().parents[1] / "data" / "contracts"
-LOCAL_DOC2_DIR = Path(r"C:\Users\george\Desktop\certification kode\akreditacia\ეტაპი 2\არგონი\doc 2")
-LOCAL_WORD_DIR = Path(r"C:\Users\george\Desktop\certification kode\akreditacia\ეტაპი 2\არგონი\Word")
+_STRIP_FILENAME_TAG = "_\u10d0\u10e0\u10d2\u10dd\u10dc"
 
 
 def _documents_root() -> Path:
@@ -86,6 +87,11 @@ def _safe_document_display_filename(filename: str | None) -> str:
     ).strip()
     if candidate in {"", ".", ".."}:
         return "document.docx"
+
+    stem = Path(candidate).stem
+    suffix = Path(candidate).suffix
+    if stem.endswith(_STRIP_FILENAME_TAG):
+        candidate = f"{stem[: -len(_STRIP_FILENAME_TAG)]}{suffix}"
 
     if len(candidate) > 255:
         lower = candidate.lower()
@@ -150,12 +156,17 @@ def _delete_document_file(stored_path: str | Path | None) -> bool:
     return True
 
 
-def _find_template_docx_for_slot(contract_type: str | None) -> Path | None:
-    if not contract_type or contract_type not in CONTRACT_SLOTS:
-        return None
-    docx_name = CONTRACT_SLOTS[contract_type]["source_docx"]
-    for folder in (LOCAL_WORD_DIR, BUNDLED_CONTRACTS_DIR):
-        candidate = folder / docx_name
+def _find_template_docx_for_slot(contract_type: str | None, display_filename: str | None = None) -> Path | None:
+    if contract_type and contract_type in CONTRACT_SLOTS:
+        docx_name = CONTRACT_SLOTS[contract_type]["source_docx"]
+        candidate = BUNDLED_CONTRACTS_DIR / docx_name
+        if candidate.is_file():
+            return candidate
+    if display_filename:
+        stem = Path(display_filename).stem
+        if stem.endswith(_STRIP_FILENAME_TAG):
+            stem = stem[: -len(_STRIP_FILENAME_TAG)]
+        candidate = BUNDLED_CONTRACTS_DIR / f"{stem}.docx"
         if candidate.is_file():
             return candidate
     return None
@@ -187,11 +198,11 @@ def _process_uploaded_file(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail="file too large (max 100MB)",
             )
-        md_text = raw_bytes.decode("utf-8-sig", errors="replace")
+        md_text = strip_internal_annexes(raw_bytes.decode("utf-8-sig", errors="replace"))
         if not html_content:
             html_content = markdown_to_html(md_text)
 
-        tpl_docx = _find_template_docx_for_slot(contract_type)
+        tpl_docx = _find_template_docx_for_slot(contract_type, display_filename)
         docx_bytes = markdown_to_docx_bytes(md_text, template_docx=tpl_docx)
 
         file_path, resolved_file_path = _new_document_storage_path(".docx")
@@ -199,8 +210,8 @@ def _process_uploaded_file(
         file_size_bytes = len(docx_bytes)
 
         stem = Path(display_filename).stem
-        if stem.endswith("_არგონ"):
-            stem = stem[: -len("_არგონ")]
+        if stem.endswith(_STRIP_FILENAME_TAG):
+            stem = stem[: -len(_STRIP_FILENAME_TAG)]
         out_filename = _safe_document_display_filename(f"{stem}.docx")
         return file_path, out_filename, file_size_bytes, html_content
 
@@ -216,43 +227,132 @@ def _process_uploaded_file(
     return file_path, display_filename, file_size_bytes, html_content
 
 
+def _stored_file_exists(file_path: str | None) -> bool:
+    if not file_path:
+        return False
+    try:
+        return _resolve_document_path(file_path).is_file()
+    except ValueError:
+        return False
+
+
+def _doc_matches_item(doc: SiteDocument, code: str, source_docx: str) -> bool:
+    if code and code in (doc.title or ""):
+        return True
+    if source_docx and (doc.filename or "") == source_docx:
+        return True
+    head = (doc.content or "")[:700]
+    return bool(code and code in head)
+
+
 def _ensure_default_contracts(db: Session) -> None:
-    """Ensure the 4 standard contracts (exam, cert_a, cert_b, cert_c) are seeded in site_documents."""
+    """Ensure the 4 public official documents and the 4 standard contracts are seeded in site_documents."""
     try:
         existing_docs = db.scalars(select(SiteDocument)).all()
-        by_type = {d.contract_type: d for d in existing_docs if d.contract_type}
-
         changed = False
-        for key, slot in CONTRACT_SLOTS.items():
-            if key in by_type:
-                continue
+        seeded_public_any = False
 
-            # Check if an existing untagged document matches this slot's code
-            code = slot["code"]
+        # 1. Ensure the 4 public documents (GIPC-SCH-001, GIPC-POL-001, GIPC-POL-002, GIPC-PRO-003)
+        for item in PUBLIC_DOCUMENTS:
+            code = item["code"]
+            source_docx = item["source_docx"]
             matched = next(
                 (
                     d
                     for d in existing_docs
-                    if not d.contract_type and (code in (d.title or "") or code in (d.content or ""))
+                    if not d.contract_type and _doc_matches_item(d, code, source_docx)
                 ),
                 None,
             )
 
-            # Locate source markdown and docx template
-            md_path = None
-            for folder in (LOCAL_DOC2_DIR, BUNDLED_CONTRACTS_DIR):
-                candidate = folder / slot["source_md"]
-                if candidate.is_file():
-                    md_path = candidate
-                    break
+            needs_refresh = (
+                matched is None
+                or not _stored_file_exists(matched.file_path)
+                or (item.get("strip_annex_1") and "IMP-2026-001" in (matched.content or ""))
+            )
+            if not needs_refresh:
+                continue
 
-            if not md_path:
+            md_path = BUNDLED_CONTRACTS_DIR / item["source_md"]
+            if not md_path.is_file():
+                continue
+
+            md_text = strip_internal_annexes(
+                md_path.read_text(encoding="utf-8-sig"),
+                force=bool(item.get("strip_annex_1")),
+            )
+            html_content = markdown_to_html(md_text)
+
+            bundled_docx = BUNDLED_CONTRACTS_DIR / source_docx
+            if bundled_docx.is_file():
+                docx_bytes = bundled_docx.read_bytes()
+            else:
+                docx_bytes = markdown_to_docx_bytes(md_text)
+
+            file_path, resolved_file_path = _new_document_storage_path(".docx")
+            resolved_file_path.write_bytes(docx_bytes)
+            filename = source_docx
+            file_size_bytes = len(docx_bytes)
+
+            if matched is not None:
+                old_file = matched.file_path
+                matched.title = item["default_title"]
+                matched.content = html_content
+                matched.file_path = file_path
+                matched.filename = filename
+                matched.file_size_bytes = file_size_bytes
+                db.add(matched)
+                if old_file and old_file != file_path:
+                    _delete_document_file(old_file)
+            else:
+                doc = SiteDocument(
+                    title=item["default_title"],
+                    content=html_content,
+                    order_index=int(item.get("order_index") or 1),
+                    contract_type=None,
+                    file_path=file_path,
+                    filename=filename,
+                    file_size_bytes=file_size_bytes,
+                )
+                db.add(doc)
+                existing_docs.append(doc)
+                seeded_public_any = True
+            changed = True
+
+        # 2. Ensure the 4 contracts (exam, cert_a, cert_b, cert_c)
+        by_type = {d.contract_type: d for d in existing_docs if d.contract_type}
+        for key, slot in CONTRACT_SLOTS.items():
+            existing_slot_doc = by_type.get(key)
+            if existing_slot_doc is not None and _stored_file_exists(existing_slot_doc.file_path):
+                target_order = int(slot.get("order_index") or 5)
+                if seeded_public_any and (existing_slot_doc.order_index or 0) <= 4:
+                    existing_slot_doc.order_index = target_order
+                    db.add(existing_slot_doc)
+                    changed = True
+                continue
+
+            code = slot["code"]
+            source_docx = slot["source_docx"]
+            matched = existing_slot_doc or next(
+                (
+                    d
+                    for d in existing_docs
+                    if not d.contract_type and _doc_matches_item(d, code, source_docx)
+                ),
+                None,
+            )
+
+            md_path = BUNDLED_CONTRACTS_DIR / slot["source_md"]
+            if not md_path.is_file():
                 continue
 
             md_text = md_path.read_text(encoding="utf-8-sig")
             html_content = markdown_to_html(md_text)
-            tpl_docx = _find_template_docx_for_slot(key)
-            docx_bytes = markdown_to_docx_bytes(md_text, template_docx=tpl_docx)
+            bundled_docx = BUNDLED_CONTRACTS_DIR / slot["source_docx"]
+            if bundled_docx.is_file():
+                docx_bytes = bundled_docx.read_bytes()
+            else:
+                docx_bytes = markdown_to_docx_bytes(md_text)
 
             file_path, resolved_file_path = _new_document_storage_path(".docx")
             resolved_file_path.write_bytes(docx_bytes)
@@ -264,6 +364,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 matched.contract_type = key
                 matched.title = matched.title or slot["default_title"]
                 matched.content = html_content
+                matched.order_index = int(slot.get("order_index") or 5)
                 matched.file_path = file_path
                 matched.filename = filename
                 matched.file_size_bytes = file_size_bytes
@@ -274,7 +375,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 doc = SiteDocument(
                     title=slot["default_title"],
                     content=html_content,
-                    order_index=int(slot.get("order_index") or 1),
+                    order_index=int(slot.get("order_index") or 5),
                     contract_type=key,
                     file_path=file_path,
                     filename=filename,
@@ -321,15 +422,22 @@ def _resolve_target_user(
     return caller
 
 
+def _is_contract_document(doc: SiteDocument) -> bool:
+    return bool(doc.contract_type) or (
+        "პირადი ნომერი" in (doc.content or "") and "___" in (doc.content or "")
+    )
+
+
 def _document_out(
     doc: SiteDocument,
     user: User | None = None,
     for_user_id: int | None = None,
 ) -> SiteDocumentOut:
+    is_contract = _is_contract_document(doc)
     download_url = None
     if doc.file_path and doc.filename:
         download_url = f"/documents/{doc.id}/download"
-        if for_user_id is not None:
+        if for_user_id is not None and is_contract:
             download_url = f"{download_url}?user_id={for_user_id}"
 
     display_filename = (
@@ -339,7 +447,11 @@ def _document_out(
     )
 
     raw_content = doc.content or ""
-    final_content = populate_contract_html(raw_content, user) if user else raw_content
+    final_content = (
+        populate_contract_html(raw_content, user)
+        if (user and is_contract)
+        else raw_content
+    )
 
     return SiteDocumentOut(
         id=doc.id,
@@ -678,7 +790,7 @@ def download_document_file(
     )
 
     target_user = _resolve_target_user(db, authorization=authorization, token=token, user_id=user_id)
-    if target_user and not is_pdf:
+    if target_user and not is_pdf and _is_contract_document(doc):
         populated_bytes = populate_contract_docx_bytes(document_path, target_user)
         fields = extract_user_fields(target_user)
         person_slug = (fields.get("full_name") or "").replace(" ", "_").strip("_")

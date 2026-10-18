@@ -1446,7 +1446,7 @@
       return String(filename || '')
         .toLowerCase()
         .replace(/\.[^.]+$/, '')
-        .replace(/_არგონ$/i, '');
+        .replace(/_\u10d0\u10e0\u10d2\u10dd\u10dc$/i, '');
     }
 
     async function collectMatchingComputerAttachments(userText, mode = 'chat') {
@@ -1458,7 +1458,7 @@
       }
       if (!localComputerFiles.length) return [];
 
-      // Group files by canonical document base key so if both .docx and _არგონ.md exist,
+      // Group files by canonical document base key so if both .docx and .md exist,
       // we pick the most recently modified version (or .md if timestamps are equal/older).
       const groups = new Map();
       for (const entry of localComputerFiles) {

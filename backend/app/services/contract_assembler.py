@@ -22,15 +22,54 @@ GEORGIAN_LETTERS = (
     "ხ", "ჯ", "ჰ",
 )
 
-CONTRACT_SLOTS: dict[str, dict[str, str]] = {
+PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
+    {
+        "key": "scheme",
+        "code": "GIPC-SCH-001",
+        "default_title": "სერტიფიცირების სქემა (GIPC-SCH-001)",
+        "order_index": 1,
+        "source_md": "01_სერტიფიკაციის_სქემა.md",
+        "source_docx": "01_სერტიფიკაციის_სქემა.docx",
+        "strip_annex_1": False,
+    },
+    {
+        "key": "impartiality",
+        "code": "GIPC-POL-001",
+        "default_title": "მიუკერძოებლობის პოლიტიკა (GIPC-POL-001)",
+        "order_index": 2,
+        "source_md": "03_მიუკერძოებლობის_პოლიტიკა.md",
+        "source_docx": "03_მიუკერძოებლობის_პოლიტიკა.docx",
+        "strip_annex_1": True,
+    },
+    {
+        "key": "confidentiality",
+        "code": "GIPC-POL-002",
+        "default_title": "კონფიდენციალურობისა და პერსონალურ მონაცემთა დაცვის პოლიტიკა (GIPC-POL-002)",
+        "order_index": 3,
+        "source_md": "04_კონფიდენციალურობის_პოლიტიკა.md",
+        "source_docx": "04_კონფიდენციალურობის_პოლიტიკა.docx",
+        "strip_annex_1": False,
+    },
+    {
+        "key": "complaints_appeals",
+        "code": "GIPC-PRO-003",
+        "default_title": "საჩივრებისა და აპელაციების პროცედურა (GIPC-PRO-003)",
+        "order_index": 4,
+        "source_md": "07_საჩივრებისა_და_აპელაციების_პროცედურა.md",
+        "source_docx": "07_საჩივრებისა_და_აპელაციების_პროცედურა.docx",
+        "strip_annex_1": True,
+    },
+]
+
+CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
     "exam": {
         "key": "exam",
         "code": "GIPC-CON-004",
         "short_title": "საგამოცდო ხელშეკრულება",
         "default_title": "საგამოცდო ხელშეკრულება (GIPC-CON-004)",
         "category": "EXAM",
-        "order_index": 1,
-        "source_md": "10_საგამოცდო_ხელშეკრულება_არგონ.md",
+        "order_index": 5,
+        "source_md": "10_საგამოცდო_ხელშეკრულება.md",
         "source_docx": "10_საგამოცდო_ხელშეკრულება.docx",
     },
     "cert_a": {
@@ -39,8 +78,8 @@ CONTRACT_SLOTS: dict[str, dict[str, str]] = {
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია A (არქიტექტორი)",
         "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი (GIPC-CON-001)",
         "category": "A",
-        "order_index": 2,
-        "source_md": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი_არგონ.md",
+        "order_index": 6,
+        "source_md": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.md",
         "source_docx": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.docx",
     },
     "cert_b": {
@@ -49,8 +88,8 @@ CONTRACT_SLOTS: dict[str, dict[str, str]] = {
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია B (სპეციალისტი)",
         "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (GIPC-CON-002)",
         "category": "B",
-        "order_index": 3,
-        "source_md": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი_არგონ.md",
+        "order_index": 7,
+        "source_md": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.md",
         "source_docx": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.docx",
     },
     "cert_c": {
@@ -59,11 +98,31 @@ CONTRACT_SLOTS: dict[str, dict[str, str]] = {
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია C (ექსპერტი)",
         "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია C: არქიტექტურული პროექტის ექსპერტი (GIPC-CON-003)",
         "category": "C",
-        "order_index": 4,
-        "source_md": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი_არგონ.md",
+        "order_index": 8,
+        "source_md": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.md",
         "source_docx": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.docx",
     },
 }
+
+_INTERNAL_ANNEX_RE = re.compile(
+    r"(?:\n---\s*)?\n##\s+დანართი\s*№\s*1\b.*$",
+    re.DOTALL,
+)
+
+
+def strip_internal_annexes(md_text: str, force: bool = False) -> str:
+    """Strip internal Annex 1 (დანართი №1) from public documents (GIPC-POL-001, GIPC-PRO-003)."""
+    if not md_text:
+        return ""
+    normalized = md_text.replace("\r\n", "\n").replace("\r", "\n")
+    if (
+        force
+        or "GIPC-POL-001" in normalized
+        or "GIPC-PRO-003" in normalized
+        or "ვებგვერდზე არ ქვეყნდება" in normalized
+    ):
+        return _INTERNAL_ANNEX_RE.sub("", normalized).rstrip() + "\n"
+    return normalized
 
 
 def current_tbilisi_date_str() -> str:
@@ -229,19 +288,29 @@ def populate_contract_docx_bytes(
         return raw_bytes
 
 
+_MD_LINK_ESCAPED_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
+_MD_LINK_PLAIN_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
+
+
 def _inline_md_to_html(text: str) -> str:
     escaped = html.escape(text)
+    escaped = _MD_LINK_ESCAPED_RE.sub(
+        r'<a href="\2" target="_blank" rel="noopener noreferrer">\1</a>',
+        escaped,
+    )
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
     escaped = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<em>\1</em>", escaped)
     escaped = re.sub(r"`([^`]+?)`", r"<strong>\1</strong>", escaped)
     return escaped
 
 
-_META_LINE_RE = re.compile(r"^\*\*(დოკუმენტის კოდი|ვერსია|თარიღი|კონფიდენციალურობა):\*\*\s*(.+)$")
+_META_LINE_RE = re.compile(
+    r"^\*\*(დოკუმენტის კოდი|ვერსია|თარიღი|კონფიდენციალურობა|სქემის მფლობელი):\*\*\s*(.+)$"
+)
 
 
 def markdown_to_html(md_text: str) -> str:
-    """Convert contract Markdown (.md) into clean semantic HTML matching the Word layout."""
+    """Convert official document or contract Markdown (.md) into clean semantic HTML matching the Word layout."""
     lines = (md_text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
     out: list[str] = []
     i = 0
@@ -305,14 +374,16 @@ def markdown_to_html(md_text: str) -> str:
             i += 1
             continue
 
-        # Consecutive "- " items -> Georgian lettered items (ა), ბ), გ)...) matching Word
+        if stripped.startswith("#### "):
+            out.append(f"<h4>{_inline_md_to_html(stripped[5:].strip())}</h4>")
+            i += 1
+            continue
+
+        # Consecutive "- " items -> en-dash bullet items matching Word layout
         if stripped.startswith("- "):
-            bullet_idx = 0
             while i < n and lines[i].strip().startswith("- "):
                 item_text = lines[i].strip()[2:].strip()
-                letter = GEORGIAN_LETTERS[bullet_idx] if bullet_idx < len(GEORGIAN_LETTERS) else "•"
-                out.append(f"<p>{letter}) {_inline_md_to_html(item_text)}</p>")
-                bullet_idx += 1
+                out.append(f"<p>– {_inline_md_to_html(item_text)}</p>")
                 i += 1
             continue
 
@@ -383,7 +454,8 @@ def _append_run(p: ET.Element, text: str, *, bold: bool = False, italic: bool = 
 
 def _append_inline_runs(p: ET.Element, md_inline: str, *, default_bold: bool = False, sz: str = "21") -> None:
     # Keep non-breaking space before blank underscore lines like Word template
-    normalized = re.sub(r":\s+(_{3,})", ":\u00a0\\1", md_inline)
+    normalized = _MD_LINK_PLAIN_RE.sub(r"\1", md_inline)
+    normalized = re.sub(r":\s+(_{3,})", ":\u00a0\\1", normalized)
     parts = _INLINE_TOKEN_RE.split(normalized)
     for part in parts:
         if not part:
@@ -506,7 +578,7 @@ def _make_table(rows: list[list[str]], col_widths: list[int], *, is_meta_table: 
 
 
 def build_docx_elements_from_md(md_text: str) -> list[ET.Element]:
-    """Build OpenXML body elements (<w:p>, <w:tbl>) from contract Markdown."""
+    """Build OpenXML body elements (<w:p>, <w:tbl>) from document or contract Markdown."""
     lines = (md_text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
     elements: list[ET.Element] = []
     i = 0
@@ -617,14 +689,28 @@ def build_docx_elements_from_md(md_text: str) -> list[ET.Element]:
             i += 1
             continue
 
+        if stripped.startswith("#### "):
+            elements.append(
+                _make_paragraph(
+                    stripped[5:].strip(),
+                    jc="left",
+                    sz="21",
+                    bold=True,
+                    before="120",
+                    after="50",
+                    line=None,
+                    keep_next=True,
+                )
+            )
+            i += 1
+            continue
+
         if stripped.startswith("- "):
-            bullet_idx = 0
             while i < n and lines[i].strip().startswith("- "):
                 item_text = lines[i].strip()[2:].strip()
-                letter = GEORGIAN_LETTERS[bullet_idx] if bullet_idx < len(GEORGIAN_LETTERS) else "•"
                 elements.append(
                     _make_paragraph(
-                        f"{letter}) {item_text}",
+                        f"– {item_text}",
                         jc="both",
                         sz="21",
                         bold=False,
@@ -634,7 +720,6 @@ def build_docx_elements_from_md(md_text: str) -> list[ET.Element]:
                         hanging_indent=True,
                     )
                 )
-                bullet_idx += 1
                 i += 1
             continue
 
@@ -649,10 +734,23 @@ def build_docx_elements_from_md(md_text: str) -> list[ET.Element]:
             if table_rows:
                 num_cols = max(len(r) for r in table_rows)
                 total_w = 9639
-                if num_cols == 3:
-                    widths = [2266, 4901, 2472]
+                first_col_header = (table_rows[0][0] if table_rows[0] else "").strip()
+                if num_cols == 4:
+                    if first_col_header == "№":
+                        widths = [480, 2645, 3273, 3241]
+                    else:
+                        widths = [2342, 2438, 2438, 2421]
+                elif num_cols == 3:
+                    if first_col_header == "ბლოკი":
+                        widths = [1303, 5660, 2676]
+                    elif first_col_header == "დონე":
+                        widths = [1630, 2209, 5800]
+                    elif first_col_header == "პარამეტრი":
+                        widths = [1397, 3694, 4548]
+                    else:
+                        widths = [2266, 4901, 2472]
                 elif num_cols == 2:
-                    widths = [3500, 6139]
+                    widths = [3100, 6539]
                 else:
                     w_each = total_w // max(num_cols, 1)
                     widths = [w_each] * num_cols

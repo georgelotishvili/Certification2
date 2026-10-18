@@ -42,9 +42,27 @@ CANDIDATE_FILES = [
     "backend/app/routers/users.py",
     "backend/app/schemas.py",
     "backend/app/services/candidate_status.py",
+    "backend/app/services/contract_assembler.py",
     "backend/app/services/email_verification.py",
     "backend/app/services/planning_email.py",
+    "backend/app/data/contracts/01_სერტიფიკაციის_სქემა.md",
+    "backend/app/data/contracts/01_სერტიფიკაციის_სქემა.docx",
+    "backend/app/data/contracts/03_მიუკერძოებლობის_პოლიტიკა.md",
+    "backend/app/data/contracts/03_მიუკერძოებლობის_პოლიტიკა.docx",
+    "backend/app/data/contracts/04_კონფიდენციალურობის_პოლიტიკა.md",
+    "backend/app/data/contracts/04_კონფიდენციალურობის_პოლიტიკა.docx",
+    "backend/app/data/contracts/07_საჩივრებისა_და_აპელაციების_პროცედურა.md",
+    "backend/app/data/contracts/07_საჩივრებისა_და_აპელაციების_პროცედურა.docx",
+    "backend/app/data/contracts/08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.md",
+    "backend/app/data/contracts/08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.docx",
+    "backend/app/data/contracts/09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.md",
+    "backend/app/data/contracts/09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.docx",
+    "backend/app/data/contracts/09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.md",
+    "backend/app/data/contracts/09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.docx",
+    "backend/app/data/contracts/10_საგამოცდო_ხელშეკრულება.md",
+    "backend/app/data/contracts/10_საგამოცდო_ხელშეკრულება.docx",
     "backend/scripts/migrate_candidate_status.py",
+    "backend/scripts/migrate_documents.py",
     "backend/scripts/migrate_planning_letters.py",
     "backend/scripts/migrate_doc_numbers.py",
     "frontend/assets/svg/logo.svg",
@@ -266,6 +284,14 @@ try:
         os.chown(tmp, uid, gid)
         os.chmod(tmp, mode)
         os.replace(tmp, p)
+
+    contracts_dir = root / "backend/app/data/contracts"
+    if contracts_dir.is_dir():
+        for old_p in contracts_dir.glob("*_\u10d0\u10e0\u10d2\u10dd\u10dc.*"):
+            try:
+                old_p.unlink()
+            except OSError:
+                pass
 
     py_rels = [rel for rel in files if rel.endswith(".py")]
     if py_rels:

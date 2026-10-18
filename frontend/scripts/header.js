@@ -142,10 +142,14 @@
     return `${dd}.${mm}.${yyyy}`;
   }
 
-  function populateContractHtmlForCurrentUser(html) {
+  function populateContractHtmlForCurrentUser(html, contractType = null) {
     if (!html) return '';
+    const out0 = String(html);
+    const isContract = Boolean(contractType) || (out0.includes('პირადი ნომერი') && (out0.includes('___') || out0.includes('[')));
+    if (!isContract) return out0;
+
     const user = getCurrentUserForContract();
-    if (!user) return String(html);
+    if (!user) return out0;
 
     const first = String(user.firstName || user.first_name || '').trim();
     const last = String(user.lastName || user.last_name || '').trim();
@@ -155,20 +159,40 @@
     const email = String(user.email || '').trim();
     const dateStr = formatTodayDateKa();
 
-    let out = String(html);
+    let out = out0;
     out = out.replace(/\[თარიღი\]/g, escapeHtml(dateStr));
+    out = out.replace(
+      /(თარიღი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
+      `$1<strong>${escapeHtml(dateStr)}</strong>`
+    );
     if (fullName) {
       out = out.replace(/\[სახელი,\s*გვარი\]/g, escapeHtml(fullName));
       out = out.replace(/\[სახელი\s+გვარი\]/g, escapeHtml(fullName));
+      out = out.replace(
+        /(სახელი\s*,\s*გვარი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
+        `$1<strong>${escapeHtml(fullName)}</strong>`
+      );
     }
     if (personalId) {
       out = out.replace(/\[პირადი\s*ნომერი\]/g, escapeHtml(personalId));
+      out = out.replace(
+        /(პირადი\s+ნომერი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
+        `$1<strong>${escapeHtml(personalId)}</strong>`
+      );
     }
     if (phone) {
       out = out.replace(/\[ტელეფონი\]/g, escapeHtml(phone));
+      out = out.replace(
+        /(ტელეფონი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
+        `$1<strong>${escapeHtml(phone)}</strong>`
+      );
     }
     if (email) {
       out = out.replace(/\[ელ\.?\s*ფოსტა\]/g, escapeHtml(email));
+      out = out.replace(
+        /(ელ\.?\s*ფოსტა\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
+        `$1<strong>${escapeHtml(email)}</strong>`
+      );
     }
 
     try {
@@ -201,7 +225,7 @@
   let cachedDocuments = null;
   let cachedDocumentsKey = null;
   let currentModalDoc = null;
-  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v2_';
+  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v3_';
 
   function getSiteDocsCacheKey() {
     const user = getCurrentUserForContract();
@@ -228,7 +252,7 @@
     if (!forceRefresh && cachedDocuments && cachedDocumentsKey === cacheKey) {
       return cachedDocuments.map((d) => ({
         ...d,
-        content: populateContractHtmlForCurrentUser(d.content || ''),
+        content: populateContractHtmlForCurrentUser(d.content || '', d.contract_type),
       }));
     }
     if (!forceRefresh) {
@@ -239,7 +263,7 @@
           if (Array.isArray(parsed)) {
             cachedDocuments = parsed.map((d) => ({
               ...d,
-              content: populateContractHtmlForCurrentUser(d.content || ''),
+              content: populateContractHtmlForCurrentUser(d.content || '', d.contract_type),
             }));
             cachedDocumentsKey = cacheKey;
             return cachedDocuments;
@@ -258,7 +282,7 @@
       const items = Array.isArray(data.items) ? data.items : [];
       cachedDocuments = items.map((d) => ({
         ...d,
-        content: populateContractHtmlForCurrentUser(d.content || ''),
+        content: populateContractHtmlForCurrentUser(d.content || '', d.contract_type),
       }));
       cachedDocumentsKey = cacheKey;
       try {
@@ -585,7 +609,7 @@
     };
 
     const tempContainer = document.createElement('div');
-    const populatedHtml = populateContractHtmlForCurrentUser(doc.content || '');
+    const populatedHtml = populateContractHtmlForCurrentUser(doc.content || '', doc.contract_type);
     renderSafeDocumentHtml(tempContainer, populatedHtml);
     sanitizeWordStyles(tempContainer);
 
@@ -862,7 +886,7 @@
 
       doc = {
         ...doc,
-        content: populateContractHtmlForCurrentUser(doc.content || ''),
+        content: populateContractHtmlForCurrentUser(doc.content || '', doc.contract_type),
       };
 
       // Option B: If a ready-made .pdf file is attached (and not a dynamically populated contract with HTML), download it directly
@@ -921,7 +945,7 @@
       const rawDoc = await response.json();
       const doc = {
         ...rawDoc,
-        content: populateContractHtmlForCurrentUser(rawDoc.content || ''),
+        content: populateContractHtmlForCurrentUser(rawDoc.content || '', rawDoc.contract_type),
       };
       currentModalDoc = doc;
 
