@@ -77,6 +77,21 @@
       custom: 'სხვა შეტყობინება',
     };
 
+    const ICONS = {
+      sparkle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/></svg>`,
+      sliders: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>`,
+      chevronDown: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`,
+      folder: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>`,
+      expand: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>`,
+      trash: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`,
+      close: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
+      chart: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>`,
+      inbox: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>`,
+      clock: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+      paperclip: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`,
+      send: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+    };
+
     function generateUuid() {
       if (global.crypto?.randomUUID) return global.crypto.randomUUID();
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -157,10 +172,10 @@
             ${
               att.preview_url
                 ? `<img src="${att.preview_url}" alt="${escapeHtml(att.filename)}" class="ai-pending-att-thumb" />`
-                : `<span class="ai-pending-att-icon">📄</span>`
+                : `<span class="ai-pending-att-icon">${ICONS.inbox}</span>`
             }
             <span class="ai-pending-att-name" title="${escapeHtml(att.filename)}">${escapeHtml(att.filename)}</span>
-            <button type="button" class="ai-pending-att-remove" data-att-idx="${idx}" title="მოხსნა">×</button>
+            <button type="button" class="ai-pending-att-remove" data-att-idx="${idx}" title="მოხსნა">${ICONS.close}</button>
           </div>
         `
         )
@@ -205,11 +220,11 @@
       if (!computerConnectBtnEl) return;
       if (localComputerFiles.length > 0) {
         computerConnectBtnEl.classList.add('is-connected');
-        computerConnectBtnEl.innerHTML = `💻 <span>${escapeHtml(localComputerFolderName || 'კომპიუტერი')} (${localComputerFiles.length})</span>`;
+        computerConnectBtnEl.innerHTML = `${ICONS.folder}<span>${escapeHtml(localComputerFolderName || 'კომპიუტერი')} (${localComputerFiles.length})</span>`;
         computerConnectBtnEl.title = `დაკავშირებულია კომპიუტერის საქაღალდე: ${localComputerFolderName} (${localComputerFiles.length} ფაილი). დააჭირეთ სხვა საქაღალდის ასარჩევად.`;
       } else {
         computerConnectBtnEl.classList.remove('is-connected');
-        computerConnectBtnEl.innerHTML = `💻 <span>კომპიუტერი</span>`;
+        computerConnectBtnEl.innerHTML = `${ICONS.folder}<span>კომპიუტერი</span>`;
         computerConnectBtnEl.title = 'კომპიუტერის საქაღალდესთან წვდომის ჩართვა (ფაილების ძებნა, წაკითხვა, ჩამოწერა და წერილზე მიბმა)';
       }
     }
@@ -228,7 +243,7 @@
           localComputerFiles = await scanDirectoryHandle(dirHandle);
           syncComputerBtnUI();
           showToast(
-            `💻 კომპიუტერის საქაღალდე "${localComputerFolderName}" დაკავშირებულია (${localComputerFiles.length} ფაილი)`
+            `კომპიუტერის საქაღალდე "${localComputerFolderName}" დაკავშირებულია (${localComputerFiles.length} ფაილი)`
           );
           renderMessages();
           return;
@@ -288,7 +303,7 @@
             const writable = await fileHandle.createWritable();
             await writable.write(blob);
             await writable.close();
-            showToast(`💾 ფაილი "${filename}" შეინახა საქაღალდეში "${localComputerFolderName}"`);
+            showToast(`ფაილი "${filename}" შეინახა საქაღალდეში "${localComputerFolderName}"`);
             return;
           } catch {}
         }
@@ -301,7 +316,7 @@
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        showToast(`⬇️ ფაილი "${filename}" ჩამოიწერა კომპიუტერში`);
+        showToast(`ფაილი "${filename}" ჩამოიწერა კომპიუტერში`);
       } catch (err) {
         showToast(err?.message || 'ფაილის ჩამოწერა ვერ მოხერხდა', 'error');
       }
@@ -423,7 +438,7 @@
       }
       if (headerConfigBtnEl) {
         const dotHtml = `<span class="ai-header-config-dot ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}"></span>`;
-        headerConfigBtnEl.innerHTML = `${dotHtml}<span>⚙️ ${escapeHtml(modelLabel)} • ${escapeHtml(levelShort)}</span><span class="ai-header-config-caret">▾</span>`;
+        headerConfigBtnEl.innerHTML = `${dotHtml}${ICONS.sliders}<span class="ai-header-config-text">${escapeHtml(modelLabel)} • ${escapeHtml(levelShort)}</span><span class="ai-header-config-caret">${ICONS.chevronDown}</span>`;
         headerConfigBtnEl.className = `ai-header-config-btn ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}`;
       }
       syncComputerBtnUI();
@@ -437,7 +452,7 @@
       fabEl.id = 'aiAssistantFab';
       fabEl.className = 'ai-assistant-fab';
       fabEl.innerHTML = `
-        <span class="ai-fab-icon">✨</span>
+        <span class="ai-fab-icon">${ICONS.sparkle}</span>
         <span class="ai-fab-label">AI ასისტენტი</span>
         <span class="ai-fab-status-dot is-unconfigured"></span>
         <span class="ai-fab-badge" hidden>0</span>
@@ -447,28 +462,46 @@
       on(fabEl, 'click', () => togglePanel());
       document.body.appendChild(fabEl);
 
-      // Clean, uncluttered chat window with computer & screenshot/file controls
+      // Clean, light, modern chat window with top quick-analysis toolbar
       panelEl = document.createElement('aside');
       panelEl.id = 'aiAssistantPanel';
       panelEl.className = 'ai-assistant-panel';
       panelEl.hidden = true;
       panelEl.innerHTML = `
         <div class="ai-panel-header">
-          <div class="ai-panel-title-row">
-            <span class="ai-panel-sparkle">✨</span>
-            <h3 class="ai-panel-title">AI ჩატი</h3>
+          <div class="ai-panel-header-left">
+            <div class="ai-panel-title-row">
+              <span class="ai-panel-brand-badge">${ICONS.sparkle}</span>
+              <h3 class="ai-panel-title">AI ჩატი</h3>
+            </div>
+            <button type="button" class="ai-header-config-btn is-unconfigured" title="AI მოდელის, აზროვნების დონისა და API გასაღების პარამეტრები">
+              <span class="ai-header-config-dot is-unconfigured"></span>
+              ${ICONS.sliders}
+              <span class="ai-header-config-text">Gemini 4 Argon • High</span>
+              <span class="ai-header-config-caret">${ICONS.chevronDown}</span>
+            </button>
           </div>
-          <button type="button" class="ai-header-config-btn is-unconfigured" title="AI მოდელის, დონის, პარამეტრებისა და სწრაფი ანალიზის ფანჯარა">
-            <span class="ai-header-config-dot is-unconfigured"></span>
-            <span>⚙️ Gemini 4 Argon • High</span>
-            <span class="ai-header-config-caret">▾</span>
-          </button>
           <div class="ai-panel-header-actions">
-            <button type="button" class="ai-computer-connect-btn" title="კომპიუტერის საქაღალდესთან წვდომის ჩართვა (ფაილების ძებნა, წაკითხვა, ჩამოწერა და წერილზე მიბმა)">💻 <span>კომპიუტერი</span></button>
-            <button type="button" class="ai-panel-icon-btn ai-btn-expand" title="ფანჯრის გაფართოება / დაპატარავება">⛶</button>
-            <button type="button" class="ai-panel-icon-btn ai-btn-clear" title="ჩატის გასუფთავება">🗑️</button>
-            <button type="button" class="ai-panel-icon-btn ai-btn-close" title="დახურვა">×</button>
+            <button type="button" class="ai-computer-connect-btn" title="კომპიუტერის საქაღალდესთან წვდომის ჩართვა (ფაილების ძებნა, წაკითხვა, ჩამოწერა და წერილზე მიბმა)">${ICONS.folder}<span>კომპიუტერი</span></button>
+            <button type="button" class="ai-panel-icon-btn ai-btn-expand" title="ფანჯრის გაფართოება / დაპატარავება">${ICONS.expand}</button>
+            <button type="button" class="ai-panel-icon-btn ai-btn-clear" title="ჩატის გასუფთავება">${ICONS.trash}</button>
+            <button type="button" class="ai-panel-icon-btn ai-btn-close" title="დახურვა">${ICONS.close}</button>
           </div>
+        </div>
+
+        <div class="ai-quick-toolbar" role="toolbar" aria-label="სწრაფი ანალიზის ბრძანებები">
+          <button type="button" class="ai-quick-chip" data-mode="site_analysis" title="საიტის მიმდინარე მდგომარეობის სრული ანალიზი">
+            ${ICONS.chart}
+            <span>საიტის ანალიზი</span>
+          </button>
+          <button type="button" class="ai-quick-chip" data-mode="statements_analysis" title="უპასუხო განცხადებებისა და მიბმული ფაილების ანალიზი">
+            ${ICONS.inbox}
+            <span>განცხადებები და ფაილები</span>
+          </button>
+          <button type="button" class="ai-quick-chip" data-mode="exam_analysis" title="კანდიდატების სტატუსებისა და 30-დღიანი ვადების ანალიზი">
+            ${ICONS.clock}
+            <span>კანდიდატები და ვადები</span>
+          </button>
         </div>
 
         <div class="ai-messages-container"></div>
@@ -478,15 +511,15 @@
         <form class="ai-input-bar">
           <input type="file" class="ai-chat-file-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip" hidden />
           <input type="file" class="ai-chat-folder-input" webkitdirectory directory multiple hidden />
-          <button type="button" class="ai-chat-attach-btn" title="სკრინის ან ფაილის მიბმა კომპიუტერიდან (ან დააჭირეთ Ctrl+V სკრინის ჩასასმელად)">📎</button>
+          <button type="button" class="ai-chat-attach-btn" title="სკრინის ან ფაილის მიბმა კომპიუტერიდან (ან დააჭირეთ Ctrl+V სკრინის ჩასასმელად)">${ICONS.paperclip}</button>
           <textarea class="ai-chat-input" rows="1" placeholder="დაწერეთ შეტყობინება ან ჩასვით სკრინი (Ctrl+V)..."></textarea>
-          <button type="submit" class="ai-chat-send-btn">გაგზავნა ➤</button>
+          <button type="submit" class="ai-chat-send-btn"><span>გაგზავნა</span>${ICONS.send}</button>
         </form>
       `;
 
       document.body.appendChild(panelEl);
 
-      // Separate modal window for Model, Reasoning Level, API Keys & Quick Actions
+      // Separate modal window for Model, Reasoning Level, and API Keys
       settingsModalOverlayEl = document.createElement('div');
       settingsModalOverlayEl.id = 'aiSettingsModalOverlay';
       settingsModalOverlayEl.className = 'ai-settings-modal-overlay';
@@ -494,8 +527,8 @@
       settingsModalOverlayEl.innerHTML = `
         <div class="ai-settings-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="aiSettingsModalTitle">
           <div class="ai-settings-modal-header">
-            <h3 id="aiSettingsModalTitle" class="ai-settings-modal-title">⚙️ AI მოდელი, დონე და მართვა</h3>
-            <button type="button" class="ai-settings-modal-close" title="დახურვა">×</button>
+            <h3 id="aiSettingsModalTitle" class="ai-settings-modal-title">${ICONS.sliders}<span>AI მოდელი, დონე და მართვა</span></h3>
+            <button type="button" class="ai-settings-modal-close" title="დახურვა">${ICONS.close}</button>
           </div>
 
           <div class="ai-settings-modal-body">
@@ -528,22 +561,13 @@
             </div>
 
             <div class="ai-modal-section">
-              <div class="ai-modal-section-title">3. სწრაფი ანალიზის ბრძანებები</div>
-              <div class="ai-modal-quick-grid">
-                <button type="button" class="ai-quick-chip" data-mode="site_analysis">📊 საიტის სრული ანალიზი</button>
-                <button type="button" class="ai-quick-chip" data-mode="statements_analysis">📨 უპასუხო განცხადებები და ფაილები</button>
-                <button type="button" class="ai-quick-chip" data-mode="exam_analysis">📋 კანდიდატები და 30-დღიანი ვადები</button>
-              </div>
-            </div>
-
-            <div class="ai-modal-section">
-              <div class="ai-modal-section-title">4. API გასაღებები (API Keys)</div>
+              <div class="ai-modal-section-title">3. API გასაღებები (API Keys)</div>
               <div class="ai-keys-grid">
                 <label class="ai-settings-label">
                   <span>
                     Gemini API Key (Gemini 4 Argon)
                     <small class="ai-masked-gemini-hint"></small>
-                    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="ai-key-link">🔑 გასაღების აღება</a>
+                    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="ai-key-link">გასაღების აღება ↗</a>
                   </span>
                   <input type="password" class="ai-settings-input ai-input-gemini-key" placeholder="AIza... (ცარიელი = უცვლელი)" autocomplete="off" />
                 </label>
@@ -551,7 +575,7 @@
                   <span>
                     OpenAI API Key (ChatGPT Sol / Astra)
                     <small class="ai-masked-openai-hint"></small>
-                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="ai-key-link">🔑 გასაღების აღება</a>
+                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="ai-key-link">გასაღების აღება ↗</a>
                   </span>
                   <input type="password" class="ai-settings-input ai-input-openai-key" placeholder="sk-... (ცარიელი = უცვლელი)" autocomplete="off" />
                 </label>
@@ -560,7 +584,7 @@
 
             <div class="ai-modal-section">
               <label class="ai-settings-label">
-                <span>5. დამატებითი ინსტრუქცია (სურვილისამებრ — უსაფრთხოების პრომპტი ყოველთვის ჩართულია)</span>
+                <span>4. დამატებითი ინსტრუქცია (სურვილისამებრ — უსაფრთხოების პრომპტი ყოველთვის ჩართულია)</span>
                 <textarea class="ai-settings-textarea ai-input-custom-prompt" rows="2" placeholder="მაგ: ყურადღება გაამახვილე სტაჟის ცნობებზე..."></textarea>
               </label>
             </div>
@@ -623,7 +647,7 @@
           }));
           syncComputerBtnUI();
           showToast(
-            `💻 კომპიუტერის საქაღალდე "${localComputerFolderName}" დაკავშირებულია (${localComputerFiles.length} ფაილი)`
+            `კომპიუტერის საქაღალდე "${localComputerFolderName}" დაკავშირებულია (${localComputerFiles.length} ფაილი)`
           );
           renderMessages();
           folderInputEl.value = '';
@@ -701,16 +725,15 @@
         });
       });
 
-      settingsModalOverlayEl.querySelectorAll('.ai-quick-chip').forEach((chip) => {
+      panelEl.querySelectorAll('.ai-quick-chip').forEach((chip) => {
         on(chip, 'click', () => {
           const mode = chip.getAttribute('data-mode') || 'site_analysis';
           const labelMap = {
-            site_analysis: '📊 ჩაატარე საიტის მიმდინარე მდგომარეობის სრული ანალიზი და მოამზადე სამოქმედო გეგმა.',
-            statements_analysis: '📨 შეისწავლე ყველა უპასუხო განცხადება და მათზე მიბმული დოკუმენტები, შეაფასე და მოამზადე სარეკომენდაციო პასუხები.',
-            exam_analysis: '📋 გააანალიზე კანდიდატების სტატუსები და სერტიფიკატის კანდიდატების 30-დღიანი ვადები.',
+            site_analysis: 'ჩაატარე საიტის მიმდინარე მდგომარეობის სრული ანალიზი და მოამზადე სამოქმედო გეგმა.',
+            statements_analysis: 'შეისწავლე ყველა უპასუხო განცხადება და მათზე მიბმული დოკუმენტები, შეაფასე და მოამზადე სარეკომენდაციო პასუხები.',
+            exam_analysis: 'გააანალიზე კანდიდატების სტატუსები და სერტიფიკატის კანდიდატების 30-დღიანი ვადები.',
           };
-          closeSettingsModal();
-          void sendChatMessage(labelMap[mode] || chip.textContent, { mode });
+          void sendChatMessage(labelMap[mode] || chip.textContent.trim(), { mode });
         });
       });
 
@@ -1217,7 +1240,8 @@
         const emptyHint = document.createElement('div');
         emptyHint.className = 'ai-empty-chat-hint';
         emptyHint.innerHTML = `
-          <span>💬 დაწერეთ შეტყობინება ქვემოთ, ჩასვით სკრინი (<strong>Ctrl+V</strong>), მიაბით ფაილი (<strong>📎</strong>) ან დააკავშირეთ <strong>💻 კომპიუტერი</strong> ფაილების მოსაძებნად და გასაგზავნად.</span>
+          <div class="ai-empty-chat-hint-icon">${ICONS.sparkle}</div>
+          <span>აირჩიეთ სწრაფი ანალიზის ბრძანება ზედა პანელიდან, დაწერეთ შეტყობინება, ჩასვით სკრინი (<strong>Ctrl+V</strong>), მიაბით ფაილი ან დააკავშირეთ <strong>კომპიუტერი</strong>.</span>
         `;
         messagesContainerEl.appendChild(emptyHint);
         return;
@@ -1243,7 +1267,7 @@
             } else {
               const badge = document.createElement('span');
               badge.className = 'ai-msg-user-file-badge';
-              badge.textContent = `📎 ${ua.filename}`;
+              badge.textContent = ua.filename;
               userAttRow.appendChild(badge);
             }
           });
@@ -1253,7 +1277,7 @@
         if (Array.isArray(msg.inspected_attachments) && msg.inspected_attachments.length > 0) {
           const filesBar = document.createElement('div');
           filesBar.className = 'ai-msg-files-inspected';
-          filesBar.innerHTML = `📎 შესწავლილი დოკუმენტები: <strong>${escapeHtml(
+          filesBar.innerHTML = `შესწავლილი დოკუმენტები: <strong>${escapeHtml(
             msg.inspected_attachments.join(', ')
           )}</strong>`;
           bubble.appendChild(filesBar);
@@ -1286,7 +1310,7 @@
         loadingEl.className = 'ai-msg-item is-assistant is-loading';
         loadingEl.innerHTML = `
           <div class="ai-msg-bubble">
-            <span class="ai-typing-indicator">✨ ${escapeHtml(getActiveModelLabel())} (${escapeHtml(getActiveLevelShortLabel())}) ამუშავებს მოთხოვნას...</span>
+            <span class="ai-typing-indicator">${ICONS.sparkle} <span>${escapeHtml(getActiveModelLabel())} (${escapeHtml(getActiveLevelShortLabel())}) ამუშავებს მოთხოვნას...</span></span>
           </div>
         `;
         messagesContainerEl.appendChild(loadingEl);
