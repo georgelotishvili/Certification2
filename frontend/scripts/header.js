@@ -504,15 +504,24 @@
       // თუ დოკუმენტს უკვე აქვს სემანტიკური H1/H2 სათაურები, დამატებითი კლასები საჭირო არ არის
       if (!container.querySelector('h1, h2')) {
         const topParagraphs = Array.from(container.children).filter(el => el.tagName === 'P');
+        const sectionHeadingRegex = /^(?:(?:ნაწილი|თავი|ეტაპი|ნაბიჯი|მუხლი|კატეგორია|დანართი)\s*[№#]?\s*[0-9IVX]+|[IVX]+\.|[0-9]{1,2}\.)\s+.+$/i;
         topParagraphs.forEach((p, idx) => {
           const fullText = (p.textContent || '').replace(/\s+/g, ' ').trim();
           if (!fullText) return;
           const boldChild = p.querySelector(':scope > strong, :scope > b');
-          if (boldChild && p.children.length === 1) {
-            const boldText = (boldChild.textContent || '').replace(/\s+/g, ' ').trim();
-            if (boldText === fullText && !/^\d+\.\d+/.test(fullText)) {
-              p.classList.add(idx === 0 ? 'site-doc-lead-title' : 'site-doc-section-title');
-            }
+          const isAllBold = Boolean(
+            boldChild &&
+            p.children.length === 1 &&
+            (boldChild.textContent || '').replace(/\s+/g, ' ').trim() === fullText
+          );
+          if (idx === 0 && fullText.length <= 115 && (isAllBold || !/[.;,]$/.test(fullText))) {
+            p.classList.add('site-doc-lead-title');
+            return;
+          }
+          if (isAllBold && !/^\d+\.\d+/.test(fullText) && fullText.length <= 115) {
+            p.classList.add('site-doc-section-title');
+          } else if (sectionHeadingRegex.test(fullText) && fullText.length <= 105 && !/[;,]$/.test(fullText)) {
+            p.classList.add('site-doc-section-title');
           }
         });
       }
@@ -926,7 +935,14 @@
       const API_BASE = getApiBase();
       let doc = null;
 
-      if (typeof docOrId === 'object' && docOrId !== null && docOrId.id) {
+      if (typeof docOrId === 'object' && docOrId !== null && docOrId.is_guide) {
+        doc = { ...docOrId };
+        const resp = await fetch(`${API_BASE}/guide/document`, { cache: 'no-cache' });
+        if (resp.ok) {
+          const freshGuide = await resp.json();
+          doc = { ...freshGuide, is_guide: true };
+        }
+      } else if (typeof docOrId === 'object' && docOrId !== null && docOrId.id) {
         doc = { ...docOrId };
         // Always fetch fresh document from API so all documents (not just contracts) have latest content
         const resp = await fetch(`${API_BASE}/documents/${doc.id}`, {
@@ -1042,132 +1058,91 @@
     }
   }
 
-  /**
-   * Extract embed URL from various video platforms
-   */
-  function getVideoEmbedUrl(url) {
-    if (!url || typeof url !== 'string') return null;
+  async function openGuideDocumentModal() {
+    const els = getSiteInfoElements();
+    if (!els) return;
 
-    // YouTube - various formats
-    // https://www.youtube.com/watch?v=VIDEO_ID
-    // https://youtu.be/VIDEO_ID
-    // https://www.youtube.com/embed/VIDEO_ID
-    const youtubeMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (youtubeMatch) {
-      return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+    currentModalDoc = null;
+    if (els.downloadPdfBtn) {
+      els.downloadPdfBtn.hidden = true;
+      els.downloadPdfBtn.disabled = false;
+    }
+    if (els.title) els.title.textContent = 'გზამკვლევი';
+    if (els.body) {
+      els.body.dataset.infoMode = 'document';
+      els.body.innerHTML = '<p class="site-info-state">იტვირთება...</p>';
     }
 
-    // Vimeo - various formats
-    // https://vimeo.com/VIDEO_ID
-    // https://player.vimeo.com/video/VIDEO_ID
-    const vimeoMatch = url.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/);
-    if (vimeoMatch) {
-      return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    els.modal.classList.add('show');
+    els.modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+    if (els.closeBtn && typeof els.closeBtn.focus === 'function') {
+      setTimeout(() => { try { els.closeBtn.focus(); } catch {} }, 0);
     }
 
-    // Dailymotion
-    // https://www.dailymotion.com/video/VIDEO_ID
-    const dailymotionMatch = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
-    if (dailymotionMatch) {
-      return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}`;
-    }
-
-    // Facebook video
-    const facebookMatch = url.match(/facebook\.com.*\/videos\/(\d+)/);
-    if (facebookMatch) {
-      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
-    }
-
-    // Already an embed URL or other platform - return as is for iframe
-    if (url.includes('embed') || url.includes('player')) {
-      return url;
-    }
-
-    // Unknown format - return null
-    return null;
-  }
-
-  async function loadGuideVideosInto(container) {
     try {
-      if (!container) return;
-      const listEl = container.querySelector('#guideVideosPublic') || container;
       const API_BASE = getApiBase();
-      listEl.innerHTML = '<p class="site-info-state">ვიდეოები იტვირთება...</p>';
-      const response = await fetch(`${API_BASE}/guide/videos`, { cache: 'no-cache' });
-      if (!response.ok) {
-        listEl.innerHTML = '<p class="site-info-state site-info-state--error">ვიდეოების სია ვერ ჩაიტვირთა. სცადეთ მოგვიანებით.</p>';
+      const response = await fetch(`${API_BASE}/guide/document`, { cache: 'no-cache' });
+      if (!response.ok) throw new Error('Guide document load failed');
+      const guideDoc = await response.json();
+
+      const docTitle = (guideDoc.title || 'გზამკვლევი').trim() || 'გზამკვლევი';
+      if (els.title) els.title.textContent = docTitle;
+
+      const hasHtmlContent = Boolean((guideDoc.content || '').replace(/<[^>]*>/g, '').trim());
+      const hasDirectPdf = Boolean(
+        guideDoc.download_url && String(guideDoc.filename || '').toLowerCase().endsWith('.pdf')
+      );
+
+      if (!guideDoc.available && !hasHtmlContent && !hasDirectPdf) {
+        if (els.body) {
+          const sheet = document.createElement('article');
+          sheet.className = 'site-doc-sheet';
+          const empty = document.createElement('p');
+          empty.className = 'site-doc-empty';
+          empty.textContent = 'ამ ეტაპზე გზამკვლევის დოკუმენტი არ არის განთავსებული.';
+          sheet.appendChild(empty);
+          els.body.replaceChildren(sheet);
+        }
         return;
       }
-      const items = await response.json();
-      if (!Array.isArray(items) || !items.length) {
-        listEl.innerHTML = '<p class="site-info-state">ამ ეტაპზე გზამკვლევის ვიდეო არ არის დამატებული.</p>';
-        return;
+
+      currentModalDoc = { ...guideDoc, title: docTitle, is_guide: true };
+      if (els.downloadPdfBtn) {
+        els.downloadPdfBtn.hidden = false;
       }
-      listEl.innerHTML = '';
-      items.forEach((video, idx) => {
-        const card = document.createElement('div');
-        card.className = 'guide-video-public-card';
-        const title = video.title || 'ვიდეო';
-        const url = video.url || '';
-        const embedUrl = getVideoEmbedUrl(url);
 
-        const head = document.createElement('div');
-        head.className = 'guide-video-public-head';
-        const badgeEl = document.createElement('span');
-        badgeEl.className = 'guide-video-index';
-        badgeEl.textContent = String(idx + 1).padStart(2, '0');
-        const titleEl = document.createElement('div');
-        titleEl.className = 'guide-video-public-title';
-        titleEl.textContent = title;
-        head.appendChild(badgeEl);
-        head.appendChild(titleEl);
-
-        card.appendChild(head);
-
-        if (embedUrl) {
-          // Create iframe for embed
+      if (els.body) {
+        if (!hasHtmlContent && hasDirectPdf) {
           const iframe = document.createElement('iframe');
-          iframe.className = 'guide-video-embed';
-          iframe.src = embedUrl;
-          iframe.setAttribute('frameborder', '0');
-          iframe.setAttribute('allowfullscreen', 'true');
-          iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
-          iframe.loading = 'lazy';
-          card.appendChild(iframe);
-        } else if (url) {
-          // Fallback: show link if embed not supported
-          const linkWrapper = document.createElement('div');
-          linkWrapper.className = 'guide-video-link-wrapper';
-          const link = document.createElement('a');
-          link.href = url;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          link.className = 'guide-video-link';
-          link.textContent = 'ვიდეოს ნახვა →';
-          linkWrapper.appendChild(link);
-          card.appendChild(linkWrapper);
+          iframe.className = 'site-doc-pdf-frame';
+          iframe.src = `${API_BASE}${guideDoc.download_url}`;
+          iframe.title = docTitle;
+          els.body.replaceChildren(iframe);
         } else {
-          const noVideo = document.createElement('div');
-          noVideo.className = 'guide-video-no-url';
-          noVideo.textContent = 'ვიდეოს ლინკი არ არის მითითებული';
-          card.appendChild(noVideo);
+          renderSafeDocumentHtml(els.body, guideDoc.content || '');
+          sanitizeWordStyles(els.body);
+          const sheet = document.createElement('article');
+          sheet.className = 'site-doc-sheet';
+          sheet.replaceChildren(...els.body.childNodes);
+          els.body.replaceChildren(sheet);
         }
-
-        listEl.appendChild(card);
-      });
-    } catch (error) {
-      console.error('Failed to load guide videos', error);
-      try {
-        if (container) {
-          const listEl = container.querySelector('#guideVideosPublic') || container;
-          listEl.innerHTML = '<p class="site-info-state site-info-state--error">ვიდეოების ჩატვირთვა ვერ მოხერხდა.</p>';
-        }
-      } catch {}
+      }
+    } catch (err) {
+      console.error('Failed to load guide document:', err);
+      if (els?.body) {
+        els.body.innerHTML = '<p class="site-info-state site-info-state--error">გზამკვლევი ვერ ჩაიტვირთა. სცადეთ მოგვიანებით.</p>';
+      }
     }
   }
 
   async function openSiteInfo(type) {
     try {
+      if (type === 'guide') {
+        await openGuideDocumentModal();
+        return;
+      }
+
       const els = getSiteInfoElements();
       if (!els) return;
       currentModalDoc = null;
@@ -1186,7 +1161,7 @@
       if (els.title) els.title.textContent = titles[type] || 'ინფორმაცია';
 
       if (els.body) {
-        els.body.dataset.infoMode = type === 'guide' ? 'guide' : 'document';
+        els.body.dataset.infoMode = 'document';
         els.body.innerHTML = '<p class="site-info-state">იტვირთება...</p>';
       }
       els.modal.classList.add('show');
@@ -1201,9 +1176,6 @@
       const html = await res.text();
       if (els.body) {
         els.body.innerHTML = html;
-        if (type === 'guide') {
-          void loadGuideVideosInto(els.body);
-        }
       }
     } catch {
       const els = getSiteInfoElements();
@@ -1460,8 +1432,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261019-bw1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261019_bw1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261019-guide1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261019_guide1';
 
   function syncHeaderInitialAuthUI() {
     try {

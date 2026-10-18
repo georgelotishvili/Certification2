@@ -295,7 +295,10 @@ _MD_LINK_PLAIN_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
 
 
 def _inline_md_to_html(text: str) -> str:
-    escaped = html.escape(text)
+    placeholder = "\u0000AST\u0000"
+    prepared = (text or "").replace(r"\*", placeholder)
+    escaped = html.escape(prepared)
+    escaped = re.sub(r"&lt;br\s*/?&gt;", "<br>", escaped, flags=re.IGNORECASE)
     escaped = _MD_LINK_ESCAPED_RE.sub(
         r'<a href="\2" target="_blank" rel="noopener noreferrer">\1</a>',
         escaped,
@@ -303,12 +306,15 @@ def _inline_md_to_html(text: str) -> str:
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
     escaped = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<em>\1</em>", escaped)
     escaped = re.sub(r"`([^`]+?)`", r"<strong>\1</strong>", escaped)
+    escaped = escaped.replace(placeholder, "*")
     return escaped
 
 
 _META_LINE_RE = re.compile(
-    r"^\*\*(დოკუმენტის კოდი|ვერსია|თარიღი|კონფიდენციალურობა|სქემის მფლობელი):\*\*\s*(.+)$"
+    r"^\*\*(დოკუმენტის კოდი|ვერსია|თარიღი|კონფიდენციალურობა|სქემის მფლობელი|სერტიფიცირების ორგანო|საიდენტიფიკაციო კოდი|იურიდიული მისამართი|ფაქტობრივი \(საოფისე და საგამოცდო\) მისამართი|ვებგვერდი):\*\*\s*(.+)$"
 )
+_MD_UL_ITEM_RE = re.compile(r"^[-*•–—]\s+(.+)$")
+_MD_OL_ITEM_RE = re.compile(r"^\d+\.\s+(.+)$")
 
 
 def markdown_to_html(md_text: str) -> str:
@@ -341,7 +347,7 @@ def markdown_to_html(md_text: str) -> str:
                     break
                 meta_rows.append((m.group(1).strip(), m.group(2).strip()))
                 i += 1
-            out.append('<table>')
+            out.append("<table>")
             for label, val in meta_rows:
                 out.append(
                     f"<tr><th>{_inline_md_to_html(label)}</th>"
@@ -356,6 +362,18 @@ def markdown_to_html(md_text: str) -> str:
             out.append(
                 f'<h1 style="text-align:center;">{_inline_md_to_html(stripped[2:].strip())}</h1>'
             )
+            i += 1
+            continue
+
+        if (
+            seen_h1
+            and len(out) == 1
+            and stripped.startswith("**")
+            and stripped.endswith("**")
+            and ":" not in stripped
+        ):
+            subtitle_text = stripped.strip("*").strip()
+            out.append(f'<h2 style="text-align:center;">{_inline_md_to_html(subtitle_text)}</h2>')
             i += 1
             continue
 
@@ -381,14 +399,39 @@ def markdown_to_html(md_text: str) -> str:
             i += 1
             continue
 
-        # Consecutive "- " items -> semantic <ul><li> list
-        if stripped.startswith("- "):
+        # Consecutive bullet items ("- " or "* ") -> semantic <ul><li> list
+        ul_match = _MD_UL_ITEM_RE.match(stripped)
+        if ul_match:
             out.append("<ul>")
-            while i < n and lines[i].strip().startswith("- "):
-                item_text = lines[i].strip()[2:].strip()
-                out.append(f"<li>{_inline_md_to_html(item_text)}</li>")
-                i += 1
+            while i < n:
+                cur_s = lines[i].strip()
+                m_ul = _MD_UL_ITEM_RE.match(cur_s)
+                m_ol_sub = _MD_OL_ITEM_RE.match(cur_s) if lines[i].startswith(("  ", "\t")) else None
+                if m_ul:
+                    out.append(f"<li>{_inline_md_to_html(m_ul.group(1).strip())}</li>")
+                    i += 1
+                elif m_ol_sub:
+                    out.append(f"<li>{_inline_md_to_html(m_ol_sub.group(1).strip())}</li>")
+                    i += 1
+                elif lines[i].startswith(("  ", "\t")) and cur_s and not cur_s.startswith(("#", "|", "---")):
+                    out[-1] = out[-1][:-5] + f"<br>{_inline_md_to_html(cur_s)}</li>"
+                    i += 1
+                else:
+                    break
             out.append("</ul>")
+            continue
+
+        # Consecutive numbered items ("1. ", "2. ") -> semantic <ol><li> list
+        ol_match = _MD_OL_ITEM_RE.match(stripped)
+        if ol_match:
+            out.append("<ol>")
+            while i < n:
+                m_ol = _MD_OL_ITEM_RE.match(lines[i].strip())
+                if not m_ol:
+                    break
+                out.append(f"<li>{_inline_md_to_html(m_ol.group(1).strip())}</li>")
+                i += 1
+            out.append("</ol>")
             continue
 
         # Markdown Table
@@ -874,8 +917,127 @@ def markdown_to_docx_bytes(md_text: str, template_docx: Path | bytes | None = No
     return _minimal_docx_From_elements(elements)
 
 
+_SECTION_H2_RE = re.compile(
+    r"^(?:(?:ნაწილი|თავი|ეტაპი|ნაბიჯი|მუხლი|კატეგორია|დანართი)\s*[№#]?\s*[0-9IVX]+|[IVX]+\.|[0-9]{1,2}\.)\s+.+$",
+    re.IGNORECASE,
+)
+_SECTION_H3_RE = re.compile(r"^[0-9]{1,2}\.[0-9]{1,2}(?:\.[0-9]{1,2})?\.?\s+.+$")
+_BULLET_LINE_RE = re.compile(r"^(?:[-•*–—]|\([ა-ჰ0-9]+\)|[ა-ჰ]\))\s+(.+)$")
+_LABEL_PREFIX_RE = re.compile(
+    r"^((?:შენიშვნა|მნიშვნელოვანია|ყურადღება|გაითვალისწინეთ|სავალდებულოა|რეკომენდაცია|მაგალითი)\s*:)\s*(.+)$",
+    re.IGNORECASE,
+)
+
+
+def _format_inline_with_labels(text: str) -> str:
+    m = _LABEL_PREFIX_RE.match(text)
+    if m:
+        return f"<strong>{_inline_md_to_html(m.group(1))}</strong> {_inline_md_to_html(m.group(2))}"
+    return _inline_md_to_html(text)
+
+
+def structured_text_to_html(raw_text: str) -> str:
+    """Convert plain text or Markdown into a symmetric, well-structured HTML document."""
+    if not raw_text or not raw_text.strip():
+        return ""
+    trimmed = raw_text.strip()
+    if re.search(r"<(?:h1|h2|h3|p|ul|ol|table|div|article)\b", trimmed, re.IGNORECASE):
+        return trimmed
+
+    # If the text already uses standard Markdown headings (# or ##), use markdown_to_html
+    if re.search(r"(?m)^#{1,4}\s+\S", trimmed):
+        return markdown_to_html(trimmed)
+
+    lines = trimmed.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    out: list[str] = []
+    i = 0
+    n = len(lines)
+    seen_h1 = False
+
+    while i < n:
+        stripped = lines[i].strip()
+        if not stripped or stripped == "---":
+            i += 1
+            continue
+
+        # Markdown table support
+        if stripped.startswith("|") and stripped.endswith("|"):
+            table_rows: list[list[str]] = []
+            while i < n and lines[i].strip().startswith("|") and lines[i].strip().endswith("|"):
+                row_str = lines[i].strip()[1:-1]
+                cells = [c.strip() for c in row_str.split("|")]
+                if not all(re.fullmatch(r"[:\-]+", c or "-") for c in cells):
+                    table_rows.append(cells)
+                i += 1
+            if table_rows:
+                out.append("<table>")
+                for r_idx, row in enumerate(table_rows):
+                    tag = "th" if r_idx == 0 else "td"
+                    cells_html = "".join(f"<{tag}>{_inline_md_to_html(c)}</{tag}>" for c in row)
+                    out.append(f"<tr>{cells_html}</tr>")
+                out.append("</table>")
+            continue
+
+        # Bullet list items
+        b_match = _BULLET_LINE_RE.match(stripped)
+        if b_match:
+            out.append("<ul>")
+            while i < n:
+                bm = _BULLET_LINE_RE.match(lines[i].strip())
+                if not bm:
+                    break
+                out.append(f"<li>{_format_inline_with_labels(bm.group(1).strip())}</li>")
+                i += 1
+            out.append("</ul>")
+            continue
+
+        # First short non-sentence line becomes centered H1 title
+        if not seen_h1 and len(out) == 0 and len(stripped) <= 115 and not stripped.endswith((".", ";", ",")):
+            seen_h1 = True
+            clean_t = stripped.strip("*").strip()
+            out.append(f'<h1 style="text-align:center;">{_inline_md_to_html(clean_t)}</h1>')
+            i += 1
+            continue
+
+        # Sub-numbered heading (1.1, 1.2, etc.) -> H3 if relatively short
+        if _SECTION_H3_RE.match(stripped) and len(stripped) <= 120 and not stripped.endswith((".", ";", ",")):
+            clean_h3 = stripped.strip("*").strip()
+            out.append(f"<h3>{_inline_md_to_html(clean_h3)}</h3>")
+            i += 1
+            continue
+
+        # Major numbered/titled section -> H2 if relatively short and not a long sentence
+        if _SECTION_H2_RE.match(stripped) and len(stripped) <= 110 and not stripped.endswith((";", ",")):
+            clean_h2 = stripped.strip("*").strip()
+            out.append(f"<h2>{_inline_md_to_html(clean_h2)}</h2>")
+            i += 1
+            continue
+
+        # Standalone bold or short heading line surrounded by blank lines
+        prev_blank = (i == 0) or (not lines[i - 1].strip())
+        next_blank = (i + 1 >= n) or (not lines[i + 1].strip())
+        is_wrapped_bold = stripped.startswith("**") and stripped.endswith("**") and len(stripped) > 4
+        if (
+            (is_wrapped_bold or (prev_blank and next_blank and len(stripped) <= 85 and not stripped.endswith((".", ";", ","))))
+            and len(stripped) <= 105
+        ):
+            clean_h = stripped.strip("*").strip()
+            if not seen_h1 and len(out) == 0:
+                seen_h1 = True
+                out.append(f'<h1 style="text-align:center;">{_inline_md_to_html(clean_h)}</h1>')
+            else:
+                out.append(f"<h2>{_inline_md_to_html(clean_h)}</h2>")
+            i += 1
+            continue
+
+        out.append(f"<p>{_format_inline_with_labels(stripped)}</p>")
+        i += 1
+
+    return "\n".join(out)
+
+
 def docx_bytes_to_html(docx_bytes: bytes) -> str:
-    """Fallback converter from .docx bytes to clean HTML when frontend HTML is not provided."""
+    """Convert .docx bytes into clean, structured HTML preserving headings, lists, and tables."""
     try:
         with zipfile.ZipFile(io.BytesIO(docx_bytes), "r") as z:
             root = ET.fromstring(z.read("word/document.xml"))
@@ -883,14 +1045,81 @@ def docx_bytes_to_html(docx_bytes: bytes) -> str:
         if body is None:
             return ""
         out: list[str] = []
+        seen_h1 = False
+        in_ul = False
+
+        def close_ul() -> None:
+            nonlocal in_ul
+            if in_ul:
+                out.append("</ul>")
+                in_ul = False
+
         for child in body:
             tag = child.tag.split("}")[-1]
             if tag == "p":
                 text = "".join(child.itertext()).strip()
                 if not text:
                     continue
-                out.append(f"<p>{html.escape(text)}</p>")
+
+                p_pr = child.find(f"./{{{W_NS}}}pPr")
+                style_val = ""
+                jc_val = ""
+                has_num_pr = False
+                has_bottom_bdr = False
+                if p_pr is not None:
+                    p_style = p_pr.find(f"./{{{W_NS}}}pStyle")
+                    if p_style is not None:
+                        style_val = (p_style.get(f"{{{W_NS}}}val") or "").lower()
+                    jc_el = p_pr.find(f"./{{{W_NS}}}jc")
+                    if jc_el is not None:
+                        jc_val = (jc_el.get(f"{{{W_NS}}}val") or "").lower()
+                    if p_pr.find(f"./{{{W_NS}}}numPr") is not None:
+                        has_num_pr = True
+                    p_bdr = p_pr.find(f"./{{{W_NS}}}pBdr")
+                    if p_bdr is not None and p_bdr.find(f"./{{{W_NS}}}bottom") is not None:
+                        has_bottom_bdr = True
+
+                runs = [r for r in child.findall(f".//{{{W_NS}}}r") if "".join(r.itertext()).strip()]
+                all_bold = bool(runs) and all(
+                    r.find(f"./{{{W_NS}}}rPr/{{{W_NS}}}b") is not None
+                    and (r.find(f"./{{{W_NS}}}rPr/{{{W_NS}}}b").get(f"{{{W_NS}}}val") or "1") not in ("0", "false")
+                    for r in runs
+                )
+
+                b_match = _BULLET_LINE_RE.match(text)
+                if has_num_pr or b_match:
+                    if not in_ul:
+                        out.append("<ul>")
+                        in_ul = True
+                    item_txt = b_match.group(1).strip() if b_match else text
+                    out.append(f"<li>{_format_inline_with_labels(item_txt)}</li>")
+                    continue
+
+                close_ul()
+
+                if "heading1" in style_val or "title" in style_val or (
+                    not seen_h1 and len(out) == 0 and (jc_val == "center" or all_bold) and len(text) <= 120
+                ):
+                    seen_h1 = True
+                    out.append(f'<h1 style="text-align:center;">{html.escape(text)}</h1>')
+                elif (
+                    "heading2" in style_val
+                    or has_bottom_bdr
+                    or (_SECTION_H2_RE.match(text) and len(text) <= 110 and not text.endswith((";", ",")))
+                    or (all_bold and len(text) <= 95 and not text.endswith((".", ";", ",")))
+                ):
+                    if seen_h1 and len(out) == 1 and jc_val == "center":
+                        out.append(f'<h2 style="text-align:center;">{html.escape(text)}</h2>')
+                    else:
+                        out.append(f"<h2>{html.escape(text)}</h2>")
+                elif "heading3" in style_val or (
+                    _SECTION_H3_RE.match(text) and len(text) <= 120 and (all_bold or not text.endswith("."))
+                ):
+                    out.append(f"<h3>{html.escape(text)}</h3>")
+                else:
+                    out.append(f"<p>{_format_inline_with_labels(text)}</p>")
             elif tag == "tbl":
+                close_ul()
                 out.append("<table>")
                 for r_idx, tr in enumerate(child.findall(f".//{{{W_NS}}}tr")):
                     cells = []
@@ -905,6 +1134,9 @@ def docx_bytes_to_html(docx_bytes: bytes) -> str:
                     if cells:
                         out.append(f"<tr>{''.join(cells)}</tr>")
                 out.append("</table>")
+
+        close_ul()
         return "\n".join(out)
     except Exception:
         return ""
+

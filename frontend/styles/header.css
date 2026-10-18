@@ -1336,7 +1336,10 @@ body.modal-open {
 
 .site-doc-sheet p.site-doc-section-title {
   margin: 20px 0 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #000000;
   font-size: 15.5px !important;
+  font-weight: 700 !important;
   line-height: 1.45;
   color: #000000 !important;
   text-align: left !important;
@@ -1350,15 +1353,16 @@ body.modal-open {
 
 .site-doc-sheet p.site-doc-lead-title {
   margin: 0 0 14px;
-  font-size: 17px !important;
-  line-height: 1.4;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1.35;
   color: #000000 !important;
   text-align: center !important;
 }
 
 .site-doc-sheet p.site-doc-lead-title > strong,
 .site-doc-sheet p.site-doc-lead-title > b {
-  font-size: 17px !important;
+  font-size: 18px !important;
   color: #000000 !important;
 }
 

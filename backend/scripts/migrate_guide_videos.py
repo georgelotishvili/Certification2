@@ -14,10 +14,7 @@ from backend.app.database import engine  # noqa: E402
 
 def run() -> None:
     """
-    Ensure guide_videos table exists with URL-based structure.
-
-    ეს მიგრაცია იძახება აპის გაშვებისას და ქმნის/განაახლებს ცხრილს
-    URL-ზე დაფუძნებული სტრუქტურით (title, url ნაცვლად storage_path, filename და ა.შ.)
+    Ensure guide_videos and guide_documents tables exist.
     """
     try:
         with engine.connect() as connection:
@@ -26,13 +23,10 @@ def run() -> None:
 
             statements: list[str] = []
 
-            # ახალი სტრუქტურა: title და url ველებით
             required_new = {"id", "order_index", "title", "url", "created_at"}
 
             if "guide_videos" in tables:
                 cols = {col["name"] for col in inspector.get_columns("guide_videos")}
-                
-                # თუ ძველი სტრუქტურაა (storage_path არსებობს), ვშლით და ვქმნით ახალს
                 if "storage_path" in cols or not required_new.issubset(cols):
                     statements.append("DROP TABLE guide_videos")
                     tables.discard("guide_videos")
@@ -53,16 +47,32 @@ def run() -> None:
                     "CREATE INDEX idx_guide_videos_order ON guide_videos(order_index, id)"
                 )
 
+            if "guide_documents" not in tables:
+                statements.append(
+                    """
+                    CREATE TABLE guide_documents (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title VARCHAR(255) NOT NULL DEFAULT 'გზამკვლევი',
+                        content TEXT NOT NULL DEFAULT '',
+                        file_path VARCHAR(1024),
+                        filename VARCHAR(255),
+                        file_size_bytes INTEGER,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+
             for sql in statements:
                 connection.execute(text(sql))
 
             if statements:
                 connection.commit()
-                print("Migration completed: created guide_videos table with URL structure")
+                print("Migration completed: guide tables verified/created")
             else:
-                print("guide_videos table already exists with correct structure, no migration needed")
+                print("guide tables already exist with correct structure, no migration needed")
     except Exception as exc:  # pragma: no cover - defensive
-        print(f"Error during guide_videos migration: {exc}")
+        print(f"Error during guide tables migration: {exc}")
         import traceback
 
         traceback.print_exc()

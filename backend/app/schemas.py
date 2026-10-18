@@ -1107,3 +1107,17 @@ class SiteDocumentsListResponse(BaseModel):
 
 class SiteDocumentOrderRequest(BaseModel):
     direction: str  # "up" or "down"
+
+
+class GuideDocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: Optional[int] = None
+    title: str = "გზამკვლევი"
+    content: str = ""
+    filename: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+    download_url: Optional[str] = None
+    available: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
