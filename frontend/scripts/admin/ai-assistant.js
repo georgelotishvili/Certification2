@@ -56,6 +56,15 @@
     let sendBtnEl = null;
     let headerConfigBtnEl = null;
     let settingsModalOverlayEl = null;
+    let attachmentsPreviewBarEl = null;
+    let attachFileInputEl = null;
+    let folderInputEl = null;
+    let computerConnectBtnEl = null;
+
+    let pendingAttachments = [];
+    let localComputerDirHandle = null;
+    let localComputerFolderName = '';
+    let localComputerFiles = [];
 
     let draftModel = 'gemini-4-argon';
     let draftLevel = 'high';
@@ -77,6 +86,227 @@
       });
     }
 
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('ფაილის წაკითხვა ვერ მოხერხდა'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function base64ToBlob(b64Data, contentType = 'application/octet-stream') {
+      const clean = String(b64Data || '').includes(',')
+        ? String(b64Data).split(',')[1]
+        : String(b64Data || '');
+      const byteCharacters = atob(clean);
+      const byteArrays = [];
+      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i += 1) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+        byteArrays.push(new Uint8Array(byteNumbers));
+      }
+      return new Blob(byteArrays, { type: contentType });
+    }
+
+    async function addFilesToPendingAttachments(fileList) {
+      if (!fileList || !fileList.length) return;
+      for (const file of Array.from(fileList)) {
+        if (pendingAttachments.length >= 6) {
+          showToast('ერთ შეტყობინებაზე მაქსიმუმ 6 ფაილის მიბმა შეიძლება', 'error');
+          break;
+        }
+        if (file.size > 15 * 1024 * 1024) {
+          showToast(`ფაილი "${file.name}" ძალიან დიდია (მაქს. 15MB)`, 'error');
+          continue;
+        }
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          const commaIdx = dataUrl.indexOf(',');
+          const b64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+          const mime = file.type || 'application/octet-stream';
+          pendingAttachments.push({
+            filename: file.name || `screenshot-${Date.now()}.png`,
+            mime_type: mime,
+            data_base64: b64,
+            preview_url: mime.startsWith('image/') ? dataUrl : null,
+            file_obj: file,
+          });
+        } catch {
+          showToast(`ფაილის "${file.name}" მიბმა ვერ მოხერხდა`, 'error');
+        }
+      }
+      renderPendingAttachments();
+    }
+
+    function renderPendingAttachments() {
+      if (!attachmentsPreviewBarEl) return;
+      if (!pendingAttachments.length) {
+        attachmentsPreviewBarEl.hidden = true;
+        attachmentsPreviewBarEl.innerHTML = '';
+        return;
+      }
+      attachmentsPreviewBarEl.hidden = false;
+      attachmentsPreviewBarEl.innerHTML = pendingAttachments
+        .map(
+          (att, idx) => `
+          <div class="ai-pending-att-chip">
+            ${
+              att.preview_url
+                ? `<img src="${att.preview_url}" alt="${escapeHtml(att.filename)}" class="ai-pending-att-thumb" />`
+                : `<span class="ai-pending-att-icon">📄</span>`
+            }
+            <span class="ai-pending-att-name" title="${escapeHtml(att.filename)}">${escapeHtml(att.filename)}</span>
+            <button type="button" class="ai-pending-att-remove" data-att-idx="${idx}" title="მოხსნა">×</button>
+          </div>
+        `
+        )
+        .join('');
+      attachmentsPreviewBarEl.querySelectorAll('.ai-pending-att-remove').forEach((btn) => {
+        on(btn, 'click', () => {
+          const i = Number(btn.getAttribute('data-att-idx'));
+          if (!Number.isNaN(i)) {
+            pendingAttachments.splice(i, 1);
+            renderPendingAttachments();
+          }
+        });
+      });
+    }
+
+    async function scanDirectoryHandle(dirHandle, prefix = '', depth = 0, out = []) {
+      if (depth > 3 || out.length >= 400) return out;
+      for await (const [name, handle] of dirHandle.entries()) {
+        if (out.length >= 400) break;
+        if (name.startsWith('.')) continue;
+        const relPath = prefix ? `${prefix}/${name}` : name;
+        if (handle.kind === 'file') {
+          try {
+            const file = await handle.getFile();
+            out.push({
+              path: relPath,
+              name: file.name,
+              size_bytes: file.size,
+              mime_type: file.type || '',
+              handle,
+              file,
+            });
+          } catch {}
+        } else if (handle.kind === 'directory' && depth < 2) {
+          await scanDirectoryHandle(handle, relPath, depth + 1, out);
+        }
+      }
+      return out;
+    }
+
+    function syncComputerBtnUI() {
+      if (!computerConnectBtnEl) return;
+      if (localComputerFiles.length > 0) {
+        computerConnectBtnEl.classList.add('is-connected');
+        computerConnectBtnEl.innerHTML = `💻 <span>${escapeHtml(localComputerFolderName || 'კომპიუტერი')} (${localComputerFiles.length})</span>`;
+        computerConnectBtnEl.title = `დაკავშირებულია კომპიუტერის საქაღალდე: ${localComputerFolderName} (${localComputerFiles.length} ფაილი). დააჭირეთ სხვა საქაღალდის ასარჩევად.`;
+      } else {
+        computerConnectBtnEl.classList.remove('is-connected');
+        computerConnectBtnEl.innerHTML = `💻 <span>კომპიუტერი</span>`;
+        computerConnectBtnEl.title = 'კომპიუტერის საქაღალდესთან წვდომის ჩართვა (ფაილების ძებნა, წაკითხვა, ჩამოწერა და წერილზე მიბმა)';
+      }
+    }
+
+    async function connectLocalComputerFolder() {
+      if (typeof global.showDirectoryPicker === 'function') {
+        try {
+          let dirHandle;
+          try {
+            dirHandle = await global.showDirectoryPicker({ mode: 'readwrite' });
+          } catch {
+            dirHandle = await global.showDirectoryPicker({ mode: 'read' });
+          }
+          localComputerDirHandle = dirHandle;
+          localComputerFolderName = dirHandle.name || 'საქაღალდე';
+          localComputerFiles = await scanDirectoryHandle(dirHandle);
+          syncComputerBtnUI();
+          showToast(
+            `💻 კომპიუტერის საქაღალდე "${localComputerFolderName}" დაკავშირებულია (${localComputerFiles.length} ფაილი)`
+          );
+          renderMessages();
+          return;
+        } catch (err) {
+          if (err?.name === 'AbortError') return;
+        }
+      }
+      folderInputEl?.click();
+    }
+
+    async function resolveComputerFileObj(pathOrName) {
+      if (!pathOrName) return null;
+      const target = String(pathOrName).trim().toLowerCase();
+      if (!target) return null;
+      for (const att of pendingAttachments) {
+        if (att.filename.toLowerCase() === target && att.file_obj) {
+          return att.file_obj;
+        }
+      }
+      let match =
+        localComputerFiles.find((f) => f.path.toLowerCase() === target) ||
+        localComputerFiles.find((f) => f.name.toLowerCase() === target) ||
+        localComputerFiles.find(
+          (f) => f.name.toLowerCase().includes(target) || target.includes(f.name.toLowerCase())
+        );
+      if (!match) return null;
+      if (match.file) return match.file;
+      if (match.handle) {
+        try {
+          return await match.handle.getFile();
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    async function triggerFileDownload(dlItem, { saveToConnectedFolder = false } = {}) {
+      if (!dlItem) return;
+      try {
+        let blob = null;
+        let filename = dlItem.filename || 'download.txt';
+        if (dlItem.mode === 'stored' && dlItem.download_url) {
+          const resp = await fetch(`${API_BASE}${dlItem.download_url}`, {
+            headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          });
+          if (!resp.ok) throw new Error('ფაილის ჩამოწერა ვერ მოხერხდა');
+          blob = await resp.blob();
+        } else if (dlItem.data_base64) {
+          blob = base64ToBlob(dlItem.data_base64, dlItem.mime_type || 'application/octet-stream');
+        }
+        if (!blob) return;
+
+        if (saveToConnectedFolder && localComputerDirHandle?.getFileHandle) {
+          try {
+            const fileHandle = await localComputerDirHandle.getFileHandle(filename, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            showToast(`💾 ფაილი "${filename}" შეინახა საქაღალდეში "${localComputerFolderName}"`);
+            return;
+          } catch {}
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        showToast(`⬇️ ფაილი "${filename}" ჩამოიწერა კომპიუტერში`);
+      } catch (err) {
+        showToast(err?.message || 'ფაილის ჩამოწერა ვერ მოხერხდა', 'error');
+      }
+    }
+
     function loadHistory() {
       try {
         const raw = global.sessionStorage?.getItem?.(STORAGE_KEY_HISTORY);
@@ -93,10 +323,16 @@
 
     function saveHistory() {
       try {
-        global.sessionStorage?.setItem?.(
-          STORAGE_KEY_HISTORY,
-          JSON.stringify(messages.slice(-30))
-        );
+        const stripped = messages.slice(-30).map((m) => ({
+          ...m,
+          user_attachments: Array.isArray(m.user_attachments)
+            ? m.user_attachments.map((a) => ({
+                filename: a.filename,
+                mime_type: a.mime_type,
+              }))
+            : undefined,
+        }));
+        global.sessionStorage?.setItem?.(STORAGE_KEY_HISTORY, JSON.stringify(stripped));
       } catch {}
     }
 
@@ -190,6 +426,7 @@
         headerConfigBtnEl.innerHTML = `${dotHtml}<span>⚙️ ${escapeHtml(modelLabel)} • ${escapeHtml(levelShort)}</span><span class="ai-header-config-caret">▾</span>`;
         headerConfigBtnEl.className = `ai-header-config-btn ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}`;
       }
+      syncComputerBtnUI();
     }
 
     function buildUI() {
@@ -210,7 +447,7 @@
       on(fabEl, 'click', () => togglePanel());
       document.body.appendChild(fabEl);
 
-      // Clean, uncluttered chat window
+      // Clean, uncluttered chat window with computer & screenshot/file controls
       panelEl = document.createElement('aside');
       panelEl.id = 'aiAssistantPanel';
       panelEl.className = 'ai-assistant-panel';
@@ -227,6 +464,7 @@
             <span class="ai-header-config-caret">▾</span>
           </button>
           <div class="ai-panel-header-actions">
+            <button type="button" class="ai-computer-connect-btn" title="კომპიუტერის საქაღალდესთან წვდომის ჩართვა (ფაილების ძებნა, წაკითხვა, ჩამოწერა და წერილზე მიბმა)">💻 <span>კომპიუტერი</span></button>
             <button type="button" class="ai-panel-icon-btn ai-btn-expand" title="ფანჯრის გაფართოება / დაპატარავება">⛶</button>
             <button type="button" class="ai-panel-icon-btn ai-btn-clear" title="ჩატის გასუფთავება">🗑️</button>
             <button type="button" class="ai-panel-icon-btn ai-btn-close" title="დახურვა">×</button>
@@ -235,8 +473,13 @@
 
         <div class="ai-messages-container"></div>
 
+        <div class="ai-attachments-preview-bar" hidden></div>
+
         <form class="ai-input-bar">
-          <textarea class="ai-chat-input" rows="1" placeholder="დაწერეთ შეტყობინება... (Enter - გაგზავნა)"></textarea>
+          <input type="file" class="ai-chat-file-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip" hidden />
+          <input type="file" class="ai-chat-folder-input" webkitdirectory directory multiple hidden />
+          <button type="button" class="ai-chat-attach-btn" title="სკრინის ან ფაილის მიბმა კომპიუტერიდან (ან დააჭირეთ Ctrl+V სკრინის ჩასასმელად)">📎</button>
+          <textarea class="ai-chat-input" rows="1" placeholder="დაწერეთ შეტყობინება ან ჩასვით სკრინი (Ctrl+V)..."></textarea>
           <button type="submit" class="ai-chat-send-btn">გაგზავნა ➤</button>
         </form>
       `;
@@ -333,7 +576,11 @@
       document.body.appendChild(settingsModalOverlayEl);
 
       headerConfigBtnEl = panelEl.querySelector('.ai-header-config-btn');
+      computerConnectBtnEl = panelEl.querySelector('.ai-computer-connect-btn');
       messagesContainerEl = panelEl.querySelector('.ai-messages-container');
+      attachmentsPreviewBarEl = panelEl.querySelector('.ai-attachments-preview-bar');
+      attachFileInputEl = panelEl.querySelector('.ai-chat-file-input');
+      folderInputEl = panelEl.querySelector('.ai-chat-folder-input');
       inputEl = panelEl.querySelector('.ai-chat-input');
       sendBtnEl = panelEl.querySelector('.ai-chat-send-btn');
 
@@ -349,6 +596,80 @@
       });
       on(headerConfigBtnEl, 'click', () => {
         openSettingsModal();
+      });
+      on(computerConnectBtnEl, 'click', () => {
+        void connectLocalComputerFolder();
+      });
+      on(panelEl.querySelector('.ai-chat-attach-btn'), 'click', () => {
+        attachFileInputEl?.click();
+      });
+      on(attachFileInputEl, 'change', () => {
+        if (attachFileInputEl?.files?.length) {
+          void addFilesToPendingAttachments(attachFileInputEl.files);
+          attachFileInputEl.value = '';
+        }
+      });
+      on(folderInputEl, 'change', () => {
+        const files = Array.from(folderInputEl?.files || []);
+        if (files.length) {
+          const firstRel = files[0].webkitRelativePath || '';
+          localComputerFolderName = firstRel.includes('/') ? firstRel.split('/')[0] : 'კომპიუტერი';
+          localComputerFiles = files.slice(0, 400).map((f) => ({
+            path: f.webkitRelativePath || f.name,
+            name: f.name,
+            size_bytes: f.size,
+            mime_type: f.type || '',
+            file: f,
+          }));
+          syncComputerBtnUI();
+          showToast(
+            `💻 კომპიუტერის საქაღალდე "${localComputerFolderName}" დაკავშირებულია (${localComputerFiles.length} ფაილი)`
+          );
+          renderMessages();
+          folderInputEl.value = '';
+        }
+      });
+
+      // Clipboard screenshot paste (Ctrl+V)
+      on(panelEl, 'paste', (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        const pastedFiles = [];
+        for (const item of Array.from(items)) {
+          if (item.kind === 'file') {
+            const f = item.getAsFile();
+            if (f) {
+              const ext = (f.type.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '');
+              const namedFile =
+                f.name && f.name !== 'image.png'
+                  ? f
+                  : new File([f], `screenshot-${Date.now()}.${ext}`, { type: f.type || 'image/png' });
+              pastedFiles.push(namedFile);
+            }
+          }
+        }
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          void addFilesToPendingAttachments(pastedFiles);
+        }
+      });
+
+      // Drag and drop files/screenshots onto chat panel
+      on(panelEl, 'dragover', (e) => {
+        e.preventDefault();
+        panelEl.classList.add('is-dragover');
+      });
+      on(panelEl, 'dragleave', (e) => {
+        if (e.target === panelEl) {
+          panelEl.classList.remove('is-dragover');
+        }
+      });
+      on(panelEl, 'drop', (e) => {
+        e.preventDefault();
+        panelEl.classList.remove('is-dragover');
+        if (e.dataTransfer?.files?.length) {
+          void addFilesToPendingAttachments(e.dataTransfer.files);
+        }
       });
 
       on(settingsModalOverlayEl.querySelector('.ai-settings-modal-close'), 'click', () => {
@@ -397,7 +718,7 @@
       on(formEl, 'submit', (e) => {
         e.preventDefault();
         const text = String(inputEl?.value || '').trim();
-        if (!text || isSending) return;
+        if ((!text && !pendingAttachments.length) || isSending) return;
         inputEl.value = '';
         void sendChatMessage(text, { mode: 'chat' });
       });
@@ -521,12 +842,69 @@
       }
     }
 
+    function createDownloadCardElement(dlItem) {
+      const card = document.createElement('div');
+      card.className = 'ai-download-file-card';
+      const hasFolder = Boolean(localComputerDirHandle?.getFileHandle);
+      card.innerHTML = `
+        <div class="ai-download-card-info">
+          <span class="ai-download-card-icon">📥</span>
+          <div>
+            <div class="ai-download-card-title">${escapeHtml(dlItem.title || 'ფაილი მზად არის ჩამოსაწერად')}</div>
+            <div class="ai-download-card-filename"><code>${escapeHtml(dlItem.filename || 'document')}</code></div>
+          </div>
+        </div>
+        <div class="ai-download-card-actions">
+          <button type="button" class="ai-download-btn">⬇️ კომპიუტერში ჩამოწერა</button>
+          ${
+            hasFolder
+              ? `<button type="button" class="ai-save-folder-btn">💾 საქაღალდეში შენახვა</button>`
+              : ''
+          }
+        </div>
+      `;
+      on(card.querySelector('.ai-download-btn'), 'click', () => {
+        void triggerFileDownload(dlItem, { saveToConnectedFolder: false });
+      });
+      const folderBtn = card.querySelector('.ai-save-folder-btn');
+      if (folderBtn) {
+        on(folderBtn, 'click', () => {
+          void triggerFileDownload(dlItem, { saveToConnectedFolder: true });
+        });
+      }
+      return card;
+    }
+
     function createProposalCardElement(proposal) {
       const card = document.createElement('div');
       card.className = `ai-letter-confirm-card ${proposal.sent ? 'is-sent' : ''}`;
 
       const modeLabel = TEMPLATE_MODE_LABELS[proposal.template_mode] || proposal.template_mode;
       const showDateTime = proposal.template_mode === 'exam' || proposal.template_mode === 'certificate';
+
+      let selectedCustomFile = null;
+      let removeAllAttachments = false;
+
+      const computerOptionsHtml =
+        localComputerFiles.length > 0
+          ? `
+          <select class="ai-letter-comp-file-select" ${proposal.sent ? 'disabled' : ''}>
+            <option value="">📂 არჩევა დაკავშირებული საქაღალდიდან (${localComputerFiles.length})...</option>
+            ${localComputerFiles
+              .slice(0, 150)
+              .map(
+                (cf) =>
+                  `<option value="${escapeHtml(cf.path)}" ${
+                    proposal.computer_attachment_path === cf.path ||
+                    proposal.computer_attachment_path === cf.name
+                      ? 'selected'
+                      : ''
+                  }>${escapeHtml(cf.path)}</option>`
+              )
+              .join('')}
+          </select>
+        `
+          : '';
 
       card.innerHTML = `
         <div class="ai-letter-card-head">
@@ -573,6 +951,22 @@
           `
               : ''
           }
+          <div class="ai-letter-summary-row ai-letter-attachment-row">
+            <strong>📎 მიბმული ფაილი:</strong>
+            <div class="ai-letter-att-controls">
+              <span class="ai-letter-att-status"></span>
+              ${
+                !proposal.sent
+                  ? `
+                <input type="file" class="ai-letter-custom-file-input" hidden />
+                <button type="button" class="ai-letter-pick-file-btn">💻 კომპიუტერიდან მიბმა</button>
+                ${computerOptionsHtml}
+                <button type="button" class="ai-letter-clear-file-btn" title="მიბმული ფაილის მოხსნა">✕</button>
+              `
+                  : ''
+              }
+            </div>
+          </div>
         </div>
 
         <div class="ai-letter-card-editor">
@@ -594,6 +988,83 @@
           }
         </div>
       `;
+
+      const attStatusEl = card.querySelector('.ai-letter-att-status');
+      const customFileInput = card.querySelector('.ai-letter-custom-file-input');
+      const pickFileBtn = card.querySelector('.ai-letter-pick-file-btn');
+      const compFileSelect = card.querySelector('.ai-letter-comp-file-select');
+      const clearFileBtn = card.querySelector('.ai-letter-clear-file-btn');
+
+      function updateAttachmentStatusText() {
+        if (!attStatusEl) return;
+        if (removeAllAttachments) {
+          attStatusEl.textContent = 'ფაილის გარეშე';
+          return;
+        }
+        if (selectedCustomFile) {
+          attStatusEl.innerHTML = `💻 კომპიუტერიდან: <code>${escapeHtml(selectedCustomFile.name)}</code>`;
+          return;
+        }
+        if (proposal.computer_attachment_path) {
+          attStatusEl.innerHTML = `💻 კომპიუტერიდან: <code>${escapeHtml(proposal.computer_attachment_path)}</code>`;
+          return;
+        }
+        if (proposal.stored_attachment?.source_type) {
+          attStatusEl.innerHTML = `🗄️ საიტის ბაზიდან: <code>${escapeHtml(proposal.stored_attachment.source_type)} #${escapeHtml(String(proposal.stored_attachment.source_id || ''))}</code>`;
+          return;
+        }
+        if (proposal.attachment_filename) {
+          attStatusEl.innerHTML = `📄 შაბლონის ფაილი: <code>${escapeHtml(proposal.attachment_filename)}</code>`;
+          return;
+        }
+        attStatusEl.textContent = 'დანართის გარეშე (შეგიძლიათ მიაბათ კომპიუტერიდან)';
+      }
+
+      if (proposal.computer_attachment_path) {
+        void resolveComputerFileObj(proposal.computer_attachment_path).then((f) => {
+          if (f) {
+            selectedCustomFile = f;
+            updateAttachmentStatusText();
+          }
+        });
+      }
+      updateAttachmentStatusText();
+
+      if (pickFileBtn && customFileInput) {
+        on(pickFileBtn, 'click', () => customFileInput.click());
+        on(customFileInput, 'change', () => {
+          if (customFileInput.files?.length) {
+            selectedCustomFile = customFileInput.files[0];
+            removeAllAttachments = false;
+            updateAttachmentStatusText();
+          }
+        });
+      }
+      if (compFileSelect) {
+        on(compFileSelect, 'change', async () => {
+          const val = compFileSelect.value;
+          if (!val) return;
+          const f = await resolveComputerFileObj(val);
+          if (f) {
+            selectedCustomFile = f;
+            proposal.computer_attachment_path = val;
+            removeAllAttachments = false;
+            updateAttachmentStatusText();
+          } else {
+            showToast('ფაილის წაკითხვა ვერ მოხერხდა', 'error');
+          }
+        });
+      }
+      if (clearFileBtn) {
+        on(clearFileBtn, 'click', () => {
+          selectedCustomFile = null;
+          proposal.computer_attachment_path = null;
+          proposal.stored_attachment = null;
+          removeAllAttachments = true;
+          if (compFileSelect) compFileSelect.value = '';
+          updateAttachmentStatusText();
+        });
+      }
 
       const confirmBtn = card.querySelector('.ai-letter-confirm-send-btn');
       if (confirmBtn) {
@@ -619,12 +1090,26 @@
             return;
           }
 
+          let attachmentToSend = selectedCustomFile;
+          if (!attachmentToSend && !removeAllAttachments && proposal.computer_attachment_path) {
+            attachmentToSend = await resolveComputerFileObj(proposal.computer_attachment_path);
+          }
+
+          const attLabel = removeAllAttachments
+            ? 'არ ებმება'
+            : attachmentToSend
+              ? `კომპიუტერიდან (${attachmentToSend.name})`
+              : proposal.stored_attachment?.source_type
+                ? `საიტის ბაზიდან (${proposal.stored_attachment.source_type})`
+                : proposal.attachment_filename || 'შაბლონის მიხედვით';
+
           const confirmText = [
             `დაადასტურეთ წერილის გაგზავნა:`,
             `• მიმღები: ${proposal.user_name} (${proposal.to_email})`,
             `• ტიპი: ${modeLabel}`,
             `• დასაბუთება: ${proposal.reason || '—'}`,
             `• სათაური: ${finalSubject}`,
+            `• დანართი ფაილი: ${attLabel}`,
             ``,
             `ნამდვილად გსურთ წერილის გაგზავნა?`,
           ].join('\n');
@@ -646,10 +1131,36 @@
             formData.append('expected_to_email', proposal.to_email);
             formData.append('confirmed', 'true');
             formData.append('action_mode', 'save_and_send');
-            formData.append('use_template_attachment', 'true');
-            if (proposal.template_updated_at) {
-              formData.append('template_updated_at', proposal.template_updated_at);
+
+            if (removeAllAttachments) {
+              formData.append('use_template_attachment', 'false');
+            } else if (attachmentToSend) {
+              formData.append('use_template_attachment', 'false');
+              formData.append('attachment', attachmentToSend, attachmentToSend.name);
+            } else if (proposal.stored_attachment?.source_type) {
+              const stType = proposal.stored_attachment.source_type;
+              const stId = proposal.stored_attachment.source_id || 0;
+              const fileResp = await fetch(
+                `${API_BASE}/admin/ai/files/${encodeURIComponent(stType)}/${encodeURIComponent(stId)}`,
+                { headers: { ...getAdminHeaders(), ...getActorHeaders() } }
+              );
+              if (fileResp.ok) {
+                const blob = await fileResp.blob();
+                const disp = fileResp.headers.get('Content-Disposition') || '';
+                const fnMatch = disp.match(/filename="?([^";]+)"?/i);
+                const fname = fnMatch ? fnMatch[1] : `${stType}-${stId}.pdf`;
+                formData.append('use_template_attachment', 'false');
+                formData.append('attachment', blob, fname);
+              } else {
+                formData.append('use_template_attachment', 'true');
+              }
+            } else {
+              formData.append('use_template_attachment', 'true');
+              if (proposal.template_updated_at) {
+                formData.append('template_updated_at', proposal.template_updated_at);
+              }
             }
+
             if (finalCategory) {
               formData.append('candidate_category', finalCategory);
             }
@@ -706,7 +1217,7 @@
         const emptyHint = document.createElement('div');
         emptyHint.className = 'ai-empty-chat-hint';
         emptyHint.innerHTML = `
-          <span>💬 დაწერეთ შეტყობინება ქვემოთ ან დააჭირეთ ზემოთ <strong>⚙️ ${escapeHtml(getActiveModelLabel())} • ${escapeHtml(getActiveLevelShortLabel())}</strong> ღილაკს მოდელის/ანალიზის ასარჩევად.</span>
+          <span>💬 დაწერეთ შეტყობინება ქვემოთ, ჩასვით სკრინი (<strong>Ctrl+V</strong>), მიაბით ფაილი (<strong>📎</strong>) ან დააკავშირეთ <strong>💻 კომპიუტერი</strong> ფაილების მოსაძებნად და გასაგზავნად.</span>
         `;
         messagesContainerEl.appendChild(emptyHint);
         return;
@@ -718,6 +1229,26 @@
 
         const bubble = document.createElement('div');
         bubble.className = 'ai-msg-bubble';
+
+        if (Array.isArray(msg.user_attachments) && msg.user_attachments.length > 0) {
+          const userAttRow = document.createElement('div');
+          userAttRow.className = 'ai-msg-user-attachments';
+          msg.user_attachments.forEach((ua) => {
+            if (ua.preview_url) {
+              const img = document.createElement('img');
+              img.src = ua.preview_url;
+              img.alt = ua.filename || 'screenshot';
+              img.className = 'ai-msg-user-image';
+              userAttRow.appendChild(img);
+            } else {
+              const badge = document.createElement('span');
+              badge.className = 'ai-msg-user-file-badge';
+              badge.textContent = `📎 ${ua.filename}`;
+              userAttRow.appendChild(badge);
+            }
+          });
+          bubble.appendChild(userAttRow);
+        }
 
         if (Array.isArray(msg.inspected_attachments) && msg.inspected_attachments.length > 0) {
           const filesBar = document.createElement('div');
@@ -734,6 +1265,12 @@
         bubble.appendChild(contentDiv);
 
         itemEl.appendChild(bubble);
+
+        if (Array.isArray(msg.download_files) && msg.download_files.length > 0) {
+          msg.download_files.forEach((dlItem) => {
+            itemEl.appendChild(createDownloadCardElement(dlItem));
+          });
+        }
 
         if (Array.isArray(msg.proposed_letters) && msg.proposed_letters.length > 0) {
           msg.proposed_letters.forEach((prop) => {
@@ -758,6 +1295,35 @@
       messagesContainerEl.scrollTop = messagesContainerEl.scrollHeight;
     }
 
+    async function collectMatchingComputerAttachments(userText) {
+      if (!localComputerFiles.length || !userText) return [];
+      const lower = userText.toLowerCase();
+      const matched = [];
+      for (const entry of localComputerFiles) {
+        if (matched.length >= 3) break;
+        const nameLower = entry.name.toLowerCase();
+        const stem = nameLower.replace(/\.[^.]+$/, '');
+        if (
+          nameLower.length >= 3 &&
+          (lower.includes(nameLower) || (stem.length >= 4 && lower.includes(stem)))
+        ) {
+          const fileObj = await resolveComputerFileObj(entry.path);
+          if (fileObj && fileObj.size <= 12 * 1024 * 1024) {
+            try {
+              const dataUrl = await readFileAsDataUrl(fileObj);
+              const commaIdx = dataUrl.indexOf(',');
+              matched.push({
+                filename: fileObj.name,
+                mime_type: fileObj.type || 'application/octet-stream',
+                data_base64: commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl,
+              });
+            } catch {}
+          }
+        }
+      }
+      return matched;
+    }
+
     async function sendChatMessage(
       text,
       { mode = 'chat', statementId = null, userId = null } = {}
@@ -766,9 +1332,24 @@
       buildUI();
       if (!isOpen) togglePanel(true);
 
+      const currentAttachments = pendingAttachments.slice();
+      pendingAttachments = [];
+      renderPendingAttachments();
+
+      const displayText =
+        text ||
+        (currentAttachments.length
+          ? `📎 მიბმულია: ${currentAttachments.map((a) => a.filename).join(', ')}`
+          : '');
+
       const userMessage = {
         role: 'user',
-        content: text,
+        content: displayText,
+        user_attachments: currentAttachments.map((a) => ({
+          filename: a.filename,
+          mime_type: a.mime_type,
+          preview_url: a.preview_url,
+        })),
         timestamp: new Date().toISOString(),
       };
       messages.push(userMessage);
@@ -778,6 +1359,16 @@
       renderMessages();
 
       try {
+        const autoMatchedComputerAttachments = await collectMatchingComputerAttachments(text);
+        const combinedAttachments = [
+          ...currentAttachments.map((a) => ({
+            filename: a.filename,
+            mime_type: a.mime_type,
+            data_base64: a.data_base64,
+          })),
+          ...autoMatchedComputerAttachments,
+        ].slice(0, 6);
+
         const apiMessages = messages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -794,6 +1385,13 @@
             mode,
             statement_id: statementId,
             user_id: userId,
+            attachments: combinedAttachments,
+            computer_files: localComputerFiles.slice(0, 400).map((cf) => ({
+              path: cf.path,
+              name: cf.name,
+              size_bytes: cf.size_bytes,
+              mime_type: cf.mime_type,
+            })),
           }),
         });
 
@@ -810,21 +1408,30 @@
         }
 
         const data = await resp.json();
+        const dlFiles = Array.isArray(data.download_files) ? data.download_files : [];
         messages.push({
           role: 'assistant',
           content: data.reply || 'ანალიზი დასრულებულია.',
           proposed_letters: Array.isArray(data.proposed_letters) ? data.proposed_letters : [],
+          download_files: dlFiles,
           inspected_attachments: Array.isArray(data.inspected_attachments)
             ? data.inspected_attachments
             : [],
           timestamp: new Date().toISOString(),
         });
         saveHistory();
+
+        for (const dl of dlFiles) {
+          if (dl.auto_download !== false) {
+            void triggerFileDownload(dl, { saveToConnectedFolder: false });
+          }
+        }
       } catch (err) {
         messages.push({
           role: 'assistant',
           content: `⚠️ **შეცდომა:** ${err?.message || 'მოთხოვნა ვერ შესრულდა.'}`,
           proposed_letters: [],
+          download_files: [],
           inspected_attachments: [],
           timestamp: new Date().toISOString(),
         });

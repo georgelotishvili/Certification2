@@ -15,16 +15,24 @@ import zipfile
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import (
+    AppFile,
     Certificate,
+    Comment,
     ExamSchedule,
+    ExpertUpload,
+    GuideVideo,
     PlanningLetter,
     PlanningTemplate,
+    Rating,
+    Regulation,
+    SiteDocument,
     Statement,
     User,
     format_letter_doc_number,
@@ -37,6 +45,8 @@ from ..services.candidate_status import (
 )
 from ..services.media_storage import ensure_media_root, resolve_storage_path
 from .admin import _require_admin, _today_in_tbilisi
+from .app_files import _get_application_form_path
+from .documents import _resolve_document_path
 from .planning_letters import (
     CUSTOM_FILE_TEMPLATES,
     DEFAULT_TEMPLATES,
@@ -114,7 +124,7 @@ REASONING_LEVELS = {
         "openai_effort": "high",
         "prompt_directive": (
             "აზროვნების დონე: ULTRA — იმუშავე მაქსიმალური ანალიტიკური სიღრმითა და სიზუსტით: "
-            "გადაამოწმე ყველა დეტალი, შეადარე განმცხადებლის ისტორია, დოკუმენტები, გამოცდის ქულები, "
+            "გადაამოწმე ყველა დეტალი, შეადარე განმცხადებლის ისტორია, დოკუმენტები, "
             "ვადები და მოამზადე ამომწურავი ექსპერტული დასკვნა და რეკომენდაციები."
         ),
     },
@@ -126,33 +136,72 @@ CATEGORY_LABELS_KA = dict(CATEGORY_DISPLAY_LABELS)
 
 DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის (gipc.org.ge) ადმინისტრატორის ოფიციალური ხელოვნური ინტელექტის ასისტენტი და ოპერატიული მრჩეველი.
 
-🚫 მკაცრი აკრძალვა საგამოცდო სისტემაზე:
-- შენ არ გაქვს და კატეგორიულად გეკრძალება ნებისმიერი კავშირი ან წვდომა საგამოცდო სისტემასთან („გამოცდა“, „მრავალბინიანი“, „მრავალფუნქციური“ განყოფილებების შიგთავსი, საგამოცდო ბლოკები, ტესტის კითხვები, სწორი პასუხები, მრავალბინიანი/მრავალფუნქციური პროექტების დავალებები, ტაქსონომია, საგამოცდო პაროლები, დროის ლიმიტები და საგამოცდო სესიები).
-- შენ მუშაობ მხოლოდ „რეგისტრაციები“ განყოფილების ადმინისტრაციულ მონაცემებთან: რეგისტრირებული პირები, შემოსული განცხადებები, მიბმული დოკუმენტები, კანდიდატების სტატუსები/ვადები, სერტიფიკატები და ოფიციალური მიმოწერა (წერილები).
+🚫 მკაცრი აკრძალვა საგამოცდო და პროექტების სისტემაზე:
+- შენ არ გაქვს და კატეგორიულად გეკრძალება ნებისმიერი კავშირი ან წვდომა მხოლოდ საგამოცდო და საგამოცდო პროექტების სისტემასთან („გამოცდა“, „მრავალბინიანი“, „მრავალფუნქციური“ განყოფილებების შიგთავსი, საგამოცდო ბლოკები, ტესტის კითხვები, სწორი პასუხები, მრავალბინიანი/მრავალფუნქციური პროექტების დავალებები, ტაქსონომია, საგამოცდო პაროლები, დროის ლიმიტები და საგამოცდო სესიები).
 
-შენი მთავარი დანიშნულებაა:
-1. შეისწავლო რეგისტრირებული პირები, შემოსული განცხადებები, განცხადებებზე მიბმული დოკუმენტები (PDF, სურათები, Word ფაილები), კანდიდატების სტატუსები, სერტიფიკატები და გაგზავნილი წერილები.
-2. მიბმული დოკუმენტების (დიპლომი, პირადობის მოწმობა, პორტფოლიო/ნამუშევრები, ცნობა, განაცხადის ფორმა) დეტალური წაკითხვა და შეფასება:
-   - ემთხვევა თუ არა დოკუმენტში მითითებული სახელი/გვარი/პირადი ნომერი განმცხადებლის მონაცემებს;
-   - რა განათლება, კვალიფიკაცია ან სამუშაო გამოცდილება ჩანს დოკუმენტში;
-   - შეესაბამება თუ არა წარმოდგენილი საბუთები მოთხოვნილ სასერტიფიკაციო კატეგორიას.
-3. მოუმზადო ადმინისტრატორს მკაფიო, დინჯი და პრაქტიკული სარეკომენდაციო სამოქმედო გეგმა ქართულ ენაზე.
+✅ სრული წვდომა საიტის ყველა დანარჩენ ნაწილსა და ბაზაზე:
+შენ გაქვს სრული წვდომა საიტის ყველა დანარჩენ განყოფილებასთან და მონაცემთა ბაზასთან:
+1. `registered_users`: ყველა რეგისტრირებული პირი (სახელი, გვარი, პირადი ნომერი, ელფოსტა, ტელეფონი, კოდი, კანდიდატის სტატუსი და კატეგორია, სერტიფიკატის სტატუსი).
+2. `certificates_registry`: სერტიფიცირებულ პირთა საჯარო და ადმინისტრაციული რეესტრი (სერტიფიკატის კოდი, დონე/კვალიფიკაცია, სტატუსი, გაცემის თარიღი, მოქმედების ვადა, მიბმული PDF ფაილი).
+3. `statements`: შემოსული განცხადებები (წაუკითხავი, უპასუხო, პასუხგაცემული) და მათზე მიბმული დოკუმენტები (PDF, სურათები, Word ფაილები).
+4. `exam_schedules_calendar`: დაგეგმილი ვიზიტების/გამოცდების ადმინისტრაციული განრიგი (დილის/საღამოს ცვლები).
+5. `recent_sent_letters` და `official_letter_templates`: გაგზავნილი ოფიციალური წერილები და წერილების შაბლონები.
+6. `public_reviews_and_ratings`: სერტიფიცირებულ პირთა საჯარო პროფილებზე (`my.html`) დაწერილი შეფასებები (5 კრიტერიუმით) და კომენტარები.
+7. `expert_portfolio_uploads`: სერტიფიცირებული ექსპერტების მიერ პირად გვერდზე ატვირთული პროექტები და ექსპერტიზის დასკვნები.
+8. `site_documents`: საიტის საინფორმაციო დოკუმენტები („დოკუმენტები / დამატება“ და „ინფორმაცია“ მენიუ — ტექსტები და Word/PDF ფაილები).
+9. `regulations`: რეგულაციები და დადგენილებები (`regulations`).
+10. `guide_videos`: გზამკვლევის ვიდეოები (`guide_videos`).
+11. `app_files_and_forms`: განაცხადის ფორმა (`application_form`) და აპლიკაციის ფაილები (`app_files`).
+12. ადმინისტრატორის მიერ ჩატში პირდაპირ ჩასმული სკრინშოტები (სურათები), ფაილები და კომპიუტერის დაკავშირებული საქაღალდის ფაილები (`local_computer_files`).
 
-სასერტიფიკაციო კატეგორიები:
-- A: A კატეგორიის სერტიფიკატი (არქიტექტურული პროექტირება / მუნიციპალური)
-- B: B კატეგორიის სერტიფიკატი (არქიტექტურული პროექტების ექსპერტიზა)
-- C: C კატეგორიის სერტიფიკატი (მთავარი არქიტექტორი)
-- B_A: B ან A კატეგორიის
-- C_A: C ან A კატეგორიის
+💻 ადმინისტრატორის კომპიუტერთან წვდომა (ძებნა, წაკითხვა, ჩამოწერა და განაცხადზე/წერილზე მიბმა):
+- თუ კონტექსტში მოცემულია `local_computer_files`, ეს არის ადმინისტრატორის კომპიუტერში არსებული ფაილების სია (`path`, `name`, `size_bytes`, `mime_type`).
+- შენ შეგიძლია მოძებნო ფაილები ადმინისტრატორის კომპიუტერში, გააანალიზო მათი შინაარსი (როცა ფაილი მოწოდებულია `attachments`-ით) და პირდაპირ მიაბა კომპიუტერში არსებული ფაილი გასაგზავნ წერილს (`"computer_attachment_path": "ფაილის_path_ან_სახელი"` `<PROPOSED_LETTER>` ბლოკში) ან მიაბა საიტის ბაზაში არსებული ფაილი (`"stored_attachment": {"source_type": "certificate", "source_id": 5}`)!
+
+🌐 ვებში გასვლა, საჯარო რეესტრებში/საიტებზე შესვლა და დოკუმენტების სანდოობის გადამოწმება (კანონმდებლობის ფარგლებში):
+- შენ ჩართული გაქვს პირდაპირი ვებ-ძებნა (Google Search Grounding) და საჯარო ვებ-გვერდების წაკითხვის შესაძლებლობა!
+- როდესაც განმცხადებელი ან ადმინისტრატორი მიაბამს დოკუმენტს (დიპლომი, სერტიფიკატი, აკრედიტაციის ცნობა, სამუშაო გამოცდილების/სტაჟის ცნობა, ამონაწერი მეწარმეთა და არასამეწარმეო იურიდიულ პირთა რეესტრიდან, საკადასტრო კოდი, პროექტი, ექსპერტიზის დასკვნა და ა.შ.), შენ ვალდებული ხარ კანონმდებლობით დასაშვებ ფარგლებში გადაამოწმო მისი სანდოობა და ნამდვილობა:
+  1) გადაამოწმო ვებში სასწავლებლის/უნივერსიტეტის/კოლეჯის არსებობა და აკრედიტაცია (მაგ. `eqe.ge`, უნივერსიტეტების ოფიციალური საიტები);
+  2) გადაამოწმო დამსაქმებელი კომპანიის/ორგანიზაციის საიდენტიფიკაციო კოდი, სტატუსი და საქმიანობა საჯარო წყაროებში (`napr.gov.ge`, `my.gov.ge`, `rs.ge`, კომპანიის ვებ-გვერდი);
+  3) გადაამოწმო დოკუმენტზე დატანილი სერიული ნომრები, თარიღების ლოგიკურობა, QR/ვერიფიკაციის ბმულები, ბეჭდები, ხელმოწერები და მოქმედი სამშენებლო/საკანონმდებლო ნორმები (`matsne.gov.ge`, დადგენილება №41, სივრცითი დაგეგმარებისა და სამშენებლო საქმიანობის კოდექსი);
+  4) დასკვნაში მკაფიოდ დაწერო: რა გადამოწმდა ვებში, რომელი საჯარო წყაროებით დასტურდება დოკუმენტის სანდოობა ან რა საეჭვო/შეუსაბამო დეტალი გამოვლინდა.
+
+⬇️ ფაილების ჩამოწერა ადმინისტრატორის კომპიუტერში (`<DOWNLOAD_FILE>`):
+შენ შეგიძლია ადმინისტრატორს პირდაპირ კომპიუტერში ჩამოუწერო როგორც შენ მიერ შექმნილი ფაილი (ანგარიში, სია, ცხრილი, წერილი, დასკვნა — `.doc`, `.csv`, `.txt`, `.html`, `.json`), ისე საიტის ბაზაში არსებული ნებისმიერი ფაილი!
+როდესაც ადმინისტრატორი გთხოვს ფაილის კომპიუტერში ჩამოწერას / შენახვას / ამოღებას:
+1) თუ ქმნი ახალ ფაილს (მაგ. სია, ცხრილი, ანგარიში, დოკუმენტი), პასუხის ბოლოს დაურთე:
+<DOWNLOAD_FILE>
+{
+  "mode": "generated",
+  "filename": "angarishi.doc",
+  "mime_type": "application/msword",
+  "title": "საიტის ანალიტიკური ანგარიში",
+  "auto_download": true,
+  "content": "აქ ჩაწერე ფაილის სრული ტექსტი ან ცხრილი"
+}
+</DOWNLOAD_FILE>
+(ცხრილებისთვის Excel-ში გასახსნელად გამოიყენე `.csv` და `"mime_type": "text/csv"`, Word-ისთვის `.doc` და `"mime_type": "application/msword"`, ტექსტისთვის `.txt`).
+
+2) თუ ადმინისტრატორი გთხოვს საიტზე უკვე ატვირთული ფაილის ჩამოწერას კომპიუტერში (მაგ. განცხადების დანართი, სერტიფიკატის PDF, საიტის დოკუმენტი, რეგულაცია, ექსპერტის ფაილი ან განაცხადის ფორმა), პასუხის ბოლოს დაურთე:
+<DOWNLOAD_FILE>
+{
+  "mode": "stored",
+  "source_type": "statement",
+  "source_id": 4,
+  "title": "განცხადებაზე მიბმული ფაილი",
+  "auto_download": true
+}
+</DOWNLOAD_FILE>
+სადაც `source_type` შეიძლება იყოს: `"statement"`, `"certificate"`, `"site_document"`, `"regulation"`, `"expert_expertise"`, `"expert_project"`, `"letter"`, `"application_form"`, `"app_file"`, ხოლო `source_id` არის შესაბამისი ჩანაწერის ID (განაცხადის ფორმისთვის `1`).
 
 ⚠️ უმკაცრესი უსაფრთხოების წესი წერილების გაგზავნაზე და ადრესატის სიზუსტეზე:
 - შენ თვითონ, დამოუკიდებლად და ადმინისტრატორის პირდაპირი დადასტურების გარეშე წერილს არასდროს აგზავნი!
 - კატეგორიულად გეკრძალება სხვადასხვა პირის მონაცემების არევა! წერილის მომზადებისას ადრესატი აუცილებლად მოძებნე `registered_users` სიაში სახელით, გვარით, პირადი ნომრით ან ელფოსტით და გადაამოწმე, რომ `user_id`, `user_name`, `personal_id`, `to_email` და წერილის ტექსტში (`body`) ჩაწერილი სახელი/გვარი ეკუთვნის ზუსტად იმავე ერთ კონკრეტულ პირს!
-- როდესაც რეკომენდაციას უწევ წერილის გაგზავნას ან როდესაც ადმინისტრატორი გთხოვს პასუხის/წერილის მომზადებას ან გაგზავნას:
+- როდესაც რეკომენდაციას უწევ წერილის გაგზავნას ან როდესაც ადმინისტრატორი გთხოვს პასუხის/წერილის მომზადებას ან გაგზავნას (მათ შორის ფაილის მიბმით):
   1) პასუხის ტექსტში აუცილებლად დაწერე მოკლე და მკაფიო აღწერა:
      - **სად იგზავნება:** მიმღების სახელი, გვარი, პირადი ნომერი და ელფოსტა;
      - **რატომ იგზავნება:** კონკრეტული მიზეზი და დასაბუთება;
-     - **რა იგზავნება:** წერილის ტიპი, კატეგორია, თარიღი/საათი და მოკლე შინაარსი;
+     - **რა იგზავნება (და რა ფაილი ებმება):** წერილის ტიპი, კატეგორია, თარიღი/საათი, მიბმული ფაილი და მოკლე შინაარსი;
      - სთხოვე ადმინისტრატორს გადახედოს და დაადასტუროს გაგზავნა ქვემოთ მოცემულ ბარათზე.
   2) ტექსტის ბოლოს აუცილებლად დაურთე სტრუქტურირებული ბლოკი ზუსტად ამ ტეგებში (თითოეული შეთავაზებული წერილისთვის):
 <PROPOSED_LETTER>
@@ -169,7 +218,9 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს
   "candidate_category": "A",
   "reason": "განმცხადებელმა წარმოადგინა არქიტექტურის დიპლომი და ითხოვს გამოცდაზე დაშვებას.",
   "subject": "გამოცდაზე დაშვება",
-  "body": "ადრესატი: სახელი გვარი\\n\\nმოგესალმებით,..."
+  "body": "ადრესატი: სახელი გვარი\\n\\nმოგესალმებით,...",
+  "computer_attachment_path": null,
+  "stored_attachment": null
 }
 </PROPOSED_LETTER>
 
@@ -184,6 +235,8 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს
 - "period": "morning" (დილის ცვლა) ან "evening" (საღამოს ცვლა) როცა template_mode არის "exam" ან "certificate"; სხვა შემთხვევაში იგივე რაც template_mode ("rejection", "exam_fail", "custom").
 - "candidate_category": "A", "B", "C", "B_A" ან "C_A".
 - "subject" და "body": სრულად შევსებული ქართული ოფიციალური ტექსტი (ყველა ცვლადი {name}, {date}, {time} და [კატეგორია] ჩანაცვლებული უნდა იყოს ზუსტად ამ მიმღების რეალური მონაცემებით!).
+- "computer_attachment_path": თუ წერილს უნდა მიებას ფაილი ადმინისტრატორის კომპიუტერიდან (`local_computer_files` ან ჩატში ატვირთული ფაილი), ჩაწერე მისი ზუსტი `path` ან `name` (წინააღმდეგ შემთხვევაში `null`).
+- "stored_attachment": თუ წერილს უნდა მიებას ფაილი საიტის ბაზიდან (მაგ. სერტიფიკატი `{"source_type": "certificate", "source_id": 5}`, რეგულაცია, საიტის დოკუმენტი და ა.შ.), მიუთითე ეს ობიექტი (წინააღმდეგ შემთხვევაში `null`).
 """
 
 
@@ -201,11 +254,26 @@ class AIChatMessage(BaseModel):
     content: str
 
 
+class AIChatAttachment(BaseModel):
+    filename: str = Field(default="screenshot.png")
+    mime_type: str = Field(default="image/png")
+    data_base64: str
+
+
+class AIComputerFileEntry(BaseModel):
+    path: str
+    name: str
+    size_bytes: int = 0
+    mime_type: str = ""
+
+
 class AIChatRequest(BaseModel):
     messages: list[AIChatMessage] = Field(default_factory=list)
     mode: str = Field(default="chat")  # "chat", "site_analysis", "statements_analysis", "exam_analysis"
     statement_id: int | None = Field(default=None)
     user_id: int | None = Field(default=None)
+    attachments: list[AIChatAttachment] = Field(default_factory=list)
+    computer_files: list[AIComputerFileEntry] = Field(default_factory=list)
 
 
 def _ai_settings_path() -> Path:
@@ -571,7 +639,7 @@ def _build_site_context_and_attachments(
     users = db.scalars(select(User).order_by(User.created_at.desc(), User.id.desc())).all()
     users_by_id = {u.id: u for u in users}
 
-    certs = db.scalars(select(Certificate)).all()
+    certs = db.scalars(select(Certificate).order_by(Certificate.created_at.desc(), Certificate.id.desc())).all()
     certs_by_user = {c.user_id: c for c in certs}
 
     statements = db.scalars(
@@ -582,6 +650,27 @@ def _build_site_context_and_attachments(
     ).all()
     letters = db.scalars(
         select(PlanningLetter).order_by(PlanningLetter.created_at.desc(), PlanningLetter.id.desc())
+    ).all()
+    ratings = db.scalars(
+        select(Rating).order_by(Rating.updated_at.desc(), Rating.id.desc())
+    ).all()
+    comments = db.scalars(
+        select(Comment).order_by(Comment.created_at.desc(), Comment.id.desc())
+    ).all()
+    expert_uploads = db.scalars(
+        select(ExpertUpload).order_by(ExpertUpload.created_at.desc(), ExpertUpload.id.desc())
+    ).all()
+    site_documents = db.scalars(
+        select(SiteDocument).order_by(SiteDocument.order_index.asc(), SiteDocument.id.asc())
+    ).all()
+    regulations = db.scalars(
+        select(Regulation).order_by(Regulation.order_index.asc(), Regulation.id.asc())
+    ).all()
+    guide_videos = db.scalars(
+        select(GuideVideo).order_by(GuideVideo.order_index.asc(), GuideVideo.id.asc())
+    ).all()
+    app_files = db.scalars(
+        select(AppFile).order_by(AppFile.created_at.desc(), AppFile.id.desc())
     ).all()
 
     templates_map: dict[str, dict[str, Any]] = {
@@ -630,7 +719,7 @@ def _build_site_context_and_attachments(
         )
 
     statements_summary: list[dict[str, Any]] = []
-    for s in statements[:30]:
+    for s in statements[:60]:
         u = users_by_id.get(s.user_id)
         req_cat = (
             parse_statement_category(s.message)
@@ -660,11 +749,16 @@ def _build_site_context_and_attachments(
                 "has_attachment": bool(s.attachment_path),
                 "attachment_filename": s.attachment_filename,
                 "attachment_size_bytes": s.attachment_size_bytes,
+                "download_source": (
+                    {"source_type": "statement", "source_id": s.id}
+                    if s.attachment_path
+                    else None
+                ),
             }
         )
 
     recent_letters_summary: list[dict[str, Any]] = []
-    for l in letters[:20]:
+    for l in letters[:40]:
         u = users_by_id.get(l.user_id)
         recent_letters_summary.append(
             {
@@ -680,8 +774,192 @@ def _build_site_context_and_attachments(
                 "subject": l.subject,
                 "sent_at": l.sent_at.isoformat() if l.sent_at else None,
                 "status": l.status,
+                "has_attachment": bool(l.attachment_path),
+                "attachment_filename": l.attachment_filename,
+                "download_source": (
+                    {"source_type": "letter", "source_id": l.id}
+                    if l.attachment_path
+                    else None
+                ),
             }
         )
+
+    certificates_registry_summary: list[dict[str, Any]] = []
+    for c in certs:
+        u = users_by_id.get(c.user_id)
+        certificates_registry_summary.append(
+            {
+                "certificate_id": c.id,
+                "user_id": c.user_id,
+                "user_name": f"{u.first_name or ''} {u.last_name or ''}".strip() if u else "",
+                "personal_id": u.personal_id if u else "",
+                "email": u.email if u else "",
+                "phone": u.phone if u else "",
+                "unique_code": c.unique_code,
+                "level": c.level,
+                "status": c.status,
+                "exam_score": c.exam_score,
+                "issue_date": c.issue_date.isoformat() if c.issue_date else None,
+                "valid_until": c.valid_until.isoformat() if c.valid_until else None,
+                "has_file": bool(c.file_path),
+                "file_filename": c.file_filename,
+                "download_source": (
+                    {"source_type": "certificate", "source_id": c.id}
+                    if c.file_path
+                    else None
+                ),
+            }
+        )
+
+    schedules_summary: list[dict[str, Any]] = []
+    for sc in schedules[:100]:
+        u = users_by_id.get(sc.user_id)
+        schedules_summary.append(
+            {
+                "schedule_id": sc.id,
+                "user_id": sc.user_id,
+                "user_name": f"{u.first_name or ''} {u.last_name or ''}".strip() if u else "",
+                "personal_id": u.personal_id if u else "",
+                "exam_date": sc.exam_date.isoformat() if sc.exam_date else None,
+                "period": sc.period,
+                "created_at": sc.created_at.isoformat() if sc.created_at else None,
+            }
+        )
+
+    ratings_by_target: dict[int, list[float]] = {}
+    for r in ratings:
+        ratings_by_target.setdefault(r.target_user_id, []).append(float(r.score))
+
+    ratings_summary: list[dict[str, Any]] = []
+    for target_uid, scores in ratings_by_target.items():
+        tu = users_by_id.get(target_uid)
+        ratings_summary.append(
+            {
+                "target_user_id": target_uid,
+                "target_user_name": f"{tu.first_name or ''} {tu.last_name or ''}".strip() if tu else "",
+                "average_score": round(sum(scores) / len(scores), 2) if scores else 0.0,
+                "ratings_count": len(scores),
+            }
+        )
+
+    comments_summary: list[dict[str, Any]] = []
+    for cm in comments[:50]:
+        tu = users_by_id.get(cm.target_user_id)
+        au = users_by_id.get(cm.author_user_id) if cm.author_user_id else None
+        comments_summary.append(
+            {
+                "comment_id": cm.id,
+                "target_user_id": cm.target_user_id,
+                "target_user_name": f"{tu.first_name or ''} {tu.last_name or ''}".strip() if tu else "",
+                "author_user_id": cm.author_user_id,
+                "author_name": f"{au.first_name or ''} {au.last_name or ''}".strip() if au else (cm.author_email or "უცნობი"),
+                "author_email": cm.author_email,
+                "message": cm.message,
+                "created_at": cm.created_at.isoformat() if cm.created_at else None,
+            }
+        )
+
+    expert_uploads_summary: list[dict[str, Any]] = []
+    for eu in expert_uploads[:80]:
+        u = users_by_id.get(eu.user_id)
+        expert_uploads_summary.append(
+            {
+                "upload_id": eu.id,
+                "user_id": eu.user_id,
+                "user_name": f"{u.first_name or ''} {u.last_name or ''}".strip() if u else "",
+                "unique_code": eu.unique_code,
+                "building_function": eu.building_function,
+                "cadastral_code": eu.cadastral_code,
+                "project_address": eu.project_address,
+                "expertise_filename": eu.expertise_filename,
+                "has_expertise_file": bool(eu.expertise_path),
+                "expertise_download_source": (
+                    {"source_type": "expert_expertise", "source_id": eu.id}
+                    if eu.expertise_path
+                    else None
+                ),
+                "project_filename": eu.project_filename,
+                "has_project_file": bool(eu.project_path),
+                "project_download_source": (
+                    {"source_type": "expert_project", "source_id": eu.id}
+                    if eu.project_path
+                    else None
+                ),
+                "created_at": eu.created_at.isoformat() if eu.created_at else None,
+            }
+        )
+
+    site_documents_summary: list[dict[str, Any]] = []
+    for sd in site_documents:
+        site_documents_summary.append(
+            {
+                "document_id": sd.id,
+                "title": sd.title,
+                "description": sd.description,
+                "filename": sd.filename,
+                "file_size_bytes": sd.file_size_bytes,
+                "mime_type": sd.mime_type,
+                "download_mode": sd.download_mode,
+                "has_file": bool(sd.file_path),
+                "download_source": (
+                    {"source_type": "site_document", "source_id": sd.id}
+                    if sd.file_path
+                    else None
+                ),
+            }
+        )
+
+    regulations_summary: list[dict[str, Any]] = []
+    for reg in regulations:
+        regulations_summary.append(
+            {
+                "regulation_id": reg.id,
+                "title": reg.title,
+                "filename": reg.filename,
+                "file_size_bytes": reg.file_size_bytes,
+                "mime_type": reg.mime_type,
+                "has_file": bool(reg.file_path),
+                "download_source": (
+                    {"source_type": "regulation", "source_id": reg.id}
+                    if reg.file_path
+                    else None
+                ),
+            }
+        )
+
+    guide_videos_summary: list[dict[str, Any]] = []
+    for gv in guide_videos:
+        guide_videos_summary.append(
+            {
+                "video_id": gv.id,
+                "title": gv.title,
+                "url": gv.url,
+                "order_index": gv.order_index,
+            }
+        )
+
+    app_form_path = _get_application_form_path()
+    app_files_and_forms_summary = {
+        "application_form": {
+            "available": bool(app_form_path),
+            "filename": app_form_path.name if app_form_path else None,
+            "download_source": (
+                {"source_type": "application_form", "source_id": 1}
+                if app_form_path
+                else None
+            ),
+        },
+        "app_files": [
+            {
+                "app_file_id": af.id,
+                "filename": af.filename,
+                "size_bytes": af.size_bytes,
+                "mime_type": af.mime_type,
+                "download_source": {"source_type": "app_file", "source_id": af.id},
+            }
+            for af in app_files
+        ],
+    }
 
     focus_context: dict[str, Any] = {}
     if focus_statement_id is not None:
@@ -695,6 +973,11 @@ def _build_site_context_and_attachments(
                 "message": st_obj.message,
                 "attachment_filename": st_obj.attachment_filename,
                 "answered_at": st_obj.answered_at.isoformat() if st_obj.answered_at else None,
+                "download_source": (
+                    {"source_type": "statement", "source_id": st_obj.id}
+                    if st_obj.attachment_path
+                    else None
+                ),
             }
     if focus_user_id is None and last_user_message:
         inferred_user = _match_user_from_text(last_user_message, users)
@@ -707,6 +990,9 @@ def _build_site_context_and_attachments(
         u_stmts = [s for s in statements if s.user_id == u.id]
         u_letters = [l for l in letters if l.user_id == u.id]
         u_scheds = [sc for sc in schedules if sc.user_id == u.id]
+        u_uploads = [eu for eu in expert_uploads if eu.user_id == u.id]
+        u_comments = [cm for cm in comments if cm.target_user_id == u.id]
+        u_scores = ratings_by_target.get(u.id) or []
         focus_context["focused_user"] = {
             "user_id": u.id,
             "name": f"{u.first_name} {u.last_name}".strip(),
@@ -718,16 +1004,28 @@ def _build_site_context_and_attachments(
             "candidate_category": u.candidate_category,
             "certificate": (
                 {
+                    "certificate_id": cert.id,
                     "unique_code": cert.unique_code,
                     "level": cert.level,
                     "status": cert.status,
+                    "exam_score": cert.exam_score,
+                    "issue_date": cert.issue_date.isoformat() if cert.issue_date else None,
                     "valid_until": cert.valid_until.isoformat() if cert.valid_until else None,
+                    "file_filename": cert.file_filename,
+                    "download_source": (
+                        {"source_type": "certificate", "source_id": cert.id}
+                        if cert.file_path
+                        else None
+                    ),
                 }
                 if cert
                 else None
             ),
             "statements_count": len(u_stmts),
             "letters_count": len(u_letters),
+            "expert_uploads_count": len(u_uploads),
+            "average_rating": round(sum(u_scores) / len(u_scores), 2) if u_scores else None,
+            "comments_count": len(u_comments),
             "schedules": [
                 {"exam_date": sc.exam_date.isoformat(), "period": sc.period}
                 for sc in u_scheds[:5]
@@ -794,7 +1092,7 @@ def _build_site_context_and_attachments(
             inspected_labels.append(label)
 
     registered_users_summary: list[dict[str, Any]] = []
-    for u in users[:150]:
+    for u in users[:300]:
         cert = certs_by_user.get(u.id)
         registered_users_summary.append(
             {
@@ -808,6 +1106,7 @@ def _build_site_context_and_attachments(
                 "candidate_category": u.candidate_category,
                 "certificate_status": cert.status if cert else None,
                 "certificate_level": cert.level if cert else None,
+                "certificate_unique_code": cert.unique_code if cert else None,
             }
         )
 
@@ -824,6 +1123,13 @@ def _build_site_context_and_attachments(
             "certificate_candidates_count": len(cert_candidates),
             "active_certificates_count": len(active_certs),
             "suspended_or_expired_certificates_count": len(suspended_or_expired_certs),
+            "scheduled_exams_count": len(schedules),
+            "expert_portfolio_uploads_count": len(expert_uploads),
+            "site_documents_count": len(site_documents),
+            "regulations_count": len(regulations),
+            "guide_videos_count": len(guide_videos),
+            "public_ratings_count": len(ratings),
+            "public_comments_count": len(comments),
         },
         "official_letter_templates": {
             k: {"subject": v.get("subject"), "body": v.get("body")}
@@ -831,13 +1137,24 @@ def _build_site_context_and_attachments(
         },
         "focused_context": focus_context,
         "registered_users": registered_users_summary,
+        "certificates_registry": certificates_registry_summary,
         "statements": statements_summary,
+        "exam_schedules_calendar": schedules_summary,
         "certificate_candidates_30_day_tracker": cert_candidates_info,
         "recent_sent_letters": recent_letters_summary,
+        "public_reviews_and_ratings": {
+            "ratings_by_expert": ratings_summary,
+            "recent_comments": comments_summary,
+        },
+        "expert_portfolio_uploads": expert_uploads_summary,
+        "site_documents": site_documents_summary,
+        "regulations": regulations_summary,
+        "guide_videos": guide_videos_summary,
+        "app_files_and_forms": app_files_and_forms_summary,
     }
 
     context_str = (
-        "=== საიტის (gipc.org.ge) მიმდინარე ბაზის მონაცემები (რეგისტრაციები და განცხადებები) ===\n"
+        "=== საიტის (gipc.org.ge) სრული ბაზის მონაცემები (გარდა საგამოცდო ტესტებისა და მრავალბინიანი/მრავალფუნქციური პროექტებისა) ===\n"
         + json.dumps(context_payload, ensure_ascii=False, indent=2)
     )
     return context_str, attachment_parts, inspected_labels, users_by_id, templates_map
@@ -1050,6 +1367,14 @@ def _parse_proposed_letters(
             stmt_id = None
 
         tpl_meta = templates_map.get(template_mode) or {}
+        comp_att_path = (
+            str(data.get("computer_attachment_path") or data.get("computer_attachment_filename") or "").strip()
+            or None
+        )
+        stored_att = data.get("stored_attachment")
+        if not isinstance(stored_att, dict) or not stored_att.get("source_type"):
+            stored_att = None
+
         proposals.append(
             {
                 "user_id": user.id,
@@ -1069,12 +1394,259 @@ def _parse_proposed_letters(
                 "body": body,
                 "template_updated_at": tpl_meta.get("updated_at"),
                 "attachment_filename": tpl_meta.get("attachment_filename"),
+                "computer_attachment_path": comp_att_path,
+                "stored_attachment": stored_att,
             }
         )
         return ""
 
     cleaned = _PROPOSED_LETTER_RE.sub(_replace, raw_text).strip()
     return cleaned, proposals
+
+
+_DOWNLOAD_FILE_RE = re.compile(
+    r"<DOWNLOAD_FILE>\s*(\{.*?\})\s*</DOWNLOAD_FILE>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _resolve_stored_file(
+    db: Session, source_type: str, source_id: int
+) -> tuple[Path, str, str] | None:
+    st = (source_type or "").strip().lower()
+    if st == "statement":
+        rec = db.get(Statement, source_id)
+        if not rec or not rec.attachment_path:
+            return None
+        p = resolve_storage_path(rec.attachment_path, f"statements/{rec.user_id}")
+        if not p or not p.exists():
+            return None
+        return p, rec.attachment_filename or p.name, "application/octet-stream"
+    if st == "certificate":
+        rec = db.get(Certificate, source_id)
+        if not rec or not rec.file_path:
+            return None
+        p = resolve_storage_path(rec.file_path, f"certificates/{rec.user_id}")
+        if not p or not p.exists():
+            return None
+        return p, rec.file_filename or p.name, rec.file_mime_type or "application/pdf"
+    if st == "site_document":
+        rec = db.get(SiteDocument, source_id)
+        if not rec or not rec.file_path:
+            return None
+        p = _resolve_document_path(rec.file_path)
+        if not p or not p.exists():
+            return None
+        return p, rec.filename or p.name, rec.mime_type or "application/octet-stream"
+    if st == "regulation":
+        rec = db.get(Regulation, source_id)
+        if not rec or not rec.file_path:
+            return None
+        p = resolve_storage_path(rec.file_path, "regulations")
+        if not p or not p.exists():
+            return None
+        return p, rec.filename or p.name, rec.mime_type or "application/octet-stream"
+    if st == "expert_expertise":
+        rec = db.get(ExpertUpload, source_id)
+        if not rec or not rec.expertise_path:
+            return None
+        p = resolve_storage_path(rec.expertise_path, f"expert_uploads/{rec.user_id}")
+        if not p or not p.exists():
+            return None
+        return p, rec.expertise_filename or p.name, "application/pdf"
+    if st == "expert_project":
+        rec = db.get(ExpertUpload, source_id)
+        if not rec or not rec.project_path:
+            return None
+        p = resolve_storage_path(rec.project_path, f"expert_uploads/{rec.user_id}")
+        if not p or not p.exists():
+            return None
+        return p, rec.project_filename or p.name, "application/octet-stream"
+    if st == "letter":
+        rec = db.get(PlanningLetter, source_id)
+        if not rec or not rec.attachment_path:
+            return None
+        p = resolve_storage_path(rec.attachment_path, f"letters/{rec.user_id}")
+        if not p or not p.exists():
+            return None
+        return p, rec.attachment_filename or p.name, "application/octet-stream"
+    if st == "application_form":
+        p = _get_application_form_path()
+        if not p or not p.exists():
+            return None
+        return p, p.name, "application/octet-stream"
+    if st == "app_file":
+        rec = db.get(AppFile, source_id)
+        if not rec or not rec.storage_path:
+            return None
+        p = resolve_storage_path(rec.storage_path, "app_files")
+        if not p or not p.exists():
+            return None
+        return p, rec.filename or p.name, rec.mime_type or "application/octet-stream"
+    return None
+
+
+def _parse_download_files(
+    raw_text: str,
+    *,
+    db: Session,
+) -> tuple[str, list[dict[str, Any]]]:
+    downloads: list[dict[str, Any]] = []
+
+    def _replace(match: re.Match) -> str:
+        block = match.group(1).strip()
+        try:
+            data = json.loads(block)
+        except Exception:
+            return ""
+        if not isinstance(data, dict):
+            return ""
+        mode = str(data.get("mode") or "generated").strip().lower()
+        title = str(data.get("title") or "ფაილის ჩამოწერა კომპიუტერში").strip()
+        auto_dl = bool(data.get("auto_download", True))
+
+        if mode == "stored":
+            source_type = str(data.get("source_type") or "").strip().lower()
+            try:
+                source_id = int(data.get("source_id") or 0)
+            except (TypeError, ValueError):
+                source_id = 0
+            resolved = _resolve_stored_file(db, source_type, source_id)
+            if not resolved:
+                return ""
+            path, filename, mime_type = resolved
+            downloads.append(
+                {
+                    "mode": "stored",
+                    "source_type": source_type,
+                    "source_id": source_id,
+                    "filename": filename,
+                    "mime_type": mime_type,
+                    "title": title,
+                    "auto_download": auto_dl,
+                    "download_url": f"/admin/ai/files/{source_type}/{source_id}",
+                }
+            )
+            return ""
+
+        filename = str(data.get("filename") or "document.txt").strip() or "document.txt"
+        mime_type = str(data.get("mime_type") or "text/plain;charset=utf-8").strip()
+        content = str(data.get("content") or "")
+        if not content:
+            return ""
+        raw_bytes = content.encode("utf-8-sig") if filename.lower().endswith(".csv") else content.encode("utf-8")
+        downloads.append(
+            {
+                "mode": "generated",
+                "filename": filename,
+                "mime_type": mime_type,
+                "title": title,
+                "auto_download": auto_dl,
+                "data_base64": base64.b64encode(raw_bytes).decode("ascii"),
+            }
+        )
+        return ""
+
+    cleaned = _DOWNLOAD_FILE_RE.sub(_replace, raw_text).strip()
+    return cleaned, downloads
+
+
+_PUBLIC_URL_RE = re.compile(
+    r"https?://[a-zA-Z0-9.\-_~:/?#\[\]@!$&'()*+,;=%]+",
+    re.IGNORECASE,
+)
+
+
+def _is_safe_public_url(url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = (parsed.hostname or "").lower().strip()
+        if not host or host in ("localhost", "0.0.0.0", "::1"):
+            return False
+        if (
+            host.startswith("127.")
+            or host.startswith("10.")
+            or host.startswith("192.168.")
+            or host.startswith("169.254.")
+            or host.endswith(".local")
+            or host.endswith(".internal")
+        ):
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def _fetch_public_web_pages_for_context(
+    texts: list[str],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    seen_urls: list[str] = []
+    for txt in texts:
+        if not txt:
+            continue
+        for match in _PUBLIC_URL_RE.findall(txt):
+            cleaned_url = match.rstrip(".,;:)>]\"'")
+            if _is_safe_public_url(cleaned_url) and cleaned_url not in seen_urls:
+                seen_urls.append(cleaned_url)
+                if len(seen_urls) >= 4:
+                    break
+        if len(seen_urls) >= 4:
+            break
+
+    web_parts: list[dict[str, Any]] = []
+    web_labels: list[str] = []
+    for url in seen_urls:
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "text/html,application/xhtml+xml,text/plain,*/*;q=0.8",
+                },
+                method="GET",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                ctype = (resp.headers.get("Content-Type") or "").lower()
+                raw_bytes = resp.read(512 * 1024)
+            if "application/pdf" in ctype or url.lower().endswith(".pdf"):
+                web_parts.append(
+                    {"text": f"🌐 ვებ-ბმულიდან ჩატვირთული PDF დოკუმენტი: {url}"}
+                )
+                web_parts.append(
+                    {
+                        "inline_data": {
+                            "mime_type": "application/pdf",
+                            "data": base64.b64encode(raw_bytes).decode("ascii"),
+                            "filename": "web_document.pdf",
+                        }
+                    }
+                )
+                web_labels.append(f"🌐 ვებ-გვერდი: {url[:60]}")
+                continue
+
+            html_str = raw_bytes.decode("utf-8", errors="replace")
+            html_str = re.sub(r"(?is)<(script|style|noscript).*?>.*?</\1>", " ", html_str)
+            text_only = re.sub(r"(?s)<[^>]+>", " ", html_str)
+            text_only = re.sub(r"\s+", " ", text_only).strip()[:18000]
+            if text_only:
+                web_parts.append(
+                    {
+                        "text": (
+                            f"🌐 ვებ-გვერდის ({url}) პირდაპირ წაკითხული შინაარსი:\n"
+                            f"---\n{text_only}\n---"
+                        )
+                    }
+                )
+                web_labels.append(f"🌐 ვებ-გვერდი: {url[:60]}")
+        except Exception:
+            pass
+
+    return web_parts, web_labels
 
 
 def _call_gemini_api(
@@ -1084,6 +1656,7 @@ def _call_gemini_api(
     system_instruction: str,
     contents: list[dict[str, Any]],
     reasoning_level: str = DEFAULT_REASONING_LEVEL,
+    out_web_sources: list[str] | None = None,
 ) -> str:
     level_cfg = REASONING_LEVELS.get(reasoning_level, REASONING_LEVELS[DEFAULT_REASONING_LEVEL])
     cleaned_contents: list[dict[str, Any]] = []
@@ -1104,38 +1677,60 @@ def _call_gemini_api(
                 cleaned_parts.append({"text": p["text"]})
         cleaned_contents.append({"role": turn.get("role", "user"), "parts": cleaned_parts})
 
-    payload = {
-        "systemInstruction": {
-            "parts": [{"text": system_instruction}],
-        },
-        "contents": cleaned_contents,
-        "generationConfig": {
-            "temperature": level_cfg["temperature"],
-            "maxOutputTokens": level_cfg["max_tokens"],
-        },
-    }
-    body_bytes = json.dumps(payload).encode("utf-8")
-
     # Strictly use ONLY gemini-4-argon — never fall back to any 3.x or lite model
     strict_model = "gemini-4-argon"
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{urllib.parse.quote(strict_model)}:generateContent?key={urllib.parse.quote(api_key)}"
     )
-    req = urllib.request.Request(
-        url,
-        data=body_bytes,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+
+    def _send_gemini(enable_search_tool: bool) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "systemInstruction": {
+                "parts": [{"text": system_instruction}],
+            },
+            "contents": cleaned_contents,
+            "generationConfig": {
+                "temperature": level_cfg["temperature"],
+                "maxOutputTokens": level_cfg["max_tokens"],
+            },
+        }
+        if enable_search_tool:
+            payload["tools"] = [{"google_search": {}}]
+        body_bytes = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body_bytes,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode("utf-8"))
 
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            resp_data = json.loads(resp.read().decode("utf-8"))
+        resp_data = _send_gemini(enable_search_tool=True)
     except urllib.error.HTTPError as exc:
         err_body = ""
         try:
             err_body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        if exc.code == 400 and ("google_search" in err_body or "tools" in err_body.lower()):
+            try:
+                resp_data = _send_gemini(enable_search_tool=False)
+            except urllib.error.HTTPError as exc2:
+                exc = exc2
+                try:
+                    err_body = exc2.read().decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+            else:
+                candidates = resp_data.get("candidates") or []
+                if not candidates:
+                    raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
+                parts = candidates[0].get("content", {}).get("parts") or []
+                return "\n".join(str(p.get("text") or "") for p in parts if "text" in p).strip()
+        try:
             err_json = json.loads(err_body)
             err_msg = err_json.get("error", {}).get("message") or err_body
         except Exception:
@@ -1158,6 +1753,21 @@ def _call_gemini_api(
     candidates = resp_data.get("candidates") or []
     if not candidates:
         raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
+
+    if out_web_sources is not None:
+        gm = candidates[0].get("groundingMetadata") or {}
+        queries = gm.get("webSearchQueries") or []
+        for q in queries[:3]:
+            if q:
+                out_web_sources.append(f"🌐 ვებ-ძიება: {q}")
+        chunks = gm.get("groundingChunks") or []
+        for ch in chunks[:4]:
+            web_info = ch.get("web") if isinstance(ch, dict) else None
+            if isinstance(web_info, dict):
+                title = str(web_info.get("title") or web_info.get("uri") or "").strip()
+                if title and f"🌐 წყარო: {title}" not in out_web_sources:
+                    out_web_sources.append(f"🌐 წყარო: {title}")
+
     parts = candidates[0].get("content", {}).get("parts") or []
     text_chunks = [str(p.get("text") or "") for p in parts if "text" in p]
     return "\n".join(text_chunks).strip()
@@ -1342,6 +1952,21 @@ def update_ai_settings(
     return _build_status_response(cfg)
 
 
+@router.get("/ai/files/{source_type}/{source_id}")
+def download_ai_stored_file(
+    source_type: str,
+    source_id: int,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    resolved = _resolve_stored_file(db, source_type, source_id)
+    if not resolved:
+        raise HTTPException(404, "ფაილი ვერ მოიძებნა.")
+    path, filename, mime_type = resolved
+    return FileResponse(path=path, media_type=mime_type, filename=filename)
+
+
 @router.post("/ai/chat")
 def ai_chat(
     payload: AIChatRequest,
@@ -1384,6 +2009,8 @@ def ai_chat(
                 "გააანალიზე გამოცდების შედეგები, გამოცდისა და სერტიფიკატის კანდიდატები (მათ შორის 30-დღიანი ვადები) "
                 "და მოამზადე შესაბამისი სარეკომენდაციო წერილები იმ პირებისთვის, ვისაც პასუხი ჯერ არ გაგზავნია."
             )
+        elif payload.attachments:
+            last_user_msg = "გთხოვ დეტალურად გააანალიზო მიბმული სკრინი / ფაილი."
         else:
             raise HTTPException(422, "შეტყობინება ცარიელია.")
 
@@ -1396,6 +2023,82 @@ def ai_chat(
             last_user_message=last_user_msg,
         )
     )
+
+    if payload.computer_files:
+        comp_list = [
+            {
+                "path": cf.path,
+                "name": cf.name,
+                "size_bytes": cf.size_bytes,
+                "mime_type": cf.mime_type,
+            }
+            for cf in payload.computer_files[:400]
+        ]
+        context_str += (
+            "\n\n=== ადმინისტრატორის კომპიუტერის დაკავშირებულ საქაღალდეში არსებული ფაილები (local_computer_files) ===\n"
+            + json.dumps(comp_list, ensure_ascii=False, indent=2)
+        )
+
+    user_uploaded_parts: list[dict[str, Any]] = []
+    for att in (payload.attachments or [])[:6]:
+        fname = (att.filename or "screenshot.png").strip()
+        mime = (att.mime_type or "image/png").strip().lower()
+        b64_raw = (att.data_base64 or "").strip()
+        if "," in b64_raw and b64_raw.startswith("data:"):
+            b64_raw = b64_raw.split(",", 1)[1].strip()
+        if not b64_raw:
+            continue
+        suffix = Path(fname).suffix.lower()
+        if mime.startswith("image/") or mime == "application/pdf":
+            user_uploaded_parts.append(
+                {
+                    "text": f"🖼️/📄 ადმინისტრატორის კომპიუტერიდან ჩატში მიბმული ფაილი / სკრინი: '{fname}'"
+                }
+            )
+            user_uploaded_parts.append(
+                {
+                    "inline_data": {
+                        "mime_type": mime,
+                        "data": b64_raw,
+                        "filename": fname,
+                    }
+                }
+            )
+            inspected_labels.append(f"კომპიუტერიდან: {fname}")
+        elif suffix == ".docx" or "wordprocessingml" in mime:
+            try:
+                raw_b = base64.b64decode(b64_raw)
+                extracted = _extract_docx_text(raw_b)
+                if extracted:
+                    user_uploaded_parts.append(
+                        {
+                            "text": f"📄 ადმინისტრატორის კომპიუტერიდან მიბმული Word ფაილი ('{fname}'):\n---\n{extracted}\n---"
+                        }
+                    )
+                    inspected_labels.append(f"კომპიუტერიდან: {fname}")
+            except Exception:
+                pass
+        else:
+            try:
+                raw_b = base64.b64decode(b64_raw)
+                txt = raw_b.decode("utf-8", errors="replace")[:30000]
+                user_uploaded_parts.append(
+                    {
+                        "text": f"📄 ადმინისტრატორის კომპიუტერიდან მიბმული ფაილი ('{fname}'):\n---\n{txt}\n---"
+                    }
+                )
+                inspected_labels.append(f"კომპიუტერიდან: {fname}")
+            except Exception:
+                pass
+
+    texts_for_url_scan = [last_user_msg] + [
+        str(p.get("text") or "")
+        for p in (attachment_parts + user_uploaded_parts)
+        if "text" in p
+    ]
+    web_parts, web_labels = _fetch_public_web_pages_for_context(texts_for_url_scan)
+    if web_labels:
+        inspected_labels.extend(web_labels)
 
     system_instruction = (
         DEFAULT_SYSTEM_PROMPT
@@ -1415,9 +2118,14 @@ def ai_chat(
     final_parts: list[dict[str, Any]] = [{"text": context_str}]
     if attachment_parts:
         final_parts.extend(attachment_parts)
+    if user_uploaded_parts:
+        final_parts.extend(user_uploaded_parts)
+    if web_parts:
+        final_parts.extend(web_parts)
     final_parts.append({"text": f"ადმინისტრატორის მოთხოვნა:\n{last_user_msg}"})
     contents.append({"role": "user", "parts": final_parts})
 
+    grounded_web_sources: list[str] = []
     if cfg["provider"] == "openai":
         raw_reply = _call_openai_api(
             api_key=cfg["api_key"],
@@ -1433,7 +2141,10 @@ def ai_chat(
             system_instruction=system_instruction,
             contents=contents,
             reasoning_level=cfg["reasoning_level"],
+            out_web_sources=grounded_web_sources,
         )
+    if grounded_web_sources:
+        inspected_labels.extend(grounded_web_sources)
 
     today = _today_in_tbilisi()
     default_date = _next_workday(today).isoformat()
@@ -1446,10 +2157,15 @@ def ai_chat(
         schedule_times=schedule_times,
         last_user_message=last_user_msg,
     )
+    clean_reply, download_files = _parse_download_files(
+        clean_reply,
+        db=db,
+    )
 
     return {
         "reply": clean_reply,
         "proposed_letters": proposed_letters,
+        "download_files": download_files,
         "inspected_attachments": inspected_labels,
         "model": cfg["model"],
         "model_label": model_info["label"],

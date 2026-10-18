@@ -228,7 +228,103 @@ class AiAssistantTests(unittest.TestCase):
         self.assertIn("გიორგი ლოთიშვილი", proposals[0]["body"])
         self.assertNotIn("ნათია ფოფხაძე", proposals[0]["body"])
 
+    def test_full_site_context_download_files_and_computer_attachments(self):
+        ai_assistant.update_ai_settings(
+            payload=ai_assistant.AISettingsPayload(
+                api_key="AIzaSyTestKey123456789",
+                model="gemini-4-argon",
+                reasoning_level="high",
+            ),
+            authorization=None,
+            db=self.db,
+        )
+        user = User(
+            id=5,
+            personal_id="01001055555",
+            first_name="დავით",
+            last_name="კაპანაძე",
+            phone="599555555",
+            email="davit@example.test",
+            password_hash="hash",
+            code="1000000005",
+            created_at=datetime(2026, 10, 18, 8, 0),
+        )
+        self.db.add(user)
+        self.db.commit()
+
+        fake_reply = """მოვამზადე ანგარიში და წერილი კომპიუტერის ფაილით:
+<PROPOSED_LETTER>
+{
+  "user_id": 5,
+  "template_mode": "custom",
+  "subject": "დოკუმენტის გადაგზავნა",
+  "body": "ადრესატი: დავით კაპანაძე\\n\\nგთხოვთ იხილოთ მიბმული ფაილი.",
+  "computer_attachment_path": "docs/charter.pdf"
+}
+</PROPOSED_LETTER>
+<DOWNLOAD_FILE>
+{
+  "mode": "generated",
+  "filename": "sia.csv",
+  "mime_type": "text/csv",
+  "title": "რეგისტრირებულ პირთა სია",
+  "auto_download": true,
+  "content": "სახელი,პირადი ნომერი\\nდავით კაპანაძე,01001055555"
+}
+</DOWNLOAD_FILE>"""
+
+        with patch.object(ai_assistant, "_call_gemini_api", return_value=fake_reply) as mocked_gemini:
+            resp = ai_assistant.ai_chat(
+                payload=ai_assistant.AIChatRequest(
+                    messages=[
+                        ai_assistant.AIChatMessage(
+                            role="user",
+                            content="ჩამოწერე სია და გაუგზავნე დავით კაპანაძეს docs/charter.pdf",
+                        )
+                    ],
+                    attachments=[
+                        ai_assistant.AIChatAttachment(
+                            filename="screen1.png",
+                            mime_type="image/png",
+                            data_base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+                        )
+                    ],
+                    computer_files=[
+                        ai_assistant.AIComputerFileEntry(
+                            path="docs/charter.pdf",
+                            name="charter.pdf",
+                            size_bytes=1024,
+                            mime_type="application/pdf",
+                        )
+                    ],
+                ),
+                authorization=None,
+                db=self.db,
+            )
+            sent_context = mocked_gemini.call_args.kwargs["contents"][-1]["parts"][0]["text"]
+            for required_section in (
+                "registered_users",
+                "certificates_registry",
+                "statements",
+                "exam_schedules_calendar",
+                "public_reviews_and_ratings",
+                "expert_portfolio_uploads",
+                "site_documents",
+                "regulations",
+                "guide_videos",
+                "app_files_and_forms",
+                "local_computer_files",
+            ):
+                self.assertIn(required_section, sent_context)
+
+        self.assertEqual(len(resp["proposed_letters"]), 1)
+        self.assertEqual(resp["proposed_letters"][0]["computer_attachment_path"], "docs/charter.pdf")
+        self.assertEqual(len(resp["download_files"]), 1)
+        self.assertEqual(resp["download_files"][0]["filename"], "sia.csv")
+        self.assertTrue(resp["download_files"][0]["data_base64"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
