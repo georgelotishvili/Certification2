@@ -168,6 +168,67 @@ class AiAssistantTests(unittest.TestCase):
         self.assertIn("გიორგი ბერიძე", prop["body"])
         self.assertIn("2026-10-22", prop["body"])
 
+    def test_recipient_resolution_prevents_sending_letter_to_wrong_user(self):
+        user_a = User(
+            id=48,
+            personal_id="36001053988",
+            first_name="ნათია",
+            last_name="ფოფხაძე",
+            phone="599000048",
+            email="natiap4@gmail.com",
+            password_hash="hash",
+            code="1000000048",
+            created_at=datetime(2026, 10, 17, 10, 0),
+        )
+        user_b = User(
+            id=51,
+            personal_id="01019077888",
+            first_name="გიორგი",
+            last_name="ლოთიშვილი",
+            phone="599000051",
+            email="lotishvili@example.test",
+            password_hash="hash",
+            code="1000000051",
+            created_at=datetime(2026, 10, 18, 9, 0),
+        )
+        self.db.add_all([user_a, user_b])
+        self.db.commit()
+
+        users_by_id = {48: user_a, 51: user_b}
+        templates_map = {"exam": ai_assistant._template_out("exam", None)}
+
+        # Even if AI puts user_id=48 by mistake when admin asked about გიორგი ლოთიშვილს,
+        # _parse_proposed_letters resolves to user_b (51) and fills official template with user_b's data.
+        raw_ai_output = """მოვამზადე წერილი გიორგი ლოთიშვილისთვის:
+<PROPOSED_LETTER>
+{
+  "user_id": 48,
+  "template_mode": "exam",
+  "period": "morning",
+  "event_date": "2026-10-23",
+  "event_time": "10:00",
+  "candidate_category": "A",
+  "subject": "გამოცდა",
+  "body": "ადრესატი: ნათია ფოფხაძე"
+}
+</PROPOSED_LETTER>"""
+
+        _, proposals = ai_assistant._parse_proposed_letters(
+            raw_ai_output,
+            users_by_id=users_by_id,
+            templates_map=templates_map,
+            default_date="2026-10-23",
+            schedule_times={"morning": "10:00", "evening": "15:00"},
+            last_user_message="გიორგი ლოთიშვილს მოუმზადე გამოცდის წერილი",
+        )
+        self.assertEqual(len(proposals), 1)
+        self.assertEqual(proposals[0]["user_id"], 51)
+        self.assertEqual(proposals[0]["user_name"], "გიორგი ლოთიშვილი")
+        self.assertEqual(proposals[0]["to_email"], "lotishvili@example.test")
+        self.assertIn("გიორგი ლოთიშვილი", proposals[0]["body"])
+        self.assertNotIn("ნათია ფოფხაძე", proposals[0]["body"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

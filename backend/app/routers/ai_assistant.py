@@ -145,19 +145,23 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს
 - B_A: B ან A კატეგორიის
 - C_A: C ან A კატეგორიის
 
-⚠️ უმკაცრესი უსაფრთხოების წესი წერილების გაგზავნაზე:
+⚠️ უმკაცრესი უსაფრთხოების წესი წერილების გაგზავნაზე და ადრესატის სიზუსტეზე:
 - შენ თვითონ, დამოუკიდებლად და ადმინისტრატორის პირდაპირი დადასტურების გარეშე წერილს არასდროს აგზავნი!
+- კატეგორიულად გეკრძალება სხვადასხვა პირის მონაცემების არევა! წერილის მომზადებისას ადრესატი აუცილებლად მოძებნე `registered_users` სიაში სახელით, გვარით, პირადი ნომრით ან ელფოსტით და გადაამოწმე, რომ `user_id`, `user_name`, `personal_id`, `to_email` და წერილის ტექსტში (`body`) ჩაწერილი სახელი/გვარი ეკუთვნის ზუსტად იმავე ერთ კონკრეტულ პირს!
 - როდესაც რეკომენდაციას უწევ წერილის გაგზავნას ან როდესაც ადმინისტრატორი გთხოვს პასუხის/წერილის მომზადებას ან გაგზავნას:
   1) პასუხის ტექსტში აუცილებლად დაწერე მოკლე და მკაფიო აღწერა:
      - **სად იგზავნება:** მიმღების სახელი, გვარი, პირადი ნომერი და ელფოსტა;
-     - **რატომ იგზავნება:** კონკრეტული მიზეზი და დასაბუთება (განცხადების, დოკუმენტის ან გამოცდის შედეგის მიხედვით);
+     - **რატომ იგზავნება:** კონკრეტული მიზეზი და დასაბუთება;
      - **რა იგზავნება:** წერილის ტიპი, კატეგორია, თარიღი/საათი და მოკლე შინაარსი;
      - სთხოვე ადმინისტრატორს გადახედოს და დაადასტუროს გაგზავნა ქვემოთ მოცემულ ბარათზე.
   2) ტექსტის ბოლოს აუცილებლად დაურთე სტრუქტურირებული ბლოკი ზუსტად ამ ტეგებში (თითოეული შეთავაზებული წერილისთვის):
 <PROPOSED_LETTER>
 {
-  "user_id": 123,
-  "statement_id": 45,
+  "user_id": 51,
+  "user_name": "სახელი გვარი",
+  "personal_id": "01001011111",
+  "to_email": "user@example.com",
+  "statement_id": null,
   "template_mode": "exam",
   "period": "morning",
   "event_date": "2026-10-20",
@@ -170,6 +174,7 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს
 </PROPOSED_LETTER>
 
 განმარტება <PROPOSED_LETTER> ველებისთვის:
+- "user_id", "user_name", "personal_id", "to_email": აუცილებლად უნდა აიღო ზუსტად იმ პირის ჩანაწერიდან `registered_users` სიაში, ვისაც ეგზავნება წერილი!
 - "template_mode" უნდა იყოს ერთ-ერთი ამ 5 ტიპიდან:
   - "exam" (გამოცდის დაგეგმვა / დადებითი პასუხი)
   - "rejection" (განაცხადის უარყოფა / უარყოფითი პასუხი)
@@ -178,7 +183,7 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს
   - "custom" (სხვა თავისუფალი შეტყობინება)
 - "period": "morning" (დილის ცვლა) ან "evening" (საღამოს ცვლა) როცა template_mode არის "exam" ან "certificate"; სხვა შემთხვევაში იგივე რაც template_mode ("rejection", "exam_fail", "custom").
 - "candidate_category": "A", "B", "C", "B_A" ან "C_A".
-- "subject" და "body": სრულად შევსებული ქართული ოფიციალური ტექსტი (ყველა ცვლადი {name}, {date}, {time} და [კატეგორია] ჩანაცვლებული უნდა იყოს რეალური მონაცემებით!).
+- "subject" და "body": სრულად შევსებული ქართული ოფიციალური ტექსტი (ყველა ცვლადი {name}, {date}, {time} და [კატეგორია] ჩანაცვლებული უნდა იყოს ზუსტად ამ მიმღების რეალური მონაცემებით!).
 """
 
 
@@ -691,6 +696,11 @@ def _build_site_context_and_attachments(
                 "attachment_filename": st_obj.attachment_filename,
                 "answered_at": st_obj.answered_at.isoformat() if st_obj.answered_at else None,
             }
+    if focus_user_id is None and last_user_message:
+        inferred_user = _match_user_from_text(last_user_message, users)
+        if inferred_user is not None:
+            focus_user_id = inferred_user.id
+
     if focus_user_id is not None and focus_user_id in users_by_id:
         u = users_by_id[focus_user_id]
         cert = certs_by_user.get(u.id)
@@ -783,6 +793,24 @@ def _build_site_context_and_attachments(
         if label:
             inspected_labels.append(label)
 
+    registered_users_summary: list[dict[str, Any]] = []
+    for u in users[:150]:
+        cert = certs_by_user.get(u.id)
+        registered_users_summary.append(
+            {
+                "user_id": u.id,
+                "full_name": f"{u.first_name or ''} {u.last_name or ''}".strip(),
+                "personal_id": u.personal_id,
+                "email": u.email,
+                "phone": u.phone,
+                "code": u.code,
+                "candidate_status": u.candidate_status,
+                "candidate_category": u.candidate_category,
+                "certificate_status": cert.status if cert else None,
+                "certificate_level": cert.level if cert else None,
+            }
+        )
+
     context_payload = {
         "current_date_tbilisi": today.isoformat(),
         "default_next_exam_date": default_next_date,
@@ -802,6 +830,7 @@ def _build_site_context_and_attachments(
             for k, v in templates_map.items()
         },
         "focused_context": focus_context,
+        "registered_users": registered_users_summary,
         "statements": statements_summary,
         "certificate_candidates_30_day_tracker": cert_candidates_info,
         "recent_sent_letters": recent_letters_summary,
@@ -820,6 +849,113 @@ _PROPOSED_LETTER_RE = re.compile(
 )
 
 
+def _ka_stem(word: str) -> str:
+    w = (word or "").strip().lower()
+    if len(w) >= 4 and w[-1] in ("ი", "ე", "ა", "ო", "უ"):
+        return w[:-1]
+    return w
+
+
+def _match_user_from_text(text: str, users: list[User]) -> User | None:
+    if not text or not users:
+        return None
+    t_lower = text.lower()
+    # 1. Exact personal_id or email match
+    for u in users:
+        pid = (u.personal_id or "").strip()
+        if len(pid) >= 9 and pid in t_lower:
+            return u
+        em = (u.email or "").strip().lower()
+        if len(em) >= 5 and "@" in em and em in t_lower:
+            return u
+
+    # 2. Full name stem match (both first_name and last_name stems present)
+    both_matches: list[User] = []
+    last_only_matches: list[User] = []
+    for u in users:
+        f_stem = _ka_stem(u.first_name or "")
+        l_stem = _ka_stem(u.last_name or "")
+        if len(l_stem) >= 4 and l_stem in t_lower:
+            if len(f_stem) >= 3 and f_stem in t_lower:
+                both_matches.append(u)
+            else:
+                last_only_matches.append(u)
+
+    if len(both_matches) == 1:
+        return both_matches[0]
+    if not both_matches and len(last_only_matches) == 1:
+        return last_only_matches[0]
+    return None
+
+
+def _resolve_target_user_for_proposal(
+    data: dict[str, Any],
+    users_by_id: dict[int, User],
+    last_user_message: str = "",
+) -> User | None:
+    all_users = list(users_by_id.values())
+    raw_pid = str(data.get("personal_id") or "").strip()
+    raw_email = str(data.get("to_email") or data.get("email") or "").strip().lower()
+    raw_name = str(data.get("user_name") or data.get("name") or "").strip()
+    raw_body = str(data.get("body") or "")
+
+    # Extract "ადრესატი: სახელი გვარი" from body if present
+    adresati_match = re.search(r"ადრესატი\s*:\s*([^\r\n]+)", raw_body)
+    body_recipient_name = adresati_match.group(1).strip() if adresati_match else ""
+
+    def _norm_name(val: str) -> str:
+        return " ".join(val.lower().split())
+
+    by_id: User | None = None
+    try:
+        if data.get("user_id") is not None:
+            by_id = users_by_id.get(int(data.get("user_id")))
+    except (TypeError, ValueError):
+        by_id = None
+
+    by_pid: User | None = None
+    if raw_pid:
+        by_pid = next((u for u in all_users if (u.personal_id or "").strip() == raw_pid), None)
+
+    by_email: User | None = None
+    if raw_email and "@" in raw_email and "example.com" not in raw_email:
+        by_email = next((u for u in all_users if (u.email or "").strip().lower() == raw_email), None)
+
+    by_name: User | None = None
+    target_name_norm = _norm_name(raw_name)
+    if target_name_norm and target_name_norm != "სახელი გვარი":
+        matches = [
+            u
+            for u in all_users
+            if _norm_name(f"{u.first_name or ''} {u.last_name or ''}") == target_name_norm
+        ]
+        if len(matches) == 1:
+            by_name = matches[0]
+        else:
+            by_name = _match_user_from_text(raw_name, all_users)
+
+    by_body_name: User | None = None
+    body_name_norm = _norm_name(body_recipient_name)
+    if body_name_norm and body_name_norm not in ("სახელი გვარი", "{name}", "[სახელი და გვარი]"):
+        matches = [
+            u
+            for u in all_users
+            if _norm_name(f"{u.first_name or ''} {u.last_name or ''}") == body_name_norm
+        ]
+        if len(matches) == 1:
+            by_body_name = matches[0]
+        else:
+            by_body_name = _match_user_from_text(body_recipient_name, all_users)
+
+    by_msg: User | None = _match_user_from_text(last_user_message, all_users) if last_user_message else None
+
+    # Priority: user explicitly named in admin message > personal_id > email > explicit name > body recipient > user_id
+    for candidate in (by_msg, by_pid, by_email, by_name, by_body_name, by_id):
+        if candidate is not None:
+            return candidate
+    return None
+
+
 def _parse_proposed_letters(
     raw_text: str,
     *,
@@ -827,6 +963,7 @@ def _parse_proposed_letters(
     templates_map: dict[str, dict[str, Any]],
     default_date: str,
     schedule_times: dict[str, str],
+    last_user_message: str = "",
 ) -> tuple[str, list[dict[str, Any]]]:
     proposals: list[dict[str, Any]] = []
 
@@ -838,11 +975,7 @@ def _parse_proposed_letters(
             return ""
         if not isinstance(data, dict):
             return ""
-        try:
-            uid = int(data.get("user_id"))
-        except (TypeError, ValueError):
-            return ""
-        user = users_by_id.get(uid)
+        user = _resolve_target_user_for_proposal(data, users_by_id, last_user_message=last_user_message)
         if not user:
             return ""
 
@@ -880,21 +1013,35 @@ def _parse_proposed_letters(
             candidate_category=cat,
             templates_map=templates_map,
         )
-        subject = str(data.get("subject") or fallback_subject).strip() or fallback_subject
-        body = str(data.get("body") or fallback_body).strip() or fallback_body
 
         full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
         cat_label = CATEGORY_LABELS_KA.get(cat, CATEGORY_LABELS_KA["A"])
-        for placeholder, val in (
-            ("{name}", full_name),
-            ("{date}", ev_date),
-            ("{time}", ev_time),
-            ("{code}", user.code or ""),
-            ("{personal_id}", user.personal_id or ""),
-            ("[კატეგორია]", cat_label),
-        ):
-            subject = subject.replace(placeholder, val)
-            body = body.replace(placeholder, val)
+
+        if template_mode in ("exam", "certificate", "exam_fail"):
+            # Always use the official template filled with the verified recipient's exact data
+            subject = fallback_subject
+            body = fallback_body
+        else:
+            subject = str(data.get("subject") or fallback_subject).strip() or fallback_subject
+            body = str(data.get("body") or fallback_body).strip() or fallback_body
+            for placeholder, val in (
+                ("{name}", full_name),
+                ("{date}", ev_date),
+                ("{time}", ev_time),
+                ("{code}", user.code or ""),
+                ("{personal_id}", user.personal_id or ""),
+                ("[კატეგორია]", cat_label),
+            ):
+                subject = subject.replace(placeholder, val)
+                body = body.replace(placeholder, val)
+            # Ensure "ადრესატი:" line always has the verified recipient's full_name
+            body = re.sub(
+                r"^ადრესატი\s*:\s*[^\r\n]+",
+                f"ადრესატი: {full_name}",
+                body,
+                count=1,
+                flags=re.MULTILINE,
+            )
 
         stmt_id = data.get("statement_id")
         try:
@@ -934,13 +1081,14 @@ _WORKING_GEMINI_MODEL_BY_KEY: dict[str, str] = {}
 
 GEMINI_FALLBACK_CHAIN = (
     "gemini-4-argon",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-flash-latest",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
     "gemini-flash-lite-latest",
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
 )
 
 
@@ -1369,6 +1517,7 @@ def ai_chat(
         templates_map=templates_map,
         default_date=default_date,
         schedule_times=schedule_times,
+        last_user_message=last_user_msg,
     )
 
     return {
