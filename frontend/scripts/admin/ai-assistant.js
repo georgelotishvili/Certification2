@@ -28,6 +28,8 @@
       reasoning_level: 'high',
       reasoning_level_label: 'High (მაღალი / ღრმა ანალიზი)',
       reasoning_level_short: 'High',
+      system_prompt: null,
+      system_prompt_customized: false,
       custom_system_prompt: '',
       default_system_prompt: '',
       quick_stats: { unseen_statements: 0, pending_statements: 0 },
@@ -56,6 +58,7 @@
     let sendBtnEl = null;
     let headerConfigBtnEl = null;
     let settingsModalOverlayEl = null;
+    let promptBoardOverlayEl = null;
     let attachmentsPreviewBarEl = null;
     let attachFileInputEl = null;
     let folderInputEl = null;
@@ -68,6 +71,7 @@
 
     let draftModel = 'gemini-4-argon';
     let draftLevel = 'high';
+    let draftSystemPrompt = '';
 
     const TEMPLATE_MODE_LABELS = {
       exam: 'გამოცდის დაგეგმვა (დადებითი პასუხი)',
@@ -684,10 +688,14 @@
             </div>
 
             <div class="ai-modal-section">
-              <label class="ai-settings-label">
-                <span>4. დამატებითი ინსტრუქცია (სურვილისამებრ — უსაფრთხოების პრომპტი ყოველთვის ჩართულია)</span>
-                <textarea class="ai-settings-textarea ai-input-custom-prompt" rows="2" placeholder="მაგ: ყურადღება გაამახვილე სტაჟის ცნობებზე..."></textarea>
-              </label>
+              <div class="ai-modal-section-title">4. ძირითადი პრომპტი (System Prompt)</div>
+              <button type="button" class="ai-open-prompt-board-btn">
+                <span class="ai-open-prompt-board-left">
+                  ${ICONS.inbox}
+                  <span>ძირითადი პრომპტის დაფის გახსნა (ნახვა / შეცვლა / წაშლა)</span>
+                </span>
+                <span class="ai-prompt-status-badge">აქტიურია</span>
+              </button>
             </div>
           </div>
 
@@ -699,6 +707,48 @@
       `;
 
       document.body.appendChild(settingsModalOverlayEl);
+
+      // Dedicated Board Modal for viewing, editing, or deleting the Main System Prompt
+      promptBoardOverlayEl = document.createElement('div');
+      promptBoardOverlayEl.id = 'aiPromptBoardOverlay';
+      promptBoardOverlayEl.className = 'ai-prompt-board-overlay';
+      promptBoardOverlayEl.hidden = true;
+      promptBoardOverlayEl.innerHTML = `
+        <div class="ai-prompt-board-dialog" role="dialog" aria-modal="true" aria-labelledby="aiPromptBoardTitle">
+          <div class="ai-prompt-board-header">
+            <div class="ai-prompt-board-title-group">
+              <h3 id="aiPromptBoardTitle" class="ai-prompt-board-title">${ICONS.inbox}<span>ძირითადი პრომპტის დაფა (System Prompt)</span></h3>
+              <span class="ai-prompt-char-count">0 სიმბოლო</span>
+            </div>
+            <button type="button" class="ai-prompt-board-close" title="დახურვა">${ICONS.close}</button>
+          </div>
+
+          <div class="ai-prompt-board-body">
+            <div class="ai-prompt-board-hint">
+              აქ მოცემულია ხელოვნური ინტელექტის ძირითადი პრომპტი. შეგიძლიათ თავისუფლად ჩაასწოროთ ტექსტი, მთლიანად წაშალოთ და ჩაწეროთ თქვენი პრომპტი, ან დააბრუნოთ საწყისი ვერსია.
+            </div>
+            <textarea class="ai-prompt-board-textarea" rows="18" spellcheck="false" placeholder="ჩაწერეთ ძირითადი პრომპტი აქ..."></textarea>
+          </div>
+
+          <div class="ai-prompt-board-footer">
+            <div class="ai-prompt-board-left-actions">
+              <button type="button" class="ai-prompt-clear-btn" title="პრომპტის სრულად წაშლა / გასუფთავება">
+                ${ICONS.trash}
+                <span>პრომპტის წაშლა</span>
+              </button>
+              <button type="button" class="ai-prompt-restore-btn" title="ქარხნული (საწყისი) პრომპტის დაბრუნება">
+                <span>↺ საწყისი პრომპტის აღდგენა</span>
+              </button>
+            </div>
+            <div class="ai-prompt-board-right-actions">
+              <button type="button" class="secondary-btn ai-prompt-cancel-btn">დახურვა</button>
+              <button type="button" class="primary-btn ai-prompt-save-btn">პრომპტის შენახვა</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(promptBoardOverlayEl);
 
       headerConfigBtnEl = panelEl.querySelector('.ai-header-config-btn');
       computerConnectBtnEl = panelEl.querySelector('.ai-computer-connect-btn');
@@ -811,6 +861,42 @@
       on(settingsModalOverlayEl.querySelector('.ai-settings-save'), 'click', () => {
         void saveSettings();
       });
+      on(settingsModalOverlayEl.querySelector('.ai-open-prompt-board-btn'), 'click', () => {
+        openPromptBoardModal();
+      });
+
+      const boardTextarea = promptBoardOverlayEl.querySelector('.ai-prompt-board-textarea');
+      on(boardTextarea, 'input', () => {
+        updatePromptCharCount(boardTextarea.value);
+      });
+      on(promptBoardOverlayEl.querySelector('.ai-prompt-board-close'), 'click', () => {
+        closePromptBoardModal();
+      });
+      on(promptBoardOverlayEl.querySelector('.ai-prompt-cancel-btn'), 'click', () => {
+        closePromptBoardModal();
+      });
+      on(promptBoardOverlayEl, 'click', (e) => {
+        if (e.target === promptBoardOverlayEl) {
+          closePromptBoardModal();
+        }
+      });
+      on(promptBoardOverlayEl.querySelector('.ai-prompt-clear-btn'), 'click', () => {
+        if (!boardTextarea) return;
+        boardTextarea.value = '';
+        updatePromptCharCount('');
+        boardTextarea.focus();
+        showToast('პრომპტის ველი გასუფთავდა — შეგიძლიათ ჩაწეროთ ახალი ან დააჭიროთ შენახვას');
+      });
+      on(promptBoardOverlayEl.querySelector('.ai-prompt-restore-btn'), 'click', () => {
+        if (!boardTextarea) return;
+        boardTextarea.value = aiStatus.default_system_prompt || '';
+        updatePromptCharCount(boardTextarea.value);
+        boardTextarea.focus();
+        showToast('საწყისი პრომპტი ჩაისვა დაფაზე');
+      });
+      on(promptBoardOverlayEl.querySelector('.ai-prompt-save-btn'), 'click', () => {
+        void savePromptFromBoard();
+      });
 
       settingsModalOverlayEl.querySelectorAll('.ai-model-card').forEach((btn) => {
         on(btn, 'click', () => {
@@ -865,6 +951,96 @@
         const id = btn.getAttribute('data-level-id');
         btn.classList.toggle('is-active', id === draftLevel);
       });
+      syncPromptBadgeUI();
+    }
+
+    function getEffectiveSystemPrompt() {
+      if (aiStatus.system_prompt !== null && aiStatus.system_prompt !== undefined) {
+        return String(aiStatus.system_prompt);
+      }
+      return String(aiStatus.default_system_prompt || '');
+    }
+
+    function syncPromptBadgeUI() {
+      if (!settingsModalOverlayEl) return;
+      const badge = settingsModalOverlayEl.querySelector('.ai-prompt-status-badge');
+      if (!badge) return;
+      const trimmed = String(draftSystemPrompt || '').trim();
+      if (!trimmed) {
+        badge.textContent = 'წაშლილია (ცარიელი)';
+        badge.className = 'ai-prompt-status-badge is-empty';
+      } else if (trimmed !== String(aiStatus.default_system_prompt || '').trim()) {
+        badge.textContent = `შეცვლილია (${trimmed.length} სიმბოლო)`;
+        badge.className = 'ai-prompt-status-badge is-custom';
+      } else {
+        badge.textContent = `აქტიურია (${trimmed.length} სიმბოლო)`;
+        badge.className = 'ai-prompt-status-badge';
+      }
+    }
+
+    function updatePromptCharCount(text) {
+      if (!promptBoardOverlayEl) return;
+      const counter = promptBoardOverlayEl.querySelector('.ai-prompt-char-count');
+      if (!counter) return;
+      const len = String(text || '').trim().length;
+      counter.textContent = len > 0 ? `${len} სიმბოლო` : 'ცარიელია (0 სიმბოლო)';
+    }
+
+    function openPromptBoardModal() {
+      buildUI();
+      if (!promptBoardOverlayEl) return;
+      const boardTextarea = promptBoardOverlayEl.querySelector('.ai-prompt-board-textarea');
+      if (boardTextarea) {
+        boardTextarea.value = draftSystemPrompt;
+        updatePromptCharCount(draftSystemPrompt);
+      }
+      promptBoardOverlayEl.hidden = false;
+      setTimeout(() => {
+        boardTextarea?.focus();
+      }, 30);
+    }
+
+    function closePromptBoardModal() {
+      if (promptBoardOverlayEl) {
+        promptBoardOverlayEl.hidden = true;
+      }
+    }
+
+    async function savePromptFromBoard() {
+      if (!promptBoardOverlayEl) return;
+      const boardTextarea = promptBoardOverlayEl.querySelector('.ai-prompt-board-textarea');
+      const saveBtn = promptBoardOverlayEl.querySelector('.ai-prompt-save-btn');
+      const newPrompt = String(boardTextarea?.value || '').trim();
+      draftSystemPrompt = newPrompt;
+      syncPromptBadgeUI();
+
+      if (saveBtn) saveBtn.disabled = true;
+      try {
+        const resp = await fetch(`${API_BASE}/admin/ai/settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAdminHeaders(),
+            ...getActorHeaders(),
+          },
+          body: JSON.stringify({
+            system_prompt: newPrompt,
+          }),
+        });
+        if (!resp.ok) {
+          throw new Error('პრომპტის შენახვა ვერ მოხერხდა');
+        }
+        const data = await resp.json();
+        aiStatus = { ...aiStatus, ...data };
+        draftSystemPrompt = getEffectiveSystemPrompt();
+        syncPromptBadgeUI();
+        closePromptBoardModal();
+        showToast(newPrompt ? 'ძირითადი პრომპტი შენახულია' : 'ძირითადი პრომპტი წაშლილია');
+      } catch (err) {
+        showToast(err?.message || 'პრომპტის შენახვა ვერ მოხერხდა', 'error');
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+      }
     }
 
     function openSettingsModal() {
@@ -872,13 +1048,13 @@
       isSettingsModalOpen = true;
       draftModel = aiStatus.model || 'gemini-4-argon';
       draftLevel = aiStatus.reasoning_level || 'high';
+      draftSystemPrompt = getEffectiveSystemPrompt();
       syncModalSelectionUI();
 
       const geminiHint = settingsModalOverlayEl.querySelector('.ai-masked-gemini-hint');
       const openaiHint = settingsModalOverlayEl.querySelector('.ai-masked-openai-hint');
       const geminiInput = settingsModalOverlayEl.querySelector('.ai-input-gemini-key');
       const openaiInput = settingsModalOverlayEl.querySelector('.ai-input-openai-key');
-      const customPromptInput = settingsModalOverlayEl.querySelector('.ai-input-custom-prompt');
 
       if (geminiHint) {
         geminiHint.textContent = aiStatus.masked_gemini_key
@@ -892,7 +1068,6 @@
       }
       if (geminiInput) geminiInput.value = '';
       if (openaiInput) openaiInput.value = '';
-      if (customPromptInput) customPromptInput.value = aiStatus.custom_system_prompt || '';
 
       settingsModalOverlayEl.hidden = false;
     }
@@ -908,13 +1083,12 @@
       if (!settingsModalOverlayEl) return;
       const geminiInput = settingsModalOverlayEl.querySelector('.ai-input-gemini-key');
       const openaiInput = settingsModalOverlayEl.querySelector('.ai-input-openai-key');
-      const customPromptInput = settingsModalOverlayEl.querySelector('.ai-input-custom-prompt');
       const saveBtn = settingsModalOverlayEl.querySelector('.ai-settings-save');
 
       const payload = {
         model: draftModel || 'gemini-4-argon',
         reasoning_level: draftLevel || 'high',
-        custom_system_prompt: customPromptInput?.value || '',
+        system_prompt: draftSystemPrompt,
       };
 
       const typedGemini = String(geminiInput?.value || '').trim();
@@ -942,6 +1116,7 @@
         }
         const data = await resp.json();
         aiStatus = { ...aiStatus, ...data };
+        draftSystemPrompt = getEffectiveSystemPrompt();
         syncStatusUI();
         closeSettingsModal();
         showToast(`არჩეულია: ${getActiveModelLabel()} (${getActiveLevelShortLabel()})`);

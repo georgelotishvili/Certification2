@@ -275,6 +275,7 @@ class AISettingsPayload(BaseModel):
     openai_api_key: str | None = Field(default=None)
     model: str | None = Field(default=None)
     reasoning_level: str | None = Field(default=None)
+    system_prompt: str | None = Field(default=None)
     custom_system_prompt: str | None = Field(default=None)
 
 
@@ -340,6 +341,15 @@ def _load_ai_settings() -> dict[str, Any]:
         reasoning_level = DEFAULT_REASONING_LEVEL
 
     custom_prompt = str(data.get("custom_system_prompt") or "").strip()
+    if "system_prompt" in data and data.get("system_prompt") is not None:
+        system_prompt = str(data.get("system_prompt")).strip()
+        system_prompt_customized = True
+    else:
+        system_prompt = DEFAULT_SYSTEM_PROMPT
+        if custom_prompt:
+            system_prompt += "\n\nდამატებითი ინსტრუქცია ადმინისტრატორისგან:\n" + custom_prompt
+        system_prompt_customized = False
+
     provider = MODEL_CATALOG[model]["provider"]
     active_key = openai_key if provider == "openai" else gemini_key
 
@@ -350,6 +360,8 @@ def _load_ai_settings() -> dict[str, Any]:
         "model": model,
         "provider": provider,
         "reasoning_level": reasoning_level,
+        "system_prompt": system_prompt,
+        "system_prompt_customized": system_prompt_customized,
         "custom_system_prompt": custom_prompt,
     }
 
@@ -361,6 +373,7 @@ def _save_ai_settings(
     openai_api_key: str | None = None,
     model: str | None = None,
     reasoning_level: str | None = None,
+    system_prompt: str | None = None,
     custom_system_prompt: str | None = None,
 ) -> dict[str, Any]:
     current = _load_ai_settings()
@@ -386,21 +399,29 @@ def _save_ai_settings(
         if cleaned_level in REASONING_LEVELS:
             current["reasoning_level"] = cleaned_level
 
+    if system_prompt is not None:
+        current["system_prompt"] = system_prompt.strip()
+        current["system_prompt_customized"] = True
+
     if custom_system_prompt is not None:
         current["custom_system_prompt"] = custom_system_prompt.strip()
+
+    saved_payload: dict[str, Any] = {
+        "api_key": current["gemini_api_key"],
+        "gemini_api_key": current["gemini_api_key"],
+        "openai_api_key": current["openai_api_key"],
+        "model": current["model"],
+        "reasoning_level": current["reasoning_level"],
+        "custom_system_prompt": current["custom_system_prompt"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if current.get("system_prompt_customized") or system_prompt is not None:
+        saved_payload["system_prompt"] = current["system_prompt"]
 
     path = _ai_settings_path()
     path.write_text(
         json.dumps(
-            {
-                "api_key": current["gemini_api_key"],
-                "gemini_api_key": current["gemini_api_key"],
-                "openai_api_key": current["openai_api_key"],
-                "model": current["model"],
-                "reasoning_level": current["reasoning_level"],
-                "custom_system_prompt": current["custom_system_prompt"],
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
+            saved_payload,
             ensure_ascii=False,
             indent=2,
         ),
@@ -436,6 +457,8 @@ def _build_status_response(cfg: dict[str, Any], quick_stats: dict[str, int] | No
         "allowed_models": list(ALLOWED_MODELS),
         "model_catalog": list(MODEL_CATALOG.values()),
         "reasoning_levels": list(REASONING_LEVELS.values()),
+        "system_prompt": cfg["system_prompt"],
+        "system_prompt_customized": cfg["system_prompt_customized"],
         "custom_system_prompt": cfg["custom_system_prompt"],
         "default_system_prompt": DEFAULT_SYSTEM_PROMPT,
     }
@@ -2034,6 +2057,7 @@ def update_ai_settings(
         openai_api_key=payload.openai_api_key,
         model=payload.model,
         reasoning_level=payload.reasoning_level,
+        system_prompt=payload.system_prompt,
         custom_system_prompt=payload.custom_system_prompt,
     )
     return _build_status_response(cfg)
@@ -2187,12 +2211,14 @@ def ai_chat(
     if web_labels:
         inspected_labels.extend(web_labels)
 
-    system_instruction = (
-        DEFAULT_SYSTEM_PROMPT
-        + f"\n\nაქტიური მოდელი: {model_info['label']} | {level_info['prompt_directive']}"
-    )
-    if cfg["custom_system_prompt"]:
-        system_instruction += "\n\nდამატებითი ინსტრუქცია ადმინისტრატორისგან:\n" + cfg["custom_system_prompt"]
+    base_prompt = str(cfg.get("system_prompt") or "").strip()
+    if base_prompt:
+        system_instruction = (
+            base_prompt
+            + f"\n\nაქტიური მოდელი: {model_info['label']} | {level_info['prompt_directive']}"
+        )
+    else:
+        system_instruction = f"აქტიური მოდელი: {model_info['label']} | {level_info['prompt_directive']}"
 
     contents: list[dict[str, Any]] = []
     prior_messages = payload.messages[:-1] if payload.messages else []
