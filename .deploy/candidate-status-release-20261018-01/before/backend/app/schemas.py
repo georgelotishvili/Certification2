@@ -1,0 +1,1100 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Any, List, Literal, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic import EmailStr
+
+
+def to_camel(value: str) -> str:
+    parts = value.split("_")
+    return parts[0] + "".join(word.capitalize() for word in parts[1:])
+
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class BlockOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    title: str
+    qty: int
+    order_index: int
+    chapter_id: Optional[int] = None
+    subchapter_id: Optional[int] = None
+    chapter_name: Optional[str] = None
+    subchapter_name: Optional[str] = None
+
+
+class ExamConfigResponse(BaseModel):
+    exam_id: int
+    title: str
+    duration_minutes: int
+    blocks: List[BlockOut]
+
+
+class ExamSettingsResponse(CamelModel):
+    exam_id: int
+    title: str
+    duration_minutes: int
+    gate_password: str
+
+
+class ExamSettingsUpdateRequest(CamelModel):
+    exam_id: Optional[int] = None
+    title: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    gate_password: Optional[str] = None
+
+
+class TaxonomySubchapterOut(CamelModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
+
+    id: int
+    chapter_id: int
+    name: str
+    order_index: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaxonomyChapterOut(CamelModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
+
+    id: int
+    name: str
+    order_index: int
+    created_at: datetime
+    updated_at: datetime
+    subchapters: List[TaxonomySubchapterOut] = Field(default_factory=list)
+
+
+class TaxonomyChapterCreate(CamelModel):
+    name: str
+    order_index: Optional[int] = None
+
+
+class TaxonomyChapterUpdate(CamelModel):
+    name: Optional[str] = None
+    order_index: Optional[int] = None
+
+
+class TaxonomySubchapterCreate(CamelModel):
+    chapter_id: int
+    name: str
+    order_index: Optional[int] = None
+
+
+class TaxonomySubchapterUpdate(CamelModel):
+    chapter_id: Optional[int] = None
+    name: Optional[str] = None
+    order_index: Optional[int] = None
+
+
+class MultiApartmentSettingsResponse(CamelModel):
+    model_config = ConfigDict(from_attributes=True)
+    duration_minutes: int
+    gate_password: str
+
+
+class MultiApartmentPublicSettingsResponse(CamelModel):
+    """
+    Public-facing settings for multi-apartment evaluation.
+    Exposes only duration_minutes (no gate password).
+    """
+    model_config = ConfigDict(from_attributes=True)
+    duration_minutes: int
+
+
+class MultiApartmentSettingsUpdateRequest(CamelModel):
+    duration_minutes: Optional[int] = None
+    gate_password: Optional[str] = None
+
+
+class MultiApartmentGateVerifyRequest(BaseModel):
+    """
+    Public gate verification request for multi-apartment evaluation.
+    Uses a single shared gate password from MultiApartmentSettings.
+    """
+
+    password: str
+
+
+class MultiApartmentGateVerifyResponse(BaseModel):
+    valid: bool
+
+
+class AdminAnswerPayload(CamelModel):
+    id: str
+    text: str
+
+
+class AdminQuestionPayload(CamelModel):
+    id: str
+    text: str
+    code: str
+    answers: List[AdminAnswerPayload]
+    correct_answer_id: Optional[str] = None
+    enabled: bool = True
+
+
+class AdminBlockPayload(CamelModel):
+    id: str
+    number: int
+    name: str
+    qty: int
+    chapter_id: Optional[int] = None
+    subchapter_id: Optional[int] = None
+    enabled: bool = True
+    questions: List[AdminQuestionPayload]
+
+
+class AdminBlocksResponse(CamelModel):
+    exam_id: int
+    blocks: List[AdminBlockPayload]
+
+
+class AdminBlocksUpdateRequest(CamelModel):
+    exam_id: Optional[int] = None
+    blocks: List[AdminBlockPayload]
+
+
+class AuthCodeRequest(BaseModel):
+    exam_id: int
+    code: str
+
+
+class AuthCodeResponse(BaseModel):
+    session_id: int
+    token: str
+    exam_id: int
+    duration_minutes: int
+    ends_at: datetime
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    user: "UserOut"
+
+
+# Session start without code (admin-started)
+class StartSessionRequest(BaseModel):
+    exam_id: int
+    candidate_first_name: str
+    candidate_last_name: str
+    candidate_code: str
+    # New clients prepare offline data first and start the permission only when
+    # the candidate presses the visible Start button.  Omitted/false preserves
+    # the deployed desktop client's legacy start-on-prepare behaviour.
+    prepare_only: bool = False
+
+
+class StartSessionResponse(BaseModel):
+    session_id: int
+    token: str
+    exam_id: int
+    duration_minutes: int
+    ends_at: datetime
+    stage_grant_id: int | None = None
+    offline_submission_token: str | None = None
+    server_now: datetime | None = None
+    started_at: datetime | None = None
+
+
+class OptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    text: str
+
+
+class QuestionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    code: str
+    text: str
+    order_index: int
+    options: List[OptionOut]
+
+
+class QuestionsResponse(BaseModel):
+    block_id: int
+    block_title: str
+    chapter_id: Optional[int] = None
+    subchapter_id: Optional[int] = None
+    chapter_name: Optional[str] = None
+    subchapter_name: Optional[str] = None
+    qty: int
+    questions: List[QuestionOut]
+
+
+class AnswerRequest(BaseModel):
+    question_id: int
+    option_id: int
+
+
+class AnswerResponse(BaseModel):
+    correct: bool
+
+
+class AllQuestionsBlockOut(BaseModel):
+    block_id: int
+    block_title: str
+    chapter_id: Optional[int] = None
+    subchapter_id: Optional[int] = None
+    chapter_name: Optional[str] = None
+    subchapter_name: Optional[str] = None
+    qty: int
+    questions: List[QuestionOut]
+
+
+class AllQuestionsResponse(BaseModel):
+    blocks: List[AllQuestionsBlockOut]
+
+
+class BatchAnswerItem(BaseModel):
+    question_id: int
+    option_id: int
+
+
+class BatchAnswersRequest(BaseModel):
+    answers: List[BatchAnswerItem]
+
+
+class BatchAnswersResponse(BaseModel):
+    saved: int
+
+
+class OfflineTheoryFinalRequest(BaseModel):
+    stage_grant_id: int | None = None
+    submission_id: UUID
+    finished_at: datetime
+    answers: List[BatchAnswerItem]
+
+
+class OfflineAttemptCancelRequest(BaseModel):
+    """An interrupted desktop may cancel only its exact issued capability."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    offline_submission_token: str | None = Field(default=None, min_length=1, max_length=128)
+    stage: Literal["theory", "project_stage_1", "project_stage_2"]
+    stage_grant_id: int | None = Field(default=None, gt=0)
+    session_id: int | None = Field(default=None, gt=0)
+    project_code: str | None = Field(default=None, min_length=1, max_length=128)
+    cancellation_id: UUID
+    start_request_id: UUID | None = None
+
+
+class FinishResponse(BaseModel):
+    total_questions: int
+    answered: int
+    correct: int
+    score_percent: float
+    block_stats: List[dict]
+    chapter_stats: List[dict] = Field(default_factory=list)
+    subchapter_stats: List[dict] = Field(default_factory=list)
+
+
+class MediaUploadResponse(BaseModel):
+    next_chunk_index: int
+    completed: bool
+
+
+class ExamGateVerifyRequest(BaseModel):
+    exam_id: int
+    password: str
+
+
+class ExamGateVerifyResponse(BaseModel):
+    valid: bool
+
+
+class AdminStatsResponse(BaseModel):
+    total_blocks: int
+    total_questions: int
+    enabled_blocks: int
+    enabled_questions: int
+
+
+# Admin results list/detail
+class ResultListItem(BaseModel):
+    session_id: int
+    started_at: datetime
+    finished_at: datetime | None
+    candidate_first_name: str | None
+    candidate_last_name: str | None
+    candidate_code: str | None
+    score_percent: float
+    exam_id: int | None = None
+    ends_at: datetime | None = None
+    status: str = "unknown"
+    personal_id: str | None = None
+
+
+class ResultListResponse(BaseModel):
+    items: List[ResultListItem]
+    total: int
+
+
+class AnswerOptionDetail(BaseModel):
+    option_id: int
+    option_text: str
+    is_correct: bool
+    is_selected: bool
+
+
+class AnswerDetail(BaseModel):
+    question_id: int
+    question_code: str
+    question_text: str
+    block_id: int | None = None
+    block_title: str | None = None
+    selected_option_id: int | None = None
+    selected_option_text: str | None = None
+    is_correct: bool | None = None
+    answered_at: datetime | None = None
+    correct_option_id: int | None = None
+    correct_option_text: str | None = None
+    options: List[AnswerOptionDetail] = Field(default_factory=list)
+
+
+class BlockStatDetail(BaseModel):
+    block_id: int
+    block_title: str | None = None
+    total: int
+    correct: int
+    percent: float
+
+
+class ResultDetailResponse(BaseModel):
+    session: ResultListItem
+    exam_title: str | None = None
+    total_questions: int
+    answered_questions: int
+    correct_answers: int
+    block_stats: List[BlockStatDetail]
+    answers: List[AnswerDetail]
+    snapshot: dict[str, Any] | None = None
+    legacy: bool = False
+    legacy_message: str | None = None
+
+
+class ResultMediaItem(BaseModel):
+    media_type: str
+    available: bool
+    download_url: str | None = None
+    filename: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    duration_seconds: int | None = None
+    updated_at: datetime | None = None
+
+
+class ResultMediaResponse(BaseModel):
+    items: List[ResultMediaItem]
+
+
+# Users (registration and admin listing)
+class ExamStagePermissionOut(BaseModel):
+    granted: bool = False
+    status: str = "none"
+    grant_id: int | None = None
+    granted_at: datetime | None = None
+    expires_at: datetime | None = None
+    started_at: datetime | None = None
+    remaining_seconds: int | None = None
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    personal_id: str
+    first_name: str
+    last_name: str
+    phone: str
+    email: str
+    code: str
+    is_admin: bool
+    is_founder: bool = False
+    exam_permission: bool = False
+    exam_stage: str | None = None
+    exam_stage_expires_at: datetime | None = None
+    exam_stage_started_at: datetime | None = None
+    exam_stage_status: str | None = None
+    exam_stage_remaining_seconds: int | None = None
+    exam_stage_permissions: dict[str, ExamStagePermissionOut] = Field(default_factory=dict)
+    created_at: datetime
+    has_unseen_statements: bool | None = None
+    unseen_statement_count: int | None = None
+    has_pending_statements: bool | None = None
+    pending_statement_count: int | None = None
+    certificate: dict | None = None
+    certificate_info: dict | None = None
+    photo_filename: str | None = None
+    exam_outcome: dict[str, Any] | None = None
+
+
+class PublicUserOut(BaseModel):
+    """Fields that may be returned by the public profile endpoint."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    first_name: str
+    last_name: str
+    email: str
+    created_at: datetime
+
+
+class PublicCertificateOut(BaseModel):
+    """Certificate verification fields, never storage or account metadata."""
+
+    unique_code: str | None = None
+    level: str
+    status: str
+    issue_date: datetime | None = None
+    validity_term: int | None = None
+    valid_until: datetime | None = None
+
+
+class PublicPersonPageOut(PublicUserOut):
+    """Shared, read-only person page for guests and signed-in visitors."""
+
+    id: int
+    code: str
+    certificate: PublicCertificateOut
+
+
+class UserCreate(BaseModel):
+    personal_id: str
+    first_name: str
+    last_name: str
+    phone: str
+    email: EmailStr
+    password: str
+
+
+class UserProfileUpdateRequest(BaseModel):
+    """
+    Self-service profile update.
+    - first_name/last_name/phone/email/personal_id can be updated
+    - current_password is required for any change
+    - new_password is optional; when provided, confirm_new_password must match
+    - email_verification_code is required when changing email
+    """
+
+    first_name: str | None = None
+    last_name: str | None = None
+    personal_id: str | None = None
+    phone: str | None = None
+    email: EmailStr | None = None
+    current_password: str | None = None
+    new_password: str | None = None
+    confirm_new_password: str | None = None
+    email_verification_code: str | None = None  # Required when changing email
+
+
+class GeorgianNameUpdateRequest(CamelModel):
+    first_name: str
+    last_name: str
+
+
+class UsersListResponse(BaseModel):
+    items: List[UserOut]
+    total: int
+
+
+class ExamScheduleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    exam_date: date
+    period: Literal["morning", "evening"]
+
+
+class ExamScheduleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    exam_date: date
+    period: Literal["morning", "evening"]
+    created_at: datetime
+
+
+class ExamSchedulesResponse(BaseModel):
+    items: List[ExamScheduleOut]
+
+
+class StatementCreate(BaseModel):
+    message: str = Field(..., min_length=1, max_length=5000)
+
+
+class StatementOut(BaseModel):
+    id: int
+    doc_number: str | None = None
+    message: str
+    created_at: datetime
+    attachment_filename: str | None = None
+
+
+class AdminStatementOut(BaseModel):
+    id: int
+    doc_number: str | None = None
+    user_id: int
+    user_first_name: str | None = None
+    user_last_name: str | None = None
+    user_email: str | None = None
+    message: str
+    created_at: datetime
+    seen_at: datetime | None = None
+    seen_by: str | None = None
+    answered_at: datetime | None = None
+    answered_by: str | None = None
+    attachment_filename: str | None = None
+    attachment_size_bytes: int | None = None
+
+
+class AdminStatementsResponse(BaseModel):
+    items: List[AdminStatementOut]
+    total: int
+
+
+class StatementSeenRequest(BaseModel):
+    statement_ids: List[int]
+
+
+class StatementAnsweredRequest(BaseModel):
+    answered: bool
+
+
+class StatementAnsweredResponse(BaseModel):
+    statement: AdminStatementOut
+    user_id: int
+    has_unseen_statements: bool
+    unseen_statement_count: int
+    has_pending_statements: bool
+    pending_statement_count: int
+
+
+class ToggleAdminRequest(BaseModel):
+    is_admin: bool
+
+
+class ToggleExamPermissionRequest(BaseModel):
+    exam_permission: bool
+
+
+class ToggleExamStagePermissionRequest(BaseModel):
+    granted: bool
+    replace_started: bool = False
+    expected_grant_id: int | None = None
+
+
+class AdminUserUpdateRequest(CamelModel):
+    personal_id: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    code: Optional[str] = None
+
+
+class CertificateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    unique_code: str | None = None
+    level: str  # architect, expert, municipal
+    status: str  # active, suspended, expired
+    issue_date: datetime | None = None
+    validity_term: int | None = None  # years
+    valid_until: datetime | None = None
+    filename: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    notification_status: str | None = None
+    notification_error: str | None = None
+
+
+class CertificateCreate(BaseModel):
+    unique_code: str | None = None
+    level: str = "architect"  # architect, expert, municipal
+    status: str = "active"  # active, suspended, expired
+    issue_date: datetime | None = None
+    validity_term: int | None = None  # years
+    valid_until: datetime | None = None
+    send_notification: bool = False
+    notification_subject: str | None = None
+    notification_body: str | None = None
+
+
+class CertificateUpdate(CamelModel):
+    unique_code: Optional[str] = None
+    level: Optional[str] = None
+    status: Optional[str] = None
+    issue_date: Optional[datetime] = None
+    validity_term: Optional[int] = None
+    valid_until: Optional[datetime] = None
+    send_notification: Optional[bool] = False
+    notification_subject: Optional[str] = None
+    notification_body: Optional[str] = None
+
+
+class CertificateNotifyRequest(BaseModel):
+    subject: str | None = None
+    body: str | None = None
+
+
+class RegistryPersonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    full_name: str
+    photo_url: str
+    unique_code: str
+    qualification: str
+    certificate_status: str
+    rating: float | None = None
+    registration_date: datetime
+
+
+# Reviews (ratings and comments)
+class ReviewCriteria(BaseModel):
+    integrity: float = Field(ge=0, le=5)
+    responsibility: float = Field(ge=0, le=5)
+    knowledge_experience: float = Field(ge=0, le=5)
+    professional_skills: float = Field(ge=0, le=5)
+    price_quality: float = Field(ge=0, le=5)
+
+
+class ReviewRatingCreate(BaseModel):
+    criteria: ReviewCriteria
+
+
+class ReviewCommentCreate(BaseModel):
+    message: str
+
+
+class ReviewCommentOut(BaseModel):
+    id: int
+    target_user_id: int
+    author_user_id: int
+    author_first_name: str | None = None
+    author_last_name: str | None = None
+    message: str
+    created_at: datetime
+
+
+class ReviewsSummaryOut(BaseModel):
+    target_user_id: int
+    average: float
+    ratings_count: int
+    actor_score: float | None = None
+    actor_criteria: ReviewCriteria | None = None
+    comments: List[ReviewCommentOut] = Field(default_factory=list)
+
+
+# Expert uploads
+class ExpertUploadOut(BaseModel):
+    id: int
+    unique_code: str
+    status: str
+    building_function: str
+    cadastral_code: str
+    project_address: str
+    expertise_filename: str | None = None
+    project_filename: str | None = None
+    created_at: datetime
+    submitted_at: datetime | None = None
+
+
+class ExpertUploadCreate(BaseModel):
+    building_function: str
+    cadastral_code: str
+
+
+class ExpertUploadUpdate(BaseModel):
+    building_function: str | None = None
+    cadastral_code: str | None = None
+
+
+# Multi-apartment project evaluation
+class MultiApartmentAnswerPayload(CamelModel):
+    id: str
+    text: str
+
+
+class MultiApartmentProjectPayload(CamelModel):
+    id: str
+    number: int
+    code: str
+    pdfFile: Optional[str] = None
+    answers: List[MultiApartmentAnswerPayload]
+    correctAnswerId: Optional[str] = None
+    # New: support multiple correct answers per project.
+    # Admin UI can now mark several answers as correct; this array contains
+    # the IDs of all correct answers. For backwards compatibility,
+    # correctAnswerId may still be used to hold the first correct ID.
+    correctAnswerIds: Optional[List[str]] = None
+
+
+class MultiApartmentProjectsResponse(CamelModel):
+    projects: List[MultiApartmentProjectPayload]
+
+
+class MultiApartmentProjectsUpdateRequest(CamelModel):
+    projects: List[MultiApartmentProjectPayload]
+
+
+class PublicMultiApartmentProjectResponse(CamelModel):
+    id: int
+    number: int
+    code: str
+    pdfUrl: Optional[str] = None
+    answers: List[MultiApartmentAnswerPayload]
+    stageGrantId: Optional[int] = None
+
+
+class MultiApartmentEvaluationSubmitRequest(CamelModel):
+    projectCode: str
+    projectName: str
+    selectedAnswerIds: List[int]
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    durationSeconds: int
+    stageGrantId: Optional[int] = None
+    offlineSubmissionToken: Optional[str] = None
+    submissionId: Optional[UUID] = None
+    finishedAt: Optional[datetime] = None
+
+
+class MultiApartmentEvaluationResponse(CamelModel):
+    id: int
+    userId: int
+    projectId: int
+    projectCode: str
+    projectName: str
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    selectedAnswerIds: List[int]
+    startedAt: datetime
+    finishedAt: datetime
+    durationSeconds: int
+    createdAt: datetime
+    stageGrantId: Optional[int] = None
+    offlineSubmissionId: Optional[str] = None
+
+
+class MultiApartmentEvaluationListResponse(CamelModel):
+    items: List[MultiApartmentEvaluationResponse]
+    total: int
+
+
+class MultiApartmentAnswerDetail(CamelModel):
+    """დეტალური ინფორმაცია პასუხის შესახებ"""
+    id: int
+    text: str
+    isCorrect: bool
+    isSelected: bool
+
+
+class MultiApartmentEvaluationDetailResponse(CamelModel):
+    """დეტალური შედეგი ერთი შეფასებისთვის"""
+    id: int
+    userId: int
+    projectId: int
+    projectCode: str
+    projectName: str
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    startedAt: datetime
+    finishedAt: datetime
+    durationSeconds: int
+    createdAt: datetime
+    answers: List[MultiApartmentAnswerDetail]
+
+
+class GuideVideoOut(BaseModel):
+    id: int
+    title: str
+    url: str
+    order_index: int
+    created_at: datetime
+
+
+class GuideVideoCreate(BaseModel):
+    title: str = ""
+    url: str = ""
+
+
+class GuideVideoUpdate(BaseModel):
+    title: Optional[str] = None
+    url: Optional[str] = None
+
+
+class GuideVideosReorderRequest(BaseModel):
+    ids: List[int]
+
+
+class AppFileOut(BaseModel):
+    id: int
+    filename: str
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    created_at: datetime
+    url: str
+
+
+# Multi-functional project evaluation
+class MultiFunctionalAnswerPayload(CamelModel):
+    id: str
+    text: str
+
+
+class MultiFunctionalProjectPayload(CamelModel):
+    id: str
+    number: int
+    code: str
+    pdfFile: Optional[str] = None
+    answers: List[MultiFunctionalAnswerPayload]
+    correctAnswerId: Optional[str] = None
+    # New: support multiple correct answers per project.
+    # Admin UI can now mark several answers as correct; this array contains
+    # the IDs of all correct answers. For backwards compatibility,
+    # correctAnswerId may still be used to hold the first correct ID.
+    correctAnswerIds: Optional[List[str]] = None
+
+
+class MultiFunctionalProjectsResponse(CamelModel):
+    projects: List[MultiFunctionalProjectPayload]
+
+
+class MultiFunctionalProjectsUpdateRequest(CamelModel):
+    projects: List[MultiFunctionalProjectPayload]
+
+
+class PublicMultiFunctionalProjectResponse(CamelModel):
+    id: int
+    number: int
+    code: str
+    pdfUrl: Optional[str] = None
+    answers: List[MultiFunctionalAnswerPayload]
+    stageGrantId: Optional[int] = None
+
+
+class MultiFunctionalEvaluationSubmitRequest(CamelModel):
+    projectCode: str
+    selectedAnswerId: int
+
+
+class MultiFunctionalSettingsResponse(CamelModel):
+    model_config = ConfigDict(from_attributes=True)
+    duration_minutes: int
+    gate_password: str
+
+
+class MultiFunctionalPublicSettingsResponse(CamelModel):
+    """
+    Public-facing settings for multi-functional evaluation.
+    Exposes only duration_minutes (no gate password).
+    """
+    model_config = ConfigDict(from_attributes=True)
+    duration_minutes: int
+
+
+class MultiFunctionalSettingsUpdateRequest(CamelModel):
+    duration_minutes: Optional[int] = None
+    gate_password: Optional[str] = None
+
+
+class MultiFunctionalGateVerifyRequest(BaseModel):
+    """
+    Public gate verification request for multi-functional evaluation.
+    Uses a single shared gate password from MultiFunctionalSettings.
+    """
+
+    password: str
+
+
+class MultiFunctionalGateVerifyResponse(BaseModel):
+    valid: bool
+
+
+class MultiFunctionalEvaluationSubmitFullRequest(CamelModel):
+    """სრული შეფასების მოთხოვნა - მრავალბინიანის მსგავსი"""
+    projectCode: str
+    projectName: str
+    selectedAnswerIds: List[int]
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    durationSeconds: int
+    stageGrantId: Optional[int] = None
+    offlineSubmissionToken: Optional[str] = None
+    submissionId: Optional[UUID] = None
+    finishedAt: Optional[datetime] = None
+
+
+class MultiFunctionalEvaluationResponse(CamelModel):
+    id: int
+    userId: int
+    projectId: int
+    projectCode: str
+    projectName: str
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    selectedAnswerIds: List[int]
+    startedAt: datetime
+    finishedAt: datetime
+    durationSeconds: int
+    createdAt: datetime
+    stageGrantId: Optional[int] = None
+    offlineSubmissionId: Optional[str] = None
+
+
+class ExamStageStartRequest(CamelModel):
+    stageGrantId: Optional[int] = None
+    projectCode: Optional[str] = None
+    offline: bool = False
+    startRequestId: Optional[UUID] = None
+
+
+class ExamStageStartResponse(CamelModel):
+    stageGrantId: Optional[int] = None
+    stage: str
+    startedAt: datetime
+    durationMinutes: int
+    offlineSubmissionToken: Optional[str] = None
+    endsAt: Optional[datetime] = None
+    serverNow: Optional[datetime] = None
+
+
+class MultiFunctionalEvaluationListResponse(CamelModel):
+    items: List[MultiFunctionalEvaluationResponse]
+    total: int
+
+
+class MultiFunctionalAnswerDetail(CamelModel):
+    """დეტალური ინფორმაცია პასუხის შესახებ"""
+    id: int
+    text: str
+    isCorrect: bool
+    isSelected: bool
+
+
+class MultiFunctionalEvaluationDetailResponse(CamelModel):
+    """დეტალური შედეგი ერთი შეფასებისთვის"""
+    id: int
+    userId: int
+    projectId: int
+    projectCode: str
+    projectName: str
+    percentage: float
+    correctCount: int
+    wrongCount: int
+    totalCorrectAnswers: int
+    startedAt: datetime
+    finishedAt: datetime
+    durationSeconds: int
+    createdAt: datetime
+    answers: List[MultiFunctionalAnswerDetail]
+
+
+# Email verification
+class SendVerificationCodeRequest(BaseModel):
+    email: EmailStr
+    purpose: str = "register"  # "register", "update", or "password_reset"
+
+
+class SendVerificationCodeResponse(BaseModel):
+    success: bool
+    message: str
+    expires_in: int  # seconds
+
+
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str
+    purpose: str = "register"
+
+
+class VerifyCodeResponse(BaseModel):
+    valid: bool
+
+
+# Password recovery
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    verification_code: str
+    new_password: str
+    confirm_new_password: str
+
+
+# Extended registration with verification
+class UserCreateWithVerification(BaseModel):
+    personal_id: str
+    first_name: str
+    last_name: str
+    phone: str
+    email: EmailStr
+    password: str
+    verification_code: str
+
+
+# Site documents
+class SiteDocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    title: str
+    content: str
+    order_index: int
+    filename: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+    download_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SiteDocumentCreate(BaseModel):
+    title: str
+    content: str = ""
+
+
+class SiteDocumentUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+
+
+class SiteDocumentsListResponse(BaseModel):
+    items: List[SiteDocumentOut]
+
+
+class SiteDocumentOrderRequest(BaseModel):
+    direction: str  # "up" or "down"

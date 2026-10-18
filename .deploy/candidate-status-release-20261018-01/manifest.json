@@ -1,0 +1,97 @@
+{
+  "release": "candidate-status-release-20261018-01",
+  "created_at": "2026-10-18T08:53:01.563768+00:00",
+  "host": "gipcadmin@148.251.167.229",
+  "files": [
+    {
+      "path": "backend/app/main.py",
+      "before_sha256": "0647540bd86580f6b5fe9edefb9600b0c37e03cddd593a56a9e9c4064290efda",
+      "after_sha256": "ce854ef6f305081847057ad00acf609f681d41917f96910c0d234f0c381a3ffa",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/models.py",
+      "before_sha256": "bb151cf0dc6ebff59ced49705799c25ed0e5ec0a34162ee6910d395897d468e8",
+      "after_sha256": "f8e44da93ec225dd4a21740c0f4d7548456cd64c7252ec2b0571f1958e6dfa26",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/routers/admin.py",
+      "before_sha256": "227281fa0bcbe75b5726dd8388837c8376a5ca508b29287cf166053d435ad982",
+      "after_sha256": "c208f77b3486f85316efec2079f598fac4cc27d62fc6a48bb1f0d1b64c221d9c",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/routers/exam_schedules.py",
+      "before_sha256": "1121940784e8647396989be13ecb1bd6a358d517cc95af4d03c8786bcb955f3a",
+      "after_sha256": "b67d91006fdfab3af06967a857caa26213988ca84a3348d44762d349b96a4ff1",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/routers/planning_letters.py",
+      "before_sha256": "291bb551c6ae093cedf68c3353a68687178bdb252b83fe329dce18bb2fa36988",
+      "after_sha256": "a0d52d11da862b5c3cba7642b76e5b9cc6b69d283452502369a39bb4e72ac8e9",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/routers/users.py",
+      "before_sha256": "b90749580bc04aef70e3a69ff3d7ed88343ccb821c57b5b9467982ab34939271",
+      "after_sha256": "23e4aca2fb71847f8bf1b999516fb4a976ccd326774189b91666001469895779",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/schemas.py",
+      "before_sha256": "b7db0c3b6f71edea47db1c38ee623795d707f043b07a9d22a0f67ac06d5b34f4",
+      "after_sha256": "64db54e5f5c532acdca50877105132e8aa816a37705bbb8aa762f2b216902144",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/services/candidate_status.py",
+      "before_sha256": null,
+      "after_sha256": "14df6c89d0aabdbb512182dc80b4a3dce87179fac5bde2a1600c72fe77e46cf0",
+      "existed_before": false
+    },
+    {
+      "path": "backend/scripts/migrate_candidate_status.py",
+      "before_sha256": null,
+      "after_sha256": "c33191a58666b1a9bdd2dd838deef5f8ad2b14ffdc3f760a586aa4cbe21ee8ae",
+      "existed_before": false
+    },
+    {
+      "path": "frontend/pages/admin.html",
+      "before_sha256": "138de0f32e85b335939cda3ea204a54f64c147d038f733be9f392e82bc609e2c",
+      "after_sha256": "49eacd86dd287da45020641e16a6ef094e31944e63e420b72adcbe7731bfeaff",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin.js",
+      "before_sha256": "0b9276eb67ea27f631bb4ee2892339a1f7a5a6f475769f182788c2d21abf70c6",
+      "after_sha256": "63aa52dc3fce9fdd7d01e9f880d4a8224941e123ee8fdc86e56e7a57f4f47e02",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin/certificate.js",
+      "before_sha256": "381cb9e6489d2bde37394815c18eb893b0715f86dc119fdc883550134b2d8bb1",
+      "after_sha256": "43523b560e3d82401d44b749b4f8e41976f93c4a0ed00797ac30fdcc790a593f",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin/exam-schedules.js",
+      "before_sha256": "0928f0ae885c9b90cf9da538ee8452aa4e5007289c9399b95565988ef1e82a64",
+      "after_sha256": "633b03416924c25783c03dcdb185c8dadbf689305bd2246bb481ac9a93247919",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin/users.js",
+      "before_sha256": "1b141ee0fabb5d34abee1a88fb775e7b299f0f6d771e53eb59c684e2a0128972",
+      "after_sha256": "af75e4b708d62f7894a1572bef8fac19627e7cfdcf9922f3939346ef1a2f99e8",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/styles/admin.css",
+      "before_sha256": "54296caffeb062d6c1014a06403685cf48d09353fccad16673fa44f68babac22",
+      "after_sha256": "52dc5297fb76be14dde3e7cd34f00619d95067407bb68f8d8f18a800710c434d",
+      "existed_before": true
+    }
+  ]
+}

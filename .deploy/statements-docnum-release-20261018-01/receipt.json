@@ -1,0 +1,57 @@
+{
+  "release": "statements-docnum-release-20261018-01",
+  "deployed_at": "2026-10-18T07:31:54.438579+00:00",
+  "remote": {
+    "ok": true,
+    "service": "active",
+    "openapi_status": 200,
+    "has_admin_users_route": true,
+    "has_planning_templates_route": true,
+    "verified_files": {
+      "frontend/pages/documents.html": true,
+      "frontend/pages/index.html": true,
+      "frontend/pages/my.html": true,
+      "frontend/pages/registry.html": true,
+      "frontend/partials/header.html": true,
+      "frontend/scripts/header.js": true,
+      "frontend/styles/header.css": true
+    }
+  },
+  "public_checks": {
+    "https://gipc.org.ge/pages/documents.html": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "b5aadfb14b095a97c0c1e420256174a463c33c4effeef084fa04e4b3b6b0fbd2"
+    },
+    "https://gipc.org.ge/pages/index.html": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "58e14ef9c4a5993f67db6ebb9cf3d90fbda25b6e338baed219338713a32f0ae0"
+    },
+    "https://gipc.org.ge/pages/my.html": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "6a3429d63c114b0a7446106285bd3b7d709a3b82bdae84aa2d2dd4a7f624b172"
+    },
+    "https://gipc.org.ge/pages/registry.html": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "28001f9104b9338847eadf93a8e00bff6a304f0c8cf94301a3a5f8aa1dec4f06"
+    },
+    "https://gipc.org.ge/partials/header.html": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "4dc79e582292a81d13a49ac29796624b6be4af4b07a87d366f44182e41a9e98e"
+    },
+    "https://gipc.org.ge/scripts/header.js": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "5defabc74eac4412ded88ecd1c00547e1ab790fee1d1536ead087967995bb2e7"
+    },
+    "https://gipc.org.ge/styles/header.css": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "b94799be32304d56aa1e1c59c46417e4b3f68a4f9e4ce9680e9978bb14848355"
+    }
+  }
+}

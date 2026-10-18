@@ -1,0 +1,49 @@
+{
+  "release": "statements-docnum-release-20261018-01",
+  "created_at": "2026-10-18T07:31:36.126239+00:00",
+  "host": "gipcadmin@148.251.167.229",
+  "files": [
+    {
+      "path": "frontend/pages/documents.html",
+      "before_sha256": "120eb2da5ca7fe061ce47d96577004df90a884b930c02b403b249e101a7e5d76",
+      "after_sha256": "b5aadfb14b095a97c0c1e420256174a463c33c4effeef084fa04e4b3b6b0fbd2",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/pages/index.html",
+      "before_sha256": "821f2ba8c282eb7e41bed8f3f7aecd589f6358a5162d898913cc8c95daf8e380",
+      "after_sha256": "58e14ef9c4a5993f67db6ebb9cf3d90fbda25b6e338baed219338713a32f0ae0",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/pages/my.html",
+      "before_sha256": "b3821a68266909c6137a5d4447d39a365ce7763ec02a85a0c973c654879613d0",
+      "after_sha256": "6a3429d63c114b0a7446106285bd3b7d709a3b82bdae84aa2d2dd4a7f624b172",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/pages/registry.html",
+      "before_sha256": "010218cf848dea1fa128bc3cf2e8c09d63c5c4d365dbc0347bfdb5cfecc3a49e",
+      "after_sha256": "28001f9104b9338847eadf93a8e00bff6a304f0c8cf94301a3a5f8aa1dec4f06",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/partials/header.html",
+      "before_sha256": "dac95bdbde52fb91eccda3bc833a9a81e10f5be7512bff685b78999bda38e4cd",
+      "after_sha256": "4dc79e582292a81d13a49ac29796624b6be4af4b07a87d366f44182e41a9e98e",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/header.js",
+      "before_sha256": "f577b6fd7d4bb52c637d9877514181687d64660fc4e5b29920bcb77b77097b15",
+      "after_sha256": "5defabc74eac4412ded88ecd1c00547e1ab790fee1d1536ead087967995bb2e7",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/styles/header.css",
+      "before_sha256": "c993babf7478c313a2b36578dc45723aea95badb4027dc0322883900baaaa9a5",
+      "after_sha256": "b94799be32304d56aa1e1c59c46417e4b3f68a4f9e4ce9680e9978bb14848355",
+      "existed_before": true
+    }
+  ]
+}

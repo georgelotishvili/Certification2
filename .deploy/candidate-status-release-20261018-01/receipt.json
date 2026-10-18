@@ -1,0 +1,60 @@
+{
+  "release": "candidate-status-release-20261018-01",
+  "deployed_at": "2026-10-18T08:53:23.789202+00:00",
+  "remote": {
+    "ok": true,
+    "service": "active",
+    "openapi_status": 200,
+    "has_admin_users_route": true,
+    "has_planning_templates_route": true,
+    "verified_files": {
+      "backend/app/main.py": true,
+      "backend/app/models.py": true,
+      "backend/app/routers/admin.py": true,
+      "backend/app/routers/exam_schedules.py": true,
+      "backend/app/routers/planning_letters.py": true,
+      "backend/app/routers/users.py": true,
+      "backend/app/schemas.py": true,
+      "backend/app/services/candidate_status.py": true,
+      "backend/scripts/migrate_candidate_status.py": true,
+      "frontend/pages/admin.html": true,
+      "frontend/scripts/admin.js": true,
+      "frontend/scripts/admin/certificate.js": true,
+      "frontend/scripts/admin/exam-schedules.js": true,
+      "frontend/scripts/admin/users.js": true,
+      "frontend/styles/admin.css": true
+    }
+  },
+  "public_checks": {
+    "https://gipc.org.ge/pages/admin.html": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "49eacd86dd287da45020641e16a6ef094e31944e63e420b72adcbe7731bfeaff"
+    },
+    "https://gipc.org.ge/scripts/admin.js": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "63aa52dc3fce9fdd7d01e9f880d4a8224941e123ee8fdc86e56e7a57f4f47e02"
+    },
+    "https://gipc.org.ge/scripts/admin/certificate.js": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "43523b560e3d82401d44b749b4f8e41976f93c4a0ed00797ac30fdcc790a593f"
+    },
+    "https://gipc.org.ge/scripts/admin/exam-schedules.js": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "633b03416924c25783c03dcdb185c8dadbf689305bd2246bb481ac9a93247919"
+    },
+    "https://gipc.org.ge/scripts/admin/users.js": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "af75e4b708d62f7894a1572bef8fac19627e7cfdcf9922f3939346ef1a2f99e8"
+    },
+    "https://gipc.org.ge/styles/admin.css": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "52dc5297fb76be14dde3e7cd34f00619d95067407bb68f8d8f18a800710c434d"
+    }
+  }
+}
