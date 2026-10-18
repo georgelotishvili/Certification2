@@ -18,8 +18,8 @@
     let aiStatus = {
       configured: false,
       masked_key: null,
-      model: 'gemini-2.5-flash',
-      allowed_models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+      model: 'gemini-4-argon',
+      allowed_models: ['gemini-4-argon'],
       custom_system_prompt: '',
       default_system_prompt: '',
       quick_stats: { unseen_statements: 0, pending_statements: 0 },
@@ -140,7 +140,7 @@
       if (fabDotEl) {
         fabDotEl.className = `ai-fab-status-dot ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}`;
         fabDotEl.title = aiStatus.configured
-          ? `Gemini ჩართულია (${aiStatus.model})`
+          ? `Gemini 4 Argon ჩართულია (${aiStatus.model})`
           : 'საჭიროა Gemini API Key-ს მითითება';
       }
       const pendingCount = Number(aiStatus.quick_stats?.pending_statements || 0);
@@ -150,7 +150,7 @@
       }
       if (modelBadgeEl) {
         modelBadgeEl.textContent = aiStatus.configured
-          ? `● ${aiStatus.model}`
+          ? '● Gemini 4 Argon'
           : '⚠ API Key არ არის შეყვანილი';
         modelBadgeEl.className = `ai-panel-model-badge ${aiStatus.configured ? 'is-ready' : 'is-unconfigured'}`;
       }
@@ -184,7 +184,7 @@
             <div class="ai-panel-title-row">
               <span class="ai-panel-sparkle">✨</span>
               <h3 class="ai-panel-title">GIPC AI მრჩეველი</h3>
-              <span class="ai-panel-model-badge is-unconfigured">Gemini</span>
+              <span class="ai-panel-model-badge is-unconfigured">Gemini 4 Argon</span>
             </div>
             <p class="ai-panel-subtitle">განცხადებების, დოკუმენტების და საიტის ანალიზი • წერილები იგზავნება მხოლოდ თქვენი დასტურით</p>
           </div>
@@ -199,7 +199,7 @@
         <div class="ai-settings-drawer" hidden>
           <div class="ai-settings-inner">
             <div class="ai-settings-head">
-              <strong>⚙️ Gemini-ს კონფიგურაცია</strong>
+              <strong>⚙️ Gemini 4 Argon — კონფიგურაცია</strong>
               <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="ai-key-link">🔑 API Key-ს აღება (Google AI Studio)</a>
             </div>
             <label class="ai-settings-label">
@@ -209,9 +209,7 @@
             <label class="ai-settings-label">
               <span>Gemini მოდელი</span>
               <select class="ai-settings-select ai-select-model">
-                <option value="gemini-2.5-flash">gemini-2.5-flash (სწრაფი და რეკომენდებული)</option>
-                <option value="gemini-2.5-pro">gemini-2.5-pro (ღრმა ანალიტიკა)</option>
-                <option value="gemini-2.0-flash">gemini-2.0-flash (სტანდარტული)</option>
+                <option value="gemini-4-argon">gemini-4-argon (Gemini 4 Argon)</option>
               </select>
             </label>
             <label class="ai-settings-label">
@@ -311,7 +309,7 @@
             : '(ჯერ არ არის შენახული)';
         }
         if (keyInput) keyInput.value = '';
-        if (modelSelect) modelSelect.value = aiStatus.model || 'gemini-2.5-flash';
+        if (modelSelect) modelSelect.value = aiStatus.model || 'gemini-4-argon';
         if (customPromptInput) customPromptInput.value = aiStatus.custom_system_prompt || '';
       }
     }
@@ -323,7 +321,7 @@
       const saveBtn = settingsDrawerEl?.querySelector('.ai-settings-save');
 
       const payload = {
-        model: modelSelect?.value || 'gemini-2.5-flash',
+        model: modelSelect?.value || 'gemini-4-argon',
         custom_system_prompt: customPromptInput?.value || '',
       };
       const typedKey = String(keyInput?.value || '').trim();
@@ -559,7 +557,7 @@
         const welcome = document.createElement('div');
         welcome.className = 'ai-welcome-box';
         welcome.innerHTML = `
-          <div class="ai-welcome-title">👋 გამარჯობა! მე ვარ GIPC-ის AI ოპერატიული მრჩეველი (Gemini).</div>
+          <div class="ai-welcome-title">👋 გამარჯობა! მე ვარ GIPC-ის AI ოპერატიული მრჩეველი (Gemini 4 Argon).</div>
           <p class="ai-welcome-text">
             შემიძლია შევისწავლო შემოსული განცხადებები, წავიკითხო მიბმული PDF/Word/სურათი დოკუმენტები,
             გადავამოწმო გამოცდების შედეგები და მოგიმზადოთ სამოქმედო გეგმა და საპასუხო წერილები.
@@ -610,7 +608,7 @@
         loadingEl.className = 'ai-msg-item is-assistant is-loading';
         loadingEl.innerHTML = `
           <div class="ai-msg-bubble">
-            <span class="ai-typing-indicator">✨ Gemini სწავლობს ბაზას და მიბმულ დოკუმენტებს...</span>
+            <span class="ai-typing-indicator">✨ Gemini 4 Argon სწავლობს ბაზას და მიბმულ დოკუმენტებს...</span>
           </div>
         `;
         messagesContainerEl.appendChild(loadingEl);

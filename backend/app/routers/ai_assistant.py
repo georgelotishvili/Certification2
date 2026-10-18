@@ -50,15 +50,13 @@ from .planning_letters import (
 router = APIRouter()
 
 ALLOWED_MODELS = (
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
-    "gemini-2.0-flash",
+    "gemini-4-argon",
 )
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-4-argon"
 
 CATEGORY_LABELS_KA = dict(CATEGORY_DISPLAY_LABELS)
 
-DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის (gipc.org.ge) ადმინისტრატორის ოფიციალური ხელოვნური ინტელექტის ასისტენტი და ოპერატიული მრჩეველი (Google Gemini).
+DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის (gipc.org.ge) ადმინისტრატორის ოფიციალური ხელოვნური ინტელექტის ასისტენტი და ოპერატიული მრჩეველი (Google Gemini 4 Argon).
 
 შენი მთავარი დანიშნულებაა:
 1. შეისწავლო საიტზე არსებული მონაცემები: რეგისტრირებული პირები, შემოსული განცხადებები, განცხადებებზე მიბმული დოკუმენტები (PDF, სურათები, Word ფაილები), დაგეგმილი გამოცდები, გამოცდების შედეგები, კანდიდატების სტატუსები და გაგზავნილი წერილები.
@@ -838,6 +836,32 @@ def _parse_proposed_letters(
     return cleaned, proposals
 
 
+def _discover_available_model(api_key: str, preferred: str = "gemini-4-argon") -> str:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={urllib.parse.quote(api_key)}"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        models = data.get("models") or []
+        names: list[str] = []
+        for m in models:
+            methods = m.get("supportedGenerationMethods") or []
+            if "generateContent" not in methods:
+                continue
+            raw_name = str(m.get("name") or "")
+            short_name = raw_name.split("/", 1)[-1] if "/" in raw_name else raw_name
+            if short_name:
+                names.append(short_name)
+        for n in names:
+            if "argon" in n.lower() or "gemini-4" in n.lower():
+                return n
+        if names:
+            return names[0]
+    except Exception:
+        pass
+    return preferred
+
+
 def _call_gemini_api(
     *,
     api_key: str,
@@ -845,10 +869,6 @@ def _call_gemini_api(
     system_instruction: str,
     contents: list[dict[str, Any]],
 ) -> str:
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{urllib.parse.quote(model)}:generateContent?key={urllib.parse.quote(api_key)}"
-    )
     payload = {
         "systemInstruction": {
             "parts": [{"text": system_instruction}],
@@ -859,16 +879,39 @@ def _call_gemini_api(
             "maxOutputTokens": 4096,
         },
     }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
+    body_bytes = json.dumps(payload).encode("utf-8")
+
+    def _send_for_model(target_model: str) -> dict[str, Any]:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{urllib.parse.quote(target_model)}:generateContent?key={urllib.parse.quote(api_key)}"
+        )
+        req = urllib.request.Request(
+            url,
+            data=body_bytes,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
         with urllib.request.urlopen(req, timeout=60) as resp:
-            resp_data = json.loads(resp.read().decode("utf-8"))
+            return json.loads(resp.read().decode("utf-8"))
+
+    try:
+        resp_data = _send_for_model(model)
     except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            resolved_model = _discover_available_model(api_key, preferred=model)
+            if resolved_model and resolved_model != model:
+                try:
+                    resp_data = _send_for_model(resolved_model)
+                except urllib.error.HTTPError as retry_exc:
+                    exc = retry_exc
+                else:
+                    candidates = resp_data.get("candidates") or []
+                    if not candidates:
+                        raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
+                    parts = candidates[0].get("content", {}).get("parts") or []
+                    text_chunks = [str(p.get("text") or "") for p in parts if "text" in p]
+                    return "\n".join(text_chunks).strip()
         err_body = ""
         try:
             err_body = exc.read().decode("utf-8", errors="replace")
@@ -878,13 +921,13 @@ def _call_gemini_api(
             err_msg = err_body or str(exc)
         if exc.code in (400, 401, 403) and "API key" in err_msg:
             raise HTTPException(400, "Gemini API Key არასწორია ან არააქტიურია. გადაამოწმეთ გასაღები პარამეტრებში.")
-        raise HTTPException(502, f"Gemini API შეცდომა ({exc.code}): {err_msg[:300]}")
+        raise HTTPException(502, f"Gemini 4 Argon API შეცდომა ({exc.code}): {err_msg[:300]}")
     except Exception as exc:
-        raise HTTPException(502, f"Gemini-სთან დაკავშირება ვერ მოხერხდა: {exc}")
+        raise HTTPException(502, f"Gemini 4 Argon-თან დაკავშირება ვერ მოხერხდა: {exc}")
 
     candidates = resp_data.get("candidates") or []
     if not candidates:
-        raise HTTPException(502, "Gemini-მ ცარიელი პასუხი დააბრუნა.")
+        raise HTTPException(502, "Gemini 4 Argon-მა ცარიელი პასუხი დააბრუნა.")
     parts = candidates[0].get("content", {}).get("parts") or []
     text_chunks = [str(p.get("text") or "") for p in parts if "text" in p]
     return "\n".join(text_chunks).strip()

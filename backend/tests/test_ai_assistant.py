@@ -59,14 +59,15 @@ class AiAssistantTests(unittest.TestCase):
         updated = ai_assistant.update_ai_settings(
             payload=ai_assistant.AISettingsPayload(
                 api_key="AIzaSyTestKey123456789",
-                model="gemini-2.5-flash",
+                model="gemini-4-argon",
                 custom_system_prompt="ყოველთვის შეამოწმე დიპლომი.",
             ),
             authorization=None,
             db=self.db,
         )
         self.assertTrue(updated["configured"])
-        self.assertEqual(updated["model"], "gemini-2.5-flash")
+        self.assertEqual(updated["model"], "gemini-4-argon")
+        self.assertEqual(updated["allowed_models"], ["gemini-4-argon"])
         self.assertEqual(updated["masked_key"], "AIzaSy...6789")
 
         # 2. Add a user and a statement with a PDF attachment
