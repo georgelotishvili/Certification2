@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEPLOY_DIR = ROOT / ".deploy" / "candidate-status-release-20261018-01"
+DEPLOY_DIR = ROOT / ".deploy" / "statement-reply-release-20261018-01"
 BEFORE_DIR = DEPLOY_DIR / "before"
 AFTER_DIR = DEPLOY_DIR / "after"
 

@@ -231,6 +231,35 @@
         const actions = document.createElement('div');
         actions.className = 'statement-actions';
 
+        const replyBtn = document.createElement('button');
+        replyBtn.type = 'button';
+        replyBtn.className = 'exam-stmt-reply-btn statement-reply-btn';
+        replyBtn.textContent = '↩ პასუხის გაცემა';
+        replyBtn.setAttribute('aria-label', 'პასუხის გაცემა განცხადებაზე');
+        replyBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const targetUser = activeUser;
+          if (!targetUser) return;
+          if (item.seen_at == null) {
+            void markStatementsSeen([item.id]);
+          }
+          close();
+          window.dispatchEvent(new CustomEvent('admin:openStatementReply', {
+            detail: {
+              userId: targetUser.id,
+              returnToHistory: true,
+              statementItem: {
+                statementId: item.id,
+                docNumber: docNumberText,
+                body: item.message || '',
+                statementRaw: item,
+              },
+            },
+          }));
+        });
+        actions.appendChild(replyBtn);
+
         const answeredLabel = document.createElement('label');
         answeredLabel.className = 'statement-answered-label';
         const answeredCheckbox = document.createElement('input');

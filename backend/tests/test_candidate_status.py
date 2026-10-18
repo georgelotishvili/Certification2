@@ -200,6 +200,12 @@ class CandidateStatusLifecycleTests(unittest.TestCase):
         self.assertEqual(payload["user_candidate_status"], "exam_candidate")
         self.assertEqual(payload["user_candidate_category"], "C_A")
 
+        # Verify statement was automatically marked as seen and answered ("პასუხი გაცემულია")
+        self.db.refresh(stmt)
+        self.assertIsNotNone(stmt.seen_at)
+        self.assertIsNotNone(stmt.answered_at)
+        self.assertEqual(stmt.answered_by, self.staff.email)
+
         # Verify filter qualification=exam_candidate returns the user
         list_res = client.get("/admin/users?paginated=true&page=1&qualification=exam_candidate", headers=headers)
         self.assertEqual(list_res.status_code, 200)

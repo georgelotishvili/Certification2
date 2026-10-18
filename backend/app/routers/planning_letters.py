@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate, User, format_letter_doc_number
+from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate, Statement, User, format_letter_doc_number
 from ..services.bounded_upload import UploadTooLarge, save_upload_stream
 from ..services.candidate_status import (
     VALID_CANDIDATE_CATEGORIES,
@@ -464,6 +464,7 @@ def send_letter(
     edit_letter_id: int | None = Form(None),
     keep_existing_attachment: bool = Form(False),
     candidate_category: str | None = Form(None),
+    statement_id: int | None = Form(None),
     authorization: str | None = Header(None), db: Session = Depends(get_db),
 ):
     actor = _require_admin(db, authorization)
@@ -654,6 +655,27 @@ def send_letter(
             )
             user.candidate_updated_at = now
             db.add(user)
+
+        # Automatically mark the replied statement (or latest unanswered statement) as seen & answered
+        target_stmt = None
+        if statement_id is not None:
+            target_stmt = db.scalar(
+                select(Statement).where(Statement.id == statement_id, Statement.user_id == user_id)
+            )
+        if target_stmt is None:
+            target_stmt = db.scalar(
+                select(Statement)
+                .where(Statement.user_id == user_id, Statement.answered_at.is_(None))
+                .order_by(Statement.created_at.desc(), Statement.id.desc())
+            )
+        if target_stmt is not None:
+            if target_stmt.seen_at is None:
+                target_stmt.seen_at = now
+                target_stmt.seen_by = actor.email
+            if target_stmt.answered_at is None:
+                target_stmt.answered_at = now
+                target_stmt.answered_by = actor.email
+            db.add(target_stmt)
 
         db.add(letter)
         db.flush()

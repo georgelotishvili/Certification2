@@ -410,8 +410,14 @@
       return null;
     }
 
-    function inferExamCandidateCategory(user, statementItems = []) {
+    function inferExamCandidateCategory(user, statementItems = [], replyToStatement = null) {
       const valid = new Set(['A', 'B', 'C', 'B_A', 'C_A']);
+      if (replyToStatement) {
+        const fromReplyStmt = parseStatementCategory(
+          replyToStatement.body || replyToStatement.statementRaw?.message || ''
+        );
+        if (fromReplyStmt && valid.has(fromReplyStmt)) return fromReplyStmt;
+      }
       const candCat = String(user?.candidate_category || '').trim().toUpperCase();
       if (valid.has(candCat)) return candCat;
       const reqCat = String(user?.requested_category || '').trim().toUpperCase();
@@ -423,8 +429,8 @@
       return 'A';
     }
 
-    function inferCertificateCandidateCategory(user, examOutcome, statementItems = []) {
-      const base = inferExamCandidateCategory(user, statementItems);
+    function inferCertificateCandidateCategory(user, examOutcome, statementItems = [], replyToStatement = null) {
+      const base = inferExamCandidateCategory(user, statementItems, replyToStatement);
       if (base === 'A' || base === 'B' || base === 'C') return base;
       const outcome = examOutcome?.outcome || user?.exam_outcome?.outcome || '';
       if (base === 'B_A') {
@@ -1020,11 +1026,134 @@
         panel.dataset.dirty = 'false';
       }
 
+      const REPLY_TEMPLATE_OPTIONS = [
+        {
+          mode: 'exam',
+          pill: '📅 დადებითი პასუხი',
+          pillClass: 'is-exam-pill',
+          title: 'გამოცდის დაგეგმვა (გამოცდაზე დაშვება)',
+          desc: 'განაცხადის დაკმაყოფილება, გამოცდაზე დაშვების წერილი და თარიღის/დროის ჩანიშვნა',
+        },
+        {
+          mode: 'rejection',
+          pill: '✕ უარყოფითი პასუხი',
+          pillClass: 'is-rejection-pill',
+          title: 'განაცხადზე უარი (უარყოფითი პასუხი)',
+          desc: 'განაცხადის დაუკმაყოფილებლობის სტანდარტული შაბლონით პასუხის გაგზავნა',
+        },
+        {
+          mode: 'certificate',
+          pill: '🎓 სერტიფიკატის მინიჭება',
+          pillClass: 'is-certificate-pill',
+          title: 'სერტიფიკატის გადაცემა (ჩაბარება)',
+          desc: 'გამოცდის წარმატებით ჩაბარებისა და სერტიფიკატის მინიჭების შეტყობინება',
+        },
+        {
+          mode: 'exam_fail',
+          pill: '⚠ გამოცდაზე ჩაჭრა',
+          pillClass: 'is-fail-pill',
+          title: 'ჩაჭრის შეტყობინება (განმეორებითი გამოცდა)',
+          desc: 'გამოცდაზე გამსვლელი ბარიერის ვერდაძლევის სტანდარტული შეტყობინება',
+        },
+        {
+          mode: 'custom',
+          pill: '✉ თავისუფალი ტექსტი',
+          pillClass: 'is-custom-pill',
+          title: 'სხვა შეტყობინება (ინდივიდუალური წერილი)',
+          desc: 'ნებისმიერი შინაარსის წერილის შედგენა და გაგზავნა შაბლონის გარეშე',
+        },
+      ];
+
+      // =========================================================================
+      // MODAL 0: Statement Reply Template Chooser
+      // =========================================================================
+      async function openReplyTemplateChooserModal(statementItem, { returnToHistory = true } = {}) {
+        await load();
+        closeAnyExamModal();
+
+        const candidateName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || '(უსახელო)';
+        const safeEmail = escapeHtml(user.email || '—');
+        const docNum = statementItem?.docNumber || (statementItem?.statementId ? `#${statementItem.statementId}` : '');
+        const parsedStmtCat = parseStatementCategory(
+          statementItem?.body || statementItem?.statementRaw?.message || ''
+        );
+
+        const optionsHtml = REPLY_TEMPLATE_OPTIONS.map((opt) => `
+          <button type="button" class="stmt-reply-template-card mode-${opt.mode}" data-reply-mode="${opt.mode}">
+            <div class="stmt-reply-template-card-top">
+              <span class="stmt-reply-template-pill ${opt.pillClass}">${escapeHtml(opt.pill)}</span>
+              <span class="stmt-reply-template-arrow">გადასვლა →</span>
+            </div>
+            <div class="stmt-reply-template-title">${escapeHtml(opt.title)}</div>
+            <div class="stmt-reply-template-desc">${escapeHtml(opt.desc)}</div>
+          </button>
+        `).join('');
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay exam-schedule-modal-overlay open';
+        overlay.setAttribute('aria-hidden', 'false');
+        overlay.innerHTML = `
+          <div class="modal stmt-reply-chooser-modal" role="dialog" aria-modal="true" aria-labelledby="stmtReplyChooserTitle">
+            <div class="modal-header">
+              <h3 class="modal-title" id="stmtReplyChooserTitle">პასუხის გაცემა განცხადებაზე${docNum ? ` — № ${escapeHtml(docNum)}` : ''}</h3>
+              <button class="modal-close stmt-reply-chooser-close" type="button" aria-label="დახურვა">×</button>
+            </div>
+            <div class="modal-body stmt-reply-chooser-body">
+              <div class="exam-schedule-candidate-bar">
+                <span><strong>კანდიდატი:</strong> ${escapeHtml(candidateName)}</span>
+                <span><strong>კოდი:</strong> ${escapeHtml(user.code || '—')}</span>
+                <span><strong>მეილი:</strong> ${safeEmail}</span>
+                ${docNum ? `<span><strong>განცხადება:</strong> № ${escapeHtml(docNum)}</span>` : ''}
+                ${parsedStmtCat ? `<span><strong>მოთხოვნილი კატეგორია:</strong> ${escapeHtml(parsedStmtCat.replace('_', '/'))}</span>` : ''}
+              </div>
+              <p class="stmt-reply-chooser-hint">
+                აირჩიეთ სტანდარტული შაბლონი, რომლითაც გსურთ პასუხის გაცემა (გაგზავნის ან შენახვის შემდეგ <strong>„პასუხი გაცემულია“</strong> ავტომატურად მოინიშნება):
+              </p>
+              <div class="stmt-reply-template-grid">
+                ${optionsHtml}
+              </div>
+            </div>
+            <div class="modal-footer stmt-reply-chooser-footer">
+              <button type="button" class="btn-secondary stmt-reply-chooser-back">უკან დაბრუნება</button>
+            </div>
+          </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        overlay.querySelectorAll('[data-reply-mode]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const chosenMode = btn.getAttribute('data-reply-mode') || 'exam';
+            void openScheduleFormModal(null, {
+              mode: chosenMode,
+              returnToHistory,
+              replyToStatement: statementItem,
+            });
+          });
+        });
+
+        const handleCloseChooser = () => {
+          closeAnyExamModal();
+          if (returnToHistory) {
+            void openScheduledExamsListModal();
+          }
+        };
+
+        overlay.querySelector('.stmt-reply-chooser-close')?.addEventListener('click', handleCloseChooser);
+        overlay.querySelector('.stmt-reply-chooser-back')?.addEventListener('click', handleCloseChooser);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) handleCloseChooser();
+        });
+      }
+
       // =========================================================================
       // MODAL 1: Form & Letter Editor for all 5 Modes
       // ('exam' | 'rejection' | 'certificate' | 'exam_fail' | 'custom')
       // =========================================================================
-      async function openScheduleFormModal(editingItem = null, { mode = 'exam', returnToHistory = false } = {}) {
+      async function openScheduleFormModal(
+        editingItem = null,
+        { mode = 'exam', returnToHistory = false, replyToStatement = null } = {}
+      ) {
         const resolvedMode = editingItem?.mode || mode || 'exam';
         const meta = MODE_META[resolvedMode] || MODE_META.exam;
         const hasTimeAndPeriod = meta.hasTimeAndPeriod;
@@ -1052,8 +1181,8 @@
         let modalBusy = false;
 
         const initialCategory = resolvedMode === 'certificate'
-          ? inferCertificateCandidateCategory(user, examOutcome, statementItems)
-          : inferExamCandidateCategory(user, statementItems);
+          ? inferCertificateCandidateCategory(user, examOutcome, statementItems, replyToStatement)
+          : inferExamCandidateCategory(user, statementItems, replyToStatement);
         const categoryOptionsHtml = resolvedMode === 'certificate'
           ? [
               { key: 'A', label: 'A კატეგორია — შენობა-ნაგებობის არქიტექტორი' },
@@ -1092,6 +1221,10 @@
         );
 
         const modalTitleText = editingItem ? meta.editTitle : meta.createTitle;
+        const replyDocNum = replyToStatement?.docNumber || (replyToStatement?.statementId ? `#${replyToStatement.statementId}` : '');
+        const templateSwitcherOptionsHtml = REPLY_TEMPLATE_OPTIONS.map((opt) => (
+          `<option value="${opt.mode}"${opt.mode === resolvedMode ? ' selected' : ''}>${escapeHtml(opt.title)}</option>`
+        )).join('');
 
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay exam-schedule-modal-overlay open';
@@ -1112,6 +1245,23 @@
                   <span><strong>კოდი:</strong> ${escapeHtml(user.code || '—')}</span>
                   <span><strong>მეილი:</strong> ${safeEmail}</span>
                 </div>
+
+                ${!editingItem ? `
+                  <div class="exam-schedule-reply-context-bar${replyToStatement ? ' is-statement-reply' : ''}">
+                    <div class="exam-schedule-reply-context-info">
+                      ${replyToStatement ? `
+                        <span class="exam-schedule-reply-badge">↩ პასუხი განცხადებაზე ${escapeHtml(replyDocNum)}</span>
+                        <span class="exam-schedule-reply-auto-note">✓ დადასტურებისას „პასუხი გაცემულია“ ავტომატურად მოინიშნება</span>
+                      ` : `
+                        <span class="exam-schedule-reply-label-text">პასუხის / შეტყობინების შაბლონი:</span>
+                      `}
+                    </div>
+                    <label class="exam-schedule-template-switch-label">
+                      <span>შაბლონის შეცვლა:</span>
+                      <select class="exam-schedule-template-switch-select">${templateSwitcherOptionsHtml}</select>
+                    </label>
+                  </div>
+                ` : ''}
 
                 ${hasTimeAndPeriod ? `
                   <div class="exam-schedule-controls">
@@ -1316,6 +1466,7 @@
         const morningDefaultDisplay = overlay.querySelector('[data-default-display="morning"]');
         const eveningDefaultDisplay = overlay.querySelector('[data-default-display="evening"]');
         const categorySelect = overlay.querySelector('.exam-schedule-category-select');
+        const templateSwitchSelect = overlay.querySelector('.exam-schedule-template-switch-select');
         const subjectInput = overlay.querySelector('.exam-schedule-subject');
         const bodyInput = overlay.querySelector('.exam-schedule-body');
         const textEditBtn = overlay.querySelector('.exam-schedule-text-edit-btn');
@@ -1328,6 +1479,17 @@
         const nextBtn = overlay.querySelector('.exam-schedule-next-btn');
         const backBtn = overlay.querySelector('.exam-schedule-back-btn');
         const confirmSubmitBtn = overlay.querySelector('.exam-schedule-confirm-submit-btn');
+
+        templateSwitchSelect?.addEventListener('change', () => {
+          if (modalBusy) return;
+          const nextMode = templateSwitchSelect.value || 'exam';
+          if (nextMode === resolvedMode) return;
+          void openScheduleFormModal(null, {
+            mode: nextMode,
+            returnToHistory,
+            replyToStatement,
+          });
+        });
 
         function setModalStatus(msg = '', isError = false) {
           statusEl.textContent = msg;
@@ -1849,6 +2011,9 @@
             formData.append('expected_to_email', String(user.email || '').trim());
             if (hasCategorySelect) {
               formData.append('candidate_category', currentSelectedCategory());
+            }
+            if (replyToStatement?.statementId != null) {
+              formData.append('statement_id', String(replyToStatement.statementId));
             }
 
             if (editingItem) {
@@ -2394,6 +2559,24 @@
             const headRight = document.createElement('div');
             headRight.className = 'exam-schedule-head-right';
 
+            const triggerReplyForStatement = (ev) => {
+              ev?.stopPropagation?.();
+              if (item.seenAt == null) {
+                void markStatementSeenInModal(item.statementId, item, row, badge);
+              }
+              void openReplyTemplateChooserModal(item, { returnToHistory: true });
+            };
+
+            if (item.isIncomingStatement) {
+              const quickReplyBtn = document.createElement('button');
+              quickReplyBtn.type = 'button';
+              quickReplyBtn.className = 'exam-stmt-quick-reply-btn';
+              quickReplyBtn.textContent = '↩ პასუხის გაცემა';
+              quickReplyBtn.title = 'პასუხის გაცემა განცხადებაზე სტანდარტული შაბლონის არჩევით';
+              quickReplyBtn.addEventListener('click', triggerReplyForStatement);
+              headRight.appendChild(quickReplyBtn);
+            }
+
             const dateLabel = formatDisplayDate(item.examDate);
             const timeDisplay = item.sentAtDisplay || dateLabel;
             if (timeDisplay) {
@@ -2486,6 +2669,14 @@
               : `${docHeaderLine}${item.subject ? `სათაური: ${item.subject}\n\n` : ''}${item.body || ''}`;
 
             if (item.isIncomingStatement) {
+              const replyBtn = document.createElement('button');
+              replyBtn.type = 'button';
+              replyBtn.className = 'exam-stmt-reply-btn';
+              replyBtn.textContent = '↩ პასუხის გაცემა';
+              replyBtn.title = 'პასუხის გაცემა სტანდარტული შაბლონის არჩევით';
+              replyBtn.addEventListener('click', triggerReplyForStatement);
+              actionsWrap.appendChild(replyBtn);
+
               const answeredLabel = document.createElement('label');
               answeredLabel.className = 'exam-stmt-answered-label';
               const answeredChk = document.createElement('input');
@@ -2586,6 +2777,18 @@
                 ? `დოკუმენტის №: ${item.docNumber}\n\n${item.body || '(ტექსტის გარეშე)'}`
                 : (item.body || '(ტექსტის გარეშე)');
               bodyWrap.appendChild(pre);
+            }
+
+            if (item.isIncomingStatement) {
+              const bottomReplyBar = document.createElement('div');
+              bottomReplyBar.className = 'exam-stmt-bottom-reply-bar';
+              const bottomReplyBtn = document.createElement('button');
+              bottomReplyBtn.type = 'button';
+              bottomReplyBtn.className = 'btn-primary exam-stmt-bottom-reply-btn';
+              bottomReplyBtn.textContent = '↩ პასუხის გაცემა (შაბლონის არჩევა)';
+              bottomReplyBtn.addEventListener('click', triggerReplyForStatement);
+              bottomReplyBar.appendChild(bottomReplyBtn);
+              bodyWrap.appendChild(bottomReplyBar);
             }
 
             row.appendChild(bodyWrap);
@@ -2730,9 +2933,21 @@
         }
       });
 
+      global.addEventListener('admin:openStatementReply', (ev) => {
+        if (Number(ev?.detail?.userId) === Number(user.id) && isCurrent()) {
+          void openReplyTemplateChooserModal(ev.detail.statementItem || null, {
+            returnToHistory: Boolean(ev.detail.returnToHistory),
+          });
+        }
+      });
+
       updateCardButtonBadge();
 
-      return { load, openHistoryModal: openScheduledExamsListModal };
+      return {
+        load,
+        openHistoryModal: openScheduledExamsListModal,
+        openReplyModal: openReplyTemplateChooserModal,
+      };
     }
 
     return { mount };
