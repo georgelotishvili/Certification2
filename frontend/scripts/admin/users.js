@@ -1577,7 +1577,29 @@
     }
 
     function init() {
+      let searchUserInteracted = false;
+      const unlockUsersSearch = () => {
+        searchUserInteracted = true;
+        if (DOM.usersSearch && DOM.usersSearch.readOnly) {
+          DOM.usersSearch.readOnly = false;
+        }
+      };
+      if (DOM.usersSearch) {
+        DOM.usersSearch.value = '';
+        DOM.usersSearch.readOnly = true;
+        on(DOM.usersSearch, 'pointerdown', unlockUsersSearch);
+        on(DOM.usersSearch, 'mousedown', unlockUsersSearch);
+        on(DOM.usersSearch, 'touchstart', unlockUsersSearch);
+        on(DOM.usersSearch, 'keydown', unlockUsersSearch);
+        on(DOM.usersSearch, 'focus', unlockUsersSearch);
+      }
       on(DOM.usersSearch, 'input', () => {
+        // Guard against browser password manager autofilling saved admin email into the search box
+        if (!searchUserInteracted || document.activeElement !== DOM.usersSearch) {
+          if (DOM.usersSearch) DOM.usersSearch.value = '';
+          syncResetFiltersButton();
+          return;
+        }
         syncResetFiltersButton();
         // Invalidate old responses immediately, not only after the debounce.
         ++usersRenderVersion;

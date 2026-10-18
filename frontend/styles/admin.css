@@ -121,6 +121,18 @@ header {
     z-index: 99;
   }
 
+  .nav-bar::before {
+    content: "";
+    position: fixed;
+    top: 80px;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: #f3f6fd;
+    z-index: -1;
+    pointer-events: none;
+  }
+
     .nav {
       width: auto;
       max-width: 100%;
@@ -577,7 +589,7 @@ main {
   min-height: 600px;
   background: var(--surface-elevated);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   margin: 0 clamp(6px, 1.5vw, 20px);
   box-shadow: 0 12px 32px rgba(29, 39, 68, 0.08);
@@ -8132,6 +8144,10 @@ body.modal-open {
   color: #1e293b;
   font: inherit;
   font-size: 12.5px;
+}
+
+.ai-masked-key-input {
+  -webkit-text-security: disc;
 }
 
 .ai-settings-modal-footer {

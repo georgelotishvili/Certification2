@@ -670,7 +670,7 @@
                     <small class="ai-masked-gemini-hint"></small>
                     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="ai-key-link">გასაღების აღება ↗</a>
                   </span>
-                  <input type="password" class="ai-settings-input ai-input-gemini-key" placeholder="AIza... (ცარიელი = უცვლელი)" autocomplete="off" />
+                  <input type="text" name="gipc_ai_gemini_api_token" class="ai-settings-input ai-masked-key-input ai-input-gemini-key" placeholder="AIza... (ცარიელი = უცვლელი)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
                 </label>
                 <label class="ai-settings-label">
                   <span>
@@ -678,7 +678,7 @@
                     <small class="ai-masked-openai-hint"></small>
                     <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="ai-key-link">გასაღების აღება ↗</a>
                   </span>
-                  <input type="password" class="ai-settings-input ai-input-openai-key" placeholder="sk-... (ცარიელი = უცვლელი)" autocomplete="off" />
+                  <input type="text" name="gipc_ai_openai_api_token" class="ai-settings-input ai-masked-key-input ai-input-openai-key" placeholder="sk-... (ცარიელი = უცვლელი)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
                 </label>
               </div>
             </div>

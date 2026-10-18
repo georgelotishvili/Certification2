@@ -18,14 +18,14 @@
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
     <script src="../scripts/admin/certificate.js?v=20261018-cand1" defer></script>
     <script src="../scripts/admin/exam-schedules.js?v=20261018-cert30d" defer></script>
-    <script src="../scripts/admin/users.js?v=20261018-contracts1" defer></script>
+    <script src="../scripts/admin/users.js?v=20261018-nofill1" defer></script>
     <script src="../scripts/admin/guide-videos.js" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
     <script src="../scripts/admin/documents.js?v=20261018-contracts1" defer></script>
-    <script src="../scripts/admin/ai-assistant.js?v=20261018-doc2live1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261018-contracts1" />
+    <script src="../scripts/admin/ai-assistant.js?v=20261018-nofill1" defer></script>
+    <link rel="stylesheet" href="../styles/admin.css?v=20261018-nofill1" />
   </head>
   <body>
     <header>
@@ -95,7 +95,7 @@
           <div id="durationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
           <div class="duration-group">
             <label for="adminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
-            <input id="adminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <input id="adminGatePassword" name="gipc_admin_gate_code" class="duration-input" type="text" placeholder="მაგ: cpig" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
             <button id="saveAdminGatePassword" class="duration-save">შენახვა</button>
           </div>
           <div id="gatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
@@ -144,7 +144,7 @@
               <span class="stat stat-blocks"><span class="label">ბლოკი</span> <span id="adminBlocksCount">0</span></span>
               <span class="stat stat-questions"><span class="label">კითხვა</span> <span id="adminQuestionsCount">0</span></span>
             </div>
-            <input id="examBlocksSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="საგამოცდო ბლოკების ძებნა" />
+            <input id="examBlocksSearch" name="gipc_exam_blocks_search_nofill" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="საგამოცდო ბლოკების ძებნა" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
           </div>
 
           <div class="exam-blocks-grid">
@@ -162,7 +162,7 @@
             <div class="users-filters-header">
               <h2 class="exam-blocks-title">რეგისტრირებული პირები</h2>
               <div class="users-filters-controls">
-                <input id="usersSearch" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი, გვარი, ელფოსტა, ტელეფონი, კოდი, პირადი №, დოკუმენტის №)" />
+                <input id="usersSearch" name="gipc_users_search_nofill" class="exam-blocks-search" type="search" placeholder="ძებნა (სახელი, გვარი, ელფოსტა, ტელეფონი, კოდი, პირადი №, დოკუმენტის №)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" readonly />
                 <label class="users-filter-label users-admin-role-chip" title="მხოლოდ ადმინისტრატორის სტატუსის მქონე პირების ჩვენება">
                   <input id="onlyAdmins" type="checkbox" />
                   <span>მხოლოდ ადმინისტრატორები</span>
@@ -375,7 +375,7 @@
           <div id="multiApartmentDurationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
           <div class="duration-group">
             <label for="multiApartmentAdminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
-            <input id="multiApartmentAdminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <input id="multiApartmentAdminGatePassword" name="gipc_ma_gate_code" class="duration-input" type="text" placeholder="მაგ: cpig" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
             <button id="saveMultiApartmentAdminGatePassword" class="duration-save">შენახვა</button>
           </div>
           <div id="multiApartmentGatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
@@ -387,7 +387,7 @@
             <div class="exam-blocks-stats">
               <span class="stat stat-blocks"><span class="label">პროექტი</span> <span id="multiApartmentBlocksCount">0</span></span>
             </div>
-            <input id="multiApartmentSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალბინიანის ძებნა" />
+            <input id="multiApartmentSearch" name="gipc_ma_search_nofill" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალბინიანის ძებნა" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
           </div>
 
           <div class="exam-blocks-grid" id="multiApartmentGrid">
@@ -409,7 +409,7 @@
           <div id="multiFunctionalDurationFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
           <div class="duration-group">
             <label for="multiFunctionalAdminGatePassword" class="duration-label">ადმინისტრატორის პაროლი</label>
-            <input id="multiFunctionalAdminGatePassword" class="duration-input" type="text" placeholder="მაგ: cpig" />
+            <input id="multiFunctionalAdminGatePassword" name="gipc_mf_gate_code" class="duration-input" type="text" placeholder="მაგ: cpig" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
             <button id="saveMultiFunctionalAdminGatePassword" class="duration-save">შენახვა</button>
           </div>
           <div id="multiFunctionalGatePwdFlash" class="duration-flash" aria-live="polite" style="display:none;"></div>
@@ -421,7 +421,7 @@
             <div class="exam-blocks-stats">
               <span class="stat stat-blocks"><span class="label">პროექტი</span> <span id="multiFunctionalBlocksCount">0</span></span>
             </div>
-            <input id="multiFunctionalSearch" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალფუნქციურის ძებნა" />
+            <input id="multiFunctionalSearch" name="gipc_mf_search_nofill" class="exam-blocks-search" type="search" placeholder="ძებნა..." aria-label="მრავალფუნქციურის ძებნა" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" />
           </div>
 
           <div class="exam-blocks-grid" id="multiFunctionalGrid">
