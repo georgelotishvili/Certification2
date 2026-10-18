@@ -33,12 +33,10 @@ from ..models import (
 from ..services.candidate_status import (
     CATEGORY_DISPLAY_LABELS,
     VALID_CANDIDATE_CATEGORIES,
-    get_user_latest_requested_category,
     parse_statement_category,
-    sync_all_user_candidates,
 )
 from ..services.media_storage import ensure_media_root, resolve_storage_path
-from .admin import _compute_all_exam_histories, _require_admin, _today_in_tbilisi
+from .admin import _require_admin, _today_in_tbilisi
 from .planning_letters import (
     CUSTOM_FILE_TEMPLATES,
     DEFAULT_TEMPLATES,
@@ -128,8 +126,12 @@ CATEGORY_LABELS_KA = dict(CATEGORY_DISPLAY_LABELS)
 
 DEFAULT_SYSTEM_PROMPT = """შენ ხარ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის (gipc.org.ge) ადმინისტრატორის ოფიციალური ხელოვნური ინტელექტის ასისტენტი და ოპერატიული მრჩეველი.
 
+🚫 მკაცრი აკრძალვა საგამოცდო სისტემაზე:
+- შენ არ გაქვს და კატეგორიულად გეკრძალება ნებისმიერი კავშირი ან წვდომა საგამოცდო სისტემასთან („გამოცდა“, „მრავალბინიანი“, „მრავალფუნქციური“ განყოფილებების შიგთავსი, საგამოცდო ბლოკები, ტესტის კითხვები, სწორი პასუხები, მრავალბინიანი/მრავალფუნქციური პროექტების დავალებები, ტაქსონომია, საგამოცდო პაროლები, დროის ლიმიტები და საგამოცდო სესიები).
+- შენ მუშაობ მხოლოდ „რეგისტრაციები“ განყოფილების ადმინისტრაციულ მონაცემებთან: რეგისტრირებული პირები, შემოსული განცხადებები, მიბმული დოკუმენტები, კანდიდატების სტატუსები/ვადები, სერტიფიკატები და ოფიციალური მიმოწერა (წერილები).
+
 შენი მთავარი დანიშნულებაა:
-1. შეისწავლო საიტზე არსებული მონაცემები: რეგისტრირებული პირები, შემოსული განცხადებები, განცხადებებზე მიბმული დოკუმენტები (PDF, სურათები, Word ფაილები), დაგეგმილი გამოცდები, გამოცდების შედეგები, კანდიდატების სტატუსები და გაგზავნილი წერილები.
+1. შეისწავლო რეგისტრირებული პირები, შემოსული განცხადებები, განცხადებებზე მიბმული დოკუმენტები (PDF, სურათები, Word ფაილები), კანდიდატების სტატუსები, სერტიფიკატები და გაგზავნილი წერილები.
 2. მიბმული დოკუმენტების (დიპლომი, პირადობის მოწმობა, პორტფოლიო/ნამუშევრები, ცნობა, განაცხადის ფორმა) დეტალური წაკითხვა და შეფასება:
    - ემთხვევა თუ არა დოკუმენტში მითითებული სახელი/გვარი/პირადი ნომერი განმცხადებლის მონაცემებს;
    - რა განათლება, კვალიფიკაცია ან სამუშაო გამოცდილება ჩანს დოკუმენტში;
@@ -561,9 +563,6 @@ def _build_site_context_and_attachments(
     default_next_date = _next_workday(today).isoformat()
     schedule_times = _load_schedule_times()
 
-    exam_histories = _compute_all_exam_histories(db)
-    requested_categories = sync_all_user_candidates(db, exam_histories)
-
     users = db.scalars(select(User).order_by(User.created_at.desc(), User.id.desc())).all()
     users_by_id = {u.id: u for u in users}
 
@@ -606,35 +605,6 @@ def _build_site_context_and_attachments(
     active_certs = [c for c in certs if c.status == "active"]
     suspended_or_expired_certs = [c for c in certs if c.status in ("suspended", "expired")]
 
-    pending_pass_users: list[dict[str, Any]] = []
-    pending_fail_users: list[dict[str, Any]] = []
-    for uid, hist in exam_histories.items():
-        u = users_by_id.get(uid)
-        if not u:
-            continue
-        if hist.get("pending_pass_letter"):
-            pending_pass_users.append(
-                {
-                    "user_id": u.id,
-                    "name": f"{u.first_name} {u.last_name}".strip(),
-                    "personal_id": u.personal_id,
-                    "email": u.email,
-                    "requested_category": requested_categories.get(u.id) or u.candidate_category or "A",
-                    "summary": hist.get("summary_text"),
-                }
-            )
-        elif hist.get("pending_fail_letter"):
-            pending_fail_users.append(
-                {
-                    "user_id": u.id,
-                    "name": f"{u.first_name} {u.last_name}".strip(),
-                    "personal_id": u.personal_id,
-                    "email": u.email,
-                    "requested_category": requested_categories.get(u.id) or u.candidate_category or "A",
-                    "summary": hist.get("summary_text"),
-                }
-            )
-
     now_utc = datetime.utcnow()
     cert_candidates_info: list[dict[str, Any]] = []
     for u in cert_candidates:
@@ -659,7 +629,6 @@ def _build_site_context_and_attachments(
         u = users_by_id.get(s.user_id)
         req_cat = (
             parse_statement_category(s.message)
-            or requested_categories.get(s.user_id)
             or (u.candidate_category if u else None)
             or "A"
         )
@@ -737,7 +706,6 @@ def _build_site_context_and_attachments(
             "code": u.code,
             "candidate_status": u.candidate_status,
             "candidate_category": u.candidate_category,
-            "requested_category": requested_categories.get(u.id),
             "certificate": (
                 {
                     "unique_code": cert.unique_code,
@@ -748,7 +716,6 @@ def _build_site_context_and_attachments(
                 if cert
                 else None
             ),
-            "exam_history": exam_histories.get(u.id),
             "statements_count": len(u_stmts),
             "letters_count": len(u_letters),
             "schedules": [
@@ -829,8 +796,6 @@ def _build_site_context_and_attachments(
             "certificate_candidates_count": len(cert_candidates),
             "active_certificates_count": len(active_certs),
             "suspended_or_expired_certificates_count": len(suspended_or_expired_certs),
-            "users_needing_exam_pass_letter_count": len(pending_pass_users),
-            "users_needing_exam_fail_letter_count": len(pending_fail_users),
         },
         "official_letter_templates": {
             k: {"subject": v.get("subject"), "body": v.get("body")}
@@ -838,14 +803,12 @@ def _build_site_context_and_attachments(
         },
         "focused_context": focus_context,
         "statements": statements_summary,
-        "users_needing_pass_letter": pending_pass_users,
-        "users_needing_fail_letter": pending_fail_users,
         "certificate_candidates_30_day_tracker": cert_candidates_info,
         "recent_sent_letters": recent_letters_summary,
     }
 
     context_str = (
-        "=== საიტის (gipc.org.ge) მიმდინარე ბაზის მონაცემები ===\n"
+        "=== საიტის (gipc.org.ge) მიმდინარე ბაზის მონაცემები (რეგისტრაციები და განცხადებები) ===\n"
         + json.dumps(context_payload, ensure_ascii=False, indent=2)
     )
     return context_str, attachment_parts, inspected_labels, users_by_id, templates_map

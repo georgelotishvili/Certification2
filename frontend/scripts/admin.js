@@ -298,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const isOtherChildActive = !!activeName && otherChildTargets.has(activeName);
     document.querySelector('.other-trigger')?.classList.toggle('active', isOtherChildActive);
     document.querySelector('.drawer-other-trigger')?.classList.toggle('active', isOtherChildActive);
+    window.dispatchEvent(new CustomEvent('admin:sectionChanged', { detail: { section: activeName } }));
   }
 
   function getCurrentUser() {

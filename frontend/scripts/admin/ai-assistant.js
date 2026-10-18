@@ -289,7 +289,7 @@
               <div class="ai-modal-quick-grid">
                 <button type="button" class="ai-quick-chip" data-mode="site_analysis">📊 საიტის სრული ანალიზი</button>
                 <button type="button" class="ai-quick-chip" data-mode="statements_analysis">📨 უპასუხო განცხადებები და ფაილები</button>
-                <button type="button" class="ai-quick-chip" data-mode="exam_analysis">🎓 გამოცდის შედეგები და ვადები</button>
+                <button type="button" class="ai-quick-chip" data-mode="exam_analysis">📋 კანდიდატები და 30-დღიანი ვადები</button>
               </div>
             </div>
 
@@ -386,7 +386,7 @@
           const labelMap = {
             site_analysis: '📊 ჩაატარე საიტის მიმდინარე მდგომარეობის სრული ანალიზი და მოამზადე სამოქმედო გეგმა.',
             statements_analysis: '📨 შეისწავლე ყველა უპასუხო განცხადება და მათზე მიბმული დოკუმენტები, შეაფასე და მოამზადე სარეკომენდაციო პასუხები.',
-            exam_analysis: '🎓 გააანალიზე გამოცდების შედეგები, კანდიდატები და 30-დღიანი ვადები.',
+            exam_analysis: '📋 გააანალიზე კანდიდატების სტატუსები და სერტიფიკატის კანდიდატების 30-დღიანი ვადები.',
           };
           closeSettingsModal();
           void sendChatMessage(labelMap[mode] || chip.textContent, { mode });
@@ -856,10 +856,24 @@
       });
     }
 
+    const FORBIDDEN_EXAM_SECTIONS = new Set(['exam', 'multiApartment', 'multiFunctional']);
+
     function init() {
       loadHistory();
       buildUI();
       void fetchStatus();
+
+      global.addEventListener('admin:sectionChanged', (event) => {
+        const sec = event?.detail?.section || '';
+        const isForbidden = FORBIDDEN_EXAM_SECTIONS.has(sec);
+        if (isForbidden) {
+          closeSettingsModal();
+          togglePanel(false);
+          if (fabEl) fabEl.hidden = true;
+        } else {
+          if (fabEl) fabEl.hidden = false;
+        }
+      });
 
       global.addEventListener('admin:aiAnalyzeStatement', (event) => {
         const detail = event?.detail || {};
