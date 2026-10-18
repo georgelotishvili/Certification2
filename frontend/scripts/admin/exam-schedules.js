@@ -2567,16 +2567,6 @@
               void openReplyTemplateChooserModal(item, { returnToHistory: true });
             };
 
-            if (item.isIncomingStatement) {
-              const quickReplyBtn = document.createElement('button');
-              quickReplyBtn.type = 'button';
-              quickReplyBtn.className = 'exam-stmt-quick-reply-btn';
-              quickReplyBtn.textContent = '↩ პასუხის გაცემა';
-              quickReplyBtn.title = 'პასუხის გაცემა განცხადებაზე სტანდარტული შაბლონის არჩევით';
-              quickReplyBtn.addEventListener('click', triggerReplyForStatement);
-              headRight.appendChild(quickReplyBtn);
-            }
-
             const dateLabel = formatDisplayDate(item.examDate);
             const timeDisplay = item.sentAtDisplay || dateLabel;
             if (timeDisplay) {
@@ -2777,18 +2767,6 @@
                 ? `დოკუმენტის №: ${item.docNumber}\n\n${item.body || '(ტექსტის გარეშე)'}`
                 : (item.body || '(ტექსტის გარეშე)');
               bodyWrap.appendChild(pre);
-            }
-
-            if (item.isIncomingStatement) {
-              const bottomReplyBar = document.createElement('div');
-              bottomReplyBar.className = 'exam-stmt-bottom-reply-bar';
-              const bottomReplyBtn = document.createElement('button');
-              bottomReplyBtn.type = 'button';
-              bottomReplyBtn.className = 'btn-primary exam-stmt-bottom-reply-btn';
-              bottomReplyBtn.textContent = '↩ პასუხის გაცემა (შაბლონის არჩევა)';
-              bottomReplyBtn.addEventListener('click', triggerReplyForStatement);
-              bottomReplyBar.appendChild(bottomReplyBtn);
-              bodyWrap.appendChild(bottomReplyBar);
             }
 
             row.appendChild(bodyWrap);
