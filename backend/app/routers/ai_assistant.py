@@ -227,36 +227,27 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ შპს „საქართ�
 ✅ სრული წვდომა საიტის ყველა დანარჩენ ნაწილსა და ბაზაზე:
 1. `registered_users`: ყველა რეგისტრირებული პირი (სახელი, გვარი, პირადი ნომერი, ელფოსტა, ტელეფონი, კოდი, კანდიდატის სტატუსი და კატეგორია, სერტიფიკატის სტატუსი).
 2. `certificates_registry`: სერტიფიცირებულ პირთა საჯარო და ადმინისტრაციული რეესტრი.
-3. `statements`: შემოსული განცხადებები და მათზე მიბმული დოკუმენტები (PDF, სურათები, Word ფაილები).
+3. `statements`: შემოსული განცხადებები და მათზე მიბმული დოკუმენტები (PDF, სურათები, Word და ZIP ფაილები).
 4. `exam_schedules_calendar`: დაგეგმილი გამოცდების ადმინისტრაციული განრიგი (დილის/საღამოს ცვლები).
 5. `recent_sent_letters` და `official_letter_templates`: გაგზავნილი ოფიციალური წერილები და წერილების შაბლონები (`GIPC-FRM-023`).
 6. `public_reviews_and_ratings`: სერტიფიცირებულ პირთა საჯარო პროფილებზე (`my.html`) დაწერილი შეფასებები და კომენტარები.
 7. `expert_portfolio_uploads`: სერტიფიცირებული ექსპერტების მიერ ატვირთული პროექტები და ექსპერტიზის დასკვნები.
-8. `site_documents`, `regulations`, `guide_videos`, `app_files_and_forms`.
+8. `site_documents`, `regulations`, `guide_videos`, `app_files_and_forms` (შენიშვნა: განაცხადის ფორმა კანდიდატის გვერდზე ჩაშენებულია ონლაინ-ფორმის სახით, ამიტომ `application_form` ველში ფაილის არარსებობა ნორმალურია და ხარვეზად არასდროს ჩათვალო).
 9. ადმინისტრატორის მიერ ჩატში ჩასმული სკრინშოტები, ფაილები და კომპიუტერის დაკავშირებული საქაღალდის ფაილები (`local_computer_files` და ცოცხლად წაკითხული `doc 2` დოკუმენტები).
 
-💻 ადმინისტრატორის კომპიუტერთან წვდომა (ცოცხალი წაკითხვა, ძებნა, ჩამოწერა და წერილზე მიბმა):
-- `local_computer_files` შეიცავს ადმინისტრატორის კომპიუტერის დაკავშირებულ საქაღალდეში არსებულ ყველა ფაილს (`path`, `name`, `size_bytes`, `mime_type`), ხოლო შესაბამისი დოკუმენტების სრული უახლესი ტექსტი ავტომატურად გადმოგეცემა კონტექსტში.
-- თუ `local_computer_files` სიაში ხედავ ფაილს (PDF, სურათი, Word, ZIP ან ტექსტური ფაილი), რომლის შიგთავსის წაკითხვაც გჭირდება და ის ჯერ არ არის მიბმული მიმდინარე კონტექსტში, პასუხის ბოლოს დაურთე `<READ_LOCAL_FILE>{"path": "ფაილის_სრული_path_ან_სახელი"}</READ_LOCAL_FILE>` (შეგიძლია დაურთო რამდენიმე `<READ_LOCAL_FILE>` ბლოკი). სისტემა ავტომატურად წაიკითხავს ამ ფაილებს კომპიუტერიდან და მოგაწვდის სრულ შიგთავსს!
-- შენ შეგიძლია პირდაპირ მიაბა კომპიუტერში არსებული ნებისმიერი ფაილი (მაგ. `.docx` ხელშეკრულება, ფორმა ან დასკვნა) გასაგზავნ წერილს (`"computer_attachment_path": "ფაილის_path_ან_სახელი"` `<PROPOSED_LETTER>` ბლოკში) ან მიაბა საიტის ბაზაში არსებული ფაილი (`"stored_attachment": {"source_type": "certificate", "source_id": 5}`).
+💻 ადმინისტრატორის კომპიუტერის ფაილების წაკითხვა (`<READ_LOCAL_FILE>`):
+- `local_computer_files` შეიცავს ადმინისტრატორის კომპიუტერის დაკავშირებულ საქაღალდეში არსებულ ყველა ფაილს (`path`, `name`, `size_bytes`, `mime_type`).
+- როდესაც ადმინისტრატორი გთხოვს მის კომპიუტერში არსებული კონკრეტული ფაილის წაკითხვას ან შემოწმებას (და ფაილის შიგთავსი ჯერ არ ჩანს კონტექსტში), პასუხის ბოლოს დაამატე ზუსტად ამ ფორმატის ბლოკი:
+<READ_LOCAL_FILE>
+{"path": "საქაღალდე/ფაილის_სახელი.docx"}
+</READ_LOCAL_FILE>
 
 🌐 ვებში გასვლა და დოკუმენტების სანდოობის გადამოწმება (კანონმდებლობის ფარგლებში):
 - ჩართული გაქვს პირდაპირი ვებ-ძებნა (Google Search Grounding) და საჯარო ვებ-გვერდების წაკითხვა.
 - მიბმული დოკუმენტების (დიპლომი, სტაჟის ცნობა, რეესტრის ამონაწერი, პროექტი, ექსპერტიზის დასკვნა) შემოწმებისას ვებში გადაამოწმე უნივერსიტეტის აკრედიტაცია (`eqe.ge`), დამსაქმებელი ორგანიზაციის სტატუსი (`napr.gov.ge`, `my.gov.ge`, `rs.ge`), საკადასტრო და საკანონმდებლო მონაცემები (`matsne.gov.ge`, დადგენილება №134, №255, №41) და დასკვნაში მიუთითე გადამოწმების შედეგი.
 
 ⬇️ ფაილების ჩამოწერა ადმინისტრატორის კომპიუტერში (`<DOWNLOAD_FILE>`):
-1) ახალი ფაილის შესაქმნელად და კომპიუტერში ჩამოსაწერად პასუხის ბოლოს დაურთე:
-<DOWNLOAD_FILE>
-{
-  "mode": "generated",
-  "filename": "angarishi.doc",
-  "mime_type": "application/msword",
-  "title": "საიტის ანალიტიკური ანგარიში",
-  "auto_download": true,
-  "content": "აქ ჩაწერე ფაილის სრული ტექსტი ან ცხრილი"
-}
-</DOWNLOAD_FILE>
-2) საიტის ბაზაში არსებული ფაილის ჩამოსაწერად პასუხის ბოლოს დაურთე:
+1) საიტის ბაზაში არსებული ნებისმიერი ფაილის ჩამოსაწერად პასუხის ბოლოს აუცილებლად დაამატე ზუსტად ამ ფორმატის ბლოკი:
 <DOWNLOAD_FILE>
 {
   "mode": "stored",
@@ -267,20 +258,32 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ შპს „საქართ�
 }
 </DOWNLOAD_FILE>
 (`source_type`: `"statement"`, `"certificate"`, `"site_document"`, `"regulation"`, `"expert_expertise"`, `"expert_project"`, `"letter"`, `"application_form"`, `"app_file"`).
+2) ახალი ფაილის/ანგარიშის შესაქმნელად და კომპიუტერში ჩამოსაწერად პასუხის ბოლოს დაამატე:
+<DOWNLOAD_FILE>
+{
+  "mode": "generated",
+  "filename": "angarishi.doc",
+  "mime_type": "application/msword",
+  "title": "საიტის ანალიტიკური ანგარიში",
+  "auto_download": true,
+  "content": "აქ ჩაწერე ფაილის სრული ტექსტი ან ცხრილი"
+}
+</DOWNLOAD_FILE>
 
-⚠️ უმკაცრესი უსაფრთხოების წესი წერილების გაგზავნაზე და ადრესატის სიზუსტეზე:
-- ადმინისტრატორის პირდაპირი დადასტურების გარეშე წერილს არასდროს აგზავნი!
+⚠️ უმკაცრესი უსაფრთხოების წესი წერილების გაგზავნაზე (`<PROPOSED_LETTER>`):
+- შენ თვითონ არასდროს აგზავნი წერილს ავტომატურად ადმინისტრატორის დადასტურების გარეშე!
 - კატეგორიულად გეკრძალება სხვადასხვა პირის მონაცემების არევა! `registered_users` სიაში გადაამოწმე, რომ `user_id`, `user_name`, `personal_id`, `to_email` და წერილის ტექსტში (`body`) ჩაწერილი სახელი/გვარი ეკუთვნის ზუსტად იმავე ერთ კონკრეტულ პირს!
-- როდესაც ამზადებ წერილს (სტანდარტულს ან არასტანდარტულს `GIPC-FRM-023`-ის მიხედვით):
-  1) პასუხის ტექსტში დაწერე: **სად იგზავნება**, **რატომ იგზავნება** (შესაბამისი პროცედურის პუნქტის მითითებით) და **რა იგზავნება / რა ფაილი ებმება**.
-  2) ტექსტის ბოლოს დაურთე `<PROPOSED_LETTER>` ბლოკი:
+- როდესაც ადმინისტრატორი გთხოვს კანდიდატისთვის ან მომხმარებლისთვის წერილის მომზადებას/გაგზავნას (ან განცხადების შემოწმებისას სთავაზობ საპასუხო წერილს), ჯერ ტექსტურად წარუდგინე მოკლე დასაბუთება და წერილის პროექტი, ხოლო პასუხის ბოლოს აუცილებლად დაამატე ზუსტად ამ ფორმატის `<PROPOSED_LETTER>` ბლოკი (რათა ჩატში გამოჩნდეს „✅ ვადასტურებ და გაიგზავნოს“ ღილაკი):
 <PROPOSED_LETTER>
 {
   "user_id": 51,
   "user_name": "სახელი გვარი",
+  "recipient_name": "სახელი გვარი",
   "personal_id": "01001011111",
   "to_email": "user@example.com",
-  "statement_id": null,
+  "recipient_email": "user@example.com",
+  "statement_id": 12,
+  "kind": "exam",
   "template_mode": "exam",
   "period": "morning",
   "event_date": "2026-10-20",
@@ -293,7 +296,10 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ შპს „საქართ�
   "stored_attachment": null
 }
 </PROPOSED_LETTER>
-(`template_mode`: `"exam"`, `"rejection"`, `"certificate"`, `"exam_fail"`, `"custom"`; `period`: `"morning"` ან `"evening"` როცა `template_mode` არის `"exam"` ან `"certificate"`).
+(`template_mode` / `kind`: `"exam"`, `"rejection"`, `"certificate"`, `"exam_fail"`, `"custom"`; `period`: `"morning"` ან `"evening"` როცა `template_mode` არის `"exam"` ან `"certificate"`; `event_date`, `event_time` და წერილის ტექსტი ყოველთვის აიღე საიტის მიმდინარე ბაზიდან ან ადმინისტრატორის მითითებით).
+
+🗣️ პასუხის სტილი (სავალდებულო წესი):
+- ყოველთვის უპასუხე მოკლედ, მარტივად, ლაკონიურად და პირდაპირ საქმეზე (მაქსიმუმ რამდენიმე წინადადებით ან მოკლე პუნქტებით). არ დაწერო გრძელი შესავლები, თეორიული მსჯელობები და ვრცელი ტექსტები, თუ ადმინისტრატორი თავად არ გთხოვს დეტალურ განმარტებას ან ოფიციალური წერილის/დოკუმენტის სრულ პროექტს.
 """
 
 
@@ -472,8 +478,19 @@ def _load_ai_settings() -> dict[str, Any]:
         reasoning_level = DEFAULT_REASONING_LEVEL
 
     custom_prompt = str(data.get("custom_system_prompt") or "").strip()
-    if "system_prompt" in data and data.get("system_prompt") is not None:
-        system_prompt = str(data.get("system_prompt")).strip()
+    stored_sys_prompt = (
+        str(data.get("system_prompt") or "").strip()
+        if "system_prompt" in data and data.get("system_prompt") is not None
+        else ""
+    )
+    if (
+        stored_sys_prompt
+        and "<PROPOSED_LETTER>" in stored_sys_prompt
+        and "<DOWNLOAD_FILE>" in stored_sys_prompt
+        and "<READ_LOCAL_FILE>" in stored_sys_prompt
+        and "იოსებიძის ქ. №69, ბინა №28" not in stored_sys_prompt
+    ):
+        system_prompt = stored_sys_prompt
         system_prompt_customized = True
     else:
         system_prompt = DEFAULT_SYSTEM_PROMPT
@@ -1610,13 +1627,17 @@ def _build_site_context_and_attachments(
 
 
 _PROPOSED_LETTER_RE = re.compile(
-    r"<PROPOSED_LETTER>\s*(\{.*?\})\s*</PROPOSED_LETTER>",
+    r"<(?:PROPOSED_LETTER|PROPOSE_LETTER|SEND_LETTER)>\s*(.*?)\s*</(?:PROPOSED_LETTER|PROPOSE_LETTER|SEND_LETTER)>",
     re.DOTALL | re.IGNORECASE,
 )
 
 
 def _ka_stem(word: str) -> str:
     w = (word or "").strip().lower()
+    for suf in ("ისთვის", "ების", "ებს", "ით", "ად", "მა", "ზე", "ში", "ის", "ს"):
+        if len(w) >= len(suf) + 3 and w.endswith(suf):
+            w = w[: -len(suf)]
+            break
     if len(w) >= 4 and w[-1] in ("ი", "ე", "ა", "ო", "უ"):
         return w[:-1]
     return w
@@ -1629,10 +1650,10 @@ def _match_user_from_text(text: str, users: list[User]) -> User | None:
     # 1. Exact personal_id or email match
     for u in users:
         pid = (u.personal_id or "").strip()
-        if len(pid) >= 9 and pid in t_lower:
+        if len(pid) >= 9 and pid not in ("01000000000", "00000000000", "12345678901") and pid in t_lower:
             return u
         em = (u.email or "").strip().lower()
-        if len(em) >= 5 and "@" in em and em in t_lower:
+        if len(em) >= 5 and "@" in em and "example.com" not in em and em in t_lower:
             return u
 
     # 2. Full name stem match (both first_name and last_name stems present)
@@ -1651,18 +1672,44 @@ def _match_user_from_text(text: str, users: list[User]) -> User | None:
         return both_matches[0]
     if not both_matches and len(last_only_matches) == 1:
         return last_only_matches[0]
+    if both_matches:
+        return both_matches[0]
     return None
 
 
 def _resolve_target_user_for_proposal(
     data: dict[str, Any],
     users_by_id: dict[int, User],
+    *,
+    db: Session | None = None,
     last_user_message: str = "",
+    prior_messages_text: str = "",
+    focus_user_id: int | None = None,
+    focus_statement_id: int | None = None,
 ) -> User | None:
     all_users = list(users_by_id.values())
+    if not all_users:
+        return None
+
     raw_pid = str(data.get("personal_id") or "").strip()
-    raw_email = str(data.get("to_email") or data.get("email") or "").strip().lower()
-    raw_name = str(data.get("user_name") or data.get("name") or "").strip()
+    if raw_pid in ("01000000000", "00000000000", "12345678901"):
+        raw_pid = ""
+
+    raw_email = (
+        str(data.get("to_email") or data.get("recipient_email") or data.get("email") or "")
+        .strip()
+        .lower()
+    )
+    if "example.com" in raw_email:
+        raw_email = ""
+
+    raw_name = str(
+        data.get("user_name")
+        or data.get("recipient_name")
+        or data.get("name")
+        or data.get("full_name")
+        or ""
+    ).strip()
     raw_body = str(data.get("body") or "")
 
     # Extract "ადრესატი: სახელი გვარი" from body if present
@@ -1673,23 +1720,43 @@ def _resolve_target_user_for_proposal(
         return " ".join(val.lower().split())
 
     by_id: User | None = None
+    raw_uid = data.get("user_id") if data.get("user_id") is not None else data.get("recipient_id")
     try:
-        if data.get("user_id") is not None:
-            by_id = users_by_id.get(int(data.get("user_id")))
+        if raw_uid is not None:
+            by_id = users_by_id.get(int(raw_uid))
     except (TypeError, ValueError):
         by_id = None
+
+    by_stmt: User | None = None
+    raw_stmt_id = data.get("statement_id")
+    if db is not None and raw_stmt_id is not None:
+        try:
+            sid = int(raw_stmt_id)
+            if sid != 105 or focus_statement_id == 105:
+                stmt_rec = db.get(Statement, sid)
+                if stmt_rec and stmt_rec.user_id:
+                    by_stmt = users_by_id.get(stmt_rec.user_id)
+        except (TypeError, ValueError):
+            by_stmt = None
 
     by_pid: User | None = None
     if raw_pid:
         by_pid = next((u for u in all_users if (u.personal_id or "").strip() == raw_pid), None)
 
     by_email: User | None = None
-    if raw_email and "@" in raw_email and "example.com" not in raw_email:
+    if raw_email and "@" in raw_email:
         by_email = next((u for u in all_users if (u.email or "").strip().lower() == raw_email), None)
 
     by_name: User | None = None
     target_name_norm = _norm_name(raw_name)
-    if target_name_norm and target_name_norm != "სახელი გვარი":
+    placeholder_names = {
+        "სახელი გვარი",
+        "კანდიდატის სახელი გვარი",
+        "[სახელი და გვარი]",
+        "[სახელი, გვარი]",
+        "{name}",
+    }
+    if target_name_norm and target_name_norm not in placeholder_names:
         matches = [
             u
             for u in all_users
@@ -1702,7 +1769,7 @@ def _resolve_target_user_for_proposal(
 
     by_body_name: User | None = None
     body_name_norm = _norm_name(body_recipient_name)
-    if body_name_norm and body_name_norm not in ("სახელი გვარი", "{name}", "[სახელი და გვარი]"):
+    if body_name_norm and body_name_norm not in placeholder_names:
         matches = [
             u
             for u in all_users
@@ -1713,47 +1780,120 @@ def _resolve_target_user_for_proposal(
         else:
             by_body_name = _match_user_from_text(body_recipient_name, all_users)
 
-    by_msg: User | None = _match_user_from_text(last_user_message, all_users) if last_user_message else None
+    by_msg: User | None = (
+        _match_user_from_text(last_user_message, all_users) if last_user_message else None
+    )
 
-    # Priority: user explicitly named in admin message > personal_id > email > explicit name > body recipient > user_id
-    for candidate in (by_msg, by_pid, by_email, by_name, by_body_name, by_id):
+    by_focus: User | None = None
+    if focus_user_id and focus_user_id in users_by_id:
+        by_focus = users_by_id.get(focus_user_id)
+    elif db is not None and focus_statement_id:
+        stmt_focus = db.get(Statement, focus_statement_id)
+        if stmt_focus and stmt_focus.user_id:
+            by_focus = users_by_id.get(stmt_focus.user_id)
+
+    by_prior_msg: User | None = (
+        _match_user_from_text(prior_messages_text, all_users) if prior_messages_text else None
+    )
+
+    # Priority: explicit message target / exact PID / exact email / explicit name / body recipient / statement / user_id / focus / prior chat history
+    for candidate in (
+        by_msg,
+        by_pid,
+        by_email,
+        by_name,
+        by_body_name,
+        by_stmt,
+        by_id,
+        by_focus,
+        by_prior_msg,
+    ):
         if candidate is not None:
             return candidate
-    return None
+
+    # Final fallback: latest unanswered statement's user so a proposal card never silently vanishes
+    if db is not None:
+        latest_stmt = db.scalar(
+            select(Statement)
+            .where(Statement.user_id.is_not(None))
+            .order_by(Statement.answered_at.is_not(None).asc(), Statement.created_at.desc())
+        )
+        if latest_stmt and latest_stmt.user_id in users_by_id:
+            return users_by_id[latest_stmt.user_id]
+    return all_users[0] if all_users else None
 
 
 def _parse_proposed_letters(
     raw_text: str,
     *,
+    db: Session | None = None,
     users_by_id: dict[int, User],
     templates_map: dict[str, dict[str, Any]],
     default_date: str,
     schedule_times: dict[str, str],
     last_user_message: str = "",
+    prior_messages_text: str = "",
+    focus_user_id: int | None = None,
+    focus_statement_id: int | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     proposals: list[dict[str, Any]] = []
 
     def _replace(match: re.Match) -> str:
         block = match.group(1).strip()
+        if block.startswith("```"):
+            block = re.sub(r"^```(?:json)?\s*", "", block, flags=re.IGNORECASE)
+            block = re.sub(r"\s*```$", "", block).strip()
+        if not block.startswith("{"):
+            j_match = re.search(r"\{.*\}", block, flags=re.DOTALL)
+            if j_match:
+                block = j_match.group(0)
         try:
             data = json.loads(block)
         except Exception:
             return ""
         if not isinstance(data, dict):
             return ""
-        user = _resolve_target_user_for_proposal(data, users_by_id, last_user_message=last_user_message)
+        user = _resolve_target_user_for_proposal(
+            data,
+            users_by_id,
+            db=db,
+            last_user_message=last_user_message,
+            prior_messages_text=prior_messages_text,
+            focus_user_id=focus_user_id,
+            focus_statement_id=focus_statement_id,
+        )
         if not user:
             return ""
 
-        template_mode = str(data.get("template_mode") or "exam").strip().lower()
-        if template_mode not in ("exam", "rejection", "certificate", "exam_fail", "custom"):
-            template_mode = "exam"
+        raw_mode = (
+            str(data.get("template_mode") or data.get("kind") or data.get("period") or "exam")
+            .strip()
+            .lower()
+        )
+        mode_aliases = {
+            "exam": "exam",
+            "morning": "exam",
+            "evening": "exam",
+            "rejection": "rejection",
+            "reject": "rejection",
+            "refusal": "rejection",
+            "certificate": "certificate",
+            "cert": "certificate",
+            "cert_issued": "cert_issued",
+            "exam_fail": "exam_fail",
+            "fail": "exam_fail",
+            "failed": "exam_fail",
+            "custom": "custom",
+        }
+        template_mode = mode_aliases.get(raw_mode, "exam")
 
-        period = str(data.get("period") or "").strip().lower()
+        raw_period = str(data.get("period") or "").strip().lower()
         if template_mode in ("exam", "certificate"):
-            if period not in ("morning", "evening"):
-                period = "morning"
+            period = raw_period if raw_period in ("morning", "evening") else "morning"
             kind = template_mode
+        elif template_mode == "cert_issued":
+            period = "custom"
+            kind = "certificate"
         else:
             period = template_mode
             kind = "exam"
@@ -1783,20 +1923,38 @@ def _parse_proposed_letters(
         full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
         cat_label = CATEGORY_LABELS_KA.get(cat, CATEGORY_LABELS_KA["A"])
 
-        if template_mode in ("exam", "certificate", "exam_fail"):
+        if template_mode in ("exam", "certificate", "exam_fail", "cert_issued"):
             # Always use the official template filled with the verified recipient's exact data
             subject = fallback_subject
             body = fallback_body
         else:
-            subject = str(data.get("subject") or fallback_subject).strip() or fallback_subject
-            body = str(data.get("body") or fallback_body).strip() or fallback_body
+            raw_subj = str(data.get("subject") or "").strip()
+            if raw_subj in ("", "წერილის სათაური", "სათაური"):
+                subject = fallback_subject
+            else:
+                subject = raw_subj
+            raw_b = str(data.get("body") or "").strip()
+            if (
+                raw_b in ("", "შაბლონის სრული ტექსტი შევსებული მონაცემებით", "წერილის ტექსტი")
+                or len(raw_b) < 25
+            ):
+                body = fallback_body
+            else:
+                body = raw_b
             for placeholder, val in (
                 ("{name}", full_name),
+                ("[სახელი და გვარი]", full_name),
+                ("[სახელი, გვარი]", full_name),
                 ("{date}", ev_date),
+                ("[გამოცდის თარიღი]", ev_date),
                 ("{time}", ev_time),
+                ("[საათი]", ev_time),
                 ("{code}", user.code or ""),
                 ("{personal_id}", user.personal_id or ""),
                 ("[კატეგორია]", cat_label),
+                ("[IBAN ანგარიში]", "GE33TB7313736080100014"),
+                ("[IBAN]", "GE33TB7313736080100014"),
+                ("[მისამართი]", "ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6"),
             ):
                 subject = subject.replace(placeholder, val)
                 body = body.replace(placeholder, val)
@@ -1812,6 +1970,8 @@ def _parse_proposed_letters(
         stmt_id = data.get("statement_id")
         try:
             stmt_id = int(stmt_id) if stmt_id is not None else None
+            if stmt_id == 105 and focus_statement_id != 105:
+                stmt_id = None
         except (TypeError, ValueError):
             stmt_id = None
 
@@ -1854,7 +2014,7 @@ def _parse_proposed_letters(
 
 
 _DOWNLOAD_FILE_RE = re.compile(
-    r"<DOWNLOAD_FILE>\s*(\{.*?\})\s*</DOWNLOAD_FILE>",
+    r"<DOWNLOAD_FILE>\s*(.*?)\s*</DOWNLOAD_FILE>",
     re.DOTALL | re.IGNORECASE,
 )
 
@@ -1975,13 +2135,21 @@ def _parse_download_files(
 
     def _replace(match: re.Match) -> str:
         block = match.group(1).strip()
+        if block.startswith("```"):
+            block = re.sub(r"^```(?:json)?\s*", "", block, flags=re.IGNORECASE)
+            block = re.sub(r"\s*```$", "", block).strip()
+        if not block.startswith("{"):
+            j_match = re.search(r"\{.*\}", block, flags=re.DOTALL)
+            if j_match:
+                block = j_match.group(0)
         try:
             data = json.loads(block)
         except Exception:
             return ""
         if not isinstance(data, dict):
             return ""
-        mode = str(data.get("mode") or "generated").strip().lower()
+        default_mode = "stored" if data.get("source_type") else "generated"
+        mode = str(data.get("mode") or default_mode).strip().lower()
         title = str(data.get("title") or "ფაილის ჩამოწერა კომპიუტერში").strip()
         auto_dl = bool(data.get("auto_download", True))
 
@@ -3415,11 +3583,15 @@ def ai_chat(
 
     contents: list[dict[str, Any]] = []
     prior_messages = payload.messages[:-1] if payload.messages else []
+    prior_texts: list[str] = []
     for m in prior_messages[-10:]:
         role = "model" if m.role in ("assistant", "model") else "user"
         text, _ = _parse_read_local_files(m.content.strip())
+        text = _PROPOSED_LETTER_RE.sub("", text)
+        text = _DOWNLOAD_FILE_RE.sub("", text).strip()
         if text:
             contents.append({"role": role, "parts": [{"text": text}]})
+            prior_texts.append(text)
 
     final_parts: list[dict[str, Any]] = [{"text": context_str}]
     if kb_inline_parts:
@@ -3460,11 +3632,15 @@ def ai_chat(
     schedule_times = _load_schedule_times()
     clean_reply, proposed_letters = _parse_proposed_letters(
         raw_reply,
+        db=db,
         users_by_id=users_by_id,
         templates_map=templates_map,
         default_date=default_date,
         schedule_times=schedule_times,
         last_user_message=last_user_msg,
+        prior_messages_text="\n".join(reversed(prior_texts)),
+        focus_user_id=payload.user_id,
+        focus_statement_id=payload.statement_id,
     )
     clean_reply, download_files = _parse_download_files(
         clean_reply,
