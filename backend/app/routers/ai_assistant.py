@@ -411,16 +411,22 @@ def _load_ai_settings() -> dict[str, Any]:
     pub_stored_gemini = str(data.get("public_gemini_api_key") or "").strip()
     pub_stored_openai = str(data.get("public_openai_api_key") or "").strip()
 
-    public_model = str(data.get("public_model") or model or DEFAULT_MODEL).strip()
+    public_model = str(data.get("public_model") or DEFAULT_MODEL).strip()
     if public_model not in MODEL_CATALOG:
-        public_model = model
+        public_model = DEFAULT_MODEL
 
     public_reasoning_level = str(data.get("public_reasoning_level") or reasoning_level or DEFAULT_REASONING_LEVEL).strip().lower()
     if public_reasoning_level not in REASONING_LEVELS:
         public_reasoning_level = DEFAULT_REASONING_LEVEL
 
-    if "public_system_prompt" in data and data.get("public_system_prompt") is not None:
-        public_system_prompt = str(data.get("public_system_prompt")).strip()
+    stored_pub_prompt = str(data.get("public_system_prompt") or "").strip()
+    if (
+        "public_system_prompt" in data
+        and data.get("public_system_prompt") is not None
+        and stored_pub_prompt
+        and "ნუ ღელავთ, პროცესი ძალიან მარტივია" not in stored_pub_prompt
+    ):
+        public_system_prompt = stored_pub_prompt
         public_system_prompt_customized = True
     else:
         public_system_prompt = DEFAULT_PUBLIC_SYSTEM_PROMPT
@@ -2553,15 +2559,11 @@ def _retrieve_knowledge_base_context(
 
     scored_docs.sort(key=lambda x: x[0], reverse=True)
 
-    catalog_lines = [
-        f"- [{it.get('folder', 'დოკუმენტები')}] {it.get('filename')}"
-        for it in items
-    ]
     blocks: list[str] = [
-        "=== ინსტიტუტის ერთიანი დოკუმენტური ცოდნის ბაზა (AI Knowledge Base — სულ "
-        f"{len(items)} დოკუმენტი) ===\n"
-        "ატვირთული დოკუმენტების სრული კატალოგი:\n"
-        + "\n".join(catalog_lines)
+        "=== ინსტიტუტის ოფიციალური დოკუმენტური ცოდნის ბაზა ===\n"
+        "[სისტემური წესი: ქვემოთ მოცემულია შენი შიდა ცოდნის ბაზის დოკუმენტების შინაარსი. "
+        "არასოდეს ჩამოუთვალო მომხმარებელს ფაილების ტექნიკური სახელები (მაგ. .md, .docx, .pdf, _არგონ) — "
+        "გამოიყენე მხოლოდ მათი შინაარსი კითხვაზე ბუნებრივად საპასუხოდ!]"
     ]
 
     # Include public GuideDocument (`გზამკვლევი`) if present in DB
@@ -2608,10 +2610,9 @@ def _retrieve_knowledge_base_context(
                 excerpt = excerpt[:remaining]
 
             blocks.append(
-                f"=== დოკუმენტი ცოდნის ბაზიდან: [{folder}] {fname} ===\n{excerpt}"
+                f"=== წყარო ცოდნის ბაზიდან ===\n{excerpt}"
             )
             used_chars += len(excerpt)
-            inspected_labels.append(f"📚 {fname}")
         elif fname.lower().endswith(".pdf") and score >= 40 and len(inline_parts) < 2:
             # Binary PDF without extracted text — pass as inline_data
             storage_name = str(it.get("storage_name") or "")
@@ -2620,7 +2621,7 @@ def _retrieve_knowledge_base_context(
                 try:
                     b64_pdf = base64.b64encode(pdf_path.read_bytes()).decode("ascii")
                     inline_parts.append(
-                        {"text": f"📄 ცოდნის ბაზის PDF დოკუმენტი: '{fname}'"}
+                        {"text": "📄 ცოდნის ბაზის PDF დოკუმენტი:"}
                     )
                     inline_parts.append(
                         {
@@ -2631,7 +2632,6 @@ def _retrieve_knowledge_base_context(
                             }
                         }
                     )
-                    inspected_labels.append(f"📚 {fname}")
                 except Exception:
                     pass
 

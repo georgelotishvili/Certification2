@@ -2170,7 +2170,7 @@
       return;
     }
 
-    const STORAGE_KEY = 'gipc_public_ai_chat_history_v1';
+    const STORAGE_KEY = 'gipc_public_ai_chat_history_v2';
     const API_BASE = getApiBase();
 
     const ICONS = {

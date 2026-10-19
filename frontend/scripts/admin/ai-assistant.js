@@ -1561,15 +1561,6 @@
           bubble.appendChild(userAttRow);
         }
 
-        if (Array.isArray(msg.inspected_attachments) && msg.inspected_attachments.length > 0) {
-          const filesBar = document.createElement('div');
-          filesBar.className = 'ai-msg-files-inspected';
-          filesBar.innerHTML = `შესწავლილი დოკუმენტები: <strong>${escapeHtml(
-            msg.inspected_attachments.join(', ')
-          )}</strong>`;
-          bubble.appendChild(filesBar);
-        }
-
         const contentDiv = document.createElement('div');
         contentDiv.className = 'ai-msg-content';
         contentDiv.innerHTML = formatMarkdownSimple(msg.content);
@@ -1707,13 +1698,6 @@
           ) {
             score += 35;
           }
-        } else if (
-          keyLower.startsWith('27_შეტყობინებების_შაბლონები') ||
-          keyLower.startsWith('28_ვებგვერდზე_განსათავსებელი') ||
-          keyLower.startsWith('05_სერტიფიკაციის_პროცედურა')
-        ) {
-          // Always give a small baseline score to the 3 core reference documents when a folder is connected
-          score += 10;
         }
 
         if (score > 0) {
