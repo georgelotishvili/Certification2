@@ -356,21 +356,64 @@
       folderInputEl?.click();
     }
 
+    function normalizeLocalPath(p) {
+      return String(p || '')
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/^\/+|\/+$/g, '')
+        .toLowerCase();
+    }
+
+    function findMatchingComputerEntries(pathOrName) {
+      const target = normalizeLocalPath(pathOrName);
+      if (!target || !localComputerFiles.length) return [];
+      const targetBase = target.split('/').pop() || target;
+
+      // 1. Exact path match or suffix path match (e.g. when AI includes/omits root folder name)
+      const exactOrSuffix = localComputerFiles.filter((f) => {
+        const fp = normalizeLocalPath(f.path);
+        return fp === target || fp.endsWith('/' + target) || target.endsWith('/' + fp);
+      });
+      if (exactOrSuffix.length) return exactOrSuffix;
+
+      // 2. Subfolder match (if AI requested a directory path)
+      const folderMatches = localComputerFiles.filter((f) => {
+        const fp = normalizeLocalPath(f.path);
+        return fp.startsWith(target + '/') || fp.includes('/' + target + '/');
+      });
+      if (folderMatches.length) return folderMatches;
+
+      // 3. Exact filename match
+      const nameMatches = localComputerFiles.filter(
+        (f) => normalizeLocalPath(f.name) === targetBase || normalizeLocalPath(f.name) === target
+      );
+      if (nameMatches.length) return nameMatches;
+
+      // 4. Partial path or filename match
+      return localComputerFiles.filter((f) => {
+        const fp = normalizeLocalPath(f.path);
+        const fn = normalizeLocalPath(f.name);
+        return (
+          fp.includes(target) ||
+          target.includes(fp) ||
+          (targetBase.length >= 4 && (fn.includes(targetBase) || targetBase.includes(fn)))
+        );
+      });
+    }
+
     async function resolveComputerFileObj(pathOrName) {
       if (!pathOrName) return null;
-      const target = String(pathOrName).trim().toLowerCase();
+      const target = normalizeLocalPath(pathOrName);
       if (!target) return null;
+      const targetBase = target.split('/').pop() || target;
       for (const att of pendingAttachments) {
-        if (att.filename.toLowerCase() === target && att.file_obj) {
+        const attName = normalizeLocalPath(att.filename);
+        if ((attName === target || attName === targetBase) && att.file_obj) {
           return att.file_obj;
         }
       }
-      let match =
-        localComputerFiles.find((f) => f.path.toLowerCase() === target) ||
-        localComputerFiles.find((f) => f.name.toLowerCase() === target) ||
-        localComputerFiles.find(
-          (f) => f.name.toLowerCase().includes(target) || target.includes(f.name.toLowerCase())
-        );
+      const matches = findMatchingComputerEntries(pathOrName);
+      const match = matches[0] || null;
       if (!match) return null;
       // Always read fresh from handle first so live edits on disk are immediately reflected
       if (match.handle) {
@@ -384,6 +427,109 @@
       }
       if (match.file) return match.file;
       return null;
+    }
+
+    function extractAndStripReadLocalFiles(rawText) {
+      const requested = [];
+      const seen = new Set();
+      function addPath(val) {
+        const p = String(val || '').trim().replace(/^["']+|["']+$/g, '');
+        const key = normalizeLocalPath(p);
+        if (p && key && !seen.has(key)) {
+          seen.add(key);
+          requested.push({ path: p });
+        }
+      }
+      let cleaned = String(rawText || '').replace(
+        /<READ_LOCAL_FILE>\s*([\s\S]*?)\s*<\/READ_LOCAL_FILE>/gi,
+        (_m, inner) => {
+          const block = String(inner || '').trim();
+          if (!block) return '';
+          try {
+            const data = JSON.parse(block);
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+              ['path', 'file', 'filename', 'rel_path', 'name'].forEach((k) => {
+                if (data[k]) addPath(data[k]);
+              });
+              if (Array.isArray(data.paths)) data.paths.forEach(addPath);
+              if (Array.isArray(data.files)) {
+                data.files.forEach((it) =>
+                  addPath(it && typeof it === 'object' ? it.path || it.name || it.filename : it)
+                );
+              }
+            } else if (Array.isArray(data)) {
+              data.forEach((it) =>
+                addPath(it && typeof it === 'object' ? it.path || it.name || it.filename : it)
+              );
+            } else if (typeof data === 'string') {
+              addPath(data);
+            }
+          } catch {
+            const regex = /"(?:path|file|filename|rel_path|name)"\s*:\s*"([^"]+)"/g;
+            let match;
+            let found = false;
+            while ((match = regex.exec(block)) !== null) {
+              addPath(match[1]);
+              found = true;
+            }
+            if (!found) {
+              block.split(/\r?\n/).forEach((line) => {
+                const cl = line.trim().replace(/^[-*•"']+|["']+$/g, '');
+                if (cl && !cl.startsWith('{') && !cl.startsWith('}')) addPath(cl);
+              });
+            }
+          }
+          return '';
+        }
+      );
+      cleaned = cleaned.replace(/<\/?READ_LOCAL_FILE[^>]*>/gi, '').trim();
+      return { cleanText: cleaned, readLocalFiles: requested };
+    }
+
+    async function resolveAndReadLocalFiles(requestedList) {
+      if (!Array.isArray(requestedList) || !requestedList.length) return [];
+      if (localComputerDirHandle && !savedHandleNeedsPermission) {
+        try {
+          localComputerFiles = await scanDirectoryHandle(localComputerDirHandle);
+          syncComputerBtnUI();
+        } catch {}
+      }
+      if (!localComputerFiles.length) return [];
+
+      const entriesToRead = [];
+      const seenPaths = new Set();
+      for (const reqItem of requestedList) {
+        const reqPath = typeof reqItem === 'string' ? reqItem : reqItem?.path || reqItem?.filename || '';
+        if (!reqPath) continue;
+        const matches = findMatchingComputerEntries(reqPath);
+        for (const entry of matches) {
+          const normP = normalizeLocalPath(entry.path);
+          if (!seenPaths.has(normP)) {
+            seenPaths.add(normP);
+            entriesToRead.push(entry);
+            if (entriesToRead.length >= 15) break;
+          }
+        }
+        if (entriesToRead.length >= 15) break;
+      }
+
+      const attachments = [];
+      for (const entry of entriesToRead) {
+        const fileObj = await resolveComputerFileObj(entry.path);
+        if (fileObj && fileObj.size <= 25 * 1024 * 1024) {
+          try {
+            const dataUrl = await readFileAsDataUrl(fileObj);
+            const commaIdx = dataUrl.indexOf(',');
+            attachments.push({
+              filename: fileObj.name,
+              path: entry.path,
+              mime_type: fileObj.type || entry.mime_type || 'application/octet-stream',
+              data_base64: commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl,
+            });
+          } catch {}
+        }
+      }
+      return attachments;
     }
 
     async function triggerFileDownload(dlItem, { saveToConnectedFolder = false } = {}) {
@@ -433,7 +579,16 @@
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            messages = parsed.slice(-30);
+            messages = parsed.slice(-30).map((m) => {
+              const { cleanText, readLocalFiles } = extractAndStripReadLocalFiles(m.content || '');
+              const existingLocal = Array.isArray(m.read_local_files) ? m.read_local_files : [];
+              const mergedLocal = existingLocal.length ? existingLocal : readLocalFiles;
+              return {
+                ...m,
+                content: cleanText,
+                read_local_files: mergedLocal,
+              };
+            });
           }
         }
       } catch {
@@ -457,7 +612,8 @@
     }
 
     function formatMarkdownSimple(text) {
-      const safe = escapeHtml(String(text || ''));
+      const { cleanText } = extractAndStripReadLocalFiles(String(text || ''));
+      const safe = escapeHtml(cleanText);
       const lines = safe.split(/\r?\n/);
       const htmlLines = [];
       let inList = false;
@@ -1519,6 +1675,62 @@
       return card;
     }
 
+    function createReadLocalFileCardElement(msg) {
+      const reqFiles = Array.isArray(msg.read_local_files) ? msg.read_local_files : [];
+      const card = document.createElement('div');
+      card.className = 'ai-download-file-card ai-read-local-file-card';
+      const pathsList = reqFiles
+        .map((r) => (typeof r === 'string' ? r : r?.path || r?.filename || ''))
+        .filter(Boolean);
+      const isAutoRead = reqFiles.some((r) => r && typeof r === 'object' && r.auto_read);
+
+      card.innerHTML = `
+        <div class="ai-download-card-info">
+          <span class="ai-download-card-icon">📂</span>
+          <div>
+            <div class="ai-download-card-title">${
+              isAutoRead
+                ? `კომპიუტერიდან ავტომატურად წაკითხულია (${pathsList.length} ფაილი)`
+                : `AI ითხოვს კომპიუტერის ფაილების წაკითხვას (${pathsList.length} ფაილი)`
+            }</div>
+            <div class="ai-download-card-filename"><code>${escapeHtml(pathsList.join(', '))}</code></div>
+          </div>
+        </div>
+        <div class="ai-download-card-actions">
+          <button type="button" class="ai-download-btn ai-read-local-trigger-btn">${
+            isAutoRead ? '🔄 ხელახლა წაკითხვა და გაგზავნა' : '📂 წაკითხვა და AI-სთვის გაგზავნა'
+          }</button>
+        </div>
+      `;
+
+      const triggerBtn = card.querySelector('.ai-read-local-trigger-btn');
+      if (triggerBtn) {
+        on(triggerBtn, 'click', async (e) => {
+          if (isSending) return;
+          if (!localComputerFiles.length || savedHandleNeedsPermission) {
+            await connectLocalComputerFolder(e);
+          }
+          const resolved = await resolveAndReadLocalFiles(reqFiles);
+          if (!resolved.length) {
+            showToast(
+              'მოთხოვნილი ფაილი ვერ მოიძებნა დაკავშირებულ საქაღალდეში. გადაამოწმეთ დაკავშირებული საქაღალდე.',
+              'error'
+            );
+            return;
+          }
+          const namesLabel = resolved.map((a) => a.path || a.filename).join(', ');
+          void sendChatMessage(
+            `📂 კომპიუტერიდან წაკითხულია მოთხოვნილი ფაილები: ${namesLabel}. გთხოვ დეტალურად გააანალიზო მათი სრული შიგთავსი.`,
+            {
+              mode: 'chat',
+              extraAttachments: resolved,
+            }
+          );
+        });
+      }
+      return card;
+    }
+
     function renderMessages() {
       if (!messagesContainerEl) return;
       messagesContainerEl.innerHTML = '';
@@ -1568,6 +1780,10 @@
 
         itemEl.appendChild(bubble);
 
+        if (Array.isArray(msg.read_local_files) && msg.read_local_files.length > 0) {
+          itemEl.appendChild(createReadLocalFileCardElement(msg));
+        }
+
         if (Array.isArray(msg.download_files) && msg.download_files.length > 0) {
           msg.download_files.forEach((dlItem) => {
             itemEl.appendChild(createDownloadCardElement(dlItem));
@@ -1588,7 +1804,7 @@
         loadingEl.className = 'ai-msg-item is-assistant is-loading';
         loadingEl.innerHTML = `
           <div class="ai-msg-bubble">
-            <span class="ai-typing-indicator">${ICONS.sparkle} <span>${escapeHtml(getActiveModelLabel())} (${escapeHtml(getActiveLevelShortLabel())}) ამუშავებს მოთხოვნას...</span></span>
+            <span class="ai-typing-indicator">${ICONS.sparkle} <span class="ai-typing-status-text">${escapeHtml(getActiveModelLabel())} (${escapeHtml(getActiveLevelShortLabel())}) ამუშავებს მოთხოვნას...</span></span>
           </div>
         `;
         messagesContainerEl.appendChild(loadingEl);
@@ -1635,19 +1851,22 @@
       }
       if (!localComputerFiles.length) return [];
 
-      // Group files by canonical document base key so if both .docx and .md exist,
-      // we pick the most recently modified version (or .md if timestamps are equal/older).
+      const allowedExts = ['.md', '.docx', '.pdf', '.txt', '.zip', '.jpg', '.jpeg', '.png', '.webp', '.csv'];
       const groups = new Map();
       for (const entry of localComputerFiles) {
         const lowerName = entry.name.toLowerCase();
-        if (!lowerName.endsWith('.md') && !lowerName.endsWith('.docx') && !lowerName.endsWith('.pdf') && !lowerName.endsWith('.txt')) {
+        if (!allowedExts.some((ext) => lowerName.endsWith(ext))) {
           continue;
         }
-        const key = normalizeDocKey(entry.name);
-        if (!groups.has(key)) {
-          groups.set(key, { key, md: null, docx: null, other: null });
+        const docStem = normalizeDocKey(entry.name);
+        const dirPart = entry.path.includes('/')
+          ? entry.path.slice(0, entry.path.lastIndexOf('/')).toLowerCase()
+          : '';
+        const groupKey = dirPart ? `${dirPart}/${docStem}` : docStem;
+        if (!groups.has(groupKey)) {
+          groups.set(groupKey, { key: docStem, pathLower: entry.path.toLowerCase(), md: null, docx: null, other: null });
         }
-        const g = groups.get(key);
+        const g = groups.get(groupKey);
         if (lowerName.endsWith('.md')) g.md = entry;
         else if (lowerName.endsWith('.docx')) g.docx = entry;
         else g.other = entry;
@@ -1655,7 +1874,6 @@
 
       function pickFreshestEntry(g) {
         if (g.docx && g.md) {
-          // If the .docx file was edited more recently than the .md file, read the live .docx!
           if ((g.docx.last_modified || 0) > (g.md.last_modified || 0) + 2000) {
             return g.docx;
           }
@@ -1665,6 +1883,10 @@
       }
 
       const lower = String(userText || '').toLowerCase();
+      const words = lower
+        .split(/[\s,.;:!?()[\]"']+/)
+        .map((w) => w.trim())
+        .filter((w) => w.length >= 4);
       const scored = [];
 
       for (const g of groups.values()) {
@@ -1673,10 +1895,23 @@
         let score = 0;
         const keyLower = g.key;
         const nameLower = entry.name.toLowerCase();
+        const pathLower = entry.path.toLowerCase();
 
-        // Direct filename or stem match
-        if (lower && (lower.includes(nameLower) || (keyLower.length >= 4 && lower.includes(keyLower)))) {
+        // Direct filename, stem, or relative path match
+        if (
+          lower &&
+          (lower.includes(nameLower) ||
+            lower.includes(pathLower) ||
+            (keyLower.length >= 4 && lower.includes(keyLower)))
+        ) {
           score += 100;
+        } else if (words.length >= 1) {
+          const matchedWords = words.filter((w) => pathLower.includes(w) || nameLower.includes(w));
+          if (matchedWords.length >= 2) {
+            score += 85;
+          } else if (matchedWords.length === 1 && matchedWords[0].length >= 5) {
+            score += 45;
+          }
         }
 
         // Topic / GIPC document code match
@@ -1708,14 +1943,15 @@
       scored.sort((a, b) => b.score - a.score);
 
       const matched = [];
-      for (const item of scored.slice(0, 5)) {
+      for (const item of scored.slice(0, 10)) {
         const fileObj = await resolveComputerFileObj(item.entry.path);
-        if (fileObj && fileObj.size <= 12 * 1024 * 1024) {
+        if (fileObj && fileObj.size <= 25 * 1024 * 1024) {
           try {
             const dataUrl = await readFileAsDataUrl(fileObj);
             const commaIdx = dataUrl.indexOf(',');
             matched.push({
               filename: fileObj.name,
+              path: item.entry.path,
               mime_type: fileObj.type || 'application/octet-stream',
               data_base64: commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl,
             });
@@ -1727,13 +1963,13 @@
 
     async function sendChatMessage(
       text,
-      { mode = 'chat', statementId = null, userId = null } = {}
+      { mode = 'chat', statementId = null, userId = null, extraAttachments = [] } = {}
     ) {
       if (isSending) return;
       buildUI();
       if (!isOpen) togglePanel(true);
 
-      const currentAttachments = pendingAttachments.slice();
+      const currentAttachments = [...pendingAttachments.slice(), ...(Array.isArray(extraAttachments) ? extraAttachments : [])];
       pendingAttachments = [];
       renderPendingAttachments();
 
@@ -1761,19 +1997,34 @@
 
       try {
         const autoMatchedComputerAttachments = await collectMatchingComputerAttachments(text, mode);
+        const seenAttNames = new Set(currentAttachments.map((a) => normalizeLocalPath(a.path || a.filename)));
+        const filteredAuto = autoMatchedComputerAttachments.filter(
+          (a) => !seenAttNames.has(normalizeLocalPath(a.path || a.filename))
+        );
         const combinedAttachments = [
           ...currentAttachments.map((a) => ({
             filename: a.filename,
             mime_type: a.mime_type,
             data_base64: a.data_base64,
           })),
-          ...autoMatchedComputerAttachments,
-        ].slice(0, 8);
+          ...filteredAuto.map((a) => ({
+            filename: a.filename,
+            mime_type: a.mime_type,
+            data_base64: a.data_base64,
+          })),
+        ].slice(0, 20);
 
         const apiMessages = messages.map((m) => ({
           role: m.role,
           content: m.content,
         }));
+        const computerFilesPayload = localComputerFiles.slice(0, 400).map((cf) => ({
+          path: cf.path,
+          name: cf.name,
+          size_bytes: cf.size_bytes,
+          mime_type: cf.mime_type,
+        }));
+
         const resp = await fetch(`${API_BASE}/admin/ai/chat`, {
           method: 'POST',
           headers: {
@@ -1787,12 +2038,7 @@
             statement_id: statementId,
             user_id: userId,
             attachments: combinedAttachments,
-            computer_files: localComputerFiles.slice(0, 400).map((cf) => ({
-              path: cf.path,
-              name: cf.name,
-              size_bytes: cf.size_bytes,
-              mime_type: cf.mime_type,
-            })),
+            computer_files: computerFilesPayload,
           }),
         });
 
@@ -1808,13 +2054,92 @@
           throw new Error(detail);
         }
 
-        const data = await resp.json();
+        let data = await resp.json();
+        const parsedFromReply = extractAndStripReadLocalFiles(data.reply || '');
+        let cleanReply = parsedFromReply.cleanText;
+        const backendReadReq = Array.isArray(data.read_local_files) ? data.read_local_files : [];
+        let requestedLocalFiles = [...backendReadReq, ...parsedFromReply.readLocalFiles];
+        // Deduplicate requestedLocalFiles by normalized path
+        const seenReq = new Set();
+        requestedLocalFiles = requestedLocalFiles.filter((r) => {
+          const p = normalizeLocalPath(typeof r === 'string' ? r : r?.path || r?.filename || '');
+          if (!p || seenReq.has(p)) return false;
+          seenReq.add(p);
+          return true;
+        });
+
+        // If AI requested <READ_LOCAL_FILE>, automatically resolve from localComputerFiles and do a seamless follow-up!
+        if (requestedLocalFiles.length > 0) {
+          const autoReadAttachments = await resolveAndReadLocalFiles(requestedLocalFiles);
+          if (autoReadAttachments.length > 0) {
+            const statusTextEl = messagesContainerEl?.querySelector('.ai-typing-status-text');
+            if (statusTextEl) {
+              statusTextEl.textContent = `📂 კომპიუტერიდან იკითხება ფაილები (${autoReadAttachments.map((a) => a.filename).join(', ')})...`;
+            }
+            const followupMessages = [
+              ...apiMessages,
+              ...(cleanReply ? [{ role: 'assistant', content: cleanReply }] : []),
+              {
+                role: 'user',
+                content: `📂 კომპიუტერის დაკავშირებული საქაღალდიდან ავტომატურად წაკითხულია მოთხოვნილი ფაილები (${autoReadAttachments.map((a) => a.path || a.filename).join(', ')}). გთხოვ დეტალურად გააანალიზო მათი სრული შიგთავსი და მოამზადო საბოლოო პასუხი.`,
+              },
+            ];
+            const followupResp = await fetch(`${API_BASE}/admin/ai/chat`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...getAdminHeaders(),
+                ...getActorHeaders(),
+              },
+              body: JSON.stringify({
+                messages: followupMessages,
+                mode,
+                statement_id: statementId,
+                user_id: userId,
+                attachments: autoReadAttachments.map((a) => ({
+                  filename: a.filename,
+                  mime_type: a.mime_type,
+                  data_base64: a.data_base64,
+                })),
+                computer_files: computerFilesPayload,
+              }),
+            });
+            if (followupResp.ok) {
+              const data2 = await followupResp.json();
+              const parsed2 = extractAndStripReadLocalFiles(data2.reply || '');
+              cleanReply = parsed2.cleanText || cleanReply;
+              data = {
+                ...data2,
+                proposed_letters: [
+                  ...(Array.isArray(data.proposed_letters) ? data.proposed_letters : []),
+                  ...(Array.isArray(data2.proposed_letters) ? data2.proposed_letters : []),
+                ],
+                download_files: [
+                  ...(Array.isArray(data.download_files) ? data.download_files : []),
+                  ...(Array.isArray(data2.download_files) ? data2.download_files : []),
+                ],
+                inspected_attachments: Array.from(
+                  new Set([
+                    ...(Array.isArray(data.inspected_attachments) ? data.inspected_attachments : []),
+                    ...(Array.isArray(data2.inspected_attachments) ? data2.inspected_attachments : []),
+                  ])
+                ),
+              };
+              requestedLocalFiles = requestedLocalFiles.map((r) => ({
+                path: typeof r === 'string' ? r : r.path || r.filename,
+                auto_read: true,
+              }));
+            }
+          }
+        }
+
         const dlFiles = Array.isArray(data.download_files) ? data.download_files : [];
         messages.push({
           role: 'assistant',
-          content: data.reply || 'ანალიზი დასრულებულია.',
+          content: cleanReply || 'ანალიზი დასრულებულია.',
           proposed_letters: Array.isArray(data.proposed_letters) ? data.proposed_letters : [],
           download_files: dlFiles,
+          read_local_files: requestedLocalFiles,
           inspected_attachments: Array.isArray(data.inspected_attachments)
             ? data.inspected_attachments
             : [],
@@ -1833,6 +2158,7 @@
           content: `⚠️ **შეცდომა:** ${err?.message || 'მოთხოვნა ვერ შესრულდა.'}`,
           proposed_letters: [],
           download_files: [],
+          read_local_files: [],
           inspected_attachments: [],
           timestamp: new Date().toISOString(),
         });

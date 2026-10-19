@@ -237,6 +237,7 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ შპს „საქართ�
 
 💻 ადმინისტრატორის კომპიუტერთან წვდომა (ცოცხალი წაკითხვა, ძებნა, ჩამოწერა და წერილზე მიბმა):
 - `local_computer_files` შეიცავს ადმინისტრატორის კომპიუტერის დაკავშირებულ საქაღალდეში არსებულ ყველა ფაილს (`path`, `name`, `size_bytes`, `mime_type`), ხოლო შესაბამისი დოკუმენტების სრული უახლესი ტექსტი ავტომატურად გადმოგეცემა კონტექსტში.
+- თუ `local_computer_files` სიაში ხედავ ფაილს (PDF, სურათი, Word, ZIP ან ტექსტური ფაილი), რომლის შიგთავსის წაკითხვაც გჭირდება და ის ჯერ არ არის მიბმული მიმდინარე კონტექსტში, პასუხის ბოლოს დაურთე `<READ_LOCAL_FILE>{"path": "ფაილის_სრული_path_ან_სახელი"}</READ_LOCAL_FILE>` (შეგიძლია დაურთო რამდენიმე `<READ_LOCAL_FILE>` ბლოკი). სისტემა ავტომატურად წაიკითხავს ამ ფაილებს კომპიუტერიდან და მოგაწვდის სრულ შიგთავსს!
 - შენ შეგიძლია პირდაპირ მიაბა კომპიუტერში არსებული ნებისმიერი ფაილი (მაგ. `.docx` ხელშეკრულება, ფორმა ან დასკვნა) გასაგზავნ წერილს (`"computer_attachment_path": "ფაილის_path_ან_სახელი"` `<PROPOSED_LETTER>` ბლოკში) ან მიაბა საიტის ბაზაში არსებული ფაილი (`"stored_attachment": {"source_type": "certificate", "source_id": 5}`).
 
 🌐 ვებში გასვლა და დოკუმენტების სანდოობის გადამოწმება (კანონმდებლობის ფარგლებში):
@@ -742,6 +743,148 @@ def _extract_docx_text(file_bytes: bytes, max_chars: int = 80000) -> str:
         return ""
 
 
+def _extract_pdf_text(file_bytes: bytes, max_chars: int = 40000) -> str:
+    try:
+        import pypdf  # type: ignore
+
+        reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+        pages: list[str] = []
+        for idx, page in enumerate(reader.pages, start=1):
+            try:
+                txt = (page.extract_text() or "").strip()
+            except Exception:
+                txt = ""
+            if txt:
+                pages.append(f"[გვერდი {idx}]\n{txt}")
+        joined = "\n\n".join(pages).strip()
+        return joined[:max_chars] if joined else ""
+    except Exception:
+        return ""
+
+
+def _unpack_zip_bytes_to_parts(
+    raw_bytes: bytes,
+    zip_filename: str,
+    context_label: str,
+    *,
+    budget_bytes: int = 24 * 1024 * 1024,
+    max_files: int = 30,
+) -> tuple[list[dict[str, Any]], int, list[str]]:
+    """Unpack a .zip archive (up to 30 files), extracting full text from all PDFs/DOCX/TXT
+    and attaching inline_data for images and PDFs (prioritizing scanned PDFs and images)."""
+    mime_map = {
+        ".pdf": "application/pdf",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }
+    parts: list[dict[str, Any]] = []
+    unpacked_names: list[str] = []
+    used = 0
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
+            names = [
+                n
+                for n in zf.namelist()
+                if not n.endswith("/")
+                and not n.startswith("__MACOSX/")
+                and not Path(n).name.startswith("._")
+                and not Path(n).name.startswith("~$")
+            ]
+            parts.append(
+                {
+                    "text": (
+                        f"📎 {context_label} — მიბმულია ZIP არქივი '{zip_filename}' "
+                        f"(სულ {len(names)} ფაილი): {', '.join(names[:40])}\n"
+                        f"ქვემოთ მოცემულია არქივში არსებული ყველა ფაილის ({min(len(names), max_files)} ფაილი) შიგთავსი:"
+                    )
+                }
+            )
+            binary_queue: list[tuple[int, str, str, bytes]] = []
+            for idx, inner_name in enumerate(names[:max_files], start=1):
+                inner_suffix = Path(inner_name).suffix.lower()
+                try:
+                    inner_bytes = zf.read(inner_name)
+                except Exception:
+                    continue
+                if not inner_bytes:
+                    continue
+                unpacked_names.append(Path(inner_name).name)
+
+                if inner_suffix == ".pdf":
+                    pdf_txt = _extract_pdf_text(inner_bytes, max_chars=28000)
+                    if pdf_txt:
+                        parts.append(
+                            {
+                                "text": (
+                                    f"📄 [{idx}/{min(len(names), max_files)}] PDF ფაილი ZIP არქივიდან "
+                                    f"({context_label} / '{inner_name}') — ამოღებული ტექსტი:\n---\n{pdf_txt}\n---"
+                                )
+                            }
+                        )
+                    else:
+                        parts.append(
+                            {
+                                "text": (
+                                    f"📄 [{idx}/{min(len(names), max_files)}] PDF ფაილი ZIP არქივიდან "
+                                    f"({context_label} / '{inner_name}') — სკანირებული/გრაფიკული PDF (იხილეთ მიბმული ვიზუალური ასლი)."
+                                )
+                            }
+                        )
+                    # Priority 0 for scanned PDFs (< 120 chars extracted), priority 1 for text-layer PDFs
+                    prio = 0 if len(pdf_txt) < 120 else 1
+                    binary_queue.append((prio, inner_name, "application/pdf", inner_bytes))
+                elif inner_suffix in (".jpg", ".jpeg", ".png", ".webp"):
+                    # Priority 0 for images so they are always visually inspected
+                    binary_queue.append((0, inner_name, mime_map[inner_suffix], inner_bytes))
+                elif inner_suffix == ".docx":
+                    txt = _extract_docx_text(inner_bytes, max_chars=35000)
+                    if txt:
+                        parts.append(
+                            {
+                                "text": (
+                                    f"📄 [{idx}/{min(len(names), max_files)}] Word ფაილი ZIP არქივიდან "
+                                    f"({context_label} / '{inner_name}'):\n---\n{txt}\n---"
+                                )
+                            }
+                        )
+                elif inner_suffix in (".txt", ".md", ".csv", ".json", ".html", ".htm"):
+                    txt = inner_bytes.decode("utf-8", errors="replace").strip()[:30000]
+                    if txt:
+                        parts.append(
+                            {
+                                "text": (
+                                    f"📄 [{idx}/{min(len(names), max_files)}] ტექსტური ფაილი ZIP არქივიდან "
+                                    f"({context_label} / '{inner_name}'):\n---\n{txt}\n---"
+                                )
+                            }
+                        )
+
+            # Attach inline_data for images and PDFs (scanned PDFs and images first, then text PDFs)
+            binary_queue.sort(key=lambda item: item[0])
+            for _prio, inner_name, mtype, inner_bytes in binary_queue:
+                if 0 < len(inner_bytes) <= (budget_bytes - used):
+                    parts.append(
+                        {
+                            "text": f"📄 ფაილი ZIP არქივიდან ({context_label}): '{inner_name}'"
+                        }
+                    )
+                    parts.append(
+                        {
+                            "inline_data": {
+                                "mime_type": mtype,
+                                "data": base64.b64encode(inner_bytes).decode("ascii"),
+                                "filename": inner_name,
+                            }
+                        }
+                    )
+                    used += len(inner_bytes)
+    except Exception:
+        pass
+    return parts, used, unpacked_names
+
+
 def _read_statement_attachment_parts(
     statement: Statement,
     user: User | None,
@@ -768,7 +911,8 @@ def _read_statement_attachment_parts(
     except OSError:
         return [], 0, None
 
-    if size <= 0 or size > budget_bytes:
+    max_disk_size = max(budget_bytes, 50 * 1024 * 1024)
+    if size <= 0 or size > max_disk_size:
         return (
             [
                 {
@@ -796,7 +940,32 @@ def _read_statement_attachment_parts(
     }
 
     parts: list[dict[str, Any]] = []
+    if suffix == ".pdf":
+        pdf_txt = _extract_pdf_text(raw_bytes, max_chars=45000)
+        header_txt = (
+            f"📎 ქვემოთ მოცემულია განცხადებაზე ({doc_num}, ავტორი: {user_label}) "
+            f"მიბმული PDF დოკუმენტი: '{filename}'. გთხოვ დეტალურად წაიკითხო და გააანალიზო მისი შინაარსი:"
+        )
+        if pdf_txt:
+            header_txt += f"\n--- PDF-დან ამოღებული ტექსტი ('{filename}') ---\n{pdf_txt}\n---"
+        parts.append({"text": header_txt})
+        used = 0
+        if len(raw_bytes) <= budget_bytes:
+            parts.append(
+                {
+                    "inline_data": {
+                        "mime_type": "application/pdf",
+                        "data": base64.b64encode(raw_bytes).decode("ascii"),
+                        "filename": filename,
+                    }
+                }
+            )
+            used = len(raw_bytes)
+        return parts, used, f"{doc_num}: {filename}"
+
     if suffix in mime_map:
+        if len(raw_bytes) > budget_bytes:
+            return [], 0, None
         parts.append(
             {
                 "text": (
@@ -830,50 +999,16 @@ def _read_statement_attachment_parts(
             return parts, len(extracted.encode("utf-8")), f"{doc_num}: {filename}"
 
     if suffix == ".zip":
-        try:
-            with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
-                names = [n for n in zf.namelist() if not n.endswith("/")]
-                parts.append(
-                    {
-                        "text": (
-                            f"📎 განცხადებაზე ({doc_num}, ავტორი: {user_label}) მიბმულია ZIP არქივი "
-                            f"'{filename}', რომელიც შეიცავს ფაილებს: {', '.join(names[:20])}"
-                        )
-                    }
-                )
-                used = 0
-                for inner_name in names[:3]:
-                    inner_suffix = Path(inner_name).suffix.lower()
-                    if inner_suffix in mime_map:
-                        inner_bytes = zf.read(inner_name)
-                        if 0 < len(inner_bytes) <= (budget_bytes - used):
-                            parts.append(
-                                {
-                                    "text": f"📄 ფაილი ZIP არქივიდან ({doc_num}): '{inner_name}'"
-                                }
-                            )
-                            parts.append(
-                                {
-                                    "inline_data": {
-                                        "mime_type": mime_map[inner_suffix],
-                                        "data": base64.b64encode(inner_bytes).decode("ascii"),
-                                        "filename": inner_name,
-                                    }
-                                }
-                            )
-                            used += len(inner_bytes)
-                    elif inner_suffix == ".docx":
-                        inner_bytes = zf.read(inner_name)
-                        txt = _extract_docx_text(inner_bytes)
-                        if txt:
-                            parts.append(
-                                {
-                                    "text": f"📄 Word ფაილი ZIP არქივიდან ({doc_num} / '{inner_name}'):\n{txt}"
-                                }
-                            )
-                return parts, used, f"{doc_num}: {filename}"
-        except Exception:
-            pass
+        zip_parts, used, unpacked_names = _unpack_zip_bytes_to_parts(
+            raw_bytes,
+            filename,
+            f"განცხადება {doc_num} (ავტორი: {user_label})",
+            budget_bytes=budget_bytes,
+            max_files=30,
+        )
+        if zip_parts:
+            count_note = f" ({len(unpacked_names)} ფაილი)" if unpacked_names else ""
+            return zip_parts, used, f"{doc_num}: {filename}{count_note}"
 
     return (
         [
@@ -1393,7 +1528,7 @@ def _build_site_context_and_attachments(
 
     attachment_parts: list[dict[str, Any]] = []
     inspected_labels: list[str] = []
-    remaining_budget = 12 * 1024 * 1024
+    remaining_budget = 24 * 1024 * 1024
     for st_item in attachments_to_load:
         u = users_by_id.get(st_item.user_id)
         parts, used_bytes, label = _read_statement_attachment_parts(
@@ -1894,6 +2029,67 @@ def _parse_download_files(
 
     cleaned = _DOWNLOAD_FILE_RE.sub(_replace, raw_text).strip()
     return cleaned, downloads
+
+
+_READ_LOCAL_FILE_RE = re.compile(
+    r"<READ_LOCAL_FILE>\s*(.*?)\s*</READ_LOCAL_FILE>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _parse_read_local_files(raw_text: str) -> tuple[str, list[dict[str, str]]]:
+    requested: list[dict[str, str]] = []
+    seen_paths: set[str] = set()
+
+    def _add_path(val: Any) -> None:
+        p = str(val or "").strip().strip("\"'")
+        if p and p not in seen_paths:
+            seen_paths.add(p)
+            requested.append({"path": p})
+
+    def _replace(match: re.Match) -> str:
+        block = (match.group(1) or "").strip()
+        if not block:
+            return ""
+        try:
+            data = json.loads(block)
+            if isinstance(data, dict):
+                for key in ("path", "file", "filename", "rel_path", "name"):
+                    if data.get(key):
+                        _add_path(data.get(key))
+                if isinstance(data.get("paths"), list):
+                    for item in data["paths"]:
+                        _add_path(item)
+                if isinstance(data.get("files"), list):
+                    for item in data["files"]:
+                        if isinstance(item, dict):
+                            _add_path(item.get("path") or item.get("name") or item.get("filename"))
+                        else:
+                            _add_path(item)
+            elif isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict):
+                        _add_path(item.get("path") or item.get("name") or item.get("filename"))
+                    else:
+                        _add_path(item)
+            elif isinstance(data, str):
+                _add_path(data)
+            return ""
+        except Exception:
+            m_path = re.findall(r'"(?:path|file|filename|rel_path|name)"\s*:\s*"([^"]+)"', block)
+            if m_path:
+                for mp in m_path:
+                    _add_path(mp)
+            else:
+                for line in block.splitlines():
+                    cleaned_line = line.strip().strip("-*•\"'")
+                    if cleaned_line and not cleaned_line.startswith("{") and not cleaned_line.startswith("}"):
+                        _add_path(cleaned_line)
+            return ""
+
+    cleaned = _READ_LOCAL_FILE_RE.sub(_replace, raw_text).strip()
+    cleaned = re.sub(r"</?READ_LOCAL_FILE[^>]*>", "", cleaned, flags=re.IGNORECASE).strip()
+    return cleaned, requested
 
 
 _PUBLIC_URL_RE = re.compile(
@@ -3110,25 +3306,63 @@ def ai_chat(
         )
 
     user_uploaded_parts: list[dict[str, Any]] = []
-    for att in (payload.attachments or [])[:10]:
+    for att in (payload.attachments or [])[:25]:
         fname = (att.filename or "screenshot.png").strip()
-        mime = (att.mime_type or "image/png").strip().lower()
+        mime = (att.mime_type or "application/octet-stream").strip().lower()
         b64_raw = (att.data_base64 or "").strip()
         if "," in b64_raw and b64_raw.startswith("data:"):
             b64_raw = b64_raw.split(",", 1)[1].strip()
         if not b64_raw:
             continue
         suffix = Path(fname).suffix.lower()
-        if mime.startswith("image/") or mime == "application/pdf":
+        if suffix == ".zip" or "zip" in mime:
+            try:
+                raw_b = base64.b64decode(b64_raw)
+                zip_parts, _used_b, unpacked_names = _unpack_zip_bytes_to_parts(
+                    raw_b,
+                    fname,
+                    f"ადმინისტრატორის კომპიუტერიდან მიბმული ZIP ({fname})",
+                    budget_bytes=20 * 1024 * 1024,
+                    max_files=30,
+                )
+                if zip_parts:
+                    user_uploaded_parts.extend(zip_parts)
+                    count_note = f" ({len(unpacked_names)} ფაილი)" if unpacked_names else ""
+                    inspected_labels.append(f"კომპიუტერიდან: {fname}{count_note}")
+            except Exception:
+                pass
+        elif suffix == ".pdf" or mime == "application/pdf":
+            pdf_txt = ""
+            try:
+                raw_b = base64.b64decode(b64_raw)
+                pdf_txt = _extract_pdf_text(raw_b, max_chars=45000)
+            except Exception:
+                pdf_txt = ""
+            header_txt = f"📄 ადმინისტრატორის კომპიუტერიდან წაკითხული/მიბმული PDF ფაილი: '{fname}'"
+            if pdf_txt:
+                header_txt += f"\n--- PDF-დან ამოღებული ტექსტი ('{fname}') ---\n{pdf_txt}\n---"
+            user_uploaded_parts.append({"text": header_txt})
             user_uploaded_parts.append(
                 {
-                    "text": f"🖼️/📄 ადმინისტრატორის კომპიუტერიდან ჩატში მიბმული ფაილი / სკრინი: '{fname}'"
+                    "inline_data": {
+                        "mime_type": "application/pdf",
+                        "data": b64_raw,
+                        "filename": fname,
+                    }
+                }
+            )
+            inspected_labels.append(f"კომპიუტერიდან: {fname}")
+        elif mime.startswith("image/") or suffix in (".jpg", ".jpeg", ".png", ".webp"):
+            eff_mime = mime if mime.startswith("image/") else (mimetypes.guess_type(fname)[0] or "image/png")
+            user_uploaded_parts.append(
+                {
+                    "text": f"🖼️ ადმინისტრატორის კომპიუტერიდან ჩატში მიბმული სურათი / სკრინი: '{fname}'"
                 }
             )
             user_uploaded_parts.append(
                 {
                     "inline_data": {
-                        "mime_type": mime,
+                        "mime_type": eff_mime,
                         "data": b64_raw,
                         "filename": fname,
                     }
@@ -3183,7 +3417,7 @@ def ai_chat(
     prior_messages = payload.messages[:-1] if payload.messages else []
     for m in prior_messages[-10:]:
         role = "model" if m.role in ("assistant", "model") else "user"
-        text = m.content.strip()
+        text, _ = _parse_read_local_files(m.content.strip())
         if text:
             contents.append({"role": role, "parts": [{"text": text}]})
 
@@ -3236,11 +3470,13 @@ def ai_chat(
         clean_reply,
         db=db,
     )
+    clean_reply, read_local_files = _parse_read_local_files(clean_reply)
 
     return {
         "reply": clean_reply,
         "proposed_letters": proposed_letters,
         "download_files": download_files,
+        "read_local_files": read_local_files,
         "inspected_attachments": inspected_labels,
         "model": cfg["model"],
         "model_label": model_info["label"],
