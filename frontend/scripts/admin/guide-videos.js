@@ -70,7 +70,7 @@
 
     function inlineFormatText(str) {
       const placeholder = '\u0000AST\u0000';
-      const prepared = String(str || '').replace(/\\\*/g, placeholder);
+      const prepared = String(str || '').replace(/[🟢🟡🔴]\s*/g, '').replace(/\\\*/g, placeholder);
       let s = escapeHtml(prepared);
       s = s.replace(/&lt;br\s*\/?&gt;/gi, '<br>');
       s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
@@ -147,7 +147,12 @@
         }
         if (stripped.startsWith('## ')) {
           const hText = stripped.slice(3).trim();
-          if (seenH1 && out.length === 1) {
+          const isDocSubtitle =
+            seenH1 &&
+            out.length === 1 &&
+            !/^(?:\d+\.|[IVX]+\.)\s/.test(hText) &&
+            ['შპს', 'ინსტიტუტი', 'არქიტექტორთა სერტიფიცირება', 'კატეგორია'].some((kw) => hText.includes(kw));
+          if (isDocSubtitle) {
             out.push(`<h2 style="text-align:center;">${inlineFormatText(hText)}</h2>`);
           } else {
             out.push(`<h2>${inlineFormatText(hText)}</h2>`);
@@ -219,10 +224,18 @@
         if (olMatch) {
           out.push('<ol>');
           while (i < n) {
-            const om = lines[i].trim().match(olRe);
-            if (!om) break;
-            out.push(`<li>${inlineFormatText(om[1].trim())}</li>`);
-            i += 1;
+            const curLine = lines[i];
+            const curS = curLine.trim();
+            const om = curS.match(olRe);
+            if (om) {
+              out.push(`<li>${inlineFormatText(om[1].trim())}</li>`);
+              i += 1;
+            } else if (/^(?:  |\t)/.test(curLine) && curS && !/^(?:#|\||---)/.test(curS)) {
+              out[out.length - 1] = out[out.length - 1].slice(0, -5) + `<br>${inlineFormatText(curS)}</li>`;
+              i += 1;
+            } else {
+              break;
+            }
           }
           out.push('</ol>');
           continue;

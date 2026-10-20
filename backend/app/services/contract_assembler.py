@@ -296,7 +296,7 @@ _MD_LINK_PLAIN_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
 
 def _inline_md_to_html(text: str) -> str:
     placeholder = "\u0000AST\u0000"
-    prepared = (text or "").replace(r"\*", placeholder)
+    prepared = re.sub(r"[🟢🟡🔴]\s*", "", (text or "")).replace(r"\*", placeholder)
     escaped = html.escape(prepared)
     escaped = re.sub(r"&lt;br\s*/?&gt;", "<br>", escaped, flags=re.IGNORECASE)
     escaped = _MD_LINK_ESCAPED_RE.sub(
@@ -379,8 +379,17 @@ def markdown_to_html(md_text: str) -> str:
 
         if stripped.startswith("## "):
             heading_text = stripped[3:].strip()
-            # Subtitle right after H1 (before metadata table)
-            if seen_h1 and len(out) == 1:
+            # Subtitle right after H1 (before metadata table in official documents)
+            is_doc_subtitle = (
+                seen_h1
+                and len(out) == 1
+                and not re.match(r"^(?:\d+\.|[IVX]+\.)\s", heading_text)
+                and any(
+                    kw in heading_text
+                    for kw in ("შპს", "ინსტიტუტი", "არქიტექტორთა სერტიფიცირება", "კატეგორია")
+                )
+            )
+            if is_doc_subtitle:
                 out.append(
                     f'<h2 style="text-align:center;">{_inline_md_to_html(heading_text)}</h2>'
                 )
@@ -426,11 +435,16 @@ def markdown_to_html(md_text: str) -> str:
         if ol_match:
             out.append("<ol>")
             while i < n:
-                m_ol = _MD_OL_ITEM_RE.match(lines[i].strip())
-                if not m_ol:
+                cur_s = lines[i].strip()
+                m_ol = _MD_OL_ITEM_RE.match(cur_s)
+                if m_ol:
+                    out.append(f"<li>{_inline_md_to_html(m_ol.group(1).strip())}</li>")
+                    i += 1
+                elif lines[i].startswith(("  ", "\t")) and cur_s and not cur_s.startswith(("#", "|", "---")):
+                    out[-1] = out[-1][:-5] + f"<br>{_inline_md_to_html(cur_s)}</li>"
+                    i += 1
+                else:
                     break
-                out.append(f"<li>{_inline_md_to_html(m_ol.group(1).strip())}</li>")
-                i += 1
             out.append("</ol>")
             continue
 
