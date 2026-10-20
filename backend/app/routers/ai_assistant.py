@@ -3775,10 +3775,8 @@ def public_ai_chat(
             "AI კონსულტანტი დროებით მიუწვდომელია (საჭიროა API გასაღების კონფიგურაცია ადმინის პანელში).",
         )
 
-    client_ip = (
-        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        or (request.client.host if request.client else "unknown")
-    )
+    from ..rate_limiter import RateLimiter
+    client_ip = RateLimiter()._get_client_ip(request)
     _check_public_ai_rate_limit(client_ip)
 
     last_user_msg = ""

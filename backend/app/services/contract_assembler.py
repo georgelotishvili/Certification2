@@ -978,13 +978,42 @@ def _format_inline_with_labels(text: str) -> str:
     return _inline_md_to_html(text)
 
 
+_DANGEROUS_TAG_BLOCK_RE = re.compile(
+    r"<\s*(script|iframe|object|embed|style|form|meta|link|base)\b[^>]*>.*?<\s*/\s*\1\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_DANGEROUS_TAG_SINGLE_RE = re.compile(
+    r"</?\s*(script|iframe|object|embed|style|form|meta|link|base|input|button|textarea|select)\b[^>]*>",
+    re.IGNORECASE,
+)
+_ON_EVENT_ATTR_RE = re.compile(
+    r"\s+on[a-z]+\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)",
+    re.IGNORECASE,
+)
+_JS_PROTOCOL_ATTR_RE = re.compile(
+    r"((?:href|src|action)\s*=\s*[\"']?)\s*(?:javascript|vbscript|data\s*:\s*text/html)\s*:[^\"'\s>]*",
+    re.IGNORECASE,
+)
+
+
+def sanitize_document_html(raw_html: str) -> str:
+    """Strip executable tags, inline event attributes, and javascript: URLs from document HTML."""
+    if not raw_html:
+        return ""
+    cleaned = _DANGEROUS_TAG_BLOCK_RE.sub("", raw_html)
+    cleaned = _DANGEROUS_TAG_SINGLE_RE.sub("", cleaned)
+    cleaned = _ON_EVENT_ATTR_RE.sub("", cleaned)
+    cleaned = _JS_PROTOCOL_ATTR_RE.sub(r'\1#', cleaned)
+    return cleaned.strip()
+
+
 def structured_text_to_html(raw_text: str) -> str:
     """Convert plain text or Markdown into a symmetric, well-structured HTML document."""
     if not raw_text or not raw_text.strip():
         return ""
     trimmed = raw_text.strip()
     if re.search(r"<(?:h1|h2|h3|p|ul|ol|table|div|article)\b", trimmed, re.IGNORECASE):
-        return trimmed
+        return sanitize_document_html(trimmed)
 
     # If the text already uses standard Markdown headings (# or ##), use markdown_to_html
     if re.search(r"(?m)^#{1,4}\s+\S", trimmed):

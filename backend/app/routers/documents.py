@@ -43,6 +43,7 @@ from ..services.contract_assembler import (
     CONTRACT_SLOTS,
     PUBLIC_DOCUMENTS,
     docx_bytes_to_html,
+    sanitize_document_html,
     extract_user_fields,
     markdown_to_docx_bytes,
     markdown_to_html,
@@ -562,7 +563,7 @@ async def admin_upload_contract_slot(
         if doc is None:
             doc = SiteDocument(
                 title=resolved_title,
-                content=resolved_content,
+                content=sanitize_document_html(resolved_content),
                 order_index=int(slot_info.get("order_index") or 1),
                 contract_type=slot_key,
                 file_path=new_file_path,
@@ -572,7 +573,7 @@ async def admin_upload_contract_slot(
         else:
             doc.title = resolved_title
             if resolved_content or (file and file.filename):
-                doc.content = resolved_content
+                doc.content = sanitize_document_html(resolved_content)
             if new_file_path:
                 doc.file_path = new_file_path
                 doc.filename = filename
@@ -628,7 +629,7 @@ async def admin_create_document(
     try:
         doc = SiteDocument(
             title=title.strip(),
-            content=resolved_content,
+            content=sanitize_document_html(resolved_content),
             order_index=int(max_order) + 1,
             contract_type=slot_key,
             file_path=file_path,
@@ -692,7 +693,7 @@ async def admin_update_document(
             raise
 
     if resolved_content is not None:
-        doc.content = resolved_content
+        doc.content = sanitize_document_html(resolved_content)
 
     try:
         db.add(doc)
