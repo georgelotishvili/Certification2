@@ -348,8 +348,10 @@ def _ensure_default_contracts(db: Session) -> None:
                 or (expected_size is not None and existing_slot_doc.file_size_bytes != expected_size)
             )
             if not slot_needs_refresh and existing_slot_doc is not None:
-                target_order = int(slot.get("order_index") or 5)
-                if seeded_public_any and (existing_slot_doc.order_index or 0) <= 4:
+                target_order = int(slot.get("order_index") or 6)
+                if (seeded_public_any or (existing_slot_doc.order_index or 0) == target_order - 1) and (
+                    existing_slot_doc.order_index or 0
+                ) < target_order:
                     existing_slot_doc.order_index = target_order
                     db.add(existing_slot_doc)
                     changed = True
@@ -452,7 +454,8 @@ def _resolve_target_user(
 
 def _is_contract_document(doc: SiteDocument) -> bool:
     return bool(doc.contract_type) or (
-        "პირადი ნომერი" in (doc.content or "") and "___" in (doc.content or "")
+        "პირადი ნომერი" in (doc.content or "")
+        and ("___" in (doc.content or "") or "[პირადი ნომერი]" in (doc.content or ""))
     )
 
 

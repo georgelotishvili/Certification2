@@ -63,6 +63,8 @@ CANDIDATE_FILES = [
     "backend/app/data/contracts/09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.docx",
     "backend/app/data/contracts/10_საგამოცდო_ხელშეკრულება.md",
     "backend/app/data/contracts/10_საგამოცდო_ხელშეკრულება.docx",
+    "backend/app/data/contracts/12_ფორმა_განაცხადი.md",
+    "backend/app/data/contracts/12_ფორმა_განაცხადი.docx",
     "backend/scripts/migrate_candidate_status.py",
     "backend/scripts/migrate_documents.py",
     "backend/scripts/migrate_guide_videos.py",

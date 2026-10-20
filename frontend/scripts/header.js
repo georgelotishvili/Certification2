@@ -157,6 +157,7 @@
     const personalId = String(user.personalId || user.personal_id || '').trim();
     const phone = String(user.phone || '').trim();
     const email = String(user.email || '').trim();
+    const code = String(user.code || '').trim();
     const dateStr = formatTodayDateKa();
 
     let out = out0;
@@ -181,6 +182,7 @@
       );
     }
     if (phone) {
+      out = out.replace(/\[ტელეფონის\s*ნომერი\]/g, escapeHtml(phone));
       out = out.replace(/\[ტელეფონი\]/g, escapeHtml(phone));
       out = out.replace(
         /(ტელეფონი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
@@ -188,11 +190,15 @@
       );
     }
     if (email) {
+      out = out.replace(/\[ელექტრონული\s*ფოსტა\]/g, escapeHtml(email));
       out = out.replace(/\[ელ\.?\s*ფოსტა\]/g, escapeHtml(email));
       out = out.replace(
         /(ელ\.?\s*ფოსტა\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
         `$1<strong>${escapeHtml(email)}</strong>`
       );
+    }
+    if (code) {
+      out = out.replace(/\[უნიკალური\s*კოდი\]/g, escapeHtml(code));
     }
 
     try {
@@ -225,7 +231,7 @@
   let cachedDocuments = null;
   let cachedDocumentsKey = null;
   let currentModalDoc = null;
-  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v4_';
+  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v5_';
 
   function getSiteDocsCacheKey() {
     const user = getCurrentUserForContract();

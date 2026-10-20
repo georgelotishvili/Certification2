@@ -59,6 +59,15 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
         "source_docx": "07_საჩივრებისა_და_აპელაციების_პროცედურა.docx",
         "strip_annex_1": True,
     },
+    {
+        "key": "application_form",
+        "code": "GIPC-FRM-001",
+        "default_title": "სერტიფიცირების განაცხადის ფორმა",
+        "order_index": 5,
+        "source_md": "12_ფორმა_განაცხადი.md",
+        "source_docx": "12_ფორმა_განაცხადი.docx",
+        "strip_annex_1": False,
+    },
 ]
 
 CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
@@ -68,7 +77,7 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "short_title": "საგამოცდო ხელშეკრულება",
         "default_title": "საგამოცდო ხელშეკრულება",
         "category": "EXAM",
-        "order_index": 5,
+        "order_index": 6,
         "source_md": "10_საგამოცდო_ხელშეკრულება.md",
         "source_docx": "10_საგამოცდო_ხელშეკრულება.docx",
     },
@@ -78,7 +87,7 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია A (არქიტექტორი)",
         "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი",
         "category": "A",
-        "order_index": 6,
+        "order_index": 7,
         "source_md": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.md",
         "source_docx": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.docx",
     },
@@ -88,7 +97,7 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია B (სპეციალისტი)",
         "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი",
         "category": "B",
-        "order_index": 7,
+        "order_index": 8,
         "source_md": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.md",
         "source_docx": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.docx",
     },
@@ -98,7 +107,7 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია C (ექსპერტი)",
         "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია C: არქიტექტურული პროექტის ექსპერტი",
         "category": "C",
-        "order_index": 8,
+        "order_index": 9,
         "source_md": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.md",
         "source_docx": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.docx",
     },
@@ -140,12 +149,14 @@ def extract_user_fields(user: Any, date_str: str | None = None) -> dict[str, str
         personal_id = str(user.get("personal_id") or user.get("personalId") or "").strip()
         phone = str(user.get("phone") or "").strip()
         email = str(user.get("email") or "").strip()
+        code = str(user.get("code") or "").strip()
     else:
         first = str(getattr(user, "first_name", "") or "").strip()
         last = str(getattr(user, "last_name", "") or "").strip()
         personal_id = str(getattr(user, "personal_id", "") or "").strip()
         phone = str(getattr(user, "phone", "") or "").strip()
         email = str(getattr(user, "email", "") or "").strip()
+        code = str(getattr(user, "code", "") or "").strip()
 
     full_name = f"{first} {last}".strip()
     return {
@@ -153,6 +164,7 @@ def extract_user_fields(user: Any, date_str: str | None = None) -> dict[str, str
         "personal_id": personal_id,
         "phone": phone,
         "email": email,
+        "code": code,
         "date": (date_str or current_tbilisi_date_str()).strip(),
     }
 
@@ -197,7 +209,7 @@ _HTML_FIELD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 
 def populate_contract_html(content: str, user: Any, date_str: str | None = None) -> str:
-    """Replace blank underscore lines in contract HTML with the user's data and date."""
+    """Replace blank underscore lines or bracket placeholders in contract/form HTML with the user's data and date."""
     if not content or not user:
         return content or ""
 
@@ -212,6 +224,22 @@ def populate_contract_html(content: str, user: Any, date_str: str | None = None)
             continue
         safe_val = html.escape(val)
         result = pattern.sub(lambda m, v=safe_val: f"{m.group(1)}<strong>{v}</strong>", result)
+
+    bracket_replacements = [
+        (r"\[სახელი,\s*გვარი\]", fields.get("full_name", "")),
+        (r"\[სახელი\s+გვარი\]", fields.get("full_name", "")),
+        (r"\[პირადი\s*ნომერი\]", fields.get("personal_id", "")),
+        (r"\[ტელეფონის\s*ნომერი\]", fields.get("phone", "")),
+        (r"\[ტელეფონი\]", fields.get("phone", "")),
+        (r"\[ელექტრონული\s*ფოსტა\]", fields.get("email", "")),
+        (r"\[ელ\.?\s*ფოსტა\]", fields.get("email", "")),
+        (r"\[უნიკალური\s*კოდი\]", fields.get("code", "")),
+        (r"\[თარიღი\]", fields.get("date", "")),
+    ]
+    for pat_str, val in bracket_replacements:
+        if val:
+            safe_val = html.escape(val)
+            result = re.sub(pat_str, f"<strong>{safe_val}</strong>", result)
 
     return result
 
@@ -311,7 +339,7 @@ def _inline_md_to_html(text: str) -> str:
 
 
 _META_LINE_RE = re.compile(
-    r"^\*\*(დოკუმენტის კოდი|ვერსია|თარიღი|კონფიდენციალურობა|სქემის მფლობელი|სერტიფიცირების ორგანო|საიდენტიფიკაციო კოდი|იურიდიული მისამართი|ფაქტობრივი \(საოფისე და საგამოცდო\) მისამართი|ვებგვერდი):\*\*\s*(.+)$"
+    r"^\*\*(დოკუმენტის კოდი|ფორმის კოდი|ვერსია|თარიღი|კონფიდენციალურობა|სქემის მფლობელი|სერტიფიცირების ორგანო|საიდენტიფიკაციო კოდი|იურიდიული მისამართი|ფაქტობრივი \(საოფისე და საგამოცდო\) მისამართი|ვებგვერდი):\*\*\s*(.+)$"
 )
 _MD_UL_ITEM_RE = re.compile(r"^[-*•–—]\s+(.+)$")
 _MD_OL_ITEM_RE = re.compile(r"^\d+\.\s+(.+)$")
