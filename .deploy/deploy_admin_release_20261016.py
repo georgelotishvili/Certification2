@@ -76,6 +76,7 @@ CANDIDATE_FILES = [
     "frontend/pages/documents.html",
     "frontend/pages/index.html",
     "frontend/pages/my.html",
+    "frontend/pages/registrations.html",
     "frontend/pages/registry.html",
     "frontend/partials/header.html",
     "frontend/partials/site-info/guide.html",

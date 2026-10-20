@@ -26,7 +26,14 @@ class Element {
   addEventListener(name, handler) { this.events[name] = handler; }
   setAttribute(name, value) { this.attributes[name] = String(value); }
   getAttribute(name) { return this.attributes[name] ?? null; }
+  removeAttribute(name) { delete this.attributes[name]; }
   dispatch(name) { return this.events[name]?.({ target: this, preventDefault() {} }); }
+  prepend(child) {
+    if (child.parentElement) child.parentElement.children = child.parentElement.children.filter((item) => item !== child);
+    child.parentElement = this;
+    this.children.unshift(child);
+    return child;
+  }
   appendChild(child) {
     if (child.parentElement) child.parentElement.children = child.parentElement.children.filter((item) => item !== child);
     child.parentElement = this;
@@ -115,6 +122,12 @@ function harness(options = {}) {
     clearTimeout: (id) => state.timers.delete(id),
     fetch: async (address, requestOptions = {}) => {
       const url = new URL(address);
+      if (url.pathname === '/admin/statements/summary') {
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url.pathname === '/admin/documents') {
+        return { ok: true, json: async () => ({ items: [] }) };
+      }
       const mutation = url.pathname.match(/^\/admin\/users\/(\d+)\/(admin|exam-stage-permissions\/(theory|project_stage_1|project_stage_2))$/);
       if (mutation) {
         assert.equal(requestOptions.method, 'PATCH');
@@ -185,6 +198,8 @@ function harness(options = {}) {
     examSchedules: options.examSchedules,
   });
   users.init();
+  document.activeElement = DOM.usersSearch;
+  DOM.usersSearch.dispatch('focus');
   return { DOM, users, state, document,
     visible: () => DOM.usersGrid.children.filter((card) => card.style.display !== 'none').map((card) => Number(card.dataset.id)),
     card: (id) => DOM.usersGrid.querySelector(`.block-card[data-id="${id}"]`),

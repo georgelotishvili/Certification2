@@ -8,8 +8,6 @@ const expected = [
   ['guide', 'გზამკვლევი'],
   ['regulations', 'რეგულაციები'],
   ['applicationForm', 'განაცხადის ფორმა'],
-  ['app', 'საგამოცდო აპი'],
-  ['documents', 'დოკუმენტის დამატება'],
 ];
 
 for (const menuClass of ['other-dropdown', 'drawer-other-submenu']) {

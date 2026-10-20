@@ -8,7 +8,7 @@ const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
 const markup = read('partials/header.html');
 const source = read('scripts/header.js');
 const helpers = source.slice(source.indexOf('  function on('), source.indexOf('  // Page cover'));
-const binding = source.slice(source.indexOf('  function bindHeader()'), source.indexOf('  async function loadHeader()'));
+const binding = source.slice(source.indexOf('  function bindHeader()'), source.indexOf('  window.SiteDocuments ='));
 
 function linksFor(prefix) {
   return [...markup.matchAll(/<a href="([^"]+)" class="([^"]+)"[^>]*>([^<]+)<\/a>/g)]
@@ -102,7 +102,7 @@ for (const prefix of ['nav-', 'drawer-']) {
 test('all shared-header pages request the updated navigation assets', () => {
   for (const page of ['index', 'registry', 'my']) {
     const html = read(`pages/${page}.html`);
-    assert.match(html, /header\.js\?v=20261013-nav1/);
-    assert.match(html, /header\.css\?v=20261013-statements1/);
+    assert.match(html, /header\.js\?v=20261020-guide3/);
+    assert.match(html, /header\.css\?v=20261019-publicai4/);
   }
 });
