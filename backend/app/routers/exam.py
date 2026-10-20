@@ -656,7 +656,7 @@ def submit_answer(
         existing.option_id = payload.option_id
         existing.is_correct = is_correct
         db.commit()
-        return AnswerResponse(correct=is_correct)
+        return AnswerResponse(correct=False, saved=True)
 
     ans = Answer(
         session_id=session.id,
@@ -666,7 +666,7 @@ def submit_answer(
     )
     db.add(ans)
     db.commit()
-    return AnswerResponse(correct=is_correct)
+    return AnswerResponse(correct=False, saved=True)
 
 
 @router.post("/{session_id}/finish")

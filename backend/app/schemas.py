@@ -241,7 +241,8 @@ class AnswerRequest(BaseModel):
 
 
 class AnswerResponse(BaseModel):
-    correct: bool
+    correct: bool = False
+    saved: bool = True
 
 
 class AllQuestionsBlockOut(BaseModel):
