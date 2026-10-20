@@ -863,12 +863,13 @@ class SiteDocument(Base):
 
 
 class GuideDocument(Base):
-    """გზამკვლევის დოკუმენტი — ინფორმაცია -> გზამკვლევი მოდალში"""
+    """საინფორმაციო ნავიგაციის დოკუმენტები — ინფორმაცია მენიუში (მოდალურ ფანჯარაში)"""
     __tablename__ = "guide_documents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(255), default="გზამკვლევი")
     content: Mapped[str] = mapped_column(Text, default="")
+    order_index: Mapped[int] = mapped_column(Integer, default=0, index=True)
     file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)

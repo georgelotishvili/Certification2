@@ -1114,10 +1114,19 @@ class GuideDocumentOut(BaseModel):
     id: Optional[int] = None
     title: str = "გზამკვლევი"
     content: str = ""
+    order_index: int = 0
     filename: Optional[str] = None
     file_size_bytes: Optional[int] = None
     download_url: Optional[str] = None
     available: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class GuideDocumentsListResponse(BaseModel):
+    items: List[GuideDocumentOut]
+
+
+class GuideDocumentOrderRequest(BaseModel):
+    direction: str  # "up" or "down"
 

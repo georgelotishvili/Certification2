@@ -26,7 +26,9 @@ from ..database import get_db
 from ..models import GuideDocument, GuideVideo
 from ..routers.admin import _require_admin
 from ..schemas import (
+    GuideDocumentOrderRequest,
     GuideDocumentOut,
+    GuideDocumentsListResponse,
     GuideVideoCreate,
     GuideVideoOut,
     GuideVideosReorderRequest,
@@ -39,6 +41,7 @@ from ..services.bounded_upload import (
 )
 from ..services.contract_assembler import (
     docx_bytes_to_html,
+    strip_internal_annexes,
     structured_text_to_html,
 )
 
@@ -48,6 +51,7 @@ router = APIRouter()
 GUIDE_UPLOAD_DIR = Path("uploads/guide_documents")
 GUIDE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 GUIDE_UPLOAD_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
+_STRIP_FILENAME_TAG = "_\u10d0\u10e0\u10d2\u10dd\u10dc"
 
 
 def _guide_root() -> Path:
@@ -72,13 +76,25 @@ def _safe_guide_filename(filename: str | None) -> str:
     ).strip()
     if candidate in {"", ".", ".."}:
         return "guide.docx"
-    return candidate
+    stem = Path(candidate).stem
+    suffix = Path(candidate).suffix
+    if stem.endswith(_STRIP_FILENAME_TAG):
+        candidate = f"{stem[: -len(_STRIP_FILENAME_TAG)]}{suffix}"
+    return candidate or "guide.docx"
 
 
 def _get_guide_doc_record(db: Session) -> Optional[GuideDocument]:
     return db.scalars(
-        select(GuideDocument).order_by(GuideDocument.id.asc())
+        select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
     ).first()
+
+
+def _get_all_guide_docs(db: Session) -> List[GuideDocument]:
+    return list(
+        db.scalars(
+            select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
+        ).all()
+    )
 
 
 def _guide_doc_out(doc: Optional[GuideDocument]) -> GuideDocumentOut:
@@ -87,6 +103,7 @@ def _guide_doc_out(doc: Optional[GuideDocument]) -> GuideDocumentOut:
             id=None,
             title="გზამკვლევი",
             content="",
+            order_index=0,
             filename=None,
             file_size_bytes=None,
             download_url=None,
@@ -105,59 +122,119 @@ def _guide_doc_out(doc: Optional[GuideDocument]) -> GuideDocumentOut:
 
     content_str = (doc.content or "").strip()
     is_available = bool(content_str or has_file)
+    dl_url = f"/guide/documents/{doc.id}/download" if (has_file and doc.id) else ("/guide/document/download" if has_file else None)
 
     return GuideDocumentOut(
         id=doc.id,
         title=(doc.title or "გზამკვლევი").strip() or "გზამკვლევი",
         content=doc.content or "",
-        filename=doc.filename if has_file else None,
+        order_index=int(getattr(doc, "order_index", 0) or 0),
+        filename=_safe_guide_filename(doc.filename) if (has_file and doc.filename) else None,
         file_size_bytes=doc.file_size_bytes if has_file else None,
-        download_url="/guide/document/download" if has_file else None,
+        download_url=dl_url,
         available=is_available,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
     )
 
 
-def _guide_video_out(video: GuideVideo) -> GuideVideoOut:
-    return GuideVideoOut(
-        id=video.id,
-        title=video.title or "",
-        url=video.url or "",
-        order_index=video.order_index or 0,
-        created_at=video.created_at,
-    )
+def _delete_guide_file_from_disk(stored_path: str | None) -> None:
+    if not stored_path:
+        return
+    try:
+        old_fp = _resolve_guide_path(stored_path)
+        if old_fp.exists() and old_fp.is_file():
+            old_fp.unlink()
+    except (OSError, ValueError):
+        pass
 
 
-# ----------------- Guide Document Endpoints (Admin & Public) -----------------
+async def _apply_guide_doc_fields(
+    doc: GuideDocument,
+    title: Optional[str],
+    content: Optional[str],
+    file: Optional[UploadFile],
+    remove_file: bool = False,
+) -> None:
+    if title is not None:
+        cleaned_title = title.strip()
+        if cleaned_title:
+            doc.title = cleaned_title
+        elif not doc.title:
+            doc.title = "ინფორმაცია"
+
+    if remove_file and not (file and file.filename):
+        _delete_guide_file_from_disk(doc.file_path)
+        doc.file_path = None
+        doc.filename = None
+        doc.file_size_bytes = None
+
+    extracted_html_from_file = ""
+    if file and file.filename:
+        ext = Path(file.filename).suffix.lower()
+        allowed_exts = {".docx", ".doc", ".md", ".txt", ".pdf"}
+        if ext not in allowed_exts:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="დაშვებულია მხოლოდ .docx, .md, .txt ან .pdf ფაილები",
+            )
+
+        _delete_guide_file_from_disk(doc.file_path)
+
+        unique_name = f"guide_{uuid.uuid4().hex[:12]}{ext}"
+        file_path = _resolve_guide_path(_guide_root() / unique_name)
+        try:
+            file_size = await save_async_upload(
+                file, file_path, max_bytes=GUIDE_UPLOAD_MAX_BYTES
+            )
+        except UploadTooLarge as exc:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="ფაილის ზომა აჭარბებს დასაშვებ ლიმიტს",
+            ) from exc
+
+        doc.file_path = str(file_path)
+        doc.filename = _safe_guide_filename(file.filename)
+        doc.file_size_bytes = file_size
+
+        try:
+            raw_bytes = file_path.read_bytes()
+            if ext in {".docx", ".doc"}:
+                extracted_html_from_file = docx_bytes_to_html(raw_bytes)
+            elif ext in {".md", ".txt"}:
+                text_str = strip_internal_annexes(raw_bytes.decode("utf-8-sig", errors="replace"))
+                extracted_html_from_file = structured_text_to_html(text_str)
+        except Exception:
+            extracted_html_from_file = ""
+
+    if content is not None and content.strip():
+        doc.content = structured_text_to_html(strip_internal_annexes(content))
+    elif extracted_html_from_file:
+        doc.content = extracted_html_from_file
+    elif content is not None and not (file and file.filename):
+        doc.content = ""
+
+    doc.updated_at = datetime.utcnow()
 
 
-@router.get("/guide/document", response_model=GuideDocumentOut)
-def public_get_guide_document(db: Session = Depends(get_db)):
-    doc = _get_guide_doc_record(db)
-    return _guide_doc_out(doc)
-
-
-@router.get("/guide/document/download")
-def public_download_guide_document(db: Session = Depends(get_db)):
-    doc = _get_guide_doc_record(db)
+def _serve_guide_doc_file(doc: Optional[GuideDocument]) -> FileResponse:
     if not doc or not doc.file_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="გზამკვლევის ფაილი არ მოიძებნა",
+            detail="დოკუმენტის ფაილი არ მოიძებნა",
         )
     try:
         file_path = _resolve_guide_path(doc.file_path)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="გზამკვლევის ფაილი არ მოიძებნა",
+            detail="დოკუმენტის ფაილი არ მოიძებნა",
         ) from exc
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="გზამკვლევის ფაილი არ მოიძებნა",
+            detail="დოკუმენტის ფაილი არ მოიძებნა",
         )
 
     filename = _safe_guide_filename(doc.filename or file_path.name)
@@ -178,6 +255,161 @@ def public_download_guide_document(db: Session = Depends(get_db)):
         media_type=media_type,
         headers={"Content-Disposition": disposition},
     )
+
+
+def _guide_video_out(video: GuideVideo) -> GuideVideoOut:
+    return GuideVideoOut(
+        id=video.id,
+        title=video.title or "",
+        url=video.url or "",
+        order_index=video.order_index or 0,
+        created_at=video.created_at,
+    )
+
+
+# ----------------- Guide / Info Navigation Documents Endpoints (Public & Admin) -----------------
+
+
+@router.get("/guide/documents", response_model=GuideDocumentsListResponse)
+def public_list_guide_documents(db: Session = Depends(get_db)):
+    docs = _get_all_guide_docs(db)
+    out_items = [_guide_doc_out(d) for d in docs]
+    return GuideDocumentsListResponse(items=[it for it in out_items if it.available])
+
+
+@router.get("/guide/documents/{doc_id}", response_model=GuideDocumentOut)
+def public_get_guide_document_by_id(
+    doc_id: int = FPath(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    doc = db.get(GuideDocument, doc_id)
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="დოკუმენტი არ მოიძებნა")
+    return _guide_doc_out(doc)
+
+
+@router.get("/guide/documents/{doc_id}/download")
+def public_download_guide_document_by_id(
+    doc_id: int = FPath(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    doc = db.get(GuideDocument, doc_id)
+    return _serve_guide_doc_file(doc)
+
+
+@router.get("/guide/document", response_model=GuideDocumentOut)
+def public_get_guide_document(db: Session = Depends(get_db)):
+    doc = _get_guide_doc_record(db)
+    return _guide_doc_out(doc)
+
+
+@router.get("/guide/document/download")
+def public_download_guide_document(db: Session = Depends(get_db)):
+    doc = _get_guide_doc_record(db)
+    return _serve_guide_doc_file(doc)
+
+
+@router.get("/admin/guide/documents", response_model=GuideDocumentsListResponse)
+def admin_list_guide_documents(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    docs = _get_all_guide_docs(db)
+    return GuideDocumentsListResponse(items=[_guide_doc_out(d) for d in docs])
+
+
+@router.post("/admin/guide/documents", response_model=GuideDocumentOut, status_code=status.HTTP_201_CREATED)
+async def admin_create_guide_document(
+    title: str = Form(...),
+    content: Optional[str] = Form(""),
+    file: Optional[UploadFile] = File(None),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    cleaned_title = (title or "").strip()
+    if not cleaned_title:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="სათაური სავალდებულოა")
+
+    max_order = db.scalar(select(func.max(GuideDocument.order_index))) or 0
+    doc = GuideDocument(
+        title=cleaned_title,
+        content="",
+        order_index=int(max_order) + 1,
+    )
+    await _apply_guide_doc_fields(doc, cleaned_title, content, file, remove_file=False)
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return _guide_doc_out(doc)
+
+
+@router.put("/admin/guide/documents/{doc_id}", response_model=GuideDocumentOut)
+async def admin_update_guide_document(
+    doc_id: int = FPath(..., ge=1),
+    title: Optional[str] = Form(None),
+    content: Optional[str] = Form(None),
+    remove_file: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    doc = db.get(GuideDocument, doc_id)
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="დოკუმენტი არ მოიძებნა")
+
+    should_remove_file = str(remove_file or "").strip().lower() in {"1", "true", "yes"}
+    await _apply_guide_doc_fields(doc, title, content, file, remove_file=should_remove_file)
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return _guide_doc_out(doc)
+
+
+@router.delete("/admin/guide/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_guide_document_by_id(
+    doc_id: int = FPath(..., ge=1),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    doc = db.get(GuideDocument, doc_id)
+    if not doc:
+        return
+    _delete_guide_file_from_disk(doc.file_path)
+    db.delete(doc)
+    db.commit()
+    return
+
+
+@router.patch("/admin/guide/documents/{doc_id}/order", status_code=status.HTTP_204_NO_CONTENT)
+def admin_reorder_guide_document(
+    payload: GuideDocumentOrderRequest,
+    doc_id: int = FPath(..., ge=1),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    docs = _get_all_guide_docs(db)
+    idx = next((i for i, d in enumerate(docs) if d.id == doc_id), None)
+    if idx is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="დოკუმენტი არ მოიძებნა")
+
+    direction = (payload.direction or "").strip().lower()
+    if direction == "up" and idx > 0:
+        docs[idx], docs[idx - 1] = docs[idx - 1], docs[idx]
+    elif direction == "down" and idx < len(docs) - 1:
+        docs[idx], docs[idx + 1] = docs[idx + 1], docs[idx]
+    else:
+        return
+
+    for order_idx, d in enumerate(docs, start=1):
+        d.order_index = order_idx
+        db.add(d)
+    db.commit()
+    return
 
 
 @router.get("/admin/guide/document", response_model=GuideDocumentOut)
@@ -202,65 +434,10 @@ async def _upsert_guide_document(
     doc = _get_guide_doc_record(db)
     is_new = doc is None
     if is_new:
-        doc = GuideDocument(title="გზამკვლევი", content="")
+        max_order = db.scalar(select(func.max(GuideDocument.order_index))) or 0
+        doc = GuideDocument(title="გზამკვლევი", content="", order_index=int(max_order) + 1)
 
-    if title is not None:
-        cleaned_title = title.strip()
-        doc.title = cleaned_title or "გზამკვლევი"
-
-    extracted_html_from_file = ""
-    if file and file.filename:
-        ext = Path(file.filename).suffix.lower()
-        allowed_exts = {".docx", ".doc", ".md", ".txt", ".pdf"}
-        if ext not in allowed_exts:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="დაშვებულია მხოლოდ .docx, .md, .txt ან .pdf ფაილები",
-            )
-
-        # Delete old file if exists
-        if doc.file_path:
-            try:
-                old_fp = _resolve_guide_path(doc.file_path)
-                if old_fp.exists():
-                    old_fp.unlink()
-            except (OSError, ValueError):
-                pass
-
-        unique_name = f"guide_{uuid.uuid4().hex[:12]}{ext}"
-        file_path = _resolve_guide_path(_guide_root() / unique_name)
-        try:
-            file_size = await save_async_upload(
-                file, file_path, max_bytes=GUIDE_UPLOAD_MAX_BYTES
-            )
-        except UploadTooLarge as exc:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="ფაილის ზომა აჭარბებს დასაშვებ ლიმიტს",
-            ) from exc
-
-        doc.file_path = str(file_path)
-        doc.filename = _safe_guide_filename(file.filename)
-        doc.file_size_bytes = file_size
-
-        try:
-            raw_bytes = file_path.read_bytes()
-            if ext in {".docx", ".doc"}:
-                extracted_html_from_file = docx_bytes_to_html(raw_bytes)
-            elif ext in {".md", ".txt"}:
-                text_str = raw_bytes.decode("utf-8", errors="replace")
-                extracted_html_from_file = structured_text_to_html(text_str)
-        except Exception:
-            extracted_html_from_file = ""
-
-    if content is not None and content.strip():
-        doc.content = structured_text_to_html(content)
-    elif extracted_html_from_file:
-        doc.content = extracted_html_from_file
-    elif content is not None and not file:
-        doc.content = ""
-
-    doc.updated_at = datetime.utcnow()
+    await _apply_guide_doc_fields(doc, title, content, file, remove_file=False)
     db.add(doc)
     db.commit()
     db.refresh(doc)

@@ -1,32 +1,52 @@
 (function (global) {
   function createGuideModule(context) {
     const {
-      DOM,
       API_BASE,
       on,
       escapeHtml,
       showToast = () => {},
       handleAdminErrorResponse = () => {},
       getAdminHeaders = () => ({}),
-       getActorHeaders = () => ({}),
+      getActorHeaders = () => ({}),
+      loadExternalScript = global.AdminShared?.loadExternalScript,
     } = context;
 
-    let currentGuideDoc = null;
+    let guideDocuments = [];
+    let editingId = null;
     let selectedFile = null;
+    let removeExistingFile = false;
     let isSaving = false;
 
     function getElements() {
       return {
+        addNewBtn: document.getElementById('guideAddNewBtn'),
+        formWrap: document.getElementById('guideDocForm'),
+        formHeading: document.getElementById('guideDocFormHeading'),
+        closeFormBtn: document.getElementById('guideDocCloseFormBtn'),
+        cancelBtn: document.getElementById('guideDocCancelBtn'),
         statusCard: document.getElementById('guideDocStatusCard'),
+        listEl: document.getElementById('guideDocsList'),
         titleInput: document.getElementById('guideDocTitle'),
         fileInput: document.getElementById('guideDocFile'),
         fileChooseBtn: document.getElementById('guideDocFileChoose'),
         fileNameSpan: document.getElementById('guideDocFileName'),
+        removeFileBtn: document.getElementById('guideDocRemoveFileBtn'),
         contentEditor: document.getElementById('guideDocContent'),
         saveBtn: document.getElementById('guideDocSaveBtn'),
         formatBtn: document.getElementById('guideDocFormatBtn'),
         deleteBtn: document.getElementById('guideDocDeleteBtn'),
       };
+    }
+
+    function clearPublicGuideCache() {
+      try {
+        sessionStorage.removeItem('gipc_guide_docs_v1');
+        Object.keys(sessionStorage).forEach((k) => {
+          if (k.startsWith('gipc_guide_docs_') || k.startsWith('gipc_header_partial_')) {
+            sessionStorage.removeItem(k);
+          }
+        });
+      } catch {}
     }
 
     function formatFileSize(bytes) {
@@ -323,7 +343,6 @@
 
         container.querySelectorAll('li').forEach((li) => stripLeadingBullet(li));
 
-        // If container only has raw text or <br>/<div> blocks without <h1/h2/p>, re-run structuredTextToHtml
         const hasSemanticBlocks = Boolean(container.querySelector('h1, h2, h3, ul, ol, table'));
         const topPs = Array.from(container.children).filter((el) => el.tagName === 'P');
         if (!hasSemanticBlocks && topPs.length === 0) {
@@ -334,7 +353,6 @@
           }
         }
 
-        // Promote standalone bold or numbered section <p> elements into <h1> / <h2> / <h3>
         if (!container.querySelector('h1, h2')) {
           const sectionH2Re = /^(?:(?:ნაწილი|თავი|ეტაპი|ნაბიჯი|მუხლი|კატეგორია|დანართი)\s*[№#]?\s*[0-9IVX]+|[IVX]+\.|[0-9]{1,2}\.)\s+.+$/i;
           const sectionH3Re = /^[0-9]{1,2}\.[0-9]{1,2}(?:\.[0-9]{1,2})?\.?\s+.+$/;
@@ -374,103 +392,189 @@
       }
     }
 
-    function renderStatusCard() {
-      const { statusCard, deleteBtn } = getElements();
-      if (!statusCard) return;
+    function openFormForCreate() {
+      const {
+        formWrap,
+        formHeading,
+        titleInput,
+        contentEditor,
+        fileInput,
+        fileNameSpan,
+        removeFileBtn,
+        saveBtn,
+        deleteBtn,
+      } = getElements();
 
-      const doc = currentGuideDoc;
-      const isAvailable = Boolean(doc && doc.available);
-      const hasFile = Boolean(doc && doc.filename);
-      const updatedLabel = doc?.updated_at ? formatDateGeo(doc.updated_at) : '';
-      const sizeLabel = doc?.file_size_bytes ? formatFileSize(doc.file_size_bytes) : '';
+      editingId = null;
+      selectedFile = null;
+      removeExistingFile = false;
 
-      if (deleteBtn) {
-        deleteBtn.style.display = isAvailable ? 'inline-flex' : 'none';
+      if (formHeading) {
+        formHeading.textContent = 'ახალი დოკუმენტის დამატება („ინფორმაცია“ ნავიგაციაში)';
+      }
+      if (titleInput) titleInput.value = '';
+      if (contentEditor) contentEditor.innerHTML = '';
+      if (fileInput) fileInput.value = '';
+      if (fileNameSpan) {
+        fileNameSpan.textContent = 'ფაილი არჩეული არ არის';
+        fileNameSpan.classList.remove('has-file');
+      }
+      if (removeFileBtn) removeFileBtn.style.display = 'none';
+      if (saveBtn) saveBtn.textContent = 'შენახვა და გამოქვეყნება';
+      if (deleteBtn) deleteBtn.style.display = 'none';
+
+      if (formWrap) {
+        formWrap.style.display = 'block';
+        formWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      setTimeout(() => titleInput?.focus(), 50);
+    }
+
+    function openFormForEdit(doc) {
+      if (!doc) return;
+      const {
+        formWrap,
+        formHeading,
+        titleInput,
+        contentEditor,
+        fileInput,
+        fileNameSpan,
+        removeFileBtn,
+        saveBtn,
+        deleteBtn,
+      } = getElements();
+
+      editingId = doc.id;
+      selectedFile = null;
+      removeExistingFile = false;
+
+      if (formHeading) {
+        formHeading.textContent = `დოკუმენტის რედაქტირება: ${doc.title || ''}`;
+      }
+      if (titleInput) titleInput.value = doc.title || '';
+      if (contentEditor) {
+        contentEditor.innerHTML = doc.content || '';
+        sanitizeAndStructureEditorDom(contentEditor);
+      }
+      if (fileInput) fileInput.value = '';
+      if (fileNameSpan) {
+        const sizeLabel = doc.file_size_bytes ? ` (${formatFileSize(doc.file_size_bytes)})` : '';
+        fileNameSpan.textContent = doc.filename
+          ? `მიმდინარე ფაილი: ${doc.filename}${sizeLabel}`
+          : 'ფაილი არჩეული არ არის';
+        fileNameSpan.classList.toggle('has-file', Boolean(doc.filename));
+      }
+      if (removeFileBtn) {
+        removeFileBtn.style.display = doc.filename ? 'inline-flex' : 'none';
+      }
+      if (saveBtn) saveBtn.textContent = 'ცვლილების შენახვა';
+      if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+
+      if (formWrap) {
+        formWrap.style.display = 'block';
+        formWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      setTimeout(() => titleInput?.focus(), 50);
+    }
+
+    function closeForm() {
+      const { formWrap, fileInput } = getElements();
+      editingId = null;
+      selectedFile = null;
+      removeExistingFile = false;
+      if (fileInput) fileInput.value = '';
+      if (formWrap) formWrap.style.display = 'none';
+    }
+
+    function renderGuideCard(doc, index, total) {
+      const isFirst = index === 0;
+      const isLast = index === total - 1;
+      const safeId = escapeHtml(String(doc.id));
+      const safeTitle = escapeHtml(doc.title || 'უსათაურო');
+      const plainText = (doc.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      const preview = plainText.length > 140 ? `${plainText.slice(0, 140)}...` : plainText;
+      const safePreview = escapeHtml(preview);
+      const updatedLabel = doc.updated_at ? formatDateGeo(doc.updated_at) : '';
+
+      let fileInfo = '';
+      if (doc.filename) {
+        const sizeStr = formatFileSize(doc.file_size_bytes);
+        const dlUrl = doc.download_url ? `${API_BASE}${doc.download_url}` : `${API_BASE}/guide/documents/${doc.id}/download`;
+        fileInfo = `
+          <div class="document-card-file" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px;">
+            <span class="file-icon">📄</span>
+            <span class="file-name">${escapeHtml(doc.filename)}</span>
+            ${sizeStr ? `<span class="file-size">(${escapeHtml(sizeStr)})</span>` : ''}
+            <a href="${escapeHtml(dlUrl)}" class="file-download-btn" target="_blank" download>⬇ ჩამოტვირთვა</a>
+            <button type="button" class="file-download-btn doc-detach-file-btn" style="background:#fff; color:#b91c1c; border:1px solid #fecaca; cursor:pointer;">× ფაილის მოხსნა</button>
+          </div>
+        `;
       }
 
-      statusCard.innerHTML = `
-        <div class="contract-slot-card ${isAvailable ? 'is-ready' : 'is-missing'}">
-          <div class="contract-slot-head">
-            <span class="contract-slot-code">GIPC-GDE-001</span>
-            <span class="contract-slot-status ${isAvailable ? 'ok' : 'warn'}">
-              ${isAvailable ? 'გამოქვეყნებულია საჯარო გზამკვლევში' : 'დოკუმენტი არ არის ატვირთული'}
-            </span>
+      return `
+        <div class="document-card" data-guide-doc-id="${safeId}">
+          <div class="document-card-order">
+            <button class="i-btn doc-up" type="button" ${isFirst ? 'disabled' : ''} title="ზემოთ აწევა" aria-label="ზემოთ">▲</button>
+            <button class="i-btn doc-down" type="button" ${isLast ? 'disabled' : ''} title="ქვემოთ ჩამოწევა" aria-label="ქვემოთ">▼</button>
           </div>
-          <div class="contract-slot-title">${escapeHtml(doc?.title || 'გზამკვლევი')}</div>
-          <div class="contract-slot-meta">
-            ${
-              hasFile
-                ? `ატვირთული ფაილი: <strong>${escapeHtml(doc.filename)}</strong>${sizeLabel ? ` (${escapeHtml(sizeLabel)})` : ''}`
-                : isAvailable
-                ? 'განთავსებულია სტრუქტურირებული ტექსტური გზამკვლევი'
-                : 'ატვირთეთ Word (.docx), Markdown (.md), ტექსტური (.txt) ან PDF ფაილი, ან ჩასვით ტექსტი ქვემოთ რედაქტორში'
-            }
-            ${updatedLabel ? ` · განახლდა: ${escapeHtml(updatedLabel)}` : ''}
+          <div class="document-card-info">
+            <div class="document-card-title">
+              <span style="display:inline-block; font-size:12px; font-weight:700; color:#475569; background:#f1f5f9; border:1px solid #cbd5e1; padding:1px 7px; margin-right:6px;">#${index + 1}</span>
+              ${safeTitle}
+              ${updatedLabel ? `<span style="font-size:12px; font-weight:400; color:#64748b; margin-left:8px;">განახლდა: ${escapeHtml(updatedLabel)}</span>` : ''}
+            </div>
+            <div class="document-card-preview">${safePreview || '<em>მხოლოდ მიბმული ფაილი / ტექსტი ცარიელია</em>'}</div>
+            ${fileInfo}
           </div>
-          <div class="contract-slot-actions">
-            <button type="button" class="contract-slot-btn primary" data-guide-quick-upload>
-              დოკუმენტის ფაილის ატვირთვა (.docx / .md / .txt / .pdf)
-            </button>
-            ${
-              hasFile
-                ? `<button type="button" class="contract-slot-btn" data-guide-download-file>ფაილის ჩამოტვირთვა</button>`
-                : ''
-            }
+          <div class="document-card-actions">
+            <button class="doc-edit-btn" type="button" title="რედაქტირება" aria-label="რედაქტირება">✎</button>
+            <button class="doc-delete-btn" type="button" title="წაშლა" aria-label="წაშლა">×</button>
           </div>
         </div>
       `;
-
-      const quickUploadBtn = statusCard.querySelector('[data-guide-quick-upload]');
-      if (quickUploadBtn) {
-        on(quickUploadBtn, 'click', () => {
-          const { fileInput } = getElements();
-          fileInput?.click();
-        });
-      }
-
-      const downloadBtn = statusCard.querySelector('[data-guide-download-file]');
-      if (downloadBtn) {
-        on(downloadBtn, 'click', () => {
-          window.open(`${API_BASE}/guide/document/download`, '_blank');
-        });
-      }
     }
 
-    async function loadGuideDocument() {
-      const { statusCard, titleInput, contentEditor, fileNameSpan } = getElements();
-      if (statusCard) {
-        statusCard.innerHTML = '<div class="documents-empty">იტვირთება გზამკვლევის მონაცემები...</div>';
+    function renderGuideList() {
+      const { listEl } = getElements();
+      if (!listEl) return;
+
+      if (!guideDocuments.length) {
+        listEl.innerHTML = `
+          <div class="documents-empty">
+            საინფორმაციო ნავიგაციაში დოკუმენტები ჯერ არ არის დამატებული. დააჭირეთ <strong>„+ დოკუმენტის დამატება“</strong> ღილაკს.
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = guideDocuments
+        .map((doc, idx) => renderGuideCard(doc, idx, guideDocuments.length))
+        .join('');
+    }
+
+    async function loadGuideDocuments() {
+      const { listEl } = getElements();
+      if (listEl && !guideDocuments.length) {
+        listEl.innerHTML = '<div class="documents-empty">იტვირთება საინფორმაციო ნავიგაციის დოკუმენტები...</div>';
       }
 
       try {
-        let response = await fetch(`${API_BASE}/admin/guide/document`, {
+        let response = await fetch(`${API_BASE}/admin/guide/documents`, {
           headers: { ...getAdminHeaders(), ...getActorHeaders() },
           cache: 'no-cache',
         });
         if (!response.ok) {
-          response = await fetch(`${API_BASE}/guide/document`, { cache: 'no-cache' });
+          response = await fetch(`${API_BASE}/guide/documents`, { cache: 'no-cache' });
         }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        currentGuideDoc = await response.json();
-        if (titleInput) {
-          titleInput.value = currentGuideDoc.title || 'გზამკვლევი';
-        }
-        if (contentEditor) {
-          contentEditor.innerHTML = currentGuideDoc.content || '';
-          sanitizeAndStructureEditorDom(contentEditor);
-        }
-        if (fileNameSpan) {
-          fileNameSpan.textContent = currentGuideDoc.filename
-            ? `მიმდინარე ფაილი: ${currentGuideDoc.filename}`
-            : 'ფაილი არჩეული არ არის';
-          fileNameSpan.classList.toggle('has-file', Boolean(currentGuideDoc.filename));
-        }
-        renderStatusCard();
+        const data = await response.json();
+        guideDocuments = Array.isArray(data?.items) ? data.items : [];
+        renderGuideList();
       } catch (err) {
-        console.error('Failed to load guide document:', err);
-        if (statusCard) {
-          statusCard.innerHTML = '<div class="documents-empty">გზამკვლევის ჩატვირთვა ვერ მოხერხდა</div>';
+        console.error('Failed to load guide documents:', err);
+        if (listEl) {
+          listEl.innerHTML = '<div class="documents-empty">დოკუმენტების ჩატვირთვა ვერ მოხერხდა</div>';
         }
       }
     }
@@ -479,7 +583,7 @@
       const file = event?.target?.files?.[0];
       if (!file) return;
 
-      const { fileNameSpan, contentEditor, titleInput } = getElements();
+      const { fileNameSpan, removeFileBtn, contentEditor, titleInput } = getElements();
       const lowerName = file.name.toLowerCase();
       const isDocx = lowerName.endsWith('.docx') || lowerName.endsWith('.doc');
       const isMdOrTxt = lowerName.endsWith('.md') || lowerName.endsWith('.txt');
@@ -492,13 +596,19 @@
       }
 
       selectedFile = file;
+      removeExistingFile = false;
+
       if (fileNameSpan) {
         fileNameSpan.textContent = `${file.name} (${formatFileSize(file.size)})`;
         fileNameSpan.classList.add('has-file');
       }
+      if (removeFileBtn) {
+        removeFileBtn.style.display = 'inline-flex';
+      }
 
       if (titleInput && !titleInput.value.trim()) {
-        titleInput.value = 'გზამკვლევი';
+        const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+        if (baseName) titleInput.value = baseName;
       }
 
       if (isMdOrTxt && contentEditor) {
@@ -509,40 +619,66 @@
         } catch (err) {
           console.error('Error reading text/markdown file:', err);
         }
-      } else if (isDocx && contentEditor && typeof mammoth !== 'undefined') {
+      } else if (isDocx && contentEditor) {
         try {
           contentEditor.innerHTML = '<p style="color:#64748b;">მიმდინარეობს Word ფაილის დამუშავება...</p>';
-          const arrayBuffer = await file.arrayBuffer();
-          const result = await mammoth.convertToHtml(
-            { arrayBuffer },
-            {
-              styleMap: [
-                "p[style-name='Heading 1'] => h1:fresh",
-                "p[style-name='Heading 2'] => h2:fresh",
-                "p[style-name='Heading 3'] => h3:fresh",
-                "p[style-name='Title'] => h1:fresh",
-                "b => strong",
-                "i => em",
-              ],
-            }
-          );
-          contentEditor.innerHTML = result.value || '';
-          sanitizeAndStructureEditorDom(contentEditor);
+          if (!global.mammoth?.convertToHtml && typeof loadExternalScript === 'function') {
+            await loadExternalScript('../vendor/mammoth.browser.min.js');
+          }
+          if (global.mammoth?.convertToHtml) {
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await global.mammoth.convertToHtml(
+              { arrayBuffer },
+              {
+                styleMap: [
+                  "p[style-name='Heading 1'] => h1:fresh",
+                  "p[style-name='Heading 2'] => h2:fresh",
+                  "p[style-name='Heading 3'] => h3:fresh",
+                  "p[style-name='Title'] => h1:fresh",
+                  "b => strong",
+                  "i => em",
+                ],
+              }
+            );
+            contentEditor.innerHTML = result.value || '';
+            sanitizeAndStructureEditorDom(contentEditor);
+          } else {
+            contentEditor.innerHTML = '';
+          }
         } catch (err) {
           console.error('Mammoth conversion error:', err);
           contentEditor.innerHTML = '';
         }
       }
-
-      // Automatically save and publish when a file is chosen so uploading is immediate
-      await saveGuideDocument({ autoFromFile: true });
     }
 
-    async function saveGuideDocument(options = {}) {
+    function handleRemoveAttachedFileInForm() {
+      const { fileInput, fileNameSpan, removeFileBtn } = getElements();
+      selectedFile = null;
+      removeExistingFile = true;
+      if (fileInput) fileInput.value = '';
+      if (fileNameSpan) {
+        fileNameSpan.textContent = editingId
+          ? 'მიბმული ფაილი მოიხსნება შენახვისას'
+          : 'ფაილი არჩეული არ არის';
+        fileNameSpan.classList.remove('has-file');
+      }
+      if (removeFileBtn) {
+        removeFileBtn.style.display = 'none';
+      }
+    }
+
+    async function saveGuideDocument() {
       if (isSaving) return;
       const { titleInput, contentEditor, saveBtn, fileInput } = getElements();
 
-      const title = (titleInput?.value || 'გზამკვლევი').trim() || 'გზამკვლევი';
+      const title = (titleInput?.value || '').trim();
+      if (!title) {
+        showToast('გთხოვთ მიუთითოთ დოკუმენტის სათაური (მაგ: ჩვენს შესახებ)', 'error');
+        titleInput?.focus();
+        return;
+      }
+
       if (contentEditor) {
         const rawInner = (contentEditor.innerHTML || '').trim();
         const hasTags = /<(?:h1|h2|h3|p|ul|ol|table)\b/i.test(rawInner);
@@ -554,11 +690,11 @@
 
       const content = (contentEditor?.innerHTML || '').trim();
       const plainText = (contentEditor?.innerText || contentEditor?.textContent || '').trim();
+      const currentEditingDoc = editingId ? guideDocuments.find((d) => d.id === editingId) : null;
+      const hasExistingFile = Boolean(currentEditingDoc && currentEditingDoc.filename && !removeExistingFile);
 
-      if (!plainText && !selectedFile && !(currentGuideDoc && currentGuideDoc.filename)) {
-        if (!options.autoFromFile) {
-          showToast('გთხოვთ ატვირთოთ დოკუმენტის ფაილი ან ჩასვათ გზამკვლევის ტექსტი', 'error');
-        }
+      if (!plainText && !selectedFile && !hasExistingFile) {
+        showToast('გთხოვთ ატვირთოთ დოკუმენტის ფაილი ან ჩასვათ ტექსტი რედაქტორში', 'error');
         return;
       }
 
@@ -574,78 +710,194 @@
         formData.append('content', content);
         if (selectedFile) {
           formData.append('file', selectedFile);
+        } else if (editingId && removeExistingFile) {
+          formData.append('remove_file', 'true');
         }
 
-        const response = await fetch(`${API_BASE}/admin/guide/document`, {
-          method: 'POST',
+        const isEdit = Boolean(editingId);
+        const url = isEdit
+          ? `${API_BASE}/admin/guide/documents/${editingId}`
+          : `${API_BASE}/admin/guide/documents`;
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method,
           headers: { ...getAdminHeaders(), ...getActorHeaders() },
           body: formData,
         });
 
         if (!response.ok) {
-          await handleAdminErrorResponse(response, 'გზამკვლევის შენახვა ვერ მოხერხდა', showToast);
+          await handleAdminErrorResponse(response, 'დოკუმენტის შენახვა ვერ მოხერხდა', showToast);
           return;
         }
 
-        currentGuideDoc = await response.json();
+        await response.json();
         selectedFile = null;
+        removeExistingFile = false;
         if (fileInput) fileInput.value = '';
 
-        if (contentEditor && currentGuideDoc.content) {
-          contentEditor.innerHTML = currentGuideDoc.content;
-          sanitizeAndStructureEditorDom(contentEditor);
-        }
-
-        renderStatusCard();
-        showToast('გზამკვლევის დოკუმენტი წარმატებით შეინახა და გამოქვეყნდა', 'success');
+        clearPublicGuideCache();
+        closeForm();
+        await loadGuideDocuments();
+        showToast(
+          isEdit
+            ? 'დოკუმენტი წარმატებით განახლდა'
+            : 'დოკუმენტი წარმატებით დაემატა „ინფორმაცია“ ნავიგაციაში',
+          'success'
+        );
       } catch (err) {
         console.error('Failed to save guide document:', err);
-        showToast('გზამკვლევის შენახვა ვერ მოხერხდა', 'error');
+        showToast('დოკუმენტის შენახვა ვერ მოხერხდა', 'error');
       } finally {
         isSaving = false;
         if (saveBtn) {
           saveBtn.disabled = false;
-          saveBtn.textContent = 'შენახვა და გამოქვეყნება';
+          saveBtn.textContent = editingId ? 'ცვლილების შენახვა' : 'შენახვა და გამოქვეყნება';
         }
       }
     }
 
-    async function deleteGuideDocument() {
-      if (!confirm('ნამდვილად გსურთ გზამკვლევის დოკუმენტის წაშლა?')) return;
+    async function deleteGuideDocumentById(docId) {
+      const targetDoc = guideDocuments.find((d) => d.id === docId);
+      const label = targetDoc?.title ? `„${targetDoc.title}“` : 'ეს დოკუმენტი';
+      if (!global.confirm(`ნამდვილად გსურთ წაშალოთ ${label} საინფორმაციო ნავიგაციიდან?`)) return;
 
-      const { contentEditor, fileNameSpan, fileInput } = getElements();
       try {
-        const response = await fetch(`${API_BASE}/admin/guide/document`, {
+        const response = await fetch(`${API_BASE}/admin/guide/documents/${docId}`, {
           method: 'DELETE',
           headers: { ...getAdminHeaders(), ...getActorHeaders() },
         });
         if (!response.ok && response.status !== 204) {
-          await handleAdminErrorResponse(response, 'გზამკვლევის წაშლა ვერ მოხერხდა', showToast);
+          await handleAdminErrorResponse(response, 'დოკუმენტის წაშლა ვერ მოხერხდა', showToast);
           return;
         }
 
-        currentGuideDoc = null;
-        selectedFile = null;
-        if (fileInput) fileInput.value = '';
-        if (contentEditor) contentEditor.innerHTML = '';
-        if (fileNameSpan) {
-          fileNameSpan.textContent = 'ფაილი არჩეული არ არის';
-          fileNameSpan.classList.remove('has-file');
+        if (editingId === docId) {
+          closeForm();
         }
-        renderStatusCard();
-        showToast('გზამკვლევის დოკუმენტი წაიშალა', 'success');
+        clearPublicGuideCache();
+        await loadGuideDocuments();
+        showToast('დოკუმენტი წაიშალა', 'success');
       } catch (err) {
         console.error('Failed to delete guide document:', err);
-        showToast('გზამკვლევის წაშლა ვერ მოხერხდა', 'error');
+        showToast('დოკუმენტის წაშლა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    async function detachFileFromGuideDoc(docId) {
+      const targetDoc = guideDocuments.find((d) => d.id === docId);
+      if (!targetDoc || !targetDoc.filename) return;
+      if (!global.confirm(`ნამდვილად გსურთ მიბმული ფაილის (${targetDoc.filename}) მოხსნა?`)) return;
+
+      try {
+        const formData = new FormData();
+        formData.append('remove_file', 'true');
+        const response = await fetch(`${API_BASE}/admin/guide/documents/${docId}`, {
+          method: 'PUT',
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+          body: formData,
+        });
+        if (!response.ok) {
+          await handleAdminErrorResponse(response, 'ფაილის მოხსნა ვერ მოხერხდა', showToast);
+          return;
+        }
+        clearPublicGuideCache();
+        await loadGuideDocuments();
+        showToast('მიბმული ფაილი მოიხსნა', 'success');
+      } catch (err) {
+        console.error('Failed to detach file:', err);
+        showToast('ფაილის მოხსნა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    async function changeGuideDocOrder(docId, direction) {
+      try {
+        const response = await fetch(`${API_BASE}/admin/guide/documents/${docId}/order`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAdminHeaders(),
+            ...getActorHeaders(),
+          },
+          body: JSON.stringify({ direction }),
+        });
+        if (!response.ok && response.status !== 204) {
+          await handleAdminErrorResponse(response, 'რიგითობის შეცვლა ვერ მოხერხდა', showToast);
+          return;
+        }
+        clearPublicGuideCache();
+        await loadGuideDocuments();
+      } catch (err) {
+        console.error('Failed to change order:', err);
+        showToast('რიგითობის შეცვლა ვერ მოხერხდა', 'error');
+      }
+    }
+
+    function handleListClick(event) {
+      const card = event.target.closest('[data-guide-doc-id]');
+      if (!card) return;
+      const docId = parseInt(card.getAttribute('data-guide-doc-id'), 10);
+      if (!docId) return;
+
+      if (event.target.closest('.doc-delete-btn')) {
+        void deleteGuideDocumentById(docId);
+        return;
+      }
+
+      if (event.target.closest('.doc-edit-btn')) {
+        const doc = guideDocuments.find((d) => d.id === docId);
+        if (doc) openFormForEdit(doc);
+        return;
+      }
+
+      if (event.target.closest('.doc-detach-file-btn')) {
+        void detachFileFromGuideDoc(docId);
+        return;
+      }
+
+      if (event.target.closest('.doc-up')) {
+        void changeGuideDocOrder(docId, 'up');
+        return;
+      }
+
+      if (event.target.closest('.doc-down')) {
+        void changeGuideDocOrder(docId, 'down');
+        return;
       }
     }
 
     function bindEvents() {
-      const { fileChooseBtn, fileInput, saveBtn, formatBtn, deleteBtn, contentEditor } = getElements();
+      const {
+        addNewBtn,
+        closeFormBtn,
+        cancelBtn,
+        fileChooseBtn,
+        fileInput,
+        removeFileBtn,
+        saveBtn,
+        formatBtn,
+        deleteBtn,
+        contentEditor,
+        listEl,
+      } = getElements();
+
+      if (addNewBtn) {
+        on(addNewBtn, 'click', openFormForCreate);
+      }
+      if (closeFormBtn) {
+        on(closeFormBtn, 'click', closeForm);
+      }
+      if (cancelBtn) {
+        on(cancelBtn, 'click', closeForm);
+      }
 
       if (fileChooseBtn && fileInput) {
         on(fileChooseBtn, 'click', () => fileInput.click());
         on(fileInput, 'change', handleFileSelect);
+      }
+
+      if (removeFileBtn) {
+        on(removeFileBtn, 'click', handleRemoveAttachedFileInForm);
       }
 
       if (saveBtn) {
@@ -687,18 +939,26 @@
       }
 
       if (deleteBtn) {
-        on(deleteBtn, 'click', () => void deleteGuideDocument());
+        on(deleteBtn, 'click', () => {
+          if (editingId) {
+            void deleteGuideDocumentById(editingId);
+          }
+        });
+      }
+
+      if (listEl) {
+        on(listEl, 'click', handleListClick);
       }
     }
 
     function init() {
       bindEvents();
-      void loadGuideDocument();
+      void loadGuideDocuments();
     }
 
     return {
       init,
-      render: loadGuideDocument,
+      render: loadGuideDocuments,
     };
   }
 

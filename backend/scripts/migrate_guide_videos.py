@@ -54,6 +54,7 @@ def run() -> None:
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         title VARCHAR(255) NOT NULL DEFAULT 'გზამკვლევი',
                         content TEXT NOT NULL DEFAULT '',
+                        order_index INTEGER NOT NULL DEFAULT 0,
                         file_path VARCHAR(1024),
                         filename VARCHAR(255),
                         file_size_bytes INTEGER,
@@ -62,6 +63,18 @@ def run() -> None:
                     )
                     """
                 )
+                statements.append(
+                    "CREATE INDEX idx_guide_documents_order ON guide_documents(order_index, id)"
+                )
+            else:
+                gdoc_cols = {col["name"] for col in inspector.get_columns("guide_documents")}
+                if "order_index" not in gdoc_cols:
+                    statements.append(
+                        "ALTER TABLE guide_documents ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0"
+                    )
+                    statements.append(
+                        "CREATE INDEX IF NOT EXISTS idx_guide_documents_order ON guide_documents(order_index, id)"
+                    )
 
             for sql in statements:
                 connection.execute(text(sql))

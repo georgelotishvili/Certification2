@@ -420,8 +420,48 @@
   }
 
   async function populateInfoDropdowns() {
-    // Documents are now displayed on the dedicated ../pages/documents.html page;
-    // the "ინფორმაცია" menu contains only "გზამკვლევი".
+    try {
+      const API_BASE = getApiBase();
+      const response = await fetch(`${API_BASE}/guide/documents`, { cache: 'no-cache' });
+      if (!response.ok) return;
+      const data = await response.json();
+      const items = Array.isArray(data?.items)
+        ? data.items.filter((item) => item && item.id && item.available !== false)
+        : [];
+
+      const desktopDropdown = document.querySelector('.about-dropdown');
+      const mobileSubmenu = document.querySelector('.drawer-about-submenu');
+
+      if (desktopDropdown) {
+        desktopDropdown
+          .querySelectorAll('.dropdown-item.guide, [data-guide-doc-id]')
+          .forEach((el) => el.remove());
+        items.forEach((doc) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'dropdown-item';
+          btn.setAttribute('data-guide-doc-id', String(doc.id));
+          btn.textContent = (doc.title || 'გზამკვლევი').trim() || 'გზამკვლევი';
+          desktopDropdown.appendChild(btn);
+        });
+      }
+
+      if (mobileSubmenu) {
+        mobileSubmenu
+          .querySelectorAll('.drawer-submenu-item.guide, [data-guide-doc-id]')
+          .forEach((el) => el.remove());
+        items.forEach((doc) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'drawer-submenu-item';
+          btn.setAttribute('data-guide-doc-id', String(doc.id));
+          btn.textContent = (doc.title || 'გზამკვლევი').trim() || 'გზამკვლევი';
+          mobileSubmenu.appendChild(btn);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to populate info dropdowns:', err);
+    }
   }
 
   function stripLeadingBulletFromElement(el, leadingBulletRegex) {
@@ -937,7 +977,10 @@
 
       if (typeof docOrId === 'object' && docOrId !== null && docOrId.is_guide) {
         doc = { ...docOrId };
-        const resp = await fetch(`${API_BASE}/guide/document`, { cache: 'no-cache' });
+        const guideUrl = doc.id
+          ? `${API_BASE}/guide/documents/${encodeURIComponent(doc.id)}`
+          : `${API_BASE}/guide/document`;
+        const resp = await fetch(guideUrl, { cache: 'no-cache' });
         if (resp.ok) {
           const freshGuide = await resp.json();
           doc = { ...freshGuide, is_guide: true };
@@ -1058,7 +1101,7 @@
     }
   }
 
-  async function openGuideDocumentModal() {
+  async function openGuideDocumentModal(docId = null, initialTitle = '') {
     const els = getSiteInfoElements();
     if (!els) return;
 
@@ -1067,7 +1110,7 @@
       els.downloadPdfBtn.hidden = true;
       els.downloadPdfBtn.disabled = false;
     }
-    if (els.title) els.title.textContent = 'გზამკვლევი';
+    if (els.title) els.title.textContent = (initialTitle || 'გზამკვლევი').trim() || 'გზამკვლევი';
     if (els.body) {
       els.body.dataset.infoMode = 'document';
       els.body.innerHTML = '<p class="site-info-state">იტვირთება...</p>';
@@ -1082,11 +1125,14 @@
 
     try {
       const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/guide/document`, { cache: 'no-cache' });
+      const targetUrl = docId
+        ? `${API_BASE}/guide/documents/${encodeURIComponent(docId)}`
+        : `${API_BASE}/guide/document`;
+      const response = await fetch(targetUrl, { cache: 'no-cache' });
       if (!response.ok) throw new Error('Guide document load failed');
       const guideDoc = await response.json();
 
-      const docTitle = (guideDoc.title || 'გზამკვლევი').trim() || 'გზამკვლევი';
+      const docTitle = (guideDoc.title || initialTitle || 'გზამკვლევი').trim() || 'გზამკვლევი';
       if (els.title) els.title.textContent = docTitle;
 
       const hasHtmlContent = Boolean((guideDoc.content || '').replace(/<[^>]*>/g, '').trim());
@@ -1100,7 +1146,7 @@
           sheet.className = 'site-doc-sheet';
           const empty = document.createElement('p');
           empty.className = 'site-doc-empty';
-          empty.textContent = 'ამ ეტაპზე გზამკვლევის დოკუმენტი არ არის განთავსებული.';
+          empty.textContent = 'ამ ეტაპზე დოკუმენტი არ არის განთავსებული.';
           sheet.appendChild(empty);
           els.body.replaceChildren(sheet);
         }
@@ -1131,7 +1177,7 @@
     } catch (err) {
       console.error('Failed to load guide document:', err);
       if (els?.body) {
-        els.body.innerHTML = '<p class="site-info-state site-info-state--error">გზამკვლევი ვერ ჩაიტვირთა. სცადეთ მოგვიანებით.</p>';
+        els.body.innerHTML = '<p class="site-info-state site-info-state--error">დოკუმენტი ვერ ჩაიტვირთა. სცადეთ მოგვიანებით.</p>';
       }
     }
   }
@@ -1302,6 +1348,18 @@
       const el = event.target;
       if (!el) return;
       
+      // Dynamic informational guide items (with data-guide-doc-id)
+      const guideItem = closest(el, '[data-guide-doc-id]');
+      if (guideItem && closest(guideItem, '.about-dropdown, .drawer-about-submenu')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        const guideDocId = guideItem.getAttribute('data-guide-doc-id');
+        if (guideDocId) openGuideDocumentModal(guideDocId, guideItem.textContent || '');
+        return;
+      }
+
       // Dynamic document items (with data-doc-id)
       const dynamicItem = closest(el, '[data-doc-id]');
       if (dynamicItem && closest(dynamicItem, '.about-dropdown, .drawer-about-submenu')) {
@@ -1432,8 +1490,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261019-guide1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261019_guide1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261020-guide2';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261020_guide2';
 
   function syncHeaderInitialAuthUI() {
     try {

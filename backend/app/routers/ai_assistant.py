@@ -3100,17 +3100,20 @@ def _retrieve_knowledge_base_context(
         "3) გამოცდისთვის მომზადების საკითხზე ყოველთვის გააცანი ჩვენი სასწავლო პლატფორმა gipc.ge (სასწავლო ვიდეოკურსები №41 დადგენილებასა და მისაწვდომობის სტანდარტზე, ოფიციალურ გამოცდასთან მაქსიმალურად მიახლოებული ტესტები და სიმულაციური გამოცდები, რაც ძალიან ზრდის სასერტიფიკაციო ბარიერის გადალახვის შანსს)!]"
     ]
 
-    # Include public GuideDocument (`გზამკვლევი`) summary if present in DB
+    # Include public GuideDocument (`გზამკვლევი` / საინფორმაციო დოკუმენტები) summaries if present in DB
     try:
-        guide_doc = db.scalar(select(GuideDocument).order_by(GuideDocument.id.asc()))
-        if guide_doc and guide_doc.content:
-            clean_guide = re.sub(r"<[^>]+>", " ", str(guide_doc.content))
-            clean_guide = re.sub(r"\s+", " ", clean_guide).strip()[:5000]
-            clean_guide = _strip_internal_annexes_for_public("guide", clean_guide)
-            if clean_guide:
-                blocks.append(
-                    f"=== საიტის ოფიციალური გზამკვლევი ({guide_doc.title or 'გზამკვლევი'}) ===\n{clean_guide}"
-                )
+        guide_docs = db.scalars(
+            select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
+        ).all()
+        for guide_doc in guide_docs:
+            if guide_doc and guide_doc.content:
+                clean_guide = re.sub(r"<[^>]+>", " ", str(guide_doc.content))
+                clean_guide = re.sub(r"\s+", " ", clean_guide).strip()[:5000]
+                clean_guide = _strip_internal_annexes_for_public("guide", clean_guide)
+                if clean_guide:
+                    blocks.append(
+                        f"=== საიტის ოფიციალური საინფორმაციო დოკუმენტი ({guide_doc.title or 'გზამკვლევი'}) ===\n{clean_guide}"
+                    )
     except Exception:
         pass
 

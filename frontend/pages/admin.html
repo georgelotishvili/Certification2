@@ -19,7 +19,7 @@
     <script src="../scripts/admin/certificate.js?v=20261018-cand1" defer></script>
     <script src="../scripts/admin/exam-schedules.js?v=20261018-candcleanup1" defer></script>
     <script src="../scripts/admin/users.js?v=20261019-bw1" defer></script>
-    <script src="../scripts/admin/guide-videos.js?v=20261019-guide1" defer></script>
+    <script src="../scripts/admin/guide-videos.js?v=20261020-guide2" defer></script>
     <script src="../scripts/admin/regulations.js" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js" defer></script>
@@ -433,36 +433,45 @@
       </section>
       <section id="guide-section" class="exam-settings" style="display:none;">
         <div class="exam-content">
-          <div class="exam-blocks-header" aria-label="გზამკვლევი ადმინებისთვის">
-            <h2 class="exam-blocks-title">გზამკვლევი (დოკუმენტის მართვა)</h2>
+          <div class="exam-blocks-header" aria-label="გზამკვლევი ადმინებისთვის" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <h2 class="exam-blocks-title" style="margin:0;">საინფორმაციო ნავიგაცია / გზამკვლევი (დოკუმენტების მართვა)</h2>
+            <button type="button" id="guideAddNewBtn" class="primary-btn">+ დოკუმენტის დამატება</button>
           </div>
 
-          <div class="contract-slots-panel" id="guideDocStatusCard" aria-label="გზამკვლევის სტატუსი" style="grid-template-columns: 1fr; margin-bottom: 20px;">
-            <!-- სტატუსის ბარათი იტვირთება JS-ით -->
-          </div>
-
-          <div class="document-add-form" id="guideDocForm">
+          <div class="document-add-form" id="guideDocForm" style="display:none; margin-bottom: 24px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #e2e8f0;">
+              <strong id="guideDocFormHeading" style="font-size:15px; color:#0f172a;">ახალი დოკუმენტის დამატება („ინფორმაცია“ მენიუში)</strong>
+              <button type="button" id="guideDocCloseFormBtn" class="secondary-btn" style="padding:4px 12px; font-size:13px;">დახურვა ×</button>
+            </div>
             <div class="document-form-row">
-              <label class="document-label" for="guideDocTitle">სათაური მოდალურ ფანჯარაში:</label>
-              <input type="text" id="guideDocTitle" class="document-input" value="გზამკვლევი" placeholder="გზამკვლევი" />
+              <label class="document-label" for="guideDocTitle">სათაური (ნავიგაციაში და მოდალურ ფანჯარაში):</label>
+              <input type="text" id="guideDocTitle" class="document-input" value="" placeholder="მაგ: ჩვენს შესახებ, გზამკვლევი..." />
             </div>
             <div class="document-form-row">
               <label class="document-label">დოკუმენტის ფაილი (.docx, .md, .txt, .pdf):</label>
-              <div class="document-file-upload">
+              <div class="document-file-upload" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                 <input type="file" id="guideDocFile" accept=".docx,.doc,.md,.txt,.pdf" style="display:none;" />
                 <button type="button" id="guideDocFileChoose" class="file-choose-btn">დოკუმენტის ატვირთვა / არჩევა</button>
                 <span id="guideDocFileName" class="file-name-display">ფაილი არჩეული არ არის</span>
+                <button type="button" id="guideDocRemoveFileBtn" class="secondary-btn" style="display:none; padding:4px 10px; font-size:12px; color:#b91c1c; border-color:#fecaca;">მიბმული ფაილის მოხსნა</button>
               </div>
             </div>
             <div class="document-form-row">
-              <label class="document-label">გზამკვლევის ტექსტი (Preview / ჩასმა და რედაქტირება):</label>
-              <div id="guideDocContent" class="document-editor" contenteditable="true" placeholder="ატვირთეთ დოკუმენტის ფაილი ან ჩასვით გზამკვლევის ტექსტი აქ..."></div>
+              <label class="document-label">დოკუმენტის ტექსტი (Preview / ჩასმა და რედაქტირება):</label>
+              <div id="guideDocContent" class="document-editor" contenteditable="true" placeholder="ატვირთეთ დოკუმენტის ფაილი ან ჩასვით ტექსტი აქ..."></div>
             </div>
             <div class="document-form-actions">
               <button type="button" id="guideDocSaveBtn" class="primary-btn">შენახვა და გამოქვეყნება</button>
               <button type="button" id="guideDocFormatBtn" class="secondary-btn">სტრუქტურის გასწორება</button>
+              <button type="button" id="guideDocCancelBtn" class="secondary-btn">გაუქმება</button>
               <button type="button" id="guideDocDeleteBtn" class="secondary-btn" style="display:none; color:#b91c1c; border-color:#fecaca;">დოკუმენტის წაშლა</button>
             </div>
+          </div>
+
+          <div class="contract-slots-panel" id="guideDocStatusCard" aria-label="გზამკვლევის სტატუსი" style="display:none;"></div>
+
+          <div class="documents-list" id="guideDocsList">
+            <!-- საინფორმაციო ნავიგაციის დოკუმენტების სია იტვირთება JS-ით -->
           </div>
 
           <div id="guideVideosGrid" style="display:none;"></div>
