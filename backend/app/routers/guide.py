@@ -207,10 +207,10 @@ async def _apply_guide_doc_fields(
         except Exception:
             extracted_html_from_file = ""
 
-    if content is not None and content.strip():
-        doc.content = structured_text_to_html(strip_internal_annexes(content))
-    elif extracted_html_from_file:
+    if extracted_html_from_file:
         doc.content = extracted_html_from_file
+    elif content is not None and content.strip():
+        doc.content = structured_text_to_html(strip_internal_annexes(content))
     elif content is not None and not (file and file.filename):
         doc.content = ""
 

@@ -1078,6 +1078,91 @@ def structured_text_to_html(raw_text: str) -> str:
     return "\n".join(out)
 
 
+def _docx_runs_to_html(p_el: ET.Element, strip_bullet_prefix: bool = False) -> str:
+    """Extract inline HTML from a <w:p> element preserving run-level bold and italic."""
+    segments: list[tuple[str, bool, bool]] = []
+    for r in p_el.findall(f".//{{{W_NS}}}r"):
+        r_text = "".join(r.itertext())
+        if not r_text:
+            continue
+        r_pr = r.find(f"./{{{W_NS}}}rPr")
+        is_b = False
+        is_i = False
+        if r_pr is not None:
+            b_el = r_pr.find(f"./{{{W_NS}}}b")
+            if b_el is not None and (b_el.get(f"{{{W_NS}}}val") or "1") not in ("0", "false"):
+                is_b = True
+            i_el = r_pr.find(f"./{{{W_NS}}}i")
+            if i_el is not None and (i_el.get(f"{{{W_NS}}}val") or "1") not in ("0", "false"):
+                is_i = True
+        if segments and segments[-1][1] == is_b and segments[-1][2] == is_i:
+            segments[-1] = (segments[-1][0] + r_text, is_b, is_i)
+        else:
+            segments.append((r_text, is_b, is_i))
+
+    if not segments:
+        raw = "".join(p_el.itertext()).strip()
+        return _format_inline_with_labels(raw) if raw else ""
+
+    if strip_bullet_prefix:
+        first_txt, first_b, first_i = segments[0]
+        m = _BULLET_LINE_RE.match(first_txt.lstrip())
+        if m:
+            rem = m.group(1)
+            if rem:
+                segments[0] = (rem, first_b, first_i)
+            else:
+                segments.pop(0)
+        else:
+            # Handle case where bullet symbol is in first segment and space/rest in next
+            full_joined = "".join(s[0] for s in segments).lstrip()
+            m_full = _BULLET_LINE_RE.match(full_joined)
+            if m_full:
+                prefix_len = len(full_joined) - len(m_full.group(1))
+                # Strip prefix_len chars from start of segments
+                to_strip = len("".join(s[0] for s in segments)) - len(full_joined) + prefix_len
+                while segments and to_strip > 0:
+                    s_txt, s_b, s_i = segments[0]
+                    if len(s_txt) <= to_strip:
+                        to_strip -= len(s_txt)
+                        segments.pop(0)
+                    else:
+                        segments[0] = (s_txt[to_strip:], s_b, s_i)
+                        to_strip = 0
+
+    # Clean stray markdown escape artifacts from converted docx (e.g. leading '\' before 'შენიშვნა:' and trailing '.*')
+    if segments:
+        s0_txt, s0_b, s0_i = segments[0]
+        if s0_txt.startswith("\\"):
+            s0_txt = s0_txt.lstrip("\\")
+            if s0_txt:
+                segments[0] = (s0_txt, s0_b, s0_i)
+            else:
+                segments.pop(0)
+    if segments:
+        sl_txt, sl_b, sl_i = segments[-1]
+        if sl_txt.endswith(").*"):
+            segments[-1] = (sl_txt[:-1], sl_b, sl_i)
+
+    has_any_formatting = any(b or i for _, b, i in segments)
+    if not has_any_formatting:
+        plain = "".join(t for t, _, _ in segments).strip()
+        return _format_inline_with_labels(plain)
+
+    parts: list[str] = []
+    for seg_txt, is_b, is_i in segments:
+        esc = _inline_md_to_html(seg_txt)
+        if is_b and is_i:
+            parts.append(f"<strong><em>{esc}</em></strong>")
+        elif is_b:
+            parts.append(f"<strong>{esc}</strong>")
+        elif is_i:
+            parts.append(f"<em>{esc}</em>")
+        else:
+            parts.append(esc)
+    return "".join(parts).strip()
+
+
 def docx_bytes_to_html(docx_bytes: bytes) -> str:
     """Convert .docx bytes into clean, structured HTML preserving headings, lists, and tables."""
     try:
@@ -1133,33 +1218,31 @@ def docx_bytes_to_html(docx_bytes: bytes) -> str:
                     if not in_ul:
                         out.append("<ul>")
                         in_ul = True
-                    item_txt = b_match.group(1).strip() if b_match else text
-                    out.append(f"<li>{_format_inline_with_labels(item_txt)}</li>")
+                    out.append(f"<li>{_docx_runs_to_html(child, strip_bullet_prefix=True)}</li>")
                     continue
 
                 close_ul()
 
                 if "heading1" in style_val or "title" in style_val or (
-                    not seen_h1 and len(out) == 0 and (jc_val == "center" or all_bold) and len(text) <= 120
+                    not seen_h1 and len(out) == 0 and jc_val == "center" and len(text) <= 120
                 ):
                     seen_h1 = True
                     out.append(f'<h1 style="text-align:center;">{html.escape(text)}</h1>')
                 elif (
                     "heading2" in style_val
                     or has_bottom_bdr
-                    or (_SECTION_H2_RE.match(text) and len(text) <= 110 and not text.endswith((";", ",")))
-                    or (all_bold and len(text) <= 95 and not text.endswith((".", ";", ",")))
+                    or (all_bold and len(text) <= 115 and not text.endswith((":", ".", ";", ",")))
                 ):
                     if seen_h1 and len(out) == 1 and jc_val == "center":
                         out.append(f'<h2 style="text-align:center;">{html.escape(text)}</h2>')
                     else:
                         out.append(f"<h2>{html.escape(text)}</h2>")
                 elif "heading3" in style_val or (
-                    _SECTION_H3_RE.match(text) and len(text) <= 120 and (all_bold or not text.endswith("."))
+                    all_bold and _SECTION_H3_RE.match(text) and len(text) <= 120 and not text.endswith((".", ";", ","))
                 ):
                     out.append(f"<h3>{html.escape(text)}</h3>")
                 else:
-                    out.append(f"<p>{_format_inline_with_labels(text)}</p>")
+                    out.append(f"<p>{_docx_runs_to_html(child, strip_bullet_prefix=False)}</p>")
             elif tag == "tbl":
                 close_ul()
                 out.append("<table>")
@@ -1167,12 +1250,15 @@ def docx_bytes_to_html(docx_bytes: bytes) -> str:
                     cells = []
                     cell_tag = "th" if r_idx == 0 else "td"
                     for tc in tr.findall(f"./{{{W_NS}}}tc"):
-                        c_text = " ".join(
-                            "".join(p.itertext()).strip()
-                            for p in tc.findall(f".//{{{W_NS}}}p")
-                            if "".join(p.itertext()).strip()
-                        )
-                        cells.append(f"<{cell_tag}>{html.escape(c_text)}</{cell_tag}>")
+                        c_parts = []
+                        for p in tc.findall(f".//{{{W_NS}}}p"):
+                            if "".join(p.itertext()).strip():
+                                c_parts.append(
+                                    html.escape("".join(p.itertext()).strip())
+                                    if cell_tag == "th"
+                                    else _docx_runs_to_html(p, strip_bullet_prefix=False)
+                                )
+                        cells.append(f"<{cell_tag}>{' '.join(c_parts)}</{cell_tag}>")
                     if cells:
                         out.append(f"<tr>{''.join(cells)}</tr>")
                 out.append("</table>")
