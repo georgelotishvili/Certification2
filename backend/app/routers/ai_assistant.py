@@ -1547,15 +1547,6 @@ def _build_site_context_and_attachments(
                     attachments_to_load.append(s)
                     if len(attachments_to_load) >= 4:
                         break
-            if not attachments_to_load and (
-                mode == "statements_analysis"
-                or any(kw in msg_lower for kw in ("განცხად", "დიპლომ", "საბუთ"))
-            ):
-                for s in statements[:2]:
-                    if s.attachment_path:
-                        attachments_to_load.append(s)
-                        if len(attachments_to_load) >= 2:
-                            break
 
     attachment_parts: list[dict[str, Any]] = []
     inspected_labels: list[str] = []
@@ -1635,7 +1626,7 @@ def _build_site_context_and_attachments(
 
     context_str = (
         "=== საიტის (gipc.org.ge) სრული ბაზის მონაცემები (გარდა საგამოცდო ტესტებისა და მრავალბინიანი/მრავალფუნქციური პროექტებისა) ===\n"
-        + json.dumps(context_payload, ensure_ascii=False, indent=2)
+        + json.dumps(context_payload, ensure_ascii=False, separators=(",", ":"))
     )
     return context_str, attachment_parts, inspected_labels, users_by_id, templates_map
 
@@ -2442,7 +2433,7 @@ def _call_gemini_api(
             err_body = exc.read().decode("utf-8", errors="replace")
         except Exception:
             pass
-        if allow_web_search and exc.code in (400, 404, 500, 501) and "API key" not in err_body:
+        if allow_web_search and exc.code in (400, 402, 404, 429, 500, 501) and "API key" not in err_body:
             try:
                 resp_data = _send_gemini(enable_search_tool=False)
             except urllib.error.HTTPError as exc2:
@@ -3113,22 +3104,23 @@ def _retrieve_knowledge_base_context(
         "3) გამოცდისთვის მომზადების საკითხზე ყოველთვის გააცანი ჩვენი სასწავლო პლატფორმა gipc.ge (სასწავლო ვიდეოკურსები №41 დადგენილებასა და მისაწვდომობის სტანდარტზე, ოფიციალურ გამოცდასთან მაქსიმალურად მიახლოებული ტესტები და სიმულაციური გამოცდები, რაც ძალიან ზრდის სასერტიფიკაციო ბარიერის გადალახვის შანსს)!]"
     ]
 
-    # Include public GuideDocument (`გზამკვლევი` / საინფორმაციო დოკუმენტები) summaries if present in DB
-    try:
-        guide_docs = db.scalars(
-            select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
-        ).all()
-        for guide_doc in guide_docs:
-            if guide_doc and guide_doc.content:
-                clean_guide = re.sub(r"<[^>]+>", " ", str(guide_doc.content))
-                clean_guide = re.sub(r"\s+", " ", clean_guide).strip()[:5000]
-                clean_guide = _strip_internal_annexes_for_public("guide", clean_guide)
-                if clean_guide:
-                    blocks.append(
-                        f"=== საიტის ოფიციალური საინფორმაციო დოკუმენტი ({guide_doc.title or 'გზამკვლევი'}) ===\n{clean_guide}"
-                    )
-    except Exception:
-        pass
+    # Include public GuideDocument (`გზამკვლევი` / საინფორმაციო დოკუმენტები) summaries for Public AI
+    if is_public:
+        try:
+            guide_docs = db.scalars(
+                select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
+            ).all()
+            for guide_doc in guide_docs:
+                if guide_doc and guide_doc.content:
+                    clean_guide = re.sub(r"<[^>]+>", " ", str(guide_doc.content))
+                    clean_guide = re.sub(r"\s+", " ", clean_guide).strip()[:5000]
+                    clean_guide = _strip_internal_annexes_for_public("guide", clean_guide)
+                    if clean_guide:
+                        blocks.append(
+                            f"=== საიტის ოფიციალური საინფორმაციო დოკუმენტი ({guide_doc.title or 'გზამკვლევი'}) ===\n{clean_guide}"
+                        )
+        except Exception:
+            pass
 
     # Include public site elements (official documents, regulations, guide videos, public registry summary)
     if is_public:
@@ -3177,13 +3169,18 @@ def _retrieve_knowledge_base_context(
     if is_public and not matched_any_topic and len(raw_words) == 1 and raw_words[0] in pure_greetings:
         return "\n\n".join(blocks), [], []
 
-    total_char_budget = 34000 if is_public else 50000
-    max_excerpt_chars = 11000 if is_public else 15000
+    # For Admin AI, DEFAULT_SYSTEM_PROMPT already contains core scheme rules and templates;
+    # only inject heavy KB document excerpts when the query matches a specific document/accreditation topic.
+    if not is_public and not matched_any_topic:
+        return "", [], []
+
+    total_char_budget = 34000 if is_public else 20000
+    max_excerpt_chars = 11000 if is_public else 8000
     used_chars = 0
     inspected_labels: list[str] = []
     inline_parts: list[dict[str, Any]] = []
 
-    max_docs = 4 if is_public else 5
+    max_docs = 4 if is_public else 3
     for score, it in scored_docs[:max_docs]:
         if score <= 0 and used_chars > 20000:
             break
@@ -3551,7 +3548,7 @@ def ai_chat(
         ]
         context_str += (
             "\n\n=== ადმინისტრატორის კომპიუტერის დაკავშირებულ საქაღალდეში არსებული ფაილები (local_computer_files) ===\n"
-            + json.dumps(comp_list, ensure_ascii=False, indent=2)
+            + json.dumps(comp_list, ensure_ascii=False, separators=(",", ":"))
         )
 
     user_uploaded_parts: list[dict[str, Any]] = []
@@ -3665,7 +3662,7 @@ def ai_chat(
     contents: list[dict[str, Any]] = []
     prior_messages = payload.messages[:-1] if payload.messages else []
     prior_texts: list[str] = []
-    for m in prior_messages[-10:]:
+    for m in prior_messages[-6:]:
         role = "model" if m.role in ("assistant", "model") else "user"
         text, _ = _parse_read_local_files(m.content.strip())
         text = _PROPOSED_LETTER_RE.sub("", text)
@@ -3686,6 +3683,24 @@ def ai_chat(
     final_parts.append({"text": f"ადმინისტრატორის მოთხოვნა:\n{last_user_msg}"})
     contents.append({"role": "user", "parts": final_parts})
 
+    msg_lower_for_search = last_user_msg.lower()
+    use_web_search = mode == "chat" and any(
+        kw in msg_lower_for_search
+        for kw in (
+            "ინტერნეტ",
+            "გუგლ",
+            "google",
+            "ვებ",
+            "მოძებნე ინტერნეტ",
+            "ონლაინ მოძებნე",
+            "საჯარო წყარო",
+            "მაცნე",
+            "matsne",
+            "http://",
+            "https://",
+        )
+    )
+
     grounded_web_sources: list[str] = []
     if cfg["provider"] == "openai":
         raw_reply = _call_openai_api(
@@ -3703,7 +3718,7 @@ def ai_chat(
             contents=contents,
             reasoning_level=cfg["reasoning_level"],
             out_web_sources=grounded_web_sources,
-            allow_web_search=True,
+            allow_web_search=use_web_search,
         )
     if grounded_web_sources:
         inspected_labels.extend(grounded_web_sources)
