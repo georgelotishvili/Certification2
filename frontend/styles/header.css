@@ -255,6 +255,54 @@ header {
   outline-offset: 2px;
 }
 
+@media (min-width: 1921px) {
+  .nav-bar {
+    top: 0.52vw;
+    height: 4.17vw;
+    gap: 0.83vw;
+  }
+
+  .logo img {
+    width: 8.81vw;
+  }
+
+  .auth-banner {
+    margin-left: 0.52vw;
+    font-size: clamp(13px, 0.68vw, 22px);
+  }
+
+  .nav {
+    gap: 0.42vw;
+  }
+
+  .nav > a,
+  .nav > a[aria-current="page"],
+  .nav > .nav-item > a {
+    padding: 0.36vw 0.68vw;
+    font-size: clamp(13px, 0.68vw, 22px);
+    gap: 0.31vw;
+  }
+
+  .dropdown {
+    min-width: 12.7vw;
+    padding: 0.31vw 0;
+  }
+
+  .dropdown-item,
+  .nav .dropdown a.dropdown-item {
+    padding: 0.52vw 0.83vw;
+    font-size: clamp(13px, 0.68vw, 22px);
+  }
+
+  .login-btn {
+    padding: 0 1.04vw;
+    min-width: 5.42vw;
+    height: 1.77vw;
+    margin-left: 0.21vw;
+    font-size: clamp(13px, 0.68vw, 22px);
+  }
+}
+
 .burger {
   display: none;
   position: absolute;

@@ -1126,8 +1126,14 @@ main {
   flex: 1 0 auto;
   width: 84%;
   max-width: 1160px;
-  margin: 118px auto 0;
+  margin: max(146px, 8vw) auto 0;
   padding: 20px 0 56px;
+}
+
+@media (min-width: 1921px) {
+  main {
+    max-width: min(1680px, 60.4vw);
+  }
 }
 
 body > footer {
