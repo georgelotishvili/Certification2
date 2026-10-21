@@ -275,6 +275,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 matched is None
                 or not _stored_file_exists(matched.file_path)
                 or "<p>– " in (matched.content or "")
+                or "იოსებიძ" in (matched.content or "")
                 or (expected_size is not None and matched.file_size_bytes != expected_size)
                 or (
                     item.get("strip_annex_1")
@@ -346,6 +347,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 existing_slot_doc is None
                 or not _stored_file_exists(existing_slot_doc.file_path)
                 or "<p>– " in (existing_slot_doc.content or "")
+                or "იოსებიძ" in (existing_slot_doc.content or "")
                 or (expected_size is not None and existing_slot_doc.file_size_bytes != expected_size)
             )
             if not slot_needs_refresh and existing_slot_doc is not None:
