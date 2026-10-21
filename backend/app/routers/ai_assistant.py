@@ -820,6 +820,8 @@ def _unpack_zip_bytes_to_parts(
                 }
             )
             binary_queue: list[tuple[int, str, str, bytes]] = []
+            total_extracted_chars = 0
+            max_zip_text_chars = 65000
             for idx, inner_name in enumerate(names[:max_files], start=1):
                 inner_suffix = Path(inner_name).suffix.lower()
                 try:
@@ -831,13 +833,16 @@ def _unpack_zip_bytes_to_parts(
                 unpacked_names.append(Path(inner_name).name)
 
                 if inner_suffix == ".pdf":
-                    pdf_txt = _extract_pdf_text(inner_bytes, max_chars=28000)
-                    if pdf_txt:
+                    pdf_txt = _extract_pdf_text(inner_bytes, max_chars=12000)
+                    if pdf_txt and len(pdf_txt) >= 120:
+                        rem_chars = max(1500, max_zip_text_chars - total_extracted_chars)
+                        clipped_pdf_txt = pdf_txt[:rem_chars]
+                        total_extracted_chars += len(clipped_pdf_txt)
                         parts.append(
                             {
                                 "text": (
                                     f"📄 [{idx}/{min(len(names), max_files)}] PDF ფაილი ZIP არქივიდან "
-                                    f"({context_label} / '{inner_name}') — ამოღებული ტექსტი:\n---\n{pdf_txt}\n---"
+                                    f"({context_label} / '{inner_name}') — ამოღებული ტექსტი:\n---\n{clipped_pdf_txt}\n---"
                                 )
                             }
                         )
@@ -850,39 +855,44 @@ def _unpack_zip_bytes_to_parts(
                                 )
                             }
                         )
-                    # Priority 0 for scanned PDFs (< 120 chars extracted), priority 1 for text-layer PDFs
-                    prio = 0 if len(pdf_txt) < 120 else 1
-                    binary_queue.append((prio, inner_name, "application/pdf", inner_bytes))
+                        binary_queue.append((0, inner_name, "application/pdf", inner_bytes))
                 elif inner_suffix in (".jpg", ".jpeg", ".png", ".webp"):
                     # Priority 0 for images so they are always visually inspected
                     binary_queue.append((0, inner_name, mime_map[inner_suffix], inner_bytes))
                 elif inner_suffix == ".docx":
-                    txt = _extract_docx_text(inner_bytes, max_chars=35000)
+                    txt = _extract_docx_text(inner_bytes, max_chars=20000)
                     if txt:
+                        rem_chars = max(1500, max_zip_text_chars - total_extracted_chars)
+                        clipped_txt = txt[:rem_chars]
+                        total_extracted_chars += len(clipped_txt)
                         parts.append(
                             {
                                 "text": (
                                     f"📄 [{idx}/{min(len(names), max_files)}] Word ფაილი ZIP არქივიდან "
-                                    f"({context_label} / '{inner_name}'):\n---\n{txt}\n---"
+                                    f"({context_label} / '{inner_name}'):\n---\n{clipped_txt}\n---"
                                 )
                             }
                         )
                 elif inner_suffix in (".txt", ".md", ".csv", ".json", ".html", ".htm"):
-                    txt = inner_bytes.decode("utf-8", errors="replace").strip()[:30000]
+                    txt = inner_bytes.decode("utf-8", errors="replace").strip()[:20000]
                     if txt:
+                        rem_chars = max(1500, max_zip_text_chars - total_extracted_chars)
+                        clipped_txt = txt[:rem_chars]
+                        total_extracted_chars += len(clipped_txt)
                         parts.append(
                             {
                                 "text": (
                                     f"📄 [{idx}/{min(len(names), max_files)}] ტექსტური ფაილი ZIP არქივიდან "
-                                    f"({context_label} / '{inner_name}'):\n---\n{txt}\n---"
+                                    f"({context_label} / '{inner_name}'):\n---\n{clipped_txt}\n---"
                                 )
                             }
                         )
 
-            # Attach inline_data for images and PDFs (scanned PDFs and images first, then text PDFs)
+            # Attach inline_data only for scanned PDFs and images (max 8 visual files / 12MB per archive)
             binary_queue.sort(key=lambda item: item[0])
-            for _prio, inner_name, mtype, inner_bytes in binary_queue:
-                if 0 < len(inner_bytes) <= (budget_bytes - used):
+            effective_budget = min(budget_bytes, 12 * 1024 * 1024)
+            for _prio, inner_name, mtype, inner_bytes in binary_queue[:8]:
+                if 0 < len(inner_bytes) <= (effective_budget - used):
                     parts.append(
                         {
                             "text": f"📄 ფაილი ZIP არქივიდან ({context_label}): '{inner_name}'"
