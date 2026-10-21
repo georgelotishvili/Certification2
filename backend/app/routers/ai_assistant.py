@@ -1537,11 +1537,14 @@ def _build_site_context_and_attachments(
                     attachments_to_load.append(s)
                     if len(attachments_to_load) >= 4:
                         break
-            if not attachments_to_load:
-                for s in statements[:5]:
+            if not attachments_to_load and (
+                mode == "statements_analysis"
+                or any(kw in msg_lower for kw in ("განცხად", "დიპლომ", "საბუთ"))
+            ):
+                for s in statements[:2]:
                     if s.attachment_path:
                         attachments_to_load.append(s)
-                        if len(attachments_to_load) >= 3:
+                        if len(attachments_to_load) >= 2:
                             break
 
     attachment_parts: list[dict[str, Any]] = []
@@ -2418,7 +2421,7 @@ def _call_gemini_api(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     try:
@@ -2591,7 +2594,7 @@ def _call_openai_api(
             },
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     try:
