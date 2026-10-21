@@ -200,6 +200,7 @@
     const IDB_STORE = 'handles';
     const IDB_KEY = 'computer_dir_handle';
     let savedHandleNeedsPermission = false;
+    let folderSessionEpoch = 0;
 
     function openHandleDb() {
       return new Promise((resolve, reject) => {
@@ -231,6 +232,31 @@
       } catch {}
     }
 
+    async function clearDirHandleFromIdb() {
+      try {
+        const db = await openHandleDb();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).delete(IDB_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch {}
+    }
+
+    function disconnectLocalComputerFolder() {
+      folderSessionEpoch += 1;
+      localComputerDirHandle = null;
+      localComputerFolderName = '';
+      localComputerFiles = [];
+      savedHandleNeedsPermission = false;
+      if (folderInputEl) {
+        folderInputEl.value = '';
+      }
+      syncComputerBtnUI();
+      void clearDirHandleFromIdb();
+    }
+
     async function loadDirHandleFromIdb() {
       try {
         const db = await openHandleDb();
@@ -247,15 +273,20 @@
 
     async function restoreSavedComputerFolder() {
       if (localComputerFiles.length > 0) return;
+      const myEpoch = folderSessionEpoch;
       const savedHandle = await loadDirHandleFromIdb();
+      if (myEpoch !== folderSessionEpoch) return;
       if (!savedHandle || typeof savedHandle.queryPermission !== 'function') return;
       try {
+        const perm = await savedHandle.queryPermission({ mode: 'read' });
+        if (myEpoch !== folderSessionEpoch) return;
         localComputerDirHandle = savedHandle;
         localComputerFolderName = savedHandle.name || 'doc 2';
-        const perm = await savedHandle.queryPermission({ mode: 'read' });
         if (perm === 'granted') {
           savedHandleNeedsPermission = false;
-          localComputerFiles = await scanDirectoryHandle(savedHandle);
+          const scanned = await scanDirectoryHandle(savedHandle);
+          if (myEpoch !== folderSessionEpoch) return;
+          localComputerFiles = scanned;
         } else {
           savedHandleNeedsPermission = true;
         }
@@ -336,9 +367,11 @@
           let dirHandle;
           try {
             dirHandle = await global.showDirectoryPicker({ mode: 'readwrite' });
-          } catch {
+          } catch (innerErr) {
+            if (innerErr?.name === 'AbortError') throw innerErr;
             dirHandle = await global.showDirectoryPicker({ mode: 'read' });
           }
+          folderSessionEpoch += 1;
           localComputerDirHandle = dirHandle;
           localComputerFolderName = dirHandle.name || 'საქაღალდე';
           savedHandleNeedsPermission = false;
@@ -923,6 +956,12 @@
       });
       on(panelEl.querySelector('.ai-btn-clear'), 'click', () => {
         messages = [];
+        pendingAttachments = [];
+        if (attachFileInputEl) {
+          attachFileInputEl.value = '';
+        }
+        renderPendingAttachments();
+        disconnectLocalComputerFolder();
         saveHistory();
         renderMessages();
       });
@@ -944,6 +983,10 @@
       on(folderInputEl, 'change', () => {
         const files = Array.from(folderInputEl?.files || []);
         if (files.length) {
+          folderSessionEpoch += 1;
+          localComputerDirHandle = null;
+          savedHandleNeedsPermission = false;
+          void clearDirHandleFromIdb();
           const firstRel = files[0].webkitRelativePath || '';
           localComputerFolderName = firstRel.includes('/') ? firstRel.split('/')[0] : 'კომპიუტერი';
           localComputerFiles = files.slice(0, 400).map((f) => ({
