@@ -1144,33 +1144,38 @@ body > footer {
   margin-bottom: 18px;
   padding: 16px 22px;
   border-radius: 0;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbfd 100%);
+  border: 1px solid #b8c7da;
   border-top: 3px solid #1C468C;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 6px 18px rgba(15, 23, 42, 0.055),
+    0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .page-header-photo {
   width: 64px;
   height: 84px;
   border-radius: 0;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  box-shadow: none;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  background: linear-gradient(180deg, #f3f7fc 0%, #e8eff8 100%);
+  border: 1px solid #94a9c4;
+  outline: 3px solid #f1f5fb;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, outline-color 0.16s ease;
 }
 
 .page-header-photo:hover,
 .page-header-photo.has-photo:hover {
   transform: none;
   border-color: #1C468C;
-  box-shadow: 0 4px 12px rgba(28, 70, 140, 0.12);
+  outline-color: #e4edf8;
+  box-shadow: 0 4px 12px rgba(28, 70, 140, 0.14);
 }
 
 .page-header-photo .default-photo-icon {
   width: 34px;
   height: 34px;
-  color: #64748b;
+  color: #526580;
   transition: color 0.16s ease;
 }
 
@@ -1192,6 +1197,7 @@ body > footer {
   font-size: clamp(20px, 2vw, 24px);
   font-weight: 700;
   color: #0f172a;
+  letter-spacing: 0.015em;
   text-shadow: none;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -1207,10 +1213,14 @@ body > footer {
 .my-grid .reviews-card,
 .my-grid .expert-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.97);
-  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%);
+  border: 1px solid #b8c7da;
+  border-top: 3px solid #1C468C;
   border-radius: 0;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 6px 18px rgba(15, 23, 42, 0.055),
+    0 1px 3px rgba(15, 23, 42, 0.04);
   padding: 18px 20px;
   color: #1e293b;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -1221,8 +1231,12 @@ body > footer {
 .my-grid .cert-card:hover,
 .my-grid .reviews-card:hover,
 .my-grid .expert-card:hover {
-  border-color: #94a3b8;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  border-color: #93a8c4;
+  border-top-color: #153872;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 10px 24px rgba(15, 23, 42, 0.085),
+    0 2px 5px rgba(15, 23, 42, 0.05);
 }
 
 /* Card Headers */
@@ -1237,7 +1251,7 @@ body > footer {
   gap: 12px;
   margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #d5e0ec;
 }
 
 .my-grid .profile-card h2,
@@ -1245,9 +1259,12 @@ body > footer {
 .my-grid .reviews-head h2,
 .my-grid .expert-head h2 {
   margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid #1C468C;
   font-size: 16px;
   font-weight: 700;
-  color: #1C468C;
+  color: #0f172a;
+  letter-spacing: 0.01em;
   line-height: 1.3;
 }
 
@@ -1265,12 +1282,14 @@ body > footer {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 12px;
+  padding: 9px 13px;
   border-radius: 0;
-  background: #f8fafc;
-  border: 1px solid #dce4ee;
+  background: linear-gradient(180deg, #f9fbfd 0%, #f3f7fc 100%);
+  border: 1px solid #cbd8e8;
+  border-left: 3px solid #3a5c9e;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
   min-width: 0;
-  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .profile-row[hidden],
@@ -1280,16 +1299,18 @@ body > footer {
 
 .profile-row:hover,
 .cert-row:hover {
-  background: #f1f6fc;
-  border-color: #b8cce4;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+  background: linear-gradient(180deg, #f3f8fe 0%, #eaf2fc 100%);
+  border-color: #a6bcd8;
+  border-left-color: #1C468C;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.055);
 }
 
 .my-grid .profile-label,
 .my-grid .cert-label {
-  color: #475569;
+  color: #3b4c63;
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1304,6 +1325,17 @@ body > footer {
   min-width: 0;
 }
 
+.my-grid #myCode,
+.my-grid #myCertCode {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1C468C;
+  background: #edf3fb;
+  border: 1px solid #c6d6ea;
+  padding: 2px 8px;
+}
+
 .profile-row .copy-btn,
 .cert-row .copy-btn {
   display: none !important;
@@ -1312,6 +1344,9 @@ body > footer {
 .copy-btn,
 .expert-item .copy-btn {
   border-radius: 0;
+  border: 1px solid #c6d4e6;
+  background: #ffffff;
+  color: #334155;
   transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
 
@@ -1340,14 +1375,16 @@ body > footer {
   min-height: 34px;
   padding: 7px 14px;
   border-radius: 0;
-  border: 1px solid #15356b;
-  background: #1C468C;
+  border: 1px solid #133163;
+  background: linear-gradient(180deg, #214e99 0%, #1C468C 100%);
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
-  box-shadow: none;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 2px 5px rgba(15, 23, 42, 0.12);
   transform: none;
-  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .profile-edit-btn:hover,
@@ -1360,10 +1397,12 @@ body > footer {
 .expert-btn:focus-visible:not(:disabled),
 .my-grid .file-choose:hover,
 .my-grid .file-choose:focus-visible {
-  background: #14356b;
+  background: linear-gradient(180deg, #193f7f 0%, #14356b 100%);
   border-color: #0f2752;
-  box-shadow: 0 4px 12px rgba(28, 70, 140, 0.22);
-  transform: translateY(-1.5px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 4px 12px rgba(28, 70, 140, 0.24);
+  transform: translateY(-1px);
 }
 
 .profile-edit-btn:active,
@@ -1381,28 +1420,29 @@ body > footer {
 
 /* Certificate Status Badge */
 .my-grid .cert-card #myCertStatus {
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 0;
   font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .my-grid .cert-card[data-status="active"] #myCertStatus {
-  background: #e8f5ee;
-  color: #166534;
-  border-color: #b7dfc6;
+  background: #e6f4ec;
+  color: #14532d;
+  border: 1px solid #9fd3b6;
 }
 
 .my-grid .cert-card[data-status="suspended"] #myCertStatus {
   background: #fef3c7;
   color: #92400e;
-  border-color: #fcd34d;
+  border: 1px solid #f6c453;
 }
 
 .my-grid .cert-card[data-status="expired"] #myCertStatus {
-  background: #f1f5f9;
-  color: #475569;
-  border-color: #cbd5e1;
+  background: #eef2f6;
+  color: #334155;
+  border: 1px solid #cbd5e1;
 }
 
 /* Reviews Section */
@@ -1410,15 +1450,17 @@ body > footer {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 0;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: linear-gradient(180deg, #f8fafd 0%, #f1f5fb 100%);
+  border: 1px solid #c6d4e6;
+  border-left: 3px solid #d97706;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .stars .star {
   color: #cbd5e1;
-  font-size: 18px;
+  font-size: 17px;
   transition: transform 0.16s ease, color 0.16s ease;
 }
 
@@ -1426,27 +1468,31 @@ body > footer {
 .stars .star:hover,
 .stars .star.hover {
   color: #d97706;
-  transform: scale(1.12);
+  transform: scale(1.1);
 }
 
 .stars-score {
-  color: #b45309;
-  font-size: 16px;
+  color: #0f172a;
+  font-size: 15px;
   font-weight: 700;
+  padding-left: 4px;
+  border-left: 1px solid #d5e0ec;
 }
 
 .my-grid .comment-form {
   gap: 10px;
-  padding: 12px;
+  padding: 12px 14px;
   border-radius: 0;
-  background: #f8fafc;
-  border: 1px solid #dce4ee;
-  transition: border-color 0.18s ease, background-color 0.18s ease;
+  background: linear-gradient(180deg, #f9fbfd 0%, #f3f7fc 100%);
+  border: 1px solid #cbd8e8;
+  border-left: 3px solid #3a5c9e;
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
 .my-grid .comment-form:hover,
 .my-grid .comment-form:focus-within {
-  border-color: #b8cce4;
+  border-color: #a6bcd8;
+  border-left-color: #1C468C;
   background: #f4f8fd;
 }
 
@@ -1458,18 +1504,19 @@ body > footer {
   min-height: 86px;
   padding: 10px 12px;
   border-radius: 0;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #b8c7da;
   background: #ffffff;
   color: #0f172a;
   font-size: 14px;
   line-height: 1.55;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025) inset;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .my-grid .comment-form textarea:hover,
 .my-grid .expert-field input[type="text"]:hover,
 .expert-search:hover {
-  border-color: #94a3b8;
+  border-color: #8fa6c4;
 }
 
 .my-grid .comment-form textarea:focus-visible,
@@ -1482,6 +1529,12 @@ body > footer {
 
 .my-grid .comments-list {
   max-height: 280px;
+  padding-left: 0;
+}
+
+.my-grid .comments-list::before,
+.my-grid .comment-item::before {
+  display: none !important;
 }
 
 .my-grid .expert-list {
@@ -1489,24 +1542,29 @@ body > footer {
 }
 
 .my-grid .comment-item {
-  background: #f8fafc;
-  border: 1px solid #dce4ee;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafd 100%);
+  border: 1px solid #cbd8e8;
+  border-left: 3px solid #1C468C;
   border-radius: 0;
-  padding: 10px 12px;
-  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+  padding: 10px 13px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .my-grid .comment-item:hover {
-  background: #f1f6fc;
-  border-color: #b8cce4;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  background: #f3f8fe;
+  border-color: #a6bcd8;
+  border-left-color: #14356b;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.055);
 }
 
 .my-grid .comment-meta {
-  color: #64748b;
+  color: #475569;
   font-size: 12px;
   font-weight: 600;
   flex-wrap: wrap;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed #dce5f0;
 }
 
 .my-grid .comment-text {
@@ -1519,24 +1577,27 @@ body > footer {
 .my-grid .expert-field input[type="text"],
 .expert-search,
 .expert-empty {
-  border: 1px solid #cbd5e1;
+  border: 1px solid #b8c7da;
   border-radius: 0;
   background: #ffffff;
   color: #0f172a;
   font-size: 13px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025) inset;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .my-grid .file-field {
-  padding: 10px 12px;
-  border: 1px solid #dce4ee;
+  padding: 10px 13px;
+  border: 1px solid #cbd8e8;
+  border-left: 3px solid #3a5c9e;
   border-radius: 0;
-  background: #f8fafc;
-  transition: border-color 0.18s ease, background-color 0.18s ease;
+  background: linear-gradient(180deg, #f9fbfd 0%, #f3f7fc 100%);
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
 .my-grid .file-field:hover {
-  border-color: #b8cce4;
+  border-color: #a6bcd8;
+  border-left-color: #1C468C;
   background: #f1f6fc;
 }
 
@@ -1555,29 +1616,35 @@ body > footer {
   white-space: nowrap;
   max-width: 100%;
   font-size: 12px;
+  color: #334155;
 }
 
 .my-grid .expert-item {
-  background: #f8fafc;
-  border: 1px solid #dce4ee;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafd 100%);
+  border: 1px solid #cbd8e8;
+  border-left: 3px solid #3a5c9e;
   border-radius: 0;
-  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .my-grid .expert-item:hover {
-  border-color: #b8cce4;
-  background: #f1f6fc;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  border-color: #a6bcd8;
+  border-left-color: #1C468C;
+  background: #f3f8fe;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.055);
 }
 
 .my-grid .expert-item[open] {
   background: #ffffff;
-  border-color: #94a3b8;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  border-color: #8fa6c4;
+  border-left-color: #1C468C;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
 }
 
 .my-grid .expert-item .content {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #d5e0ec;
+  background: #f9fbfd;
 }
 
 /* Modals on Personal Page */
@@ -1591,22 +1658,25 @@ body > footer {
   position: relative;
   overflow: hidden;
   background: #ffffff;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #b8c7da;
+  border-top: 3px solid #1C468C;
   border-radius: 0;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
 }
 
 .profile-edit-head,
 .ratings-modal-head {
   padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #d5e0ec;
 }
 
 .profile-edit-title,
 .ratings-modal-head h2 {
   font-size: 18px;
   font-weight: 700;
-  color: #1C468C;
+  color: #0f172a;
+  padding-left: 10px;
+  border-left: 3px solid #1C468C;
 }
 
 .profile-edit-close,
@@ -1618,7 +1688,7 @@ body > footer {
 }
 
 .profile-edit-input {
-  border-color: #cbd5e1;
+  border-color: #b8c7da;
   font-size: 13px;
 }
 
