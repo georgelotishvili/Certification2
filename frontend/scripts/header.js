@@ -1496,8 +1496,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261025-booking1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261025_booking1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261025-booking2';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261025_booking2';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -2768,11 +2768,19 @@
     document.addEventListener('certificate:loaded', () => {
       void fetchBookingState();
     });
+    window.addEventListener('focus', () => {
+      if (isLoggedIn()) void fetchBookingState();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isLoggedIn()) {
+        void fetchBookingState();
+      }
+    });
 
-    // Periodic check so the central header button disappears automatically when the booked time passes
+    // Periodic check so the central header button appears/disappears automatically
     if (expiryTimerId) clearInterval(expiryTimerId);
     expiryTimerId = setInterval(() => {
-      if (isLoggedIn() && bookingState?.active_booking) {
+      if (isLoggedIn()) {
         void fetchBookingState();
       }
     }, 30000);

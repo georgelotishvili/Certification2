@@ -640,14 +640,12 @@ def send_letter(
         now = datetime.utcnow()
         clean_cat = (candidate_category or "").strip().upper()
         valid_cat = clean_cat if clean_cat in VALID_CANDIDATE_CATEGORIES else None
-        has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user_id)) is not None
-        if custom_kind in ("rejection", "exam_fail") or has_cert:
+        if custom_kind in ("rejection", "exam_fail"):
             user.candidate_status = None
             user.candidate_category = None
             user.candidate_updated_at = now
             db.add(user)
-            if custom_kind in ("rejection", "exam_fail"):
-                _cancel_active_bookings_for_user(db, user_id, now)
+            _cancel_active_bookings_for_user(db, user_id, now)
         elif kind == "exam" and not custom_kind:
             req_cat = get_user_latest_requested_category(db, user_id)
             user.candidate_status = "exam_candidate"

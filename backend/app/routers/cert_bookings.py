@@ -172,9 +172,7 @@ def _resolve_user_eligibility(db: Session, user: User) -> dict[str, Any]:
     now_tb = _now_tbilisi()
     today_tb = now_tb.date()
 
-    has_certificate = (
-        db.scalar(select(Certificate.id).where(Certificate.user_id == user.id)) is not None
-    )
+    cert_row = db.scalar(select(Certificate).where(Certificate.user_id == user.id))
 
     pass_letter = db.scalar(
         select(PlanningLetter)
@@ -194,11 +192,15 @@ def _resolve_user_eligibility(db: Session, user: User) -> dict[str, Any]:
     letter_id: int | None = None
     if pass_letter is not None:
         revoked_after_letter = (
-            not has_certificate
-            and user.candidate_status != "cert_candidate"
+            user.candidate_status != "cert_candidate"
             and user.candidate_updated_at is not None
             and pass_letter.created_at is not None
             and user.candidate_updated_at > (pass_letter.created_at + timedelta(seconds=5))
+            and (
+                cert_row is None
+                or (cert_row.updated_at or cert_row.created_at or datetime.min)
+                <= (pass_letter.created_at + timedelta(seconds=5))
+            )
         )
         if not revoked_after_letter:
             letter_dt_utc = pass_letter.sent_at or pass_letter.created_at
@@ -210,6 +212,18 @@ def _resolve_user_eligibility(db: Session, user: User) -> dict[str, Any]:
             and user.candidate_updated_at > (letter_dt_utc + timedelta(days=30))
         ):
             letter_dt_utc = user.candidate_updated_at or datetime.utcnow()
+
+    if cert_row is None:
+        has_certificate = False
+    elif letter_dt_utc is None:
+        has_certificate = True
+    else:
+        cert_dt = cert_row.updated_at or cert_row.created_at
+        has_certificate = bool(
+            cert_dt is not None
+            and cert_dt > (letter_dt_utc + timedelta(seconds=5))
+            and user.candidate_status != "cert_candidate"
+        )
 
     raw_cat = user.candidate_category or get_user_latest_requested_category(db, user.id) or "A"
     category = normalize_cert_category(raw_cat)

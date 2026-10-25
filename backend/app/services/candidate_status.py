@@ -131,12 +131,23 @@ def sync_all_user_candidates(
 
     candidate_user_ids = [u.id for u in candidate_users]
 
-    # Users who already have a certificate
-    cert_user_ids = set(
-        db.scalars(
-            select(Certificate.user_id).where(Certificate.user_id.in_(candidate_user_ids))
-        ).all()
-    )
+    # Users who already have a certificate and its latest timestamp
+    cert_rows = db.execute(
+        select(
+            Certificate.user_id,
+            func.coalesce(Certificate.updated_at, Certificate.created_at),
+        ).where(Certificate.user_id.in_(candidate_user_ids))
+    ).all()
+    cert_dt_by_uid: dict[int, datetime] = {}
+    for uid, raw_cert_dt in cert_rows:
+        dt = raw_cert_dt
+        if isinstance(dt, str):
+            try:
+                dt = datetime.fromisoformat(dt.replace("Z", ""))
+            except Exception:
+                dt = None
+        if dt is not None:
+            cert_dt_by_uid[int(uid)] = dt
 
     # Latest certificate handover letter per user (kind='certificate', excluding non-pass periods)
     cert_letters = db.execute(
@@ -170,13 +181,22 @@ def sync_all_user_candidates(
     dirty = False
 
     for u in candidate_users:
-        # Rule 1: Certified users no longer hold candidate status
-        if u.id in cert_user_ids:
-            u.candidate_status = None
-            u.candidate_category = None
-            u.candidate_updated_at = now
-            dirty = True
-            continue
+        # Rule 1: Certified users no longer hold candidate status unless a new pass letter
+        # or candidate activation occurred AFTER the certificate was issued/updated
+        if u.id in cert_dt_by_uid:
+            cert_dt = cert_dt_by_uid[u.id]
+            letter_dt = latest_cert_letter_dt.get(u.id)
+            cand_dt = u.candidate_updated_at
+            newer_activity = (
+                (letter_dt is not None and letter_dt > (cert_dt + timedelta(seconds=5)))
+                or (cand_dt is not None and cand_dt > (cert_dt + timedelta(seconds=5)))
+            )
+            if not newer_activity:
+                u.candidate_status = None
+                u.candidate_category = None
+                u.candidate_updated_at = now
+                dirty = True
+                continue
 
         if u.candidate_status == "exam_candidate":
             hist = exam_histories.get(u.id)
@@ -283,14 +303,6 @@ def reconcile_user_candidate_status_after_delete(
     if user.candidate_status is None:
         _cancel_active_bookings_for_user(db, user.id, now)
         return False
-
-    has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user.id)) is not None
-    if has_cert:
-        user.candidate_status = None
-        user.candidate_category = None
-        user.candidate_updated_at = now
-        db.add(user)
-        return True
 
     stmt_count = int(
         db.scalar(select(func.count(Statement.id)).where(Statement.user_id == user.id)) or 0
