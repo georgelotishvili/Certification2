@@ -163,6 +163,14 @@
     </button>
   </div>
 
+  <!-- Central Certificate Appointment Booking Button (Hanging ~1/4 below Header) -->
+  <div class="cert-booking-header-wrap" id="certBookingHeaderWrap" hidden>
+    <button type="button" class="cert-booking-header-btn is-pulsing" id="certBookingHeaderBtn">
+      <span class="cert-booking-header-dot" aria-hidden="true"></span>
+      <span class="cert-booking-header-text" id="certBookingHeaderText">სერტიფიკატის აღების დაჯავშნა</span>
+    </button>
+  </div>
+
   <!-- Statements Modal -->
   <div class="results-overlay" id="userStatementsOverlay" aria-hidden="true">
     <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
@@ -335,6 +343,86 @@
             <span class="statement-history-count" id="userStatementsCount" aria-live="polite">0</span>
           </div>
           <div id="userStatementsList" class="statements-list" role="list"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Certificate Appointment Booking Modal -->
+  <div class="results-overlay cert-booking-overlay" id="certBookingOverlay" aria-hidden="true">
+    <div class="results-modal cert-booking-modal" role="dialog" aria-modal="true" aria-labelledby="certBookingModalTitle">
+      <div class="results-modal-head">
+        <div class="results-modal-titles">
+          <h2 id="certBookingModalTitle">სერტიფიკატის აღების დაჯავშნა</h2>
+          <div class="results-modal-meta">
+            <span class="meta-item" id="certBookingModalMeta"></span>
+            <span class="meta-item cert-booking-window-pill" id="certBookingWindowPill" hidden></span>
+          </div>
+        </div>
+        <div class="results-modal-actions">
+          <button type="button" class="modal-close" id="certBookingModalClose" aria-label="დახურვა">×</button>
+        </div>
+      </div>
+      <div class="results-modal-body cert-booking-modal-body">
+        <!-- Active Booking Banner -->
+        <div class="cert-booking-active-banner" id="certBookingActiveBanner" hidden>
+          <div class="cert-booking-active-info">
+            <div class="cert-booking-active-badge">აქტიური ჯავშანი</div>
+            <div class="cert-booking-active-datetime" id="certBookingActiveDateTime">—</div>
+            <div class="cert-booking-active-address">მისამართი: ქ. თბილისი, მირიან მეფის ქ. №98, მე-2 სართული, საოფისე ფართი №6</div>
+          </div>
+          <div class="cert-booking-active-actions">
+            <button type="button" class="cert-booking-btn-secondary" id="certBookingChangeTrigger">დროის შეცვლა</button>
+            <button type="button" class="cert-booking-btn-danger" id="certBookingCancelTrigger">ჯავშნის გაუქმება</button>
+          </div>
+        </div>
+
+        <!-- Ineligible / Info Notice -->
+        <div class="cert-booking-notice" id="certBookingNotice" hidden></div>
+
+        <!-- Calendar & Slot Picker Section -->
+        <div class="cert-booking-picker-wrap" id="certBookingPickerWrap" hidden>
+          <div class="cert-booking-step-box">
+            <div class="cert-booking-step-head">
+              <div class="cert-booking-step-title">1. აირჩიეთ შეხვედრის დღე</div>
+              <div class="cert-booking-month-nav">
+                <button type="button" class="cert-cal-nav-btn" id="certCalPrevMonth" aria-label="წინა თვე">‹</button>
+                <span class="cert-cal-month-label" id="certCalMonthLabel">—</span>
+                <button type="button" class="cert-cal-nav-btn" id="certCalNextMonth" aria-label="შემდეგი თვე">›</button>
+              </div>
+            </div>
+            <div class="cert-cal-weekdays">
+              <span>ორშ</span><span>სამ</span><span>ოთხ</span><span>ხუთ</span><span>პარ</span><span class="is-weekend">შაბ</span><span class="is-weekend">კვი</span>
+            </div>
+            <div class="cert-cal-grid" id="certCalGrid"></div>
+            <div class="cert-cal-legend">
+              <span class="legend-item"><i class="dot is-available"></i> ხელმისაწვდომი დღე</span>
+              <span class="legend-item"><i class="dot is-selected"></i> არჩეული დღე</span>
+              <span class="legend-item"><i class="dot is-booked"></i> თქვენი ჯავშანი</span>
+              <span class="legend-item"><i class="dot is-disabled"></i> მიუწვდომელი / შაბათ-კვირა</span>
+            </div>
+          </div>
+
+          <div class="cert-booking-step-box" id="certSlotStepBox">
+            <div class="cert-booking-step-head">
+              <div class="cert-booking-step-title" id="certSlotStepTitle">2. აირჩიეთ საათი (11:00 – 16:00, 20-წუთიანი შუალედით)</div>
+              <span class="cert-slot-selected-date" id="certSlotSelectedDateLabel">აირჩიეთ დღე კალენდარში</span>
+            </div>
+            <div class="cert-slots-grid" id="certSlotsGrid"></div>
+            <div class="cert-booking-submit-row">
+              <div class="cert-booking-selection-preview" id="certBookingSelectionPreview">დღე და საათი არ არის არჩეული</div>
+              <button type="button" class="cert-booking-btn-primary" id="certBookingSubmitBtn" disabled>ჯავშნის დადასტურება</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Booking History Section -->
+        <section class="cert-booking-history" id="certBookingHistorySection" aria-labelledby="certBookingHistoryTitle">
+          <div class="statement-history-head">
+            <h3 id="certBookingHistoryTitle">ჯავშნების ისტორია</h3>
+            <span class="statement-history-count" id="certBookingHistoryCount">0</span>
+          </div>
+          <div class="cert-booking-history-list" id="certBookingHistoryList" role="list"></div>
         </section>
       </div>
     </div>

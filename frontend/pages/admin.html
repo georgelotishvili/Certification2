@@ -25,7 +25,7 @@
     <script src="../scripts/admin/application-form.js?v=20261019-bw1" defer></script>
     <script src="../scripts/admin/documents.js?v=20261019-bw1" defer></script>
     <script src="../scripts/admin/ai-assistant.js?v=20261021-folderclear1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261019-publicai4" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261025-booking1" />
   </head>
   <body>
     <header>
@@ -33,6 +33,10 @@
         
       <div class="auth-banner">ადმინისტრატორის გვერდი</div>
 
+      <button type="button" class="admin-bookings-btn" id="adminCertBookingsBtn">
+        <span>ჯავშნები</span>
+        <span class="admin-bookings-badge" id="adminCertBookingsBadge" hidden>0</span>
+      </button>
       <button class="login-btn">მთავარი გვერდი</button>
 
       <!-- Burger toggle for <=1050px (JS-driven) -->
@@ -62,6 +66,7 @@
             </div>
           </div>
         </nav>
+        <button type="button" class="drawer-bookings-btn" id="drawerCertBookingsBtn">ჯავშნები</button>
         <button class="drawer-login">მთავარი გვერდი</button>
       </aside>
 
@@ -995,12 +1000,121 @@
       </div>
     </div>
 
+    <!-- სერტიფიკატის გადაცემის ჯავშნების მართვა (დირექტორის 1-წლიანი გრაფიკი) -->
+    <div id="adminCertBookingsOverlay" class="results-overlay" aria-hidden="true">
+      <div class="results-modal results-modal--wide admin-cert-bookings-modal" role="dialog" aria-modal="true" aria-labelledby="adminCertBookingsTitle">
+        <div class="results-modal-head">
+          <div class="results-modal-titles">
+            <h2 id="adminCertBookingsTitle">სერტიფიკატის გადაცემის ჯავშნები და გრაფიკი (11:00 – 16:00)</h2>
+            <div class="results-modal-meta">
+              <span class="meta-item" id="adminCertBookingsSummaryMeta">იტვირთება...</span>
+            </div>
+          </div>
+          <div class="results-modal-actions">
+            <button type="button" class="secondary-btn" id="adminCertBookingsRefreshBtn">განახლება</button>
+            <button type="button" class="modal-close" id="adminCertBookingsClose" aria-label="დახურვა">×</button>
+          </div>
+        </div>
+        <div class="results-modal-body admin-cert-bookings-body">
+          <!-- 1-Click Yearly / Monthly Quick-Fill Bar -->
+          <div class="admin-cb-quickbar">
+            <div class="admin-cb-quickbar-left">
+              <span class="admin-cb-quickbar-title">სამუშაო დღეების სწრაფი მონიშვნა (შაბათ-კვირა ავტომატურად გამოტოვებულია):</span>
+              <div class="admin-cb-weekdays-group" id="adminCbWeekdaysGroup">
+                <label class="admin-cb-weekday-chip"><input type="checkbox" value="0" checked /><span>ორშ</span></label>
+                <label class="admin-cb-weekday-chip"><input type="checkbox" value="1" checked /><span>სამ</span></label>
+                <label class="admin-cb-weekday-chip"><input type="checkbox" value="2" checked /><span>ოთხ</span></label>
+                <label class="admin-cb-weekday-chip"><input type="checkbox" value="3" checked /><span>ხუთ</span></label>
+                <label class="admin-cb-weekday-chip"><input type="checkbox" value="4" checked /><span>პარ</span></label>
+              </div>
+            </div>
+            <div class="admin-cb-quickbar-actions">
+              <button type="button" class="primary-btn" id="adminCbApplyYearBtn" title="მონიშნული კვირის დღეების გავრცელება მომდევნო 12 თვეზე (11:00–16:00)">მთელ წელზე გავრცელება (1 წელი)</button>
+              <button type="button" class="secondary-btn" id="adminCbApplyMonthBtn" title="მონიშნული კვირის დღეების გავრცელება მხოლოდ არჩეულ თვეზე">ამ თვეზე გავრცელება</button>
+              <button type="button" class="secondary-btn is-danger-outline" id="adminCbClearMonthBtn" title="არჩეული თვის თავისუფალი დღეების გასუფთავება">ამ თვის გასუფთავება</button>
+            </div>
+          </div>
+
+          <!-- 12-Month Quick Strip -->
+          <div class="admin-cb-months-strip" id="adminCbMonthsStrip" role="tablist" aria-label="12 თვის სწრაფი გადართვა"></div>
+
+          <!-- 2-Column Workspace: Calendar + Day/Slot Inspector -->
+          <div class="admin-cb-workspace">
+            <!-- Left: Interactive Calendar -->
+            <div class="admin-cb-calendar-card">
+              <div class="admin-cb-cal-head">
+                <button type="button" class="admin-cb-nav-btn" id="adminCbPrevMonth" aria-label="წინა თვე">‹</button>
+                <div class="admin-cb-cal-title" id="adminCbCalTitle">—</div>
+                <button type="button" class="admin-cb-nav-btn" id="adminCbNextMonth" aria-label="შემდეგი თვე">›</button>
+              </div>
+              <div class="admin-cb-cal-weekdays">
+                <span>ორშ</span><span>სამ</span><span>ოთხ</span><span>ხუთ</span><span>პარ</span><span class="is-weekend">შაბ</span><span class="is-weekend">კვი</span>
+              </div>
+              <div class="admin-cb-cal-grid" id="adminCbCalGrid"></div>
+              <div class="admin-cb-cal-legend">
+                <span><i class="cb-dot is-enabled"></i> ჩართული სამუშაო დღე</span>
+                <span><i class="cb-dot is-booked"></i> აქვს ჯავშანი</span>
+                <span><i class="cb-dot is-selected"></i> არჩეული დღე</span>
+                <span><i class="cb-dot is-weekend"></i> შაბათ-კვირა (დაბლოკილია)</span>
+              </div>
+            </div>
+
+            <!-- Right: Selected Day 20-Min Slots & Candidate Details Card -->
+            <div class="admin-cb-inspector-card">
+              <div class="admin-cb-day-head">
+                <div>
+                  <h3 class="admin-cb-day-title" id="adminCbSelectedDayTitle">აირჩიეთ დღე კალენდარში</h3>
+                  <p class="admin-cb-day-sub" id="adminCbSelectedDaySub">20-წუთიანი შუალედები (11:00 – 16:00)</p>
+                </div>
+                <div class="admin-cb-day-actions">
+                  <button type="button" class="secondary-btn" id="adminCbEnableDayBtn">მთელი დღის ჩართვა</button>
+                  <button type="button" class="secondary-btn is-danger-outline" id="adminCbDisableDayBtn">დღის გათიშვა</button>
+                </div>
+              </div>
+
+              <div class="admin-cb-slots-grid" id="adminCbSlotsGrid"></div>
+
+              <!-- Candidate Details Box (Shown when clicking a booked slot or booking row) -->
+              <div class="admin-cb-candidate-card" id="adminCbCandidateCard" hidden>
+                <div class="admin-cb-candidate-head">
+                  <div>
+                    <span class="admin-cb-candidate-badge">დამჯავშნი პირის მონაცემები</span>
+                    <h4 class="admin-cb-candidate-name" id="adminCbCandName">—</h4>
+                  </div>
+                  <button type="button" class="secondary-btn is-danger-outline" id="adminCbCancelBookingBtn">ჯავშნის გაუქმება</button>
+                </div>
+                <div class="admin-cb-candidate-grid">
+                  <div class="cb-field"><span class="cb-label">ჯავშნის დრო:</span><strong class="cb-val is-highlight" id="adminCbCandDateTime">—</strong></div>
+                  <div class="cb-field"><span class="cb-label">კატეგორია:</span><strong class="cb-val" id="adminCbCandCategory">—</strong></div>
+                  <div class="cb-field"><span class="cb-label">პირადი ნომერი:</span><strong class="cb-val" id="adminCbCandPersonalId">—</strong></div>
+                  <div class="cb-field"><span class="cb-label">ტელეფონი:</span><strong class="cb-val" id="adminCbCandPhone">—</strong></div>
+                  <div class="cb-field"><span class="cb-label">ელ-ფოსტა:</span><strong class="cb-val" id="adminCbCandEmail">—</strong></div>
+                  <div class="cb-field"><span class="cb-label">უნიკალური კოდი:</span><strong class="cb-val" id="adminCbCandCode">—</strong></div>
+                  <div class="cb-field"><span class="cb-label">ჩაბარების წერილი:</span><span class="cb-val" id="adminCbCandLetterDate">—</span></div>
+                  <div class="cb-field"><span class="cb-label">30-დღიანი ვადა:</span><span class="cb-val" id="adminCbCandDeadline">—</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom: All Bookings List -->
+          <div class="admin-cb-list-section">
+            <div class="admin-cb-list-head">
+              <h3>დაჯავშნილი შეხვედრების სია (დააკლიკეთ ჯავშანს პირის მონაცემების სანახავად)</h3>
+              <span class="admin-cb-list-count" id="adminCbListCount">0 ჯავშანი</span>
+            </div>
+            <div class="admin-cb-bookings-list" id="adminCbBookingsList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <footer>
       <div class="footer-bottom">
         <p>2025 წ. ვებგვერდი ეკუთვნის "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტს" ყველა უფლება დაცულია</p>
       </div>
     </footer>
 
-    <script src="../scripts/admin.js?v=20261019-publicai4" defer></script>
+    <script src="../scripts/admin.js?v=20261025-booking1" defer></script>
   </body>
 </html>
