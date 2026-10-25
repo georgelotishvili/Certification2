@@ -263,43 +263,7 @@
               </div>
             </div>
 
-            <!-- რიგი 4: ჩვენგან გაგზავნილი პასუხები / წერილები -->
-            <div class="users-filters-checkboxes users-sent-letters-row">
-              <span class="users-filter-group-title">გაგზავნილი:</span>
-              <div class="users-filter-chips-group">
-                <label class="users-filter-label is-info-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდის დაგეგმვის / გამოცდაზე დაშვების წერილი">
-                  <input id="filterSentExam" type="checkbox" />
-                  <span class="filter-color-dot is-sent-exam" aria-hidden="true"></span>
-                  <span>გამოცდ. დაგეგმვა</span>
-                </label>
-                <label class="users-filter-label is-danger-chip" title="პირები, რომლებსაც გაეგზავნათ განაცხადზე უარყოფითი პასუხის წერილი">
-                  <input id="filterSentRejection" type="checkbox" />
-                  <span class="filter-color-dot is-sent-rejection" aria-hidden="true"></span>
-                  <span>უარყოფითი პასუხი</span>
-                </label>
-                <label class="users-filter-label is-success-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდის ჩაბარებისა და სერტიფიკატის გადაცემის წერილი">
-                  <input id="filterSentCertificate" type="checkbox" />
-                  <span class="filter-color-dot is-sent-certificate" aria-hidden="true"></span>
-                  <span>სერტიფ. გადაცემა</span>
-                </label>
-                <label class="users-filter-label is-warning-chip" title="პირები, რომლებსაც გაეგზავნათ გამოცდაზე ჩაჭრის შეტყობინება">
-                  <input id="filterSentFail" type="checkbox" />
-                  <span class="filter-color-dot is-sent-fail" aria-hidden="true"></span>
-                  <span>ჩაჭრის შეტყ.</span>
-                </label>
-                <label class="users-filter-label is-purple-chip" title="პირები, რომლებსაც გაეგზავნათ სხვა შეტყობინება (შაბლონის გარეშე)">
-                  <input id="filterSentCustom" type="checkbox" />
-                  <span class="filter-color-dot is-sent-custom" aria-hidden="true"></span>
-                  <span>სხვა შეტყ.</span>
-                </label>
-              </div>
-              <div class="users-sent-letters-date-filter">
-                <input id="sentLettersDate" class="users-filter-date" type="date" aria-label="წერილის გაგზავნის თარიღი" title="აირჩიეთ წერილის გაგზავნის თარიღი (თბილისის დროით 00:00–24:00)" />
-                <button id="clearSentLettersDate" class="users-filter-date-clear" type="button" aria-label="გაგზავნის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
-              </div>
-            </div>
-
-            <!-- რიგი 5: დაგეგმილი გამოცდები და სერტიფიკატის გადაცემა -->
+            <!-- რიგი 4: დაგეგმილი გამოცდები -->
             <div class="users-filters-checkboxes users-exam-filters">
               <span class="users-filter-group-title">დაგეგმვა:</span>
               <div class="users-filter-chips-group">
@@ -311,11 +275,6 @@
                   <input id="filterExamEvening" type="checkbox" />
                   <span>გამოცდა საღამოს</span>
                 </label>
-                <label class="users-filter-label is-success-chip" title="დაგეგმილი სერტიფიკატის გადაცემა არჩეულ თარიღზე (ან დღევანდელ დღეზე)">
-                  <input id="filterCertificateHandover" type="checkbox" />
-                  <span class="filter-color-dot is-handover" aria-hidden="true"></span>
-                  <span>სერტიფიკატის გადაცემა</span>
-                </label>
               </div>
               <div class="users-exam-date-filter">
                 <input id="examScheduleDate" class="users-filter-date" type="date" aria-label="გამოცდის თარიღი" title="აირჩიეთ წარსული ან მომავალი დღე; თარიღის გარეშე ჯგუფი დღევანდელი დღის მიხედვით იფილტრება თბილისის დროით" />
@@ -323,7 +282,7 @@
               </div>
             </div>
 
-            <!-- რიგი 4: გამოცდის შედეგები და გასაგზავნი შეტყობინებები -->
+            <!-- რიგი 5: გამოცდის შედეგები და გასაგზავნი შეტყობინებები -->
             <div class="users-filters-checkboxes users-exam-results-filters">
               <span class="users-filter-group-title">შედეგები:</span>
               <div class="users-filter-chips-group">
@@ -337,16 +296,16 @@
                   <span class="filter-color-dot is-exam-failed" aria-hidden="true"></span>
                   <span>ჩაიჭრა</span>
                 </label>
-                <label id="filterPendingPassLetterChip" class="users-filter-label is-success-chip" title="პირები, რომლებმაც ჩააბარეს გამოცდა და გასაგზავნი აქვთ ჩაბარების / სერტიფიკატის გადაცემის შეტყობინება">
+                <label id="filterPendingPassLetterChip" class="users-filter-label is-success-chip" title="პირები, რომლებმაც ჩააბარეს გამოცდა და გასაგზავნი აქვთ ჩაბარების / სერტიფიკატის მინიჭების შეტყობინება">
                   <input id="filterPendingPassLetter" type="checkbox" />
                   <span class="filter-color-dot is-exam-passed" aria-hidden="true"></span>
-                  <span>ჩაბარების შეტყ.</span>
+                  <span>გასაგზავნი: ჩაბარება</span>
                   <span id="filterPendingPassLetterBadge" class="users-filter-count-badge is-pass-alert" hidden>0</span>
                 </label>
                 <label id="filterPendingFailLetterChip" class="users-filter-label is-danger-chip" title="პირები, რომლებიც ჩაიჭრნენ გამოცდაზე და გასაგზავნი აქვთ ჩაჭრის შეტყობინება">
                   <input id="filterPendingFailLetter" type="checkbox" />
                   <span class="filter-color-dot is-exam-failed" aria-hidden="true"></span>
-                  <span>ჩაჭრის შეტყ.</span>
+                  <span>გასაგზავნი: ჩაჭრა</span>
                   <span id="filterPendingFailLetterBadge" class="users-filter-count-badge is-fail-alert" hidden>0</span>
                 </label>
               </div>
