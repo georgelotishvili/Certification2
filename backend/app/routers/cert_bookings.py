@@ -19,6 +19,7 @@ from ..models import (
     User,
 )
 from ..services.candidate_status import (
+    NON_PASS_CERT_PERIODS,
     get_user_latest_requested_category,
     normalize_cert_category,
 )
@@ -182,7 +183,7 @@ def _resolve_user_eligibility(db: Session, user: User) -> dict[str, Any]:
             PlanningLetter.kind == "certificate",
             or_(
                 PlanningLetter.period.is_(None),
-                PlanningLetter.period != "cert_issued",
+                ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
             ),
             PlanningLetter.status != "failed",
         )
@@ -192,8 +193,16 @@ def _resolve_user_eligibility(db: Session, user: User) -> dict[str, Any]:
     letter_dt_utc: datetime | None = None
     letter_id: int | None = None
     if pass_letter is not None:
-        letter_dt_utc = pass_letter.sent_at or pass_letter.created_at
-        letter_id = pass_letter.id
+        revoked_after_letter = (
+            not has_certificate
+            and user.candidate_status != "cert_candidate"
+            and user.candidate_updated_at is not None
+            and pass_letter.created_at is not None
+            and user.candidate_updated_at > (pass_letter.created_at + timedelta(seconds=5))
+        )
+        if not revoked_after_letter:
+            letter_dt_utc = pass_letter.sent_at or pass_letter.created_at
+            letter_id = pass_letter.id
 
     if user.candidate_status == "cert_candidate":
         if letter_dt_utc is None or (
@@ -626,7 +635,7 @@ def _build_admin_overview(db: Session) -> dict[str, Any]:
                 PlanningLetter.kind == "certificate",
                 or_(
                     PlanningLetter.period.is_(None),
-                    PlanningLetter.period != "cert_issued",
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
                 ),
                 PlanningLetter.status != "failed",
             )

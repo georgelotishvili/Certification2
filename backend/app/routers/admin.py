@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..config import get_settings
 from ..database import get_db
 from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
-from ..models import ExamSchedule, PlanningLetter, MultiApartmentEvaluation, MultiFunctionalEvaluation, format_statement_doc_number
+from ..models import CertBooking, ExamSchedule, PlanningLetter, MultiApartmentEvaluation, MultiFunctionalEvaluation, format_statement_doc_number
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -61,6 +61,8 @@ from ..services.media_storage import resolve_storage_path, ensure_media_root, de
 from ..services.expert_certificate_cleanup import delete_expert_certificate_files
 from ..services.user_codes import UserCodeConflict, move_user_code, remember_user_code
 from ..services.candidate_status import (
+    NON_PASS_CERT_PERIODS,
+    _cancel_active_bookings_for_user,
     get_user_latest_requested_category,
     normalize_cert_category,
     reconcile_user_candidate_status_after_delete,
@@ -1224,7 +1226,11 @@ def _compute_exam_outcomes_for_users(db: Session, users: list[User]) -> dict[int
         .where(
             PlanningLetter.user_id.in_(user_ids),
             or_(
-                PlanningLetter.kind == "certificate",
+                (PlanningLetter.kind == "certificate")
+                & or_(
+                    PlanningLetter.period.is_(None),
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
+                ),
                 PlanningLetter.period.in_(("exam_fail", "fail_send_only")),
             ),
         )
@@ -1334,7 +1340,11 @@ def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
         ).where(
             PlanningLetter.user_id.in_(list(existing_uids)),
             or_(
-                PlanningLetter.kind == "certificate",
+                (PlanningLetter.kind == "certificate")
+                & or_(
+                    PlanningLetter.period.is_(None),
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
+                ),
                 PlanningLetter.period.in_(("exam_fail", "fail_send_only")),
             ),
         )
@@ -1562,6 +1572,7 @@ def admin_users(
 
     if exam_date is not None or exam_morning or exam_evening or certificate_handover:
         target_schedule_date = exam_date if exam_date is not None else _today_in_tbilisi()
+        target_date_str = target_schedule_date.isoformat()
         schedule_conditions = []
         if exam_morning or exam_evening or not certificate_handover:
             schedule_query = select(ExamSchedule.user_id).where(
@@ -1573,16 +1584,31 @@ def admin_users(
             elif exam_evening and not exam_morning:
                 schedule_query = schedule_query.where(ExamSchedule.period == "evening")
             schedule_conditions.append(User.id.in_(schedule_query))
+            if not exam_morning and not exam_evening and not certificate_handover:
+                booking_date_query = select(CertBooking.user_id).where(
+                    CertBooking.status == "active",
+                    CertBooking.booking_date == target_date_str,
+                )
+                schedule_conditions.append(User.id.in_(booking_date_query))
         if certificate_handover:
-            cert_handover_query = select(PlanningLetter.user_id).where(
-                PlanningLetter.kind == "certificate",
-                PlanningLetter.event_date == target_schedule_date,
-                or_(
-                    PlanningLetter.period.is_(None),
+            if exam_date is not None:
+                booking_query = select(CertBooking.user_id).where(
+                    CertBooking.status == "active",
+                    CertBooking.booking_date == target_date_str,
+                )
+                cert_handover_query = select(PlanningLetter.user_id).where(
+                    PlanningLetter.kind == "certificate",
+                    PlanningLetter.event_date == target_schedule_date,
                     PlanningLetter.period.in_(("morning", "evening", "cert_am_send", "cert_pm_send")),
-                ),
-            )
-            schedule_conditions.append(User.id.in_(cert_handover_query))
+                )
+                schedule_conditions.append(User.id.in_(booking_query))
+                schedule_conditions.append(User.id.in_(cert_handover_query))
+            else:
+                booking_query = select(CertBooking.user_id).where(
+                    CertBooking.status == "active",
+                    CertBooking.booking_date >= target_date_str,
+                )
+                schedule_conditions.append(User.id.in_(booking_query))
         stmt = stmt.where(or_(*schedule_conditions))
 
     if statement_date is not None:
@@ -1636,7 +1662,7 @@ def admin_users(
                 (PlanningLetter.kind == "certificate")
                 & or_(
                     PlanningLetter.period.is_(None),
-                    PlanningLetter.period.in_(("morning", "evening", "cert_am_send", "cert_pm_send")),
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
                 )
             )
         if sent_fail_letter:
@@ -2069,6 +2095,9 @@ def admin_update_candidate_status(
             chosen_cat = normalize_cert_category(chosen_cat)
         user.candidate_category = chosen_cat
         user.candidate_updated_at = now
+
+    if payload.candidate_status != "cert_candidate":
+        _cancel_active_bookings_for_user(db, user.id, now)
 
     db.add(user)
     db.commit()
@@ -2552,8 +2581,6 @@ def admin_delete_statement(
     db: Session = Depends(get_db),
 ):
     _require_admin(db, authorization)
-    if not _is_founder_actor(authorization, db):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete statements")
 
     statement = db.get(Statement, statement_id)
     if not statement:

@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from ..models import Certificate, ExamSchedule, PlanningLetter, Statement, User
+from ..models import CertBooking, Certificate, ExamSchedule, PlanningLetter, Statement, User
 
 VALID_CANDIDATE_STATUSES = ("exam_candidate", "cert_candidate")
 VALID_CANDIDATE_CATEGORIES = ("A", "B", "C", "B_A", "C_A")
@@ -138,7 +138,7 @@ def sync_all_user_candidates(
         ).all()
     )
 
-    # Latest certificate handover letter per user (kind='certificate', period != 'cert_issued')
+    # Latest certificate handover letter per user (kind='certificate', excluding non-pass periods)
     cert_letters = db.execute(
         select(
             PlanningLetter.user_id,
@@ -154,7 +154,7 @@ def sync_all_user_candidates(
     ).all()
     latest_cert_letter_dt: dict[int, datetime] = {}
     for uid, sent_at, created_at, period in cert_letters:
-        if period == "cert_issued":
+        if period in NON_PASS_CERT_PERIODS:
             continue
         if uid not in latest_cert_letter_dt:
             dt = sent_at or created_at
@@ -240,6 +240,31 @@ NON_EXAM_LETTER_PERIODS = (
     "cust_send_only",
 )
 
+NON_PASS_CERT_PERIODS = (
+    "cert_issued",
+    "exam_fail",
+    "fail_send_only",
+    "rejection",
+    "rej_send_only",
+    "rejection_send_only",
+    "custom",
+    "cust_send_only",
+)
+
+
+def _cancel_active_bookings_for_user(db: Session, user_id: int, now: datetime) -> None:
+    active_bookings = db.scalars(
+        select(CertBooking).where(
+            CertBooking.user_id == user_id,
+            CertBooking.status == "active",
+        )
+    ).all()
+    for b in active_bookings:
+        b.status = "cancelled"
+        b.cancelled_at = now
+        b.cancelled_by = "system"
+        db.add(b)
+
 
 def reconcile_user_candidate_status_after_delete(
     db: Session,
@@ -251,10 +276,14 @@ def reconcile_user_candidate_status_after_delete(
     a statement, exam schedule, or planning letter.
     Returns True if user candidate fields were modified.
     """
-    if user is None or user.candidate_status is None:
+    if user is None:
         return False
 
     now = datetime.utcnow()
+    if user.candidate_status is None:
+        _cancel_active_bookings_for_user(db, user.id, now)
+        return False
+
     has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user.id)) is not None
     if has_cert:
         user.candidate_status = None
@@ -298,7 +327,7 @@ def reconcile_user_candidate_status_after_delete(
                 PlanningLetter.kind == "certificate",
                 or_(
                     PlanningLetter.period.is_(None),
-                    PlanningLetter.period != "cert_issued",
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
                 ),
             )
         )
@@ -315,6 +344,7 @@ def reconcile_user_candidate_status_after_delete(
         user.candidate_category = None
         user.candidate_updated_at = now
         db.add(user)
+        _cancel_active_bookings_for_user(db, user.id, now)
         return True
 
     # Rule 2: Deleting the last certificate handover letter
@@ -329,6 +359,7 @@ def reconcile_user_candidate_status_after_delete(
                 user.candidate_category = None
             user.candidate_updated_at = now
             db.add(user)
+            _cancel_active_bookings_for_user(db, user.id, now)
             return True
 
     # Rule 3: Deleting the last exam schedule or exam admission letter
@@ -340,6 +371,7 @@ def reconcile_user_candidate_status_after_delete(
             user.candidate_category = None
             user.candidate_updated_at = now
             db.add(user)
+            _cancel_active_bookings_for_user(db, user.id, now)
             return True
 
     # Rule 4: If a statement was deleted but other statements remain, keep category in sync

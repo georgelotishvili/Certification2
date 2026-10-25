@@ -115,21 +115,21 @@
       backendKind: 'certificate',
       templateKind: 'certificate',
       hasTemplate: true,
-      hasTimeAndPeriod: true,
-      createTitle: 'სერტიფიკატის გადაცემა (ჩაბარება)',
-      editTitle: 'სერტიფიკატის გადაცემის რედაქტირება',
-      dateLabel: 'გადაცემის თარიღი',
+      hasTimeAndPeriod: false,
+      createTitle: 'სერტიფიკატის მინიჭების შეტყობინება (ჩაბარება)',
+      editTitle: 'სერტიფიკატის მინიჭების შეტყობინების რედაქტირება',
+      dateLabel: 'შეტყობინების თარიღი',
       letterBoxTitle: 'ჩაბარებისა და სერტიფიკატის მინიჭების წერილი',
       historyTypeLabel: 'სერტიფიკატის გადაცემა',
       defaultSubject: DEFAULT_CERTIFICATE_SUBJECT,
       defaultBody: DEFAULT_CERTIFICATE_BODY,
       modalClass: 'is-certificate-modal',
       rowClass: 'is-certificate-row',
-      saveAndSendDesc: 'შეინახავს სერტიფიკატის გადაცემის შეხვედრას და გაუგზავნის მილოცვის წერილს კანდიდატს მეილზე.',
-      saveOnlyDesc: 'შეინახავს მხოლოდ სერტიფიკატის გადაცემის შეხვედრას სისტემაში, მეილის გაგზავნის გარეშე.',
-      sendOnlyDesc: 'გაუგზავნის მხოლოდ ჩაბარებისა და სერტიფიკატის მინიჭების წერილს კანდიდატს მეილზე.',
-      toastSaved: 'სერტიფიკატის გადაცემის შეხვედრა შეინახა',
-      toastSavedAndSent: 'სერტიფიკატის გადაცემა დაიგეგმა და წერილი გაიგზავნა',
+      saveAndSendDesc: 'შეინახავს ჩაბარების შეტყობინებას სისტემაში, გაუგზავნის წერილს მეილზე და გაუაქტიურებს კანდიდატს სერტიფიკატის აღების დაჯავშნის 30-დღიან ღილაკს.',
+      saveOnlyDesc: 'შეინახავს ჩაბარების შეტყობინებას სისტემაში და გაუაქტიურებს დაჯავშნის ღილაკს, მეილზე წერილის გაგზავნის გარეშე.',
+      sendOnlyDesc: 'გაუგზავნის ჩაბარებისა და სერტიფიკატის მინიჭების წერილს კანდიდატს მეილზე და გაუაქტიურებს დაჯავშნის ღილაკს.',
+      toastSaved: 'სერტიფიკატის მინიჭების შეტყობინება შეინახა',
+      toastSavedAndSent: 'სერტიფიკატის მინიჭების წერილი შეინახა და გაიგზავნა',
     },
     exam_fail: {
       mode: 'exam_fail',
@@ -247,6 +247,7 @@
   function periodLabelText(period) {
     if (period === 'morning' || period === 'cert_am_send') return 'დილით';
     if (period === 'evening' || period === 'cert_pm_send') return 'საღამოს';
+    if (period === 'certificate' || period === 'cert_send_only') return 'სერტიფიკატის მინიჭება';
     if (period === 'cert_issued') return 'საჯარო რეესტრში ასახვა';
     if (period === 'rejection' || period === 'rej_send_only' || period === 'rejection_send_only') return 'უარყოფითი პასუხი';
     if (period === 'exam_fail' || period === 'fail_send_only') return 'ჩაჭრის შეტყობინება';
@@ -621,6 +622,7 @@
         if (mode === 'exam_fail') return 'exam_fail';
         if (mode === 'custom') return 'custom';
         if (letter.period === 'cert_issued') return 'cert_issued';
+        if (mode === 'certificate') return 'certificate';
         if (letter.period === 'morning' || letter.period === 'cert_am_send') return 'morning';
         if (letter.period === 'evening' || letter.period === 'cert_pm_send') return 'evening';
         return (letter.event_time || '') < '12:00' ? 'morning' : 'evening';
@@ -637,7 +639,7 @@
           return letter.period === 'cust_send_only';
         }
         if (mode === 'certificate') {
-          return letter.period === 'cert_am_send' || letter.period === 'cert_pm_send';
+          return letter.period === 'cert_send_only' || letter.period === 'cert_am_send' || letter.period === 'cert_pm_send';
         }
         return letter.exam_schedule_id == null;
       }
@@ -1359,11 +1361,7 @@
                     </div>
                   </div>
                 ` : `
-                  <div class="exam-schedule-controls exam-rejection-controls">
-                    <label class="exam-schedule-date-label">${escapeHtml(meta.dateLabel)}
-                      <input class="exam-schedule-date users-filter-date" type="date" value="${escapeHtml(initialDate)}" />
-                    </label>
-                  </div>
+                  <input class="exam-schedule-date" type="hidden" value="${escapeHtml(initialDate)}" />
                 `}
 
                 ${hasCategorySelect ? `
@@ -2057,9 +2055,16 @@
             });
 
             if (!response.ok) {
-              const fallback = response.status === 409
-                ? 'ამ თარიღისა და ჯგუფის ჩანაწერი უკვე არსებობს.'
-                : 'მოქმედება ვერ შესრულდა.';
+              let errText = '';
+              try {
+                const errPayload = await response.clone().json();
+                errText = typeof errPayload?.detail === 'string' ? errPayload.detail : '';
+              } catch {}
+              const fallback = errText || (
+                response.status === 409
+                  ? 'მოქმედება ვერ შესრულდა (კონფლიქტი).'
+                  : 'მოქმედება ვერ შესრულდა.'
+              );
               setModalStatus(fallback, true);
               await handleAdminErrorResponse(response, fallback, showToast);
               return;

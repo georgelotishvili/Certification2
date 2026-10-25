@@ -309,16 +309,14 @@
           actions.appendChild(attachBtn);
         }
 
-        if (isFounderActor()) {
-          const deleteBtn = document.createElement('button');
-          deleteBtn.type = 'button';
-          deleteBtn.className = 'statement-delete head-delete';
-          deleteBtn.textContent = '×';
-          deleteBtn.setAttribute('aria-label', 'წაშლა');
-          deleteBtn.title = 'წაშლა';
-          bindDelete(deleteBtn, item.id);
-          actions.appendChild(deleteBtn);
-        }
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'statement-delete head-delete';
+        deleteBtn.textContent = '×';
+        deleteBtn.setAttribute('aria-label', 'წაშლა');
+        deleteBtn.title = 'წაშლა';
+        bindDelete(deleteBtn, item.id);
+        actions.appendChild(deleteBtn);
 
         messageWrapper.appendChild(actions);
 

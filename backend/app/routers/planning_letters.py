@@ -19,7 +19,9 @@ from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate
 from ..services.bounded_upload import UploadTooLarge, save_upload_stream
 from ..services.candidate_status import (
     NON_EXAM_LETTER_PERIODS,
+    NON_PASS_CERT_PERIODS,
     VALID_CANDIDATE_CATEGORIES,
+    _cancel_active_bookings_for_user,
     get_user_latest_requested_category,
     normalize_cert_category,
     reconcile_user_candidate_status_after_delete,
@@ -477,9 +479,9 @@ def send_letter(
     if action_mode not in ("save_and_send", "save_only", "send_only"):
         raise HTTPException(422, "მოქმედების რეჟიმი არასწორია.")
     custom_kind = period if period in ("rejection", "exam_fail", "custom") else None
-    if period is not None and period not in ("morning", "evening", "rejection", "exam_fail", "custom"):
+    if period is not None and period not in ("morning", "evening", "rejection", "exam_fail", "custom", "certificate", "cert_send_only"):
         raise HTTPException(422, "ცვლა (დილით/საღამოს) არასწორია.")
-    if custom_kind:
+    if custom_kind or kind == "certificate":
         if not event_date.strip():
             event_date = date.today().isoformat()
         if not event_time.strip():
@@ -521,7 +523,7 @@ def send_letter(
     elif not custom_kind:
         template = db.get(PlanningTemplate, kind)
         if use_template_attachment and not attachment and not keep_existing_attachment:
-            if template_updated_at != (_iso(template.updated_at) if template else None):
+            if template_updated_at and template_updated_at != (_iso(template.updated_at) if template else None):
                 raise HTTPException(409, "შაბლონი შეიცვალა. თავიდან გადაამოწმეთ წერილი და დანართი.")
     if custom_kind == "rejection":
         resolved_period = "rej_send_only" if action_mode == "send_only" else "rejection"
@@ -530,11 +532,10 @@ def send_letter(
     elif custom_kind == "custom":
         resolved_period = "cust_send_only" if action_mode == "send_only" else "custom"
     elif kind == "certificate":
-        base_p = period if period in ("morning", "evening") else ("morning" if event_time < "12:00" else "evening")
-        if action_mode == "send_only":
-            resolved_period = "cert_am_send" if base_p == "morning" else "cert_pm_send"
+        if period in ("morning", "evening"):
+            resolved_period = ("cert_am_send" if period == "morning" else "cert_pm_send") if action_mode == "send_only" else period
         else:
-            resolved_period = base_p
+            resolved_period = "cert_send_only" if action_mode == "send_only" else "certificate"
     else:
         resolved_period = (period or ("morning" if event_time < "12:00" else "evening")) if kind == "exam" else None
     is_save_only = action_mode == "save_only"
@@ -645,6 +646,8 @@ def send_letter(
             user.candidate_category = None
             user.candidate_updated_at = now
             db.add(user)
+            if custom_kind in ("rejection", "exam_fail"):
+                _cancel_active_bookings_for_user(db, user_id, now)
         elif kind == "exam" and not custom_kind:
             req_cat = get_user_latest_requested_category(db, user_id)
             user.candidate_status = "exam_candidate"
@@ -725,7 +728,7 @@ def delete_letter(user_id: int, letter_id: int, authorization: str | None = Head
     letter = _user_letter(db, user_id, letter_id)
     user = db.get(User, user_id)
     old_path = letter.attachment_path
-    if letter.kind == "certificate" and letter.period != "cert_issued":
+    if letter.kind == "certificate" and (letter.period is None or letter.period not in NON_PASS_CERT_PERIODS):
         deleted_kind = "certificate_letter"
     elif letter.kind == "exam" and (letter.period is None or letter.period not in NON_EXAM_LETTER_PERIODS):
         deleted_kind = "exam_letter"
