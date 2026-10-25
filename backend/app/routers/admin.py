@@ -1551,10 +1551,10 @@ def admin_users(
             cand_statuses.append("cert_candidate")
         stmt = stmt.where(User.candidate_status.in_(cand_statuses))
 
+    stmt_action_cond = None
     if statement_date is None and (new_statements or pending_statements or all_statements):
         if all_statements:
-            has_any_stmt = select(Statement.id).where(Statement.user_id == User.id).exists()
-            stmt = stmt.where(has_any_stmt)
+            stmt_action_cond = select(Statement.id).where(Statement.user_id == User.id).exists()
         else:
             has_new = select(Statement.id).where(
                 Statement.user_id == User.id, Statement.seen_at.is_(None)
@@ -1568,7 +1568,7 @@ def admin_users(
                 colors.append(has_new)
             if pending_statements:
                 colors.append(~has_new & has_pending)
-            stmt = stmt.where(or_(*colors))
+            stmt_action_cond = or_(*colors)
 
     if exam_date is not None or exam_morning or exam_evening or certificate_handover:
         target_schedule_date = exam_date if exam_date is not None else _today_in_tbilisi()
@@ -1584,12 +1584,6 @@ def admin_users(
             elif exam_evening and not exam_morning:
                 schedule_query = schedule_query.where(ExamSchedule.period == "evening")
             schedule_conditions.append(User.id.in_(schedule_query))
-            if not exam_morning and not exam_evening and not certificate_handover:
-                booking_date_query = select(CertBooking.user_id).where(
-                    CertBooking.status == "active",
-                    CertBooking.booking_date == target_date_str,
-                )
-                schedule_conditions.append(User.id.in_(booking_date_query))
         if certificate_handover:
             if exam_date is not None:
                 booking_query = select(CertBooking.user_id).where(
@@ -1755,10 +1749,15 @@ def admin_users(
             if outcome_ok and pending_ok:
                 matching_uids.append(uid)
 
-        if matching_uids:
-            stmt = stmt.where(User.id.in_(matching_uids))
+        outcome_cond = User.id.in_(matching_uids) if matching_uids else (User.id == -1)
+        if stmt_action_cond is not None and not has_outcome_filter and exam_result_date is None:
+            stmt = stmt.where(or_(stmt_action_cond, outcome_cond))
         else:
-            stmt = stmt.where(User.id == -1)
+            if stmt_action_cond is not None:
+                stmt = stmt.where(stmt_action_cond)
+            stmt = stmt.where(outcome_cond)
+    elif stmt_action_cond is not None:
+        stmt = stmt.where(stmt_action_cond)
 
     if letter_match_cond is not None and sort in ("date_desc", "date_asc"):
         sent_ts_subq = (

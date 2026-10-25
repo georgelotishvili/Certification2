@@ -184,28 +184,28 @@
               </div>
             </div>
 
-            <!-- რიგი 1: კვალიფიკაცია და სერტიფიკატის სტატუსი -->
+            <!-- რიგი 1: სერტიფიცირებულები -->
             <div class="users-filters-checkboxes users-qualification-filters">
-              <span class="users-filter-group-title">კვალიფიკაცია:</span>
+              <span class="users-filter-group-title">სერტიფიცირებულები:</span>
               <div class="users-filter-chips-group">
-                <label class="users-filter-label" title="შენობა-ნაგებობის არქიტექტორები (ლურჯი წერტილით)">
+                <label class="users-filter-label" title="კატეგორია A — შენობა-ნაგებობის არქიტექტორები (ლურჯი წერტილით)">
                   <input id="filterArchitects" type="checkbox" />
                   <span class="filter-color-dot is-architect" aria-hidden="true"></span>
-                  <span>არქიტექტორები</span>
+                  <span>არქიტექტორი (A)</span>
                 </label>
-                <label class="users-filter-label" title="არქიტექტურული პროექტის ექსპერტები (წითელი წერტილით)">
-                  <input id="filterExperts" type="checkbox" />
-                  <span class="filter-color-dot is-expert" aria-hidden="true"></span>
-                  <span>არქიტექტორი ექსპერტები</span>
-                </label>
-                <label class="users-filter-label" title="მუნიციპალიტეტის სპეციალისტები (მწვანე წერტილით)">
+                <label class="users-filter-label" title="კატეგორია B — მუნიციპალიტეტის სპეციალისტები (მწვანე წერტილით)">
                   <input id="filterMunicipal" type="checkbox" />
                   <span class="filter-color-dot is-municipal" aria-hidden="true"></span>
-                  <span>მუნიციპალიტეტის სპეციალისტები</span>
+                  <span>სპეციალისტი (B)</span>
+                </label>
+                <label class="users-filter-label" title="კატეგორია C — არქიტექტურული პროექტის ექსპერტები (წითელი წერტილით)">
+                  <input id="filterExperts" type="checkbox" />
+                  <span class="filter-color-dot is-expert" aria-hidden="true"></span>
+                  <span>ექსპერტი (C)</span>
                 </label>
                 <label class="users-filter-label" title="ყველა სერტიფიცირებული პირი">
                   <input id="filterCertified" type="checkbox" />
-                  <span>სერტიფიცირებული პირები</span>
+                  <span>ყველა სერტიფიცირებული</span>
                 </label>
                 <label class="users-filter-label is-muted-chip" title="შეჩერებული ან ვადაგასული სერტიფიკატის მქონე პირები (ნაცრისფერი წერტილით)">
                   <input id="filterSuspendedExpired" type="checkbox" />
@@ -215,7 +215,7 @@
               </div>
             </div>
 
-            <!-- რიგი 2: კანდიდატები -->
+            <!-- რიგი 2: კანდიდატები და გამოცდა -->
             <div class="users-filters-checkboxes users-candidates-filters">
               <span class="users-filter-group-title">კანდიდატები:</span>
               <div class="users-filter-chips-group">
@@ -231,42 +231,6 @@
                   <span>სერტიფიკატის კანდიდატები</span>
                   <span id="filterCertCandidatesBadge" class="users-filter-count-badge is-cert-cand" hidden>0</span>
                 </label>
-              </div>
-            </div>
-
-            <!-- რიგი 3: შემოსული განცხადებები -->
-            <div class="users-filters-checkboxes users-statements-row">
-              <span class="users-filter-group-title">განცხადებები:</span>
-              <div class="users-filter-chips-group">
-                <label class="users-filter-label is-danger-chip" title="გაუხსნელი განცხადებების მქონე პირები — წითელი კონტურით">
-                  <input id="filterStatements" type="checkbox" />
-                  <span class="filter-color-dot is-unseen-stmt" aria-hidden="true"></span>
-                  <span>ახალი განცხადებები</span>
-                  <span id="filterStatementsBadge" class="users-filter-count-badge is-unseen" hidden>0</span>
-                </label>
-                <label class="users-filter-label is-info-chip" title="მხოლოდ ლურჯკონტურიანი პირები — წაკითხული, მაგრამ ჯერ უპასუხო განცხადებებით">
-                  <input id="filterPendingStatements" type="checkbox" />
-                  <span class="filter-color-dot is-pending-stmt" aria-hidden="true"></span>
-                  <span>უპასუხო განცხადებები</span>
-                  <span id="filterPendingStatementsBadge" class="users-filter-count-badge is-pending" hidden>0</span>
-                </label>
-                <label class="users-filter-label" title="ყველა პირი, ვისაც ოდესმე გამოგზავნილი აქვს განცხადება (მიღების თარიღის მითითებისას — მხოლოდ იმ თარიღის)">
-                  <input id="filterAllStatements" type="checkbox" />
-                  <span class="filter-color-dot is-all-stmt" aria-hidden="true"></span>
-                  <span>ყველა განცხადება</span>
-                  <span id="filterAllStatementsBadge" class="users-filter-count-badge is-all-stmt" hidden>0</span>
-                </label>
-              </div>
-              <div class="users-statements-filter">
-                <input id="statementsDate" class="users-filter-date" type="date" aria-label="განცხადების მიღების თარიღი" title="არჩეული დღე თბილისის დროით, 00:00–24:00; ჩანს იმ დღეს მიღებული ყველა განცხადების გამომგზავნი, სტატუსის ფილტრების მიუხედავად" />
-                <button id="clearStatementsDate" class="users-filter-date-clear" type="button" aria-label="განცხადების თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
-              </div>
-            </div>
-
-            <!-- რიგი 4: დაგეგმილი გამოცდები -->
-            <div class="users-filters-checkboxes users-exam-filters">
-              <span class="users-filter-group-title">დაგეგმვა:</span>
-              <div class="users-filter-chips-group">
                 <label class="users-filter-label" title="დილის ნაკადში დაგეგმილი გამოცდა">
                   <input id="filterExamMorning" type="checkbox" />
                   <span>გამოცდა დილით</span>
@@ -282,19 +246,27 @@
               </div>
             </div>
 
-            <!-- რიგი 5: გამოცდის შედეგები და გასაგზავნი შეტყობინებები -->
-            <div class="users-filters-checkboxes users-exam-results-filters">
-              <span class="users-filter-group-title">შედეგები:</span>
+            <!-- რიგი 3: სამოქმედო (განცხადებები და შედეგები) -->
+            <div class="users-filters-checkboxes users-statements-row">
+              <span class="users-filter-group-title">სამოქმედო:</span>
               <div class="users-filter-chips-group">
-                <label class="users-filter-label is-success-chip" title="პირები, რომლებმაც ჩააბარეს გამოცდა (სამივე ეტაპი)">
-                  <input id="filterExamPassed" type="checkbox" />
-                  <span class="filter-color-dot is-exam-passed" aria-hidden="true"></span>
-                  <span>ჩააბარა</span>
+                <label class="users-filter-label is-danger-chip" title="გაუხსნელი განცხადებების მქონე პირები — წითელი კონტურით">
+                  <input id="filterStatements" type="checkbox" />
+                  <span class="filter-color-dot is-unseen-stmt" aria-hidden="true"></span>
+                  <span>ახალი განცხადება</span>
+                  <span id="filterStatementsBadge" class="users-filter-count-badge is-unseen" hidden>0</span>
                 </label>
-                <label class="users-filter-label is-danger-chip" title="პირები, რომლებიც ჩაიჭრნენ გამოცდაზე (ან გამოტოვეს ეტაპი)">
-                  <input id="filterExamFailed" type="checkbox" />
-                  <span class="filter-color-dot is-exam-failed" aria-hidden="true"></span>
-                  <span>ჩაიჭრა</span>
+                <label class="users-filter-label is-info-chip" title="მხოლოდ ლურჯკონტურიანი პირები — წაკითხული, მაგრამ ჯერ უპასუხო განცხადებებით">
+                  <input id="filterPendingStatements" type="checkbox" />
+                  <span class="filter-color-dot is-pending-stmt" aria-hidden="true"></span>
+                  <span>უპასუხო განცხადება</span>
+                  <span id="filterPendingStatementsBadge" class="users-filter-count-badge is-pending" hidden>0</span>
+                </label>
+                <label class="users-filter-label" title="ყველა პირი, ვისაც ოდესმე გამოგზავნილი აქვს განცხადება">
+                  <input id="filterAllStatements" type="checkbox" />
+                  <span class="filter-color-dot is-all-stmt" aria-hidden="true"></span>
+                  <span>ყველა განცხადება</span>
+                  <span id="filterAllStatementsBadge" class="users-filter-count-badge is-all-stmt" hidden>0</span>
                 </label>
                 <label id="filterPendingPassLetterChip" class="users-filter-label is-success-chip" title="პირები, რომლებმაც ჩააბარეს გამოცდა და გასაგზავნი აქვთ ჩაბარების / სერტიფიკატის მინიჭების შეტყობინება">
                   <input id="filterPendingPassLetter" type="checkbox" />
@@ -308,10 +280,6 @@
                   <span>გასაგზავნი: ჩაჭრა</span>
                   <span id="filterPendingFailLetterBadge" class="users-filter-count-badge is-fail-alert" hidden>0</span>
                 </label>
-              </div>
-              <div class="users-exam-results-date-filter">
-                <input id="examResultDate" class="users-filter-date" type="date" aria-label="გამოცდის შედეგის თარიღი" title="აირჩიეთ გამოცდის თარიღი — გამოჩნდებიან ამ თარიღში ჩაბარებული ან ჩაჭრილი პირები" />
-                <button id="clearExamResultDate" class="users-filter-date-clear" type="button" aria-label="გამოცდის შედეგის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
             </div>
           </div>
