@@ -485,7 +485,7 @@
       if (DOM.filterExamMorning?.checked) params.set('exam_morning', 'true');
       if (DOM.filterExamEvening?.checked) params.set('exam_evening', 'true');
       if (DOM.filterCertificateHandover?.checked) params.set('certificate_handover', 'true');
-      if (DOM.examScheduleDate?.value) params.set('exam_date', DOM.examScheduleDate.value);
+      if (DOM.examScheduleDate?.value) params.set('filter_date', DOM.examScheduleDate.value);
       if (DOM.filterExamPassed?.checked) params.set('exam_passed', 'true');
       if (DOM.filterExamFailed?.checked) params.set('exam_failed', 'true');
       if (DOM.filterPendingPassLetter?.checked) params.set('pending_pass_letter', 'true');

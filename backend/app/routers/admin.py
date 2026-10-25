@@ -1494,12 +1494,29 @@ def admin_users(
     sent_fail_letter: bool = False,
     sent_custom_letter: bool = False,
     sent_letter_date: date | None = None,
+    filter_date: date | None = None,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
 
     exam_histories = _compute_all_exam_histories(db)
     requested_categories = sync_all_user_candidates(db, exam_histories)
+
+    f_day_start: datetime | None = None
+    f_day_end: datetime | None = None
+    f_date_str: str | None = None
+    if filter_date is not None:
+        try:
+            f_day_start = datetime.combine(
+                filter_date, time.min, tzinfo=timezone(timedelta(hours=4))
+            ).astimezone(timezone.utc).replace(tzinfo=None)
+            f_day_end = f_day_start + timedelta(days=1)
+        except OverflowError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="filter_date is outside the supported range",
+            )
+        f_date_str = filter_date.isoformat()
 
     stmt = select(User)
     if search:
@@ -1529,17 +1546,35 @@ def admin_users(
     }
     if qualification:
         if qualification == "suspended_expired":
-            stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
+            cert_subq = select(Certificate.user_id).where(
                 Certificate.status.in_(("suspended", "expired"))
-            )))
+            )
+            if filter_date is not None and f_day_start is not None and f_day_end is not None:
+                cert_subq = cert_subq.where(
+                    or_(
+                        func.date(Certificate.issue_date) == f_date_str,
+                        func.date(Certificate.valid_until) == f_date_str,
+                        (Certificate.issue_date >= f_day_start) & (Certificate.issue_date < f_day_end),
+                        (Certificate.valid_until >= f_day_start) & (Certificate.valid_until < f_day_end),
+                    )
+                )
+            stmt = stmt.where(User.id.in_(cert_subq))
         elif qualification == "exam_candidate":
             stmt = stmt.where(User.candidate_status == "exam_candidate")
         elif qualification == "cert_candidate":
             stmt = stmt.where(User.candidate_status == "cert_candidate")
         elif qualification in qualification_levels:
-            stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
+            cert_subq = select(Certificate.user_id).where(
                 Certificate.level.in_(qualification_levels[qualification])
-            )))
+            )
+            if filter_date is not None and f_day_start is not None and f_day_end is not None:
+                cert_subq = cert_subq.where(
+                    or_(
+                        func.date(Certificate.issue_date) == f_date_str,
+                        (Certificate.issue_date >= f_day_start) & (Certificate.issue_date < f_day_end),
+                    )
+                )
+            stmt = stmt.where(User.id.in_(cert_subq))
         else:
             raise HTTPException(status_code=422, detail="Unknown qualification filter")
 
@@ -1551,27 +1586,105 @@ def admin_users(
             cand_statuses.append("cert_candidate")
         stmt = stmt.where(User.candidate_status.in_(cand_statuses))
 
+    letter_ts_expr = func.coalesce(PlanningLetter.sent_at, PlanningLetter.created_at)
+
+    # Context-aware date filtering for Exam Candidates / Certificate Candidates
+    if filter_date is not None and f_day_start is not None and f_day_end is not None:
+        if (qualification == "exam_candidate" or exam_candidate) and not (exam_morning or exam_evening):
+            stmt = stmt.where(
+                or_(
+                    User.id.in_(select(ExamSchedule.user_id).where(ExamSchedule.exam_date == filter_date)),
+                    User.id.in_(
+                        select(PlanningLetter.user_id).where(
+                            PlanningLetter.kind == "exam",
+                            or_(
+                                PlanningLetter.event_date == filter_date,
+                                (letter_ts_expr >= f_day_start) & (letter_ts_expr < f_day_end),
+                            ),
+                        )
+                    ),
+                    User.id.in_(
+                        select(Statement.user_id).where(
+                            Statement.created_at >= f_day_start,
+                            Statement.created_at < f_day_end,
+                        )
+                    ),
+                )
+            )
+        if qualification == "cert_candidate" or cert_candidate:
+            cert_cand_sitting_uids = [
+                uid
+                for uid, h in exam_histories.items()
+                if any(
+                    filter_date in (sitting.get("dates") or ())
+                    and sitting.get("outcome") in ("pass_bc", "pass_a")
+                    for sitting in (h.get("sittings") or [])
+                )
+            ]
+            cert_cand_conds = [
+                User.id.in_(
+                    select(CertBooking.user_id).where(
+                        CertBooking.status == "active",
+                        CertBooking.booking_date == f_date_str,
+                    )
+                ),
+                User.id.in_(
+                    select(PlanningLetter.user_id).where(
+                        PlanningLetter.kind == "certificate",
+                        or_(
+                            PlanningLetter.event_date == filter_date,
+                            (letter_ts_expr >= f_day_start) & (letter_ts_expr < f_day_end),
+                        ),
+                    )
+                ),
+            ]
+            if cert_cand_sitting_uids:
+                cert_cand_conds.append(User.id.in_(cert_cand_sitting_uids))
+            stmt = stmt.where(or_(*cert_cand_conds))
+
     stmt_action_cond = None
     if statement_date is None and (new_statements or pending_statements or all_statements):
         if all_statements:
-            stmt_action_cond = select(Statement.id).where(Statement.user_id == User.id).exists()
+            stmt_q = select(Statement.id).where(Statement.user_id == User.id)
+            if filter_date is not None and f_day_start is not None and f_day_end is not None:
+                stmt_q = stmt_q.where(
+                    Statement.created_at >= f_day_start,
+                    Statement.created_at < f_day_end,
+                )
+            stmt_action_cond = stmt_q.exists()
         else:
-            has_new = select(Statement.id).where(
+            new_q = select(Statement.id).where(
                 Statement.user_id == User.id, Statement.seen_at.is_(None)
-            ).exists()
-            has_pending = select(Statement.id).where(
-                Statement.user_id == User.id, Statement.seen_at.is_not(None),
+            )
+            pending_q = select(Statement.id).where(
+                Statement.user_id == User.id,
+                Statement.seen_at.is_not(None),
                 Statement.answered_at.is_(None),
-            ).exists()
+            )
+            if filter_date is not None and f_day_start is not None and f_day_end is not None:
+                new_q = new_q.where(
+                    Statement.created_at >= f_day_start,
+                    Statement.created_at < f_day_end,
+                )
+                pending_q = pending_q.where(
+                    Statement.created_at >= f_day_start,
+                    Statement.created_at < f_day_end,
+                )
+            has_new = new_q.exists()
+            has_pending = pending_q.exists()
             colors = []
             if new_statements:
                 colors.append(has_new)
             if pending_statements:
-                colors.append(~has_new & has_pending)
+                colors.append(has_pending if filter_date is not None else (~has_new & has_pending))
             stmt_action_cond = or_(*colors)
 
-    if exam_date is not None or exam_morning or exam_evening or certificate_handover:
-        target_schedule_date = exam_date if exam_date is not None else _today_in_tbilisi()
+    effective_exam_date = exam_date
+    if effective_exam_date is None and filter_date is not None and (exam_morning or exam_evening or certificate_handover):
+        effective_exam_date = filter_date
+
+    if effective_exam_date is not None or exam_morning or exam_evening or certificate_handover:
+        target_schedule_date = effective_exam_date if effective_exam_date is not None else _today_in_tbilisi()
         target_date_str = target_schedule_date.isoformat()
         schedule_conditions = []
         if exam_morning or exam_evening or not certificate_handover:
@@ -1585,7 +1698,7 @@ def admin_users(
                 schedule_query = schedule_query.where(ExamSchedule.period == "evening")
             schedule_conditions.append(User.id.in_(schedule_query))
         if certificate_handover:
-            if exam_date is not None:
+            if effective_exam_date is not None:
                 booking_query = select(CertBooking.user_id).where(
                     CertBooking.status == "active",
                     CertBooking.booking_date == target_date_str,
@@ -1704,10 +1817,16 @@ def admin_users(
         and h["latest_outcome"].get("outcome") == "fail"
     )
 
+    effective_exam_result_date = exam_result_date
+    if effective_exam_result_date is None and filter_date is not None and (
+        exam_passed or exam_failed or pending_pass_letter or pending_fail_letter
+    ):
+        effective_exam_result_date = filter_date
+
     if (
         exam_passed
         or exam_failed
-        or exam_result_date is not None
+        or effective_exam_result_date is not None
         or pending_pass_letter
         or pending_fail_letter
     ):
@@ -1723,7 +1842,7 @@ def admin_users(
             if has_outcome_filter:
                 outcome_ok = False
                 for sitting in sittings:
-                    if exam_result_date is not None and exam_result_date not in sitting["dates"]:
+                    if effective_exam_result_date is not None and effective_exam_result_date not in sitting["dates"]:
                         continue
                     if exam_passed and sitting["outcome"] in ("pass_bc", "pass_a"):
                         outcome_ok = True
@@ -1731,15 +1850,15 @@ def admin_users(
                     if exam_failed and sitting["outcome"] == "fail":
                         outcome_ok = True
                         break
-            elif exam_result_date is not None and not has_pending_filter:
-                outcome_ok = any(exam_result_date in sitting["dates"] for sitting in sittings)
+            elif effective_exam_result_date is not None and not has_pending_filter:
+                outcome_ok = any(effective_exam_result_date in sitting["dates"] for sitting in sittings)
 
             pending_ok = True
             if has_pending_filter:
                 pending_ok = False
                 if latest.get("unacknowledged"):
                     latest_sitting = sittings[-1]
-                    date_ok = exam_result_date is None or exam_result_date in latest_sitting["dates"]
+                    date_ok = effective_exam_result_date is None or effective_exam_result_date in latest_sitting["dates"]
                     if date_ok:
                         if pending_pass_letter and latest.get("outcome") in ("pass_bc", "pass_a"):
                             pending_ok = True
@@ -1759,6 +1878,66 @@ def admin_users(
     elif stmt_action_cond is not None:
         stmt = stmt.where(stmt_action_cond)
 
+    # Universal date fallback when no specific filter checkbox is active:
+    # show all users who had any activity on filter_date.
+    any_context_chip_active = bool(
+        qualification
+        or exam_candidate
+        or cert_candidate
+        or new_statements
+        or pending_statements
+        or all_statements
+        or exam_morning
+        or exam_evening
+        or certificate_handover
+        or exam_passed
+        or exam_failed
+        or pending_pass_letter
+        or pending_fail_letter
+        or has_sent_type_filter
+    )
+    if filter_date is not None and f_day_start is not None and f_day_end is not None and not any_context_chip_active:
+        sitting_uids_on_date = [
+            uid
+            for uid, h in exam_histories.items()
+            if any(filter_date in (s.get("dates") or ()) for s in (h.get("sittings") or []))
+        ]
+        activity_conds = [
+            (User.created_at >= f_day_start) & (User.created_at < f_day_end),
+            User.id.in_(
+                select(Statement.user_id).where(
+                    Statement.created_at >= f_day_start,
+                    Statement.created_at < f_day_end,
+                )
+            ),
+            User.id.in_(select(ExamSchedule.user_id).where(ExamSchedule.exam_date == filter_date)),
+            User.id.in_(
+                select(PlanningLetter.user_id).where(
+                    or_(
+                        PlanningLetter.event_date == filter_date,
+                        (letter_ts_expr >= f_day_start) & (letter_ts_expr < f_day_end),
+                    )
+                )
+            ),
+            User.id.in_(
+                select(CertBooking.user_id).where(
+                    CertBooking.status == "active",
+                    CertBooking.booking_date == f_date_str,
+                )
+            ),
+            User.id.in_(
+                select(Certificate.user_id).where(
+                    or_(
+                        func.date(Certificate.issue_date) == f_date_str,
+                        (Certificate.issue_date >= f_day_start) & (Certificate.issue_date < f_day_end),
+                    )
+                )
+            ),
+        ]
+        if sitting_uids_on_date:
+            activity_conds.append(User.id.in_(sitting_uids_on_date))
+        stmt = stmt.where(or_(*activity_conds))
+
     if letter_match_cond is not None and sort in ("date_desc", "date_asc"):
         sent_ts_subq = (
             select(func.max(letter_ts_expr))
@@ -1775,6 +1954,11 @@ def admin_users(
             stmt_ts_query = stmt_ts_query.where(
                 Statement.created_at >= day_start,
                 Statement.created_at < day_end,
+            )
+        elif filter_date is not None and f_day_start is not None and f_day_end is not None:
+            stmt_ts_query = stmt_ts_query.where(
+                Statement.created_at >= f_day_start,
+                Statement.created_at < f_day_end,
             )
         stmt_ts_subq = stmt_ts_query.scalar_subquery()
         if sort == "date_asc":

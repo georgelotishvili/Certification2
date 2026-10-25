@@ -18,14 +18,14 @@
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
     <script src="../scripts/admin/certificate.js?v=20261018-cand1" defer></script>
     <script src="../scripts/admin/exam-schedules.js?v=20261025-booking2" defer></script>
-    <script src="../scripts/admin/users.js?v=20261019-bw1" defer></script>
+    <script src="../scripts/admin/users.js?v=20261026-date1" defer></script>
     <script src="../scripts/admin/guide-videos.js?v=20261020-guide3" defer></script>
     <script src="../scripts/admin/regulations.js?v=20261019-bw1" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js?v=20261019-bw1" defer></script>
     <script src="../scripts/admin/documents.js?v=20261019-bw1" defer></script>
     <script src="../scripts/admin/ai-assistant.js?v=20261021-folderclear1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261025-booking1" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261026-date1" />
   </head>
   <body>
     <header>
@@ -174,6 +174,10 @@
                   <input id="onlyAdmins" type="checkbox" />
                   <span>მხოლოდ ადმინისტრატორები</span>
                 </label>
+                <div class="users-universal-date-filter">
+                  <input id="examScheduleDate" class="users-filter-date" type="date" aria-label="უნივერსალური თარიღის ფილტრი" title="უნივერსალური თარიღის ფილტრი — ავტომატურად ერგება მონიშნულ ჩექბოქსს (განცხადების, გამოცდის, შედეგის ან დღის აქტივობის თარიღი)" />
+                  <button id="clearExamScheduleDate" class="users-filter-date-clear" type="button" aria-label="თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
+                </div>
                 <select id="usersSort" class="users-sort-select" aria-label="სორტირება">
                   <option value="date_desc">თარიღი ↓ (ნაგულისხმევი)</option>
                   <option value="date_asc">თარიღი ↑ (ძველიდან ახლისკენ)</option>
@@ -239,10 +243,6 @@
                   <input id="filterExamEvening" type="checkbox" />
                   <span>გამოცდა საღამოს</span>
                 </label>
-              </div>
-              <div class="users-exam-date-filter">
-                <input id="examScheduleDate" class="users-filter-date" type="date" aria-label="გამოცდის თარიღი" title="აირჩიეთ წარსული ან მომავალი დღე; თარიღის გარეშე ჯგუფი დღევანდელი დღის მიხედვით იფილტრება თბილისის დროით" />
-                <button id="clearExamScheduleDate" class="users-filter-date-clear" type="button" aria-label="გამოცდის თარიღის გასუფთავება" title="თარიღის გასუფთავება" disabled>×</button>
               </div>
             </div>
 

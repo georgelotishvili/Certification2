@@ -1433,6 +1433,25 @@ main {
 .users-pagination-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .users-page-status { color: var(--text-strong); font-size: 13px; text-align: center; }
 
+.users-universal-date-filter {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+.users-universal-date-filter .users-filter-date,
+.users-universal-date-filter .users-filter-date-clear {
+  height: 36px;
+}
+
+.users-universal-date-filter .users-filter-date-clear {
+  width: 36px;
+}
+
 .users-statements-filter,
 .users-exam-date-filter,
 .users-exam-results-date-filter,
