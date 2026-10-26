@@ -1052,7 +1052,8 @@ def _read_statement_attachment_parts(
 
 
 def _next_workday(today: date) -> date:
-    candidate = today + timedelta(days=1)
+    # Letter day (today) + next 7 days are blocked; earliest selectable exam day is the 8th day (today + 8 days) on a weekday
+    candidate = today + timedelta(days=8)
     while candidate.weekday() >= 5:
         candidate += timedelta(days=1)
     return candidate
@@ -1906,6 +1907,17 @@ def _parse_proposed_letters(
         ev_date = str(data.get("event_date") or default_date).strip()
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", ev_date):
             ev_date = default_date
+        if template_mode == "exam":
+            min_exam_day = _today_in_tbilisi() + timedelta(days=8)
+            try:
+                parsed_ev = date.fromisoformat(ev_date)
+            except ValueError:
+                parsed_ev = min_exam_day
+            if parsed_ev < min_exam_day:
+                parsed_ev = min_exam_day
+            while parsed_ev.weekday() >= 5:
+                parsed_ev += timedelta(days=1)
+            ev_date = parsed_ev.isoformat()
 
         default_time = schedule_times.get(period, "10:00")
         ev_time = str(data.get("event_time") or default_time).strip()

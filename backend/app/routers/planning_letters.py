@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import hashlib
 import json
 from pathlib import Path
@@ -28,7 +28,7 @@ from ..services.candidate_status import (
 )
 from ..services.media_storage import ensure_media_root, relative_storage_path, resolve_storage_path
 from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
-from .admin import _require_admin
+from .admin import _require_admin, _today_in_tbilisi
 
 router = APIRouter()
 Kind = Literal["exam", "certificate"]
@@ -494,6 +494,34 @@ def send_letter(
         day = date.fromisoformat(event_date)
     except ValueError as exc:
         raise HTTPException(422, "თარიღი, საათი ან მოთხოვნის კოდი არასწორია.") from exc
+    if kind == "exam" and not custom_kind:
+        if day.weekday() >= 5:
+            raise HTTPException(
+                422,
+                "გამოცდის დანიშვნა შაბათ-კვირას დაუშვებელია. გთხოვთ აირჩიოთ სამუშაო დღე (ორშაბათი–პარასკევი).",
+            )
+        unchanged_existing_date = False
+        if schedule_id is not None:
+            existing_sched_check = db.scalar(
+                select(ExamSchedule).where(ExamSchedule.id == schedule_id, ExamSchedule.user_id == user_id)
+            )
+            if existing_sched_check is not None and existing_sched_check.exam_date == day:
+                unchanged_existing_date = True
+        if not unchanged_existing_date and edit_letter_id is not None:
+            existing_letter_check = db.scalar(
+                select(PlanningLetter).where(PlanningLetter.id == edit_letter_id, PlanningLetter.user_id == user_id)
+            )
+            if existing_letter_check is not None and existing_letter_check.event_date == day:
+                unchanged_existing_date = True
+        min_exam_day = _today_in_tbilisi() + timedelta(days=8)
+        if not unchanged_existing_date and day < min_exam_day:
+            first_workday = min_exam_day
+            while first_workday.weekday() >= 5:
+                first_workday += timedelta(days=1)
+            raise HTTPException(
+                422,
+                f"გამოცდის დანიშვნა შესაძლებელია წერილის გაგზავნის დღიდან მინიმუმ მე-8 დღეს ({first_workday.strftime('%d-%m-%Y')}-დან).",
+            )
     digest = _upload_digest(attachment)
     fingerprint = hashlib.sha256(json.dumps({
         "user_id": user_id, "kind": kind, "date": event_date, "time": event_time,

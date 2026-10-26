@@ -1837,6 +1837,203 @@ main {
   color: var(--text-strong);
 }
 
+.exam-schedule-date-picker-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.exam-schedule-date-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.exam-schedule-date-trigger.has-value {
+  color: #0f172a;
+  font-weight: 700;
+  border-color: #94a3b8;
+}
+
+.exam-schedule-date-trigger:hover,
+.exam-schedule-date-trigger.is-open {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.exam-schedule-cal-icon {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.exam-schedule-date-trigger-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.exam-schedule-date-trigger-caret {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.exam-schedule-date-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 70;
+  width: 286px;
+  max-width: calc(100vw - 44px);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  user-select: none;
+}
+
+.exam-schedule-date-popover[hidden] {
+  display: none !important;
+}
+
+.exam-schedule-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.exam-schedule-cal-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.exam-schedule-cal-nav {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.exam-schedule-cal-nav:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.exam-schedule-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  text-align: center;
+}
+
+.exam-schedule-cal-wd {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  padding: 2px 0;
+}
+
+.exam-schedule-cal-wd.is-weekend {
+  color: #b91c1c;
+}
+
+.exam-schedule-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.exam-schedule-cal-empty {
+  height: 32px;
+}
+
+.exam-schedule-cal-day {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: #f8fafc;
+  color: #0f172a;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.exam-schedule-cal-day:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #2563eb;
+  color: #1e3a8a;
+}
+
+.exam-schedule-cal-day.is-today {
+  border-color: #94a3b8;
+}
+
+.exam-schedule-cal-day.is-disabled,
+.exam-schedule-cal-day:disabled {
+  background: #f1f5f9;
+  color: #cbd5e1;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.exam-schedule-cal-day.is-weekend.is-disabled,
+.exam-schedule-cal-day.is-weekend:disabled {
+  background: #fff1f2;
+  color: #fda4af;
+}
+
+.exam-schedule-cal-day.is-selected {
+  background: #2563eb !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+
+.exam-schedule-cal-foot {
+  padding-top: 6px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .exam-schedule-period-group {
   position: relative;
   display: inline-flex;

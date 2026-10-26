@@ -11,6 +11,19 @@
     } = context;
 
     const STORAGE_KEY_HISTORY = 'gipc_ai_chat_history_v1';
+
+    function minSelectableExamIso() {
+      const d = new Date();
+      d.setDate(d.getDate() + 8);
+      while (d.getDay() === 0 || d.getDay() === 6) {
+        d.setDate(d.getDate() + 1);
+      }
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
     let isOpen = false;
     let isExpanded = false;
     let isSettingsModalOpen = false;
@@ -1449,7 +1462,7 @@
             showDateTime
               ? `
             <div class="ai-letter-summary-row ai-letter-datetime-row">
-              <label><strong>📅 თარიღი:</strong> <input type="date" class="ai-letter-date-input" value="${escapeHtml(proposal.event_date || '')}" ${proposal.sent ? 'disabled' : ''} /></label>
+              <label><strong>📅 თარიღი:</strong> <input type="date" class="ai-letter-date-input" min="${proposal.template_mode === 'exam' || proposal.kind === 'exam' ? escapeHtml(minSelectableExamIso()) : ''}" value="${escapeHtml(proposal.event_date || '')}" ${proposal.sent ? 'disabled' : ''} /></label>
               <label><strong>🕒 საათი:</strong> <input type="time" class="ai-letter-time-input" value="${escapeHtml(proposal.event_time || '10:00')}" ${proposal.sent ? 'disabled' : ''} /></label>
               <label><strong>ცვლა:</strong>
                 <select class="ai-letter-period-select" ${proposal.sent ? 'disabled' : ''}>
@@ -1598,6 +1611,22 @@
           if (!finalSubject || !finalBody) {
             showToast('წერილის სათაური და ტექსტი სავალდებულოა', 'error');
             return;
+          }
+
+          if (showDateTime && (proposal.template_mode === 'exam' || (proposal.kind === 'exam' && (finalPeriod === 'morning' || finalPeriod === 'evening')))) {
+            const minIso = minSelectableExamIso();
+            if (!finalDate || finalDate < minIso) {
+              showToast(`გამოცდის დანიშვნა შესაძლებელია წერილის დღიდან მინიმუმ მე-8 დღეს (${minIso}-დან).`, 'error');
+              dateInput?.focus();
+              return;
+            }
+            const [y, m, d] = finalDate.split('-').map(Number);
+            const wd = new Date(y, m - 1, d).getDay();
+            if (wd === 0 || wd === 6) {
+              showToast('გამოცდის დანიშვნა შაბათ-კვირას დაუშვებელია. აირჩიეთ სამუშაო დღე.', 'error');
+              dateInput?.focus();
+              return;
+            }
           }
 
           let attachmentToSend = selectedCustomFile;
