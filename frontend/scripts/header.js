@@ -2362,12 +2362,29 @@
           main.appendChild(metaSpan);
         }
 
+        const rightWrap = document.createElement('div');
+        rightWrap.className = 'cert-booking-history-right';
+
         const badge = document.createElement('span');
         badge.className = `cert-booking-status-badge is-${item.status || 'completed'}`;
         badge.textContent = item.status_label || 'დასრულებული';
 
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'cert-booking-history-delete';
+        delBtn.title = 'ისტორიიდან წაშლა';
+        delBtn.setAttribute('aria-label', 'ისტორიიდან წაშლა');
+        delBtn.textContent = '×';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          void handleDismissHistoryItem(item);
+        });
+
+        rightWrap.appendChild(badge);
+        rightWrap.appendChild(delBtn);
+
         row.appendChild(main);
-        row.appendChild(badge);
+        row.appendChild(rightWrap);
         frag.appendChild(row);
       });
       dom.historyList.appendChild(frag);
@@ -2711,6 +2728,34 @@
         });
         if (!res.ok) {
           alert('ჯავშნის გაუქმება ვერ მოხერხდა');
+          return;
+        }
+        bookingState = await res.json();
+        syncHeaderButton();
+        renderModalContent();
+        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
+      } catch {
+        alert('ქსელური შეცდომა — სცადეთ თავიდან');
+      } finally {
+        isSubmitting = false;
+      }
+    }
+
+    async function handleDismissHistoryItem(item) {
+      if (!item?.id || isSubmitting) return;
+      if (item.status === 'active') {
+        if (!confirm(`ნამდვილად გსურთ აქტიური ჯავშნის (${item.booking_date_ka}, ${item.slot_time}) გაუქმება და ისტორიიდან წაშლა?`)) {
+          return;
+        }
+      }
+      isSubmitting = true;
+      try {
+        const res = await fetch(`${API_BASE}/users/me/cert-booking/${encodeURIComponent(item.id)}?dismiss=true`, {
+          method: 'DELETE',
+          headers: { ...getAuthHeaders() },
+        });
+        if (!res.ok) {
+          alert('ჯავშნის წაშლა ვერ მოხერხდა');
           return;
         }
         bookingState = await res.json();

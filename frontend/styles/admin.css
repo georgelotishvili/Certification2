@@ -10612,5 +10612,34 @@ body.modal-open {
   color: #475569;
 }
 
+.admin-cb-booking-row-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-cb-booking-delete {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.admin-cb-booking-delete:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+
 
 

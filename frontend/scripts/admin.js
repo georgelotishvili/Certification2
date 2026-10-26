@@ -1034,12 +1034,29 @@ document.addEventListener('DOMContentLoaded', () => {
         left.appendChild(person);
         left.appendChild(meta);
 
+        const rightWrap = document.createElement('div');
+        rightWrap.className = 'admin-cb-booking-row-right';
+
         const badge = document.createElement('span');
         badge.className = `cert-booking-status-badge is-${b.status || 'active'}`;
         badge.textContent = b.status_label || 'აქტიური';
 
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'admin-cb-booking-delete';
+        delBtn.title = 'სიიდან წაშლა';
+        delBtn.setAttribute('aria-label', 'სიიდან წაშლა');
+        delBtn.textContent = '×';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          void handleDismissBookingRowByAdmin(b);
+        });
+
+        rightWrap.appendChild(badge);
+        rightWrap.appendChild(delBtn);
+
         row.appendChild(left);
-        row.appendChild(badge);
+        row.appendChild(rightWrap);
 
         row.addEventListener('click', () => {
           selectedDateStr = b.booking_date;
@@ -1182,6 +1199,37 @@ document.addEventListener('DOMContentLoaded', () => {
         inspectedBooking = (overview.bookings || []).find((x) => x.id === b.id) || null;
         renderAll();
         ctx.showToast('ჯავშანი გაუქმდა', 'success');
+      } catch {
+        ctx.showToast('ქსელური შეცდომა', 'error');
+      } finally {
+        isBusy = false;
+      }
+    }
+
+    async function handleDismissBookingRowByAdmin(b) {
+      if (!b?.id || isBusy) return;
+      if (b.status === 'active') {
+        if (!confirm(`ნამდვილად გსურთ ${b.user?.full_name || 'კანდიდატის'} აქტიური ჯავშნის (${b.booking_date_ka} ${b.slot_time}) გაუქმება და სიიდან წაშლა?`)) {
+          return;
+        }
+      }
+      isBusy = true;
+      try {
+        const res = await fetch(`${ctx.API_BASE}/admin/cert-bookings/${encodeURIComponent(b.id)}?dismiss=true`, {
+          method: 'DELETE',
+          headers: { ...ctx.getAdminHeaders(), ...ctx.getActorHeaders() },
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          await ctx.handleAdminErrorResponse(res, 'ჯავშნის წაშლა ვერ მოხერხდა');
+          return;
+        }
+        overview = await res.json();
+        if (inspectedBooking && inspectedBooking.id === b.id) {
+          inspectedBooking = (overview.bookings || []).find((x) => x.id === b.id) || null;
+        }
+        renderAll();
+        ctx.showToast(b.status === 'active' ? 'ჯავშანი გაუქმდა და წაიშალა სიიდან' : 'ჩანაწერი წაიშალა სიიდან', 'success');
       } catch {
         ctx.showToast('ქსელური შეცდომა', 'error');
       } finally {
