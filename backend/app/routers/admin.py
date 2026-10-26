@@ -1544,6 +1544,7 @@ def admin_users(
         "municipal": ("municipal",),
         "certified": ("architect", "architect_expert", "expert", "municipal"),
     }
+    now_utc = datetime.utcnow()
     if qualification:
         if qualification == "suspended_expired":
             cert_subq = select(Certificate.user_id).where(
