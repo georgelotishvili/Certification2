@@ -1542,12 +1542,15 @@ def admin_users(
         "architect": ("architect", "architect_expert"),
         "expert": ("expert",),
         "municipal": ("municipal",),
-        "certified": ("architect", "expert", "municipal"),
+        "certified": ("architect", "architect_expert", "expert", "municipal"),
     }
     if qualification:
         if qualification == "suspended_expired":
             cert_subq = select(Certificate.user_id).where(
-                Certificate.status.in_(("suspended", "expired"))
+                or_(
+                    Certificate.status.in_(("suspended", "expired")),
+                    (Certificate.valid_until.is_not(None)) & (Certificate.valid_until < now_utc),
+                )
             )
             if filter_date is not None and f_day_start is not None and f_day_end is not None:
                 cert_subq = cert_subq.where(
@@ -1565,7 +1568,15 @@ def admin_users(
             stmt = stmt.where(User.candidate_status == "cert_candidate")
         elif qualification in qualification_levels:
             cert_subq = select(Certificate.user_id).where(
-                Certificate.level.in_(qualification_levels[qualification])
+                Certificate.level.in_(qualification_levels[qualification]),
+                or_(
+                    Certificate.status.is_(None),
+                    ~Certificate.status.in_(("suspended", "expired")),
+                ),
+                or_(
+                    Certificate.valid_until.is_(None),
+                    Certificate.valid_until >= now_utc,
+                ),
             )
             if filter_date is not None and f_day_start is not None and f_day_end is not None:
                 cert_subq = cert_subq.where(

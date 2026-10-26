@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -15,7 +15,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter
+from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter, CertBooking
+from ..services.candidate_status import (
+    NON_PASS_CERT_PERIODS,
+    get_user_latest_requested_category,
+    normalize_cert_category,
+)
 from ..schemas import (
     UserCreate, UserOut, PublicUserOut, PublicPersonPageOut, PublicCertificateOut,
     UserProfileUpdateRequest, GeorgianNameUpdateRequest, CertificateOut, CertificateCreate, CertificateUpdate, CertificateNotifyRequest,
@@ -832,6 +837,19 @@ def get_certificate(
     return CertificateOut.model_validate(cert)
 
 
+def _complete_active_bookings_for_user(db: Session, user_id: int, now: datetime) -> None:
+    active_bookings = db.scalars(
+        select(CertBooking).where(
+            CertBooking.user_id == user_id,
+            CertBooking.status == "active",
+        )
+    ).all()
+    for b in active_bookings:
+        b.status = "completed"
+        b.updated_at = now
+        db.add(b)
+
+
 @router.post("/{user_id}/certificate", response_model=CertificateOut, status_code=status.HTTP_201_CREATED)
 def create_certificate(
     user_id: int,
@@ -850,6 +868,7 @@ def create_certificate(
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Certificate already exists")
     
+    now = datetime.utcnow()
     cert = Certificate(
         user_id=user_id,
         unique_code=payload.unique_code or user.code,
@@ -862,7 +881,8 @@ def create_certificate(
     )
     user.candidate_status = None
     user.candidate_category = None
-    user.candidate_updated_at = datetime.utcnow()
+    user.candidate_updated_at = now
+    _complete_active_bookings_for_user(db, user_id, now)
     db.add(user)
     db.add(cert)
     db.commit()
@@ -910,11 +930,13 @@ def update_certificate(
         cert.valid_until = payload.valid_until
     cert.exam_score = None
     
+    now = datetime.utcnow()
     user.candidate_status = None
     user.candidate_category = None
-    user.candidate_updated_at = datetime.utcnow()
+    user.candidate_updated_at = now
+    _complete_active_bookings_for_user(db, user_id, now)
     db.add(user)
-    cert.updated_at = datetime.utcnow()
+    cert.updated_at = now
     db.commit()
     db.refresh(cert)
     
@@ -964,25 +986,24 @@ def delete_certificate(
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    # Only admin/founder can delete
-    _require_admin(db, authorization)
+    # Only founder can delete certificate
+    actor = _require_admin(db, authorization)
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    if actor.email.lower() != founder_email:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="სერტიფიკატის წაშლა მხოლოდ მთავარ ადმინისტრატორს შეუძლია",
+        )
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
 
-    # Delete all certificate-related files and directories
-    _delete_certificate_files(cert, user_id)
+    old_level = (cert.level or "").strip().lower()
 
-    # Delete user photo when certificate is deleted
-    if user.photo_path:
-        try:
-            delete_storage_file(user.photo_path)
-        except Exception:
-            pass
-        user.photo_path = None
-        user.photo_filename = None
-        db.add(user)
+    # Delete all certificate-related files and directories (do NOT delete user profile photo)
+    _delete_certificate_files(cert, user_id)
 
     # Delete all ratings and comments for this user
     db.execute(Rating.__table__.delete().where(Rating.target_user_id == user_id))
@@ -1002,6 +1023,60 @@ def delete_certificate(
             except Exception:
                 pass
     db.execute(ExpertUpload.__table__.delete().where(ExpertUpload.user_id == user_id))
+
+    now = datetime.utcnow()
+    # Restore cert_candidate status if the user has a valid certificate handover letter within the last 30 days
+    pass_letter = db.scalar(
+        select(PlanningLetter)
+        .where(
+            PlanningLetter.user_id == user_id,
+            PlanningLetter.kind == "certificate",
+            or_(
+                PlanningLetter.period.is_(None),
+                ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
+            ),
+            PlanningLetter.status != "failed",
+        )
+        .order_by(PlanningLetter.created_at.desc(), PlanningLetter.id.desc())
+    )
+    if pass_letter is not None:
+        letter_dt = pass_letter.sent_at or pass_letter.created_at
+        if letter_dt is not None and (now - letter_dt) <= timedelta(days=30):
+            fallback_cat = "C" if old_level == "expert" else ("B" if old_level == "municipal" else "A")
+            restored_cat = normalize_cert_category(
+                user.candidate_category or get_user_latest_requested_category(db, user_id) or fallback_cat
+            )
+            user.candidate_status = "cert_candidate"
+            user.candidate_category = restored_cat
+            user.candidate_updated_at = now
+            db.add(user)
+
+            # If a booking was marked completed when the certificate was issued, restore or cancel it cleanly
+            now_tb_str = (now + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M")
+            completed_bookings = db.scalars(
+                select(CertBooking).where(
+                    CertBooking.user_id == user_id,
+                    CertBooking.status == "completed",
+                )
+            ).all()
+            for cb in completed_bookings:
+                if f"{cb.booking_date} {cb.slot_time}" > now_tb_str:
+                    other_active = db.scalar(
+                        select(CertBooking.id).where(
+                            CertBooking.booking_date == cb.booking_date,
+                            CertBooking.slot_time == cb.slot_time,
+                            CertBooking.status == "active",
+                            CertBooking.id != cb.id,
+                        )
+                    )
+                    if other_active is None:
+                        cb.status = "active"
+                    else:
+                        cb.status = "cancelled"
+                        cb.cancelled_at = now
+                        cb.cancelled_by = actor.email
+                    cb.updated_at = now
+                    db.add(cb)
 
     db.delete(cert)
     db.commit()

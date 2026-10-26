@@ -123,9 +123,34 @@ def sync_all_user_candidates(
     """
     requested_by_user = get_latest_requested_categories(db)
 
-    candidate_users = db.scalars(
-        select(User).where(User.candidate_status.is_not(None))
-    ).all()
+    passed_sitting_uids: set[int] = set()
+    for uid, hist in (exam_histories or {}).items():
+        sittings = (hist or {}).get("sittings") or []
+        if not sittings:
+            continue
+        latest_sitting = sittings[-1]
+        stages = latest_sitting.get("stages") or {}
+        if (
+            stages.get("stage1") is not None
+            and stages.get("stage2") is not None
+            and stages.get("stage3") is not None
+            and latest_sitting.get("outcome") in ("pass_bc", "pass_a")
+        ):
+            passed_sitting_uids.add(int(uid))
+
+    if passed_sitting_uids:
+        candidate_users = db.scalars(
+            select(User).where(
+                or_(
+                    User.candidate_status.is_not(None),
+                    User.id.in_(passed_sitting_uids),
+                )
+            )
+        ).all()
+    else:
+        candidate_users = db.scalars(
+            select(User).where(User.candidate_status.is_not(None))
+        ).all()
     if not candidate_users:
         return requested_by_user
 
@@ -192,13 +217,14 @@ def sync_all_user_candidates(
                 or (cand_dt is not None and cand_dt > (cert_dt + timedelta(seconds=5)))
             )
             if not newer_activity:
-                u.candidate_status = None
-                u.candidate_category = None
-                u.candidate_updated_at = now
-                dirty = True
+                if u.candidate_status is not None or u.candidate_category is not None:
+                    u.candidate_status = None
+                    u.candidate_category = None
+                    u.candidate_updated_at = now
+                    dirty = True
                 continue
 
-        if u.candidate_status == "exam_candidate":
+        if u.candidate_status in ("exam_candidate", None):
             hist = exam_histories.get(u.id)
             sittings = (hist or {}).get("sittings") or []
             if sittings:
@@ -220,6 +246,16 @@ def sync_all_user_candidates(
                     is_fresh = True
                     if u.candidate_updated_at and sitting_dt:
                         is_fresh = sitting_dt >= (u.candidate_updated_at - timedelta(seconds=5))
+                    if is_fresh and u.id in cert_dt_by_uid and sitting_dt:
+                        if sitting_dt <= (cert_dt_by_uid[u.id] + timedelta(seconds=5)):
+                            is_fresh = False
+                    if is_fresh and u.candidate_status is None:
+                        if sitting_dt is None or (now - sitting_dt) > timedelta(days=30):
+                            is_fresh = False
+                        else:
+                            letter_dt = latest_cert_letter_dt.get(u.id)
+                            if letter_dt is not None and now >= (letter_dt + timedelta(days=30)):
+                                is_fresh = False
                     if is_fresh:
                         req_cat = u.candidate_category or requested_by_user.get(u.id) or "A"
                         passed_cat = resolve_passed_category(req_cat, latest_sitting.get("outcome"))
@@ -242,6 +278,7 @@ def sync_all_user_candidates(
                         u.candidate_status = None
                         u.candidate_category = None
                         u.candidate_updated_at = now
+                        _cancel_active_bookings_for_user(db, u.id, now)
                         dirty = True
 
     if dirty:

@@ -535,6 +535,10 @@ document.addEventListener('DOMContentLoaded', () => {
       ...moduleContextBase,
       onUserCertificateUpdated: (userId, certificateData) => {
         usersModule.updateUserCardColor?.(userId, certificateData);
+        usersModule.refreshLiveUserStates?.({ force: true });
+        try {
+          window.dispatchEvent(new CustomEvent('admin:certificateUpdated', { detail: { userId, certificateData } }));
+        } catch {}
       },
     }, { init: noop, open: noop, close: noop });
 
@@ -742,7 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const map = {};
       const list = Array.isArray(overview?.bookings) ? overview.bookings : [];
       list.forEach((b) => {
-        if (b.raw_status === 'cancelled') return;
+        if (b.raw_status !== 'active') return;
         if (!map[b.booking_date]) map[b.booking_date] = [];
         map[b.booking_date].push(b);
       });
@@ -757,7 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const bookingsByMonth = {};
       (overview?.bookings || []).forEach((b) => {
-        if (b.raw_status === 'cancelled') return;
+        if (b.raw_status !== 'active') return;
         const ym = b.booking_date.slice(0, 7);
         bookingsByMonth[ym] = (bookingsByMonth[ym] || 0) + 1;
       });
@@ -810,7 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dom.candLetterDate) dom.candLetterDate.textContent = b.letter_sent_ka || '—';
       if (dom.candDeadline) dom.candDeadline.textContent = b.deadline_ka ? `${b.deadline_ka}-მდე` : '—';
       if (dom.cancelBookingBtn) {
-        dom.cancelBookingBtn.hidden = b.raw_status === 'cancelled';
+        dom.cancelBookingBtn.hidden = b.raw_status !== 'active';
       }
     }
 
@@ -837,7 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const enabledSlots = new Set(overview?.availability?.[selectedDateStr] || []);
       const dayBookingsMap = {};
       (overview?.bookings || []).forEach((b) => {
-        if (b.booking_date === selectedDateStr && b.raw_status !== 'cancelled') {
+        if (b.booking_date === selectedDateStr && b.raw_status === 'active') {
           dayBookingsMap[b.slot_time] = b;
         }
       });
@@ -1239,6 +1243,7 @@ document.addEventListener('DOMContentLoaded', () => {
       void updateSingleDayAvailability(selectedDateStr, []);
     });
     ctx.on(dom.cancelBookingBtn, 'click', handleCancelBookingByAdmin);
+    window.addEventListener('admin:certificateUpdated', () => void fetchOverview(false));
 
     void fetchOverview(true);
   }

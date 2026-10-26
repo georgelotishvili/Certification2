@@ -726,6 +726,7 @@ def delete_letter(user_id: int, letter_id: int, authorization: str | None = Head
     letter = _user_letter(db, user_id, letter_id)
     user = db.get(User, user_id)
     old_path = letter.attachment_path
+    linked_schedule_id = letter.exam_schedule_id
     if letter.kind == "certificate" and (letter.period is None or letter.period not in NON_PASS_CERT_PERIODS):
         deleted_kind = "certificate_letter"
     elif letter.kind == "exam" and (letter.period is None or letter.period not in NON_EXAM_LETTER_PERIODS):
@@ -734,6 +735,18 @@ def delete_letter(user_id: int, letter_id: int, authorization: str | None = Head
         deleted_kind = "other_letter"
     db.delete(letter)
     db.flush()
+    if linked_schedule_id is not None:
+        other_ref = db.scalar(
+            select(PlanningLetter.id).where(
+                PlanningLetter.exam_schedule_id == linked_schedule_id,
+                PlanningLetter.id != letter_id,
+            )
+        )
+        if other_ref is None:
+            sched_row = db.get(ExamSchedule, linked_schedule_id)
+            if sched_row is not None and sched_row.user_id == user_id:
+                db.delete(sched_row)
+                db.flush()
     reconcile_user_candidate_status_after_delete(db, user, deleted_kind=deleted_kind)
     db.commit()
     if old_path:

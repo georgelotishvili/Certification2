@@ -13,6 +13,7 @@
       handleAdminErrorResponse = async () => {},
       onUserCertificateUpdated = () => {},
       loadExternalScript = () => Promise.resolve(),
+      isFounderActor = () => true,
       escapeHtml = (value) => {
         if (value == null) return '';
         return String(value)
@@ -1327,7 +1328,9 @@
 
       if (card) card.classList.toggle('hidden', !showCard);
       if (deleteBtn) {
-        deleteBtn.disabled = exportBusy || !hasCertificate || formOpen;
+        const canDelete = typeof isFounderActor === 'function' ? !!isFounderActor() : true;
+        deleteBtn.classList.toggle('hidden', !canDelete);
+        deleteBtn.disabled = !canDelete || exportBusy || !hasCertificate || formOpen;
       }
       if (editBtn) {
         editBtn.classList.toggle('hidden', !hasCertificate);

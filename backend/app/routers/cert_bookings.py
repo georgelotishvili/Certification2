@@ -23,6 +23,7 @@ from ..services.candidate_status import (
     get_user_latest_requested_category,
     normalize_cert_category,
 )
+from ..services.planning_email import deliver_letter
 from .admin import _require_admin
 from .users import _require_auth
 
@@ -163,6 +164,8 @@ def _effective_booking_status(booking: CertBooking, now_tb_str: str) -> tuple[st
     is_past = f"{booking.booking_date} {booking.slot_time}" <= now_tb_str
     if booking.status == "cancelled":
         return "cancelled", "გაუქმებული", is_past
+    if booking.status == "completed":
+        return "completed", "სერტიფიკატი გაცემულია / დასრულებული", True
     if is_past:
         return "completed", "დრო გავიდა / დასრულებული", True
     return "active", "აქტიური", False
@@ -792,15 +795,31 @@ def admin_bulk_update_cert_booking_availability(
                 )
             ).all()
         }
+        now_tb_str = _now_tbilisi().strftime("%Y-%m-%d %H:%M")
+        booked_slots_by_date: dict[str, set[str]] = {}
+        active_in_range = db.scalars(
+            select(CertBooking).where(
+                CertBooking.booking_date >= start_d.isoformat(),
+                CertBooking.booking_date <= end_d.isoformat(),
+                CertBooking.status == "active",
+            )
+        ).all()
+        for ab in active_in_range:
+            if ab.slot_time in ALL_CERT_SLOTS_SET and f"{ab.booking_date} {ab.slot_time}" > now_tb_str:
+                booked_slots_by_date.setdefault(ab.booking_date, set()).add(ab.slot_time)
+
         now_utc = datetime.utcnow()
         cur = start_d
         while cur <= end_d:
             if cur.weekday() < 5:  # მხოლოდ სამუშაო დღეები (ორშ–პარ)
                 d_str = cur.isoformat()
+                preserved = booked_slots_by_date.get(d_str, set())
                 if mode in ("clear_year", "clear_month"):
-                    target_slots: list[str] = []
+                    merged_slots = set(preserved)
                 else:
-                    target_slots = slots if cur.weekday() in weekdays else []
+                    base_slots = slots if cur.weekday() in weekdays else []
+                    merged_slots = set(base_slots) | set(preserved)
+                target_slots = sorted(merged_slots, key=lambda x: ALL_CERT_SLOTS.index(x))
                 slots_str = json.dumps(target_slots)
                 row = existing_rows.get(d_str)
                 if row is None:
@@ -844,8 +863,21 @@ def admin_set_day_cert_booking_availability(
     if d_obj.weekday() >= 5:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="შაბათ-კვირის მონიშვნა დაუშვებელია")
 
+    now_tb_str = _now_tbilisi().strftime("%Y-%m-%d %H:%M")
+    active_day_bookings = db.scalars(
+        select(CertBooking).where(
+            CertBooking.booking_date == clean_date,
+            CertBooking.status == "active",
+        )
+    ).all()
+    preserved_day_slots = {
+        b.slot_time
+        for b in active_day_bookings
+        if b.slot_time in ALL_CERT_SLOTS_SET and f"{b.booking_date} {b.slot_time}" > now_tb_str
+    }
+
     valid_slots = sorted(
-        {str(s).strip() for s in (payload.slots or []) if str(s).strip() in ALL_CERT_SLOTS_SET},
+        ({str(s).strip() for s in (payload.slots or []) if str(s).strip() in ALL_CERT_SLOTS_SET} | preserved_day_slots),
         key=lambda x: ALL_CERT_SLOTS.index(x),
     )
 
@@ -868,6 +900,17 @@ def admin_set_day_cert_booking_availability(
     return _build_admin_overview(db)
 
 
+class _SimpleBookingEmailPayload:
+    def __init__(self, to_email: str, subject: str, body: str, request_id: str) -> None:
+        self.to_email = to_email
+        self.subject = subject
+        self.body = body
+        self.request_id = request_id
+        self.doc_number = None
+        self.attachment_path = None
+        self.attachment_filename = None
+
+
 @admin_router.delete("/cert-bookings/{booking_id}")
 def admin_cancel_cert_booking(
     booking_id: int,
@@ -879,10 +922,37 @@ def admin_cancel_cert_booking(
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ჯავშანი ვერ მოიძებნა")
     if booking.status == "active":
+        now_utc = datetime.utcnow()
         booking.status = "cancelled"
-        booking.cancelled_at = datetime.utcnow()
+        booking.cancelled_at = now_utc
         booking.cancelled_by = actor.email
-        booking.updated_at = datetime.utcnow()
+        booking.updated_at = now_utc
         db.add(booking)
         db.commit()
+
+        user = db.get(User, booking.user_id)
+        if user and user.email:
+            full_name = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip() or user.email
+            date_ka = _format_date_ka(booking.booking_date)
+            time_range = f"{booking.slot_time}–{_slot_end_time(booking.slot_time)}"
+            subject = "სერტიფიკატის აღების ჯავშნის გაუქმება — GIPC"
+            body = (
+                f"ადრესატი: {full_name}\n\n"
+                "მოგესალმებით,\n\n"
+                f"გაცნობებთ, რომ სერტიფიკატის მისაღებად თქვენ მიერ დაჯავშნილი ვიზიტი ({date_ka}, {time_range}) გაუქმდა ადმინისტრაციის მიერ.\n\n"
+                "ახალი თარიღისა და დროის ასარჩევად, გთხოვთ ეწვიოთ საიტს gipc.org.ge, გაიაროთ ავტორიზაცია და ზედა პანელზე დააჭიროთ ღილაკს „სერტიფიკატის აღების დაჯავშნა“.\n\n"
+                "პატივისცემით,\n"
+                "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
+            )
+            try:
+                deliver_letter(
+                    _SimpleBookingEmailPayload(
+                        to_email=user.email,
+                        subject=subject,
+                        body=body,
+                        request_id=f"booking-cancel-{booking.id}-{int(now_utc.timestamp())}",
+                    )
+                )
+            except Exception:
+                pass
     return _build_admin_overview(db)
