@@ -673,11 +673,13 @@ class CertificateUpdate(CamelModel):
 
 
 class TransitionalDeadlineUpdateRequest(BaseModel):
-    deadline_date: date
+    transitional_deadline: date | None = None
+    deadline_date: date | None = None
 
 
 class TransitionalDeadlineOut(BaseModel):
-    deadline_date: date
+    transitional_deadline: date
+    deadline_date: date | None = None
     transitional_count: int = 0
     reactivated_count: int = 0
     expired_count: int = 0

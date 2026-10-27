@@ -93,6 +93,7 @@ CANDIDATE_FILES = [
     "frontend/scripts/admin/guide-videos.js",
     "frontend/scripts/admin/project-results.js",
     "frontend/scripts/admin/results.js",
+    "frontend/scripts/admin/shared.js",
     "frontend/scripts/admin/statements.js",
     "frontend/scripts/admin/users.js",
     "frontend/scripts/documents.js",

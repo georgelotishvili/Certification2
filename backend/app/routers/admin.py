@@ -3094,6 +3094,7 @@ def admin_get_certificate_transitional_deadline(
     deadline = sync_transitional_certificates(db)
     return TransitionalDeadlineOut(
         transitional_deadline=deadline,
+        deadline_date=deadline,
         reactivated_count=0,
         expired_count=0,
     )
@@ -3106,13 +3107,21 @@ def admin_update_certificate_transitional_deadline(
     db: Session = Depends(get_db),
 ):
     admin_user = _require_admin(db, authorization)
+    target_date = payload.transitional_deadline or payload.deadline_date
+    if target_date is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="გთხოვთ მიუთითოთ გამონაკლისის თარიღი",
+        )
     res = set_transitional_deadline_date(
         db,
-        payload.transitional_deadline,
+        target_date,
         actor_email=admin_user.email,
     )
     return TransitionalDeadlineOut(
         transitional_deadline=res["transitional_deadline"],
+        deadline_date=res["transitional_deadline"],
+        transitional_count=int(res.get("transitional_count", 0)),
         reactivated_count=int(res["reactivated_count"]),
         expired_count=int(res["expired_count"]),
     )
