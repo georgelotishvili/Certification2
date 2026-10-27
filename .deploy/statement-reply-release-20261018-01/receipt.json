@@ -1,6 +1,6 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "deployed_at": "2026-10-18T17:58:09.955850+00:00",
+  "deployed_at": "2026-10-27T17:44:00.750124+00:00",
   "remote": {
     "ok": true,
     "service": "active",
@@ -8,20 +8,20 @@
     "has_admin_users_route": true,
     "has_planning_templates_route": true,
     "verified_files": {
-      "frontend/pages/admin.html": true,
-      "frontend/styles/admin.css": true
+      "frontend/pages/index.html": true,
+      "frontend/styles/styles.css": true
     }
   },
   "public_checks": {
-    "https://gipc.org.ge/pages/admin.html": {
+    "https://gipc.org.ge/pages/index.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "92588e8e585175d1d1f88701249be34cee0320c080ef3e604683133ab0fe4b26"
+      "sha256": "0340a3d61245c215dc3d3bac4fb6fdc2eded6b54f010477d0cfb8ad709ca735a"
     },
-    "https://gipc.org.ge/styles/admin.css": {
+    "https://gipc.org.ge/styles/styles.css": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "d4dd3b23b7a23a05ef13924badf9b2f73361fb4f56186999fc0bb3c0b550fb4b"
+      "sha256": "2778ffc584dff8ee85cfdaee0e74127bba4e85674156028baeb1a21faa775d32"
     }
   }
 }

@@ -241,7 +241,8 @@ class AnswerRequest(BaseModel):
 
 
 class AnswerResponse(BaseModel):
-    correct: bool
+    correct: bool = False
+    saved: bool = True
 
 
 class AllQuestionsBlockOut(BaseModel):
@@ -465,6 +466,8 @@ class PublicCertificateOut(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None
     valid_until: datetime | None = None
+    is_transitional: bool = False
+    transitional_deadline: date | None = None
 
 
 class PublicPersonPageOut(PublicUserOut):
@@ -539,12 +542,19 @@ class StatementCreate(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
 
 
+class StatementAttachmentItem(BaseModel):
+    slot: int = 1
+    filename: str
+    size_bytes: int | None = None
+
+
 class StatementOut(BaseModel):
     id: int
     doc_number: str | None = None
     message: str
     created_at: datetime
     attachment_filename: str | None = None
+    attachments: List[StatementAttachmentItem] = Field(default_factory=list)
 
 
 class AdminStatementOut(BaseModel):
@@ -562,6 +572,7 @@ class AdminStatementOut(BaseModel):
     answered_by: str | None = None
     attachment_filename: str | None = None
     attachment_size_bytes: int | None = None
+    attachments: List[StatementAttachmentItem] = Field(default_factory=list)
 
 
 class AdminStatementsResponse(BaseModel):
@@ -624,6 +635,8 @@ class CertificateOut(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
+    is_transitional: bool = False
+    transitional_deadline: date | None = None
     filename: str | None = None
     mime_type: str | None = None
     size_bytes: int | None = None
@@ -640,6 +653,7 @@ class CertificateCreate(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
+    is_transitional: bool = False
     send_notification: bool = False
     notification_subject: str | None = None
     notification_body: str | None = None
@@ -652,9 +666,23 @@ class CertificateUpdate(CamelModel):
     issue_date: Optional[datetime] = None
     validity_term: Optional[int] = None
     valid_until: Optional[datetime] = None
+    is_transitional: Optional[bool] = None
     send_notification: Optional[bool] = False
     notification_subject: Optional[str] = None
     notification_body: Optional[str] = None
+
+
+class TransitionalDeadlineUpdateRequest(BaseModel):
+    transitional_deadline: date | None = None
+    deadline_date: date | None = None
+
+
+class TransitionalDeadlineOut(BaseModel):
+    transitional_deadline: date
+    deadline_date: date | None = None
+    transitional_count: int = 0
+    reactivated_count: int = 0
+    expired_count: int = 0
 
 
 class CertificateNotifyRequest(BaseModel):
@@ -1107,3 +1135,26 @@ class SiteDocumentsListResponse(BaseModel):
 
 class SiteDocumentOrderRequest(BaseModel):
     direction: str  # "up" or "down"
+
+
+class GuideDocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: Optional[int] = None
+    title: str = "გზამკვლევი"
+    content: str = ""
+    order_index: int = 0
+    filename: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+    download_url: Optional[str] = None
+    available: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class GuideDocumentsListResponse(BaseModel):
+    items: List[GuideDocumentOut]
+
+
+class GuideDocumentOrderRequest(BaseModel):
+    direction: str  # "up" or "down"
+

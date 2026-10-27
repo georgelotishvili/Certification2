@@ -157,6 +157,7 @@
     const personalId = String(user.personalId || user.personal_id || '').trim();
     const phone = String(user.phone || '').trim();
     const email = String(user.email || '').trim();
+    const code = String(user.code || '').trim();
     const dateStr = formatTodayDateKa();
 
     let out = out0;
@@ -181,6 +182,7 @@
       );
     }
     if (phone) {
+      out = out.replace(/\[ტელეფონის\s*ნომერი\]/g, escapeHtml(phone));
       out = out.replace(/\[ტელეფონი\]/g, escapeHtml(phone));
       out = out.replace(
         /(ტელეფონი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
@@ -188,11 +190,15 @@
       );
     }
     if (email) {
+      out = out.replace(/\[ელექტრონული\s*ფოსტა\]/g, escapeHtml(email));
       out = out.replace(/\[ელ\.?\s*ფოსტა\]/g, escapeHtml(email));
       out = out.replace(
         /(ელ\.?\s*ფოსტა\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
         `$1<strong>${escapeHtml(email)}</strong>`
       );
+    }
+    if (code) {
+      out = out.replace(/\[უნიკალური\s*კოდი\]/g, escapeHtml(code));
     }
 
     try {
@@ -225,7 +231,7 @@
   let cachedDocuments = null;
   let cachedDocumentsKey = null;
   let currentModalDoc = null;
-  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v3_';
+  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v5_';
 
   function getSiteDocsCacheKey() {
     const user = getCurrentUserForContract();
@@ -316,8 +322,6 @@
     'TEMPLATE', 'TEXTAREA', 'TRACK', 'VIDEO',
   ]);
   const DOCUMENT_ALLOWED_STYLE_PROPERTIES = [
-    'background-color',
-    'color',
     'font-style',
     'font-weight',
     'text-align',
@@ -422,32 +426,92 @@
   }
 
   async function populateInfoDropdowns() {
-    // Documents are now displayed on the dedicated ../pages/documents.html page;
-    // the "ინფორმაცია" menu contains only "გზამკვლევი".
+    try {
+      const API_BASE = getApiBase();
+      const response = await fetch(`${API_BASE}/guide/documents`, { cache: 'no-cache' });
+      if (!response.ok) return;
+      const data = await response.json();
+      const items = Array.isArray(data?.items)
+        ? data.items.filter((item) => item && item.id && item.available !== false)
+        : [];
+
+      const desktopDropdown = document.querySelector('.about-dropdown');
+      const mobileSubmenu = document.querySelector('.drawer-about-submenu');
+
+      if (desktopDropdown) {
+        desktopDropdown
+          .querySelectorAll('.dropdown-item.guide, [data-guide-doc-id]')
+          .forEach((el) => el.remove());
+        items.forEach((doc) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'dropdown-item';
+          btn.setAttribute('data-guide-doc-id', String(doc.id));
+          btn.textContent = (doc.title || 'გზამკვლევი').trim() || 'გზამკვლევი';
+          desktopDropdown.appendChild(btn);
+        });
+      }
+
+      if (mobileSubmenu) {
+        mobileSubmenu
+          .querySelectorAll('.drawer-submenu-item.guide, [data-guide-doc-id]')
+          .forEach((el) => el.remove());
+        items.forEach((doc) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'drawer-submenu-item';
+          btn.setAttribute('data-guide-doc-id', String(doc.id));
+          btn.textContent = (doc.title || 'გზამკვლევი').trim() || 'გზამკვლევი';
+          mobileSubmenu.appendChild(btn);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to populate info dropdowns:', err);
+    }
+  }
+
+  function stripLeadingBulletFromElement(el, leadingBulletRegex) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    const firstTextNode = walker.nextNode();
+    if (firstTextNode && firstTextNode.nodeValue) {
+      firstTextNode.nodeValue = firstTextNode.nodeValue.replace(leadingBulletRegex, '');
+    }
   }
 
   // Word inline სტილების გასუფთავება და ბულეტების კონვერტაცია
   function sanitizeWordStyles(container) {
     if (!container) return;
     try {
-      // ყველა ელემენტის სტილების გასუფთავება
+      // ყველა ელემენტის სტილების გასუფთავება (მკაცრად შავ-თეთრი)
       const allElements = container.querySelectorAll('*');
       allElements.forEach(el => {
         if (el.style) {
           el.style.fontSize = '';
           el.style.fontFamily = '';
           el.style.marginLeft = '';
+          el.style.marginRight = '';
+          el.style.paddingLeft = '';
+          el.style.paddingRight = '';
           el.style.textIndent = '';
+          el.style.color = '';
+          el.style.backgroundColor = '';
+          const tag = (el.tagName || '').toUpperCase();
+          if ((tag === 'P' || tag === 'LI') && !(el.textContent || '').includes('___')) {
+            el.style.textAlign = '';
+          }
           if (el.style.cssText) {
             el.style.cssText = el.style.cssText.replace(/mso-[^;]+;?/gi, '');
           }
         }
         el.removeAttribute('class');
+        el.removeAttribute('align');
+        el.removeAttribute('color');
+        el.removeAttribute('bgcolor');
       });
 
-      // ბულეტიანი აბზაცების კონვერტაცია <ul>/<li>-ში
-      const bulletChars = '·•\\-–—§■□►▪▸●○⁃◦◘◙';
-      const bulletRegex = new RegExp('^[\\s\\u00A0]*[' + bulletChars + '][\\s\\u00A0]*');
+      // ბულეტიანი აბზაცების კონვერტაცია <ul>/<li>-ში (მხოლოდ სტრიქონის დასაწყისში)
+      const bulletChars = '·•\\-–—■□►▪▸●○⁃◦◘◙';
+      const bulletRegex = new RegExp('^[\\s\\u00A0]*[' + bulletChars + '][\\s\\u00A0]+');
       const paragraphs = Array.from(container.querySelectorAll('p'));
       
       let currentUl = null;
@@ -459,9 +523,8 @@
         
         if (isBullet) {
           const li = document.createElement('li');
-          // წავშალოთ ბულეტის სიმბოლო ტექსტიდან
-          const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
-          li.innerHTML = p.innerHTML.replace(cleanBulletRegex, '').trim();
+          li.innerHTML = p.innerHTML;
+          stripLeadingBulletFromElement(li, bulletRegex);
           
           if (!currentUl) {
             currentUl = document.createElement('ul');
@@ -479,25 +542,35 @@
         }
       });
 
-      // უკვე არსებული <li> ელემენტებიდანაც წავშალოთ ბულეტის სიმბოლოები
+      // უკვე არსებული <li> ელემენტებიდანაც წავშალოთ მხოლოდ წინა ბულეტის სიმბოლო
       container.querySelectorAll('li').forEach(li => {
-        const cleanBulletRegex = new RegExp('[' + bulletChars + '][\\s\\u00A0]*', 'g');
-        li.innerHTML = li.innerHTML.replace(cleanBulletRegex, '').trim();
+        stripLeadingBulletFromElement(li, bulletRegex);
       });
 
-      // ცალკე მდგომი bold აბზაცების (მთავარი სათაურებისა და მუხლების) მონიშვნა
-      const topParagraphs = Array.from(container.children).filter(el => el.tagName === 'P');
-      topParagraphs.forEach((p, idx) => {
-        const fullText = (p.textContent || '').replace(/\s+/g, ' ').trim();
-        if (!fullText) return;
-        const boldChild = p.querySelector(':scope > strong, :scope > b');
-        if (boldChild && p.children.length === 1) {
-          const boldText = (boldChild.textContent || '').replace(/\s+/g, ' ').trim();
-          if (boldText === fullText && !/^\d+\.\d+/.test(fullText)) {
-            p.classList.add(idx === 0 ? 'site-doc-lead-title' : 'site-doc-section-title');
+      // თუ დოკუმენტს უკვე აქვს სემანტიკური H1/H2 სათაურები, დამატებითი კლასები საჭირო არ არის
+      if (!container.querySelector('h1, h2')) {
+        const topParagraphs = Array.from(container.children).filter(el => el.tagName === 'P');
+        const sectionHeadingRegex = /^(?:(?:ნაწილი|თავი|ეტაპი|ნაბიჯი|მუხლი|კატეგორია|დანართი)\s*[№#]?\s*[0-9IVX]+|[IVX]+\.|[0-9]{1,2}\.)\s+.+$/i;
+        topParagraphs.forEach((p, idx) => {
+          const fullText = (p.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!fullText) return;
+          const boldChild = p.querySelector(':scope > strong, :scope > b');
+          const isAllBold = Boolean(
+            boldChild &&
+            p.children.length === 1 &&
+            (boldChild.textContent || '').replace(/\s+/g, ' ').trim() === fullText
+          );
+          if (idx === 0 && fullText.length <= 115 && (isAllBold || !/[.;,]$/.test(fullText))) {
+            p.classList.add('site-doc-lead-title');
+            return;
           }
-        }
-      });
+          if (isAllBold && !/^\d+\.\d+/.test(fullText) && fullText.length <= 115) {
+            p.classList.add('site-doc-section-title');
+          } else if (sectionHeadingRegex.test(fullText) && fullText.length <= 105 && !/[;,]$/.test(fullText)) {
+            p.classList.add('site-doc-section-title');
+          }
+        });
+      }
     } catch (e) { console.error('sanitizeWordStyles error:', e); }
   }
 
@@ -595,7 +668,7 @@
 
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const marginX = 48;
+    const marginX = 52;
     const marginTop = 52;
     const marginBottom = 54;
     const usableWidth = pageWidth - marginX * 2;
@@ -608,39 +681,59 @@
       }
     };
 
+    const drawFormattedLine = (lineText, x, y, targetWidth, isLastLine, align = 'justify') => {
+      const clean = String(lineText || '').trim();
+      if (!clean) return;
+      if (align === 'center') {
+        const w = pdf.getTextWidth(clean);
+        pdf.text(clean, x + Math.max(0, (targetWidth - w) / 2), y);
+        return;
+      }
+      if (align === 'justify' && !isLastLine && !clean.includes('___')) {
+        const words = clean.split(/\s+/).filter(Boolean);
+        if (words.length > 1) {
+          const wordsWidth = words.reduce((sum, w) => sum + pdf.getTextWidth(w), 0);
+          const extra = targetWidth - wordsWidth;
+          if (extra > 0) {
+            const gap = extra / (words.length - 1);
+            let curX = x;
+            words.forEach((word) => {
+              pdf.text(word, curX, y);
+              curX += pdf.getTextWidth(word) + gap;
+            });
+            return;
+          }
+        }
+      }
+      pdf.text(clean, x, y);
+    };
+
     const tempContainer = document.createElement('div');
     const populatedHtml = populateContractHtmlForCurrentUser(doc.content || '', doc.contract_type);
     renderSafeDocumentHtml(tempContainer, populatedHtml);
     sanitizeWordStyles(tempContainer);
 
     const docTitle = String(doc.title || 'დოკუმენტი').replace(/\s+/g, ' ').trim();
+    const hasOwnH1 = Boolean(tempContainer.querySelector('h1'));
 
-    // Kicker header
-    pdf.setFont(fontName, 'normal');
-    pdf.setFontSize(9);
-    pdf.setTextColor(100, 116, 139);
-    pdf.text('საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)', marginX, cursorY);
-    cursorY += 18;
-
-    // Document main title
-    pdf.setFont(fontName, 'bold');
-    pdf.setFontSize(15);
-    pdf.setTextColor(28, 70, 140);
-    const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
-    titleLines.forEach((line) => {
-      ensureSpace(20);
-      pdf.text(line, marginX, cursorY);
-      cursorY += 20;
-    });
-
-    cursorY += 4;
-    pdf.setDrawColor(203, 213, 225);
-    pdf.setLineWidth(0.75);
-    pdf.line(marginX, cursorY, pageWidth - marginX, cursorY);
-    cursorY += 18;
+    if (!hasOwnH1) {
+      pdf.setFont(fontName, 'bold');
+      pdf.setFontSize(13.5);
+      pdf.setTextColor(0, 0, 0);
+      const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
+      titleLines.forEach((line, idx) => {
+        ensureSpace(19);
+        drawFormattedLine(line, marginX, cursorY, usableWidth, idx === titleLines.length - 1, 'center');
+        cursorY += 19;
+      });
+      cursorY += 10;
+    }
 
     const writeWrappedBlock = (text, opts = {}) => {
-      const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+      const normalized = String(text || '')
+        .replace(/([ა-ჰa-zA-Z0-9])\/([ა-ჰa-zA-Z0-9])/g, '$1 / $2')
+        .replace(/\s+/g, ' ')
+        .trim();
       if (!normalized) return;
       const {
         x = marginX,
@@ -648,11 +741,10 @@
         fontStyle = 'normal',
         fontSize = 10.5,
         lineHeight = 16,
-        color = [30, 41, 59],
         spaceBefore = 0,
-        spaceAfter = 8,
-        prefix = '',
-        prefixX = marginX,
+        spaceAfter = 7,
+        align = 'justify',
+        bottomBorder = false,
       } = opts;
 
       if (spaceBefore > 0 && cursorY > marginTop + 10) {
@@ -661,7 +753,7 @@
 
       pdf.setFont(fontName, fontStyle);
       pdf.setFontSize(fontSize);
-      pdf.setTextColor(color[0], color[1], color[2]);
+      pdf.setTextColor(0, 0, 0);
 
       const lines = pdf.splitTextToSize(normalized, width);
       if (!lines.length) return;
@@ -673,12 +765,17 @@
 
       lines.forEach((line, idx) => {
         ensureSpace(lineHeight);
-        if (idx === 0 && prefix) {
-          pdf.text(prefix, prefixX, cursorY);
-        }
-        pdf.text(line, x, cursorY);
+        const isLast = idx === lines.length - 1;
+        drawFormattedLine(line, x, cursorY, width, isLast, align);
         cursorY += lineHeight;
       });
+
+      if (bottomBorder) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.6);
+        pdf.line(x, cursorY - lineHeight + 4, x + width, cursorY - lineHeight + 4);
+        cursorY += 2;
+      }
 
       cursorY += spaceAfter;
     };
@@ -690,60 +787,69 @@
       const parsedRows = rows.map((tr) => {
         const cells = Array.from(tr.querySelectorAll('th, td'));
         if (cells.length > maxCols) maxCols = cells.length;
-        const isHeader = cells.some((c) => c.tagName === 'TH');
+        const isHeader = cells.every((c) => c.tagName === 'TH');
         return {
           isHeader,
+          tags: cells.map((c) => c.tagName),
           texts: cells.map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()),
         };
       });
       if (!maxCols) return;
 
-      const colWidth = usableWidth / maxCols;
+      let colWidths = Array(maxCols).fill(usableWidth / maxCols);
+      if (maxCols === 2) {
+        colWidths = [usableWidth * 0.30, usableWidth * 0.70];
+      } else if (maxCols === 3) {
+        colWidths = [usableWidth * 0.24, usableWidth * 0.50, usableWidth * 0.26];
+      } else if (maxCols === 4) {
+        const firstHeader = (parsedRows[0]?.texts?.[0] || '').trim();
+        if (firstHeader === '№' || firstHeader === '#') {
+          colWidths = [usableWidth * 0.07, usableWidth * 0.25, usableWidth * 0.34, usableWidth * 0.34];
+        }
+      }
+
       const cellPadX = 6;
-      const cellPadY = 6;
+      const cellPadY = 5;
       const lineH = 13.5;
 
       if (cursorY > marginTop + 10) cursorY += 6;
 
       parsedRows.forEach((row) => {
-        pdf.setFont(fontName, row.isHeader ? 'bold' : 'normal');
         pdf.setFontSize(9.5);
         const cellLines = [];
         let maxLines = 1;
         for (let c = 0; c < maxCols; c++) {
+          const isBoldCell = row.isHeader || row.tags[c] === 'TH';
+          pdf.setFont(fontName, isBoldCell ? 'bold' : 'normal');
           const txt = row.texts[c] || '';
-          const wrapped = pdf.splitTextToSize(txt, Math.max(24, colWidth - cellPadX * 2));
+          const wrapped = pdf.splitTextToSize(txt, Math.max(24, colWidths[c] - cellPadX * 2));
           cellLines.push(wrapped);
           if (wrapped.length > maxLines) maxLines = wrapped.length;
         }
         const rowHeight = maxLines * lineH + cellPadY * 2;
         ensureSpace(rowHeight + 4);
 
+        let cellX = marginX;
         for (let c = 0; c < maxCols; c++) {
-          const cellX = marginX + c * colWidth;
-          if (row.isHeader) {
-            pdf.setFillColor(248, 250, 252);
-            pdf.setDrawColor(203, 213, 225);
-            pdf.setLineWidth(0.5);
-            pdf.rect(cellX, cursorY, colWidth, rowHeight, 'FD');
-            pdf.setTextColor(28, 70, 140);
-          } else {
-            pdf.setDrawColor(203, 213, 225);
-            pdf.setLineWidth(0.5);
-            pdf.rect(cellX, cursorY, colWidth, rowHeight, 'S');
-            pdf.setTextColor(30, 41, 59);
-          }
+          const cw = colWidths[c];
+          const isBoldCell = row.isHeader || row.tags[c] === 'TH';
+          pdf.setDrawColor(0, 0, 0);
+          pdf.setLineWidth(0.5);
+          pdf.rect(cellX, cursorY, cw, rowHeight, 'S');
+          pdf.setFont(fontName, isBoldCell ? 'bold' : 'normal');
+          pdf.setTextColor(0, 0, 0);
           const lines = cellLines[c] || [];
           lines.forEach((ln, idx) => {
             pdf.text(ln, cellX + cellPadX, cursorY + cellPadY + 9.5 + idx * lineH);
           });
+          cellX += cw;
         }
         cursorY += rowHeight;
       });
       cursorY += 10;
     };
 
-    let skippedDuplicateLeadTitle = false;
+    let seenH1 = false;
 
     const renderDomNodes = (parent) => {
       Array.from(parent.childNodes).forEach((node) => {
@@ -758,19 +864,31 @@
         const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
         if (!text && tag !== 'TABLE') return;
 
-        if (!skippedDuplicateLeadTitle && text === docTitle) {
-          skippedDuplicateLeadTitle = true;
+        if (tag === 'H1' || node.classList.contains('site-doc-lead-title')) {
+          seenH1 = true;
+          writeWrappedBlock(text, {
+            fontStyle: 'bold',
+            fontSize: 13.5,
+            lineHeight: 18,
+            spaceBefore: 0,
+            spaceAfter: 4,
+            align: 'center',
+          });
           return;
         }
 
-        if (tag === 'H1' || tag === 'H2' || node.classList.contains('site-doc-lead-title')) {
+        if (tag === 'H2') {
+          const isCenteredSubtitle =
+            (node.getAttribute('style') || '').includes('center') ||
+            (seenH1 && node.previousElementSibling?.tagName === 'H1');
           writeWrappedBlock(text, {
             fontStyle: 'bold',
-            fontSize: 12.5,
-            lineHeight: 17.5,
-            color: [28, 70, 140],
-            spaceBefore: 10,
-            spaceAfter: 7,
+            fontSize: 11.5,
+            lineHeight: 16.5,
+            spaceBefore: isCenteredSubtitle ? 2 : 12,
+            spaceAfter: isCenteredSubtitle ? 10 : 6,
+            align: isCenteredSubtitle ? 'center' : 'left',
+            bottomBorder: !isCenteredSubtitle,
           });
           return;
         }
@@ -778,11 +896,11 @@
         if (tag === 'H3' || tag === 'H4' || tag === 'H5' || tag === 'H6' || node.classList.contains('site-doc-section-title')) {
           writeWrappedBlock(text, {
             fontStyle: 'bold',
-            fontSize: 11.5,
-            lineHeight: 16.5,
-            color: [15, 23, 42],
-            spaceBefore: 9,
-            spaceAfter: 6,
+            fontSize: 10.5,
+            lineHeight: 15.5,
+            spaceBefore: 8,
+            spaceAfter: 4,
+            align: 'left',
           });
           return;
         }
@@ -792,18 +910,17 @@
           items.forEach((li, idx) => {
             const liText = (li.textContent || '').replace(/\s+/g, ' ').trim();
             if (!liText) return;
-            const prefix = tag === 'OL' ? `${idx + 1}.` : '•';
-            writeWrappedBlock(liText, {
-              x: marginX + 20,
-              width: usableWidth - 20,
-              prefix,
-              prefixX: marginX + 4,
+            const prefix = tag === 'OL' ? `${idx + 1}. ` : '– ';
+            writeWrappedBlock(`${prefix}${liText}`, {
+              x: marginX,
+              width: usableWidth,
               fontSize: 10.5,
-              lineHeight: 15.5,
+              lineHeight: 16,
               spaceAfter: 5,
+              align: 'justify',
             });
           });
-          cursorY += 4;
+          cursorY += 2;
           return;
         }
 
@@ -815,13 +932,14 @@
         if (tag === 'P' || tag === 'BLOCKQUOTE') {
           const onlyBold = node.children.length === 1 && (node.children[0].tagName === 'STRONG' || node.children[0].tagName === 'B') &&
             (node.children[0].textContent || '').replace(/\s+/g, ' ').trim() === text;
+          const isLeftField = text.includes('___') || onlyBold || /^(სახელი|პირადი|ტელეფონი|ელ\.?\s*ფოსტა|თარიღი|ხელმოწერა|საიდენტიფიკაციო|იურიდიული|წარმომადგენელი)/.test(text);
           writeWrappedBlock(text, {
             fontStyle: onlyBold ? 'bold' : 'normal',
             fontSize: 10.5,
             lineHeight: 16,
-            color: onlyBold ? [15, 23, 42] : [30, 41, 59],
             spaceBefore: onlyBold ? 6 : 0,
-            spaceAfter: 8,
+            spaceAfter: 6,
+            align: isLeftField ? 'left' : 'justify',
           });
           return;
         }
@@ -841,13 +959,13 @@
     for (let i = 1; i <= totalPages; i++) {
       pdf.setPage(i);
       const footerY = pageHeight - 26;
-      pdf.setDrawColor(226, 232, 240);
+      pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.5);
       pdf.line(marginX, footerY - 12, pageWidth - marginX, footerY - 12);
 
       pdf.setFont(fontName, 'normal');
       pdf.setFontSize(8.5);
-      pdf.setTextColor(100, 116, 139);
+      pdf.setTextColor(0, 0, 0);
       pdf.text('gipc.org.ge', marginX, footerY);
       const pageLabel = `გვერდი ${i} / ${totalPages}`;
       const pageLabelWidth = pdf.getTextWidth(pageLabel);
@@ -863,16 +981,24 @@
       const API_BASE = getApiBase();
       let doc = null;
 
-      if (typeof docOrId === 'object' && docOrId !== null && docOrId.id) {
+      if (typeof docOrId === 'object' && docOrId !== null && docOrId.is_guide) {
         doc = { ...docOrId };
-        // Always fetch fresh document with auth headers if it's a contract or if content is missing
-        if (doc.contract_type || (!doc.content && !(doc.download_url && String(doc.filename || '').toLowerCase().endsWith('.pdf')))) {
-          const resp = await fetch(`${API_BASE}/documents/${doc.id}`, {
-            cache: 'no-cache',
-            headers: { ...getOptionalAuthHeaders() },
-          });
-          if (resp.ok) doc = await resp.json();
+        const guideUrl = doc.id
+          ? `${API_BASE}/guide/documents/${encodeURIComponent(doc.id)}`
+          : `${API_BASE}/guide/document`;
+        const resp = await fetch(guideUrl, { cache: 'no-cache' });
+        if (resp.ok) {
+          const freshGuide = await resp.json();
+          doc = { ...freshGuide, is_guide: true };
         }
+      } else if (typeof docOrId === 'object' && docOrId !== null && docOrId.id) {
+        doc = { ...docOrId };
+        // Always fetch fresh document from API so all documents (not just contracts) have latest content
+        const resp = await fetch(`${API_BASE}/documents/${doc.id}`, {
+          cache: 'no-cache',
+          headers: { ...getOptionalAuthHeaders() },
+        });
+        if (resp.ok) doc = await resp.json();
       } else if (docOrId) {
         const resp = await fetch(`${API_BASE}/documents/${docOrId}`, {
           cache: 'no-cache',
@@ -981,132 +1107,94 @@
     }
   }
 
-  /**
-   * Extract embed URL from various video platforms
-   */
-  function getVideoEmbedUrl(url) {
-    if (!url || typeof url !== 'string') return null;
+  async function openGuideDocumentModal(docId = null, initialTitle = '') {
+    const els = getSiteInfoElements();
+    if (!els) return;
 
-    // YouTube - various formats
-    // https://www.youtube.com/watch?v=VIDEO_ID
-    // https://youtu.be/VIDEO_ID
-    // https://www.youtube.com/embed/VIDEO_ID
-    const youtubeMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (youtubeMatch) {
-      return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+    currentModalDoc = null;
+    if (els.downloadPdfBtn) {
+      els.downloadPdfBtn.hidden = true;
+      els.downloadPdfBtn.disabled = false;
+    }
+    if (els.title) els.title.textContent = (initialTitle || 'გზამკვლევი').trim() || 'გზამკვლევი';
+    if (els.body) {
+      els.body.dataset.infoMode = 'document';
+      els.body.innerHTML = '<p class="site-info-state">იტვირთება...</p>';
     }
 
-    // Vimeo - various formats
-    // https://vimeo.com/VIDEO_ID
-    // https://player.vimeo.com/video/VIDEO_ID
-    const vimeoMatch = url.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/);
-    if (vimeoMatch) {
-      return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    els.modal.classList.add('show');
+    els.modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+    if (els.closeBtn && typeof els.closeBtn.focus === 'function') {
+      setTimeout(() => { try { els.closeBtn.focus(); } catch {} }, 0);
     }
 
-    // Dailymotion
-    // https://www.dailymotion.com/video/VIDEO_ID
-    const dailymotionMatch = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
-    if (dailymotionMatch) {
-      return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}`;
-    }
-
-    // Facebook video
-    const facebookMatch = url.match(/facebook\.com.*\/videos\/(\d+)/);
-    if (facebookMatch) {
-      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
-    }
-
-    // Already an embed URL or other platform - return as is for iframe
-    if (url.includes('embed') || url.includes('player')) {
-      return url;
-    }
-
-    // Unknown format - return null
-    return null;
-  }
-
-  async function loadGuideVideosInto(container) {
     try {
-      if (!container) return;
-      const listEl = container.querySelector('#guideVideosPublic') || container;
       const API_BASE = getApiBase();
-      listEl.innerHTML = '<p class="site-info-state">ვიდეოები იტვირთება...</p>';
-      const response = await fetch(`${API_BASE}/guide/videos`, { cache: 'no-cache' });
-      if (!response.ok) {
-        listEl.innerHTML = '<p class="site-info-state site-info-state--error">ვიდეოების სია ვერ ჩაიტვირთა. სცადეთ მოგვიანებით.</p>';
+      const targetUrl = docId
+        ? `${API_BASE}/guide/documents/${encodeURIComponent(docId)}`
+        : `${API_BASE}/guide/document`;
+      const response = await fetch(targetUrl, { cache: 'no-cache' });
+      if (!response.ok) throw new Error('Guide document load failed');
+      const guideDoc = await response.json();
+
+      const docTitle = (guideDoc.title || initialTitle || 'გზამკვლევი').trim() || 'გზამკვლევი';
+      if (els.title) els.title.textContent = docTitle;
+
+      const hasHtmlContent = Boolean((guideDoc.content || '').replace(/<[^>]*>/g, '').trim());
+      const hasDirectPdf = Boolean(
+        guideDoc.download_url && String(guideDoc.filename || '').toLowerCase().endsWith('.pdf')
+      );
+
+      if (!guideDoc.available && !hasHtmlContent && !hasDirectPdf) {
+        if (els.body) {
+          const sheet = document.createElement('article');
+          sheet.className = 'site-doc-sheet';
+          const empty = document.createElement('p');
+          empty.className = 'site-doc-empty';
+          empty.textContent = 'ამ ეტაპზე დოკუმენტი არ არის განთავსებული.';
+          sheet.appendChild(empty);
+          els.body.replaceChildren(sheet);
+        }
         return;
       }
-      const items = await response.json();
-      if (!Array.isArray(items) || !items.length) {
-        listEl.innerHTML = '<p class="site-info-state">ამ ეტაპზე გზამკვლევის ვიდეო არ არის დამატებული.</p>';
-        return;
+
+      currentModalDoc = { ...guideDoc, title: docTitle, is_guide: true };
+      if (els.downloadPdfBtn) {
+        els.downloadPdfBtn.hidden = false;
       }
-      listEl.innerHTML = '';
-      items.forEach((video, idx) => {
-        const card = document.createElement('div');
-        card.className = 'guide-video-public-card';
-        const title = video.title || 'ვიდეო';
-        const url = video.url || '';
-        const embedUrl = getVideoEmbedUrl(url);
 
-        const head = document.createElement('div');
-        head.className = 'guide-video-public-head';
-        const badgeEl = document.createElement('span');
-        badgeEl.className = 'guide-video-index';
-        badgeEl.textContent = String(idx + 1).padStart(2, '0');
-        const titleEl = document.createElement('div');
-        titleEl.className = 'guide-video-public-title';
-        titleEl.textContent = title;
-        head.appendChild(badgeEl);
-        head.appendChild(titleEl);
-
-        card.appendChild(head);
-
-        if (embedUrl) {
-          // Create iframe for embed
+      if (els.body) {
+        if (!hasHtmlContent && hasDirectPdf) {
           const iframe = document.createElement('iframe');
-          iframe.className = 'guide-video-embed';
-          iframe.src = embedUrl;
-          iframe.setAttribute('frameborder', '0');
-          iframe.setAttribute('allowfullscreen', 'true');
-          iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
-          iframe.loading = 'lazy';
-          card.appendChild(iframe);
-        } else if (url) {
-          // Fallback: show link if embed not supported
-          const linkWrapper = document.createElement('div');
-          linkWrapper.className = 'guide-video-link-wrapper';
-          const link = document.createElement('a');
-          link.href = url;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          link.className = 'guide-video-link';
-          link.textContent = 'ვიდეოს ნახვა →';
-          linkWrapper.appendChild(link);
-          card.appendChild(linkWrapper);
+          iframe.className = 'site-doc-pdf-frame';
+          iframe.src = `${API_BASE}${guideDoc.download_url}`;
+          iframe.title = docTitle;
+          els.body.replaceChildren(iframe);
         } else {
-          const noVideo = document.createElement('div');
-          noVideo.className = 'guide-video-no-url';
-          noVideo.textContent = 'ვიდეოს ლინკი არ არის მითითებული';
-          card.appendChild(noVideo);
+          renderSafeDocumentHtml(els.body, guideDoc.content || '');
+          sanitizeWordStyles(els.body);
+          const sheet = document.createElement('article');
+          sheet.className = 'site-doc-sheet';
+          sheet.replaceChildren(...els.body.childNodes);
+          els.body.replaceChildren(sheet);
         }
-
-        listEl.appendChild(card);
-      });
-    } catch (error) {
-      console.error('Failed to load guide videos', error);
-      try {
-        if (container) {
-          const listEl = container.querySelector('#guideVideosPublic') || container;
-          listEl.innerHTML = '<p class="site-info-state site-info-state--error">ვიდეოების ჩატვირთვა ვერ მოხერხდა.</p>';
-        }
-      } catch {}
+      }
+    } catch (err) {
+      console.error('Failed to load guide document:', err);
+      if (els?.body) {
+        els.body.innerHTML = '<p class="site-info-state site-info-state--error">დოკუმენტი ვერ ჩაიტვირთა. სცადეთ მოგვიანებით.</p>';
+      }
     }
   }
 
   async function openSiteInfo(type) {
     try {
+      if (type === 'guide') {
+        await openGuideDocumentModal();
+        return;
+      }
+
       const els = getSiteInfoElements();
       if (!els) return;
       currentModalDoc = null;
@@ -1125,7 +1213,7 @@
       if (els.title) els.title.textContent = titles[type] || 'ინფორმაცია';
 
       if (els.body) {
-        els.body.dataset.infoMode = type === 'guide' ? 'guide' : 'document';
+        els.body.dataset.infoMode = 'document';
         els.body.innerHTML = '<p class="site-info-state">იტვირთება...</p>';
       }
       els.modal.classList.add('show');
@@ -1140,9 +1228,6 @@
       const html = await res.text();
       if (els.body) {
         els.body.innerHTML = html;
-        if (type === 'guide') {
-          void loadGuideVideosInto(els.body);
-        }
       }
     } catch {
       const els = getSiteInfoElements();
@@ -1269,6 +1354,18 @@
       const el = event.target;
       if (!el) return;
       
+      // Dynamic informational guide items (with data-guide-doc-id)
+      const guideItem = closest(el, '[data-guide-doc-id]');
+      if (guideItem && closest(guideItem, '.about-dropdown, .drawer-about-submenu')) {
+        event.preventDefault();
+        closeAboutDropdown();
+        closeDrawerAboutSubmenu();
+        if (DOM.body.classList.contains('menu-open')) closeMenu();
+        const guideDocId = guideItem.getAttribute('data-guide-doc-id');
+        if (guideDocId) openGuideDocumentModal(guideDocId, guideItem.textContent || '');
+        return;
+      }
+
       // Dynamic document items (with data-doc-id)
       const dynamicItem = closest(el, '[data-doc-id]');
       if (dynamicItem && closest(dynamicItem, '.about-dropdown, .drawer-about-submenu')) {
@@ -1399,8 +1496,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261018-stmt-tabs2';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261018_stmt_tabs2';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-testmode2';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_testmode2';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1456,6 +1553,9 @@
 
     // Initialize statements module after header is loaded
     initStatementsModule();
+
+    // Initialize certificate appointment booking module
+    initCertBookingModule();
   }
 
   async function loadHeader() {
@@ -1500,12 +1600,32 @@
       tabExam: document.getElementById('statementTabExam'),
       tabOther: document.getElementById('statementTabOther'),
       examForm: document.getElementById('examApplicationForm'),
-      examFileControls: document.getElementById('examFileControls'),
-      examFilesChoose: document.getElementById('examFilesChoose'),
-      examFilesInput: document.getElementById('examFilesInput'),
-      examFilesDisplay: document.getElementById('examFilesDisplay'),
-      examFilesListWrap: document.getElementById('examFilesListWrap'),
-      examFilesList: document.getElementById('examFilesList'),
+      examSlots: {
+        id: {
+          controls: document.getElementById('examIdFileControls'),
+          choose: document.getElementById('examIdFilesChoose'),
+          input: document.getElementById('examIdFilesInput'),
+          display: document.getElementById('examIdFilesDisplay'),
+          listWrap: document.getElementById('examIdFilesListWrap'),
+          list: document.getElementById('examIdFilesList'),
+        },
+        diploma: {
+          controls: document.getElementById('examDiplomaFileControls'),
+          choose: document.getElementById('examDiplomaFilesChoose'),
+          input: document.getElementById('examDiplomaFilesInput'),
+          display: document.getElementById('examDiplomaFilesDisplay'),
+          listWrap: document.getElementById('examDiplomaFilesListWrap'),
+          list: document.getElementById('examDiplomaFilesList'),
+        },
+        experience: {
+          controls: document.getElementById('examExperienceFileControls'),
+          choose: document.getElementById('examExperienceFilesChoose'),
+          input: document.getElementById('examExperienceFilesInput'),
+          display: document.getElementById('examExperienceFilesDisplay'),
+          listWrap: document.getElementById('examExperienceFilesListWrap'),
+          list: document.getElementById('examExperienceFilesList'),
+        },
+      },
       examAdditionalInfo: document.getElementById('examAdditionalInfo'),
       examConfirmCheckbox: document.getElementById('examConfirmCheckbox'),
       examApplicantSignature: document.getElementById('examApplicantSignature'),
@@ -1515,7 +1635,11 @@
     let overlayOpen = false;
     let isLoading = false;
     let cache = [];
-    let examSelectedFiles = [];
+    const examSlotFiles = {
+      id: [],
+      diploma: [],
+      experience: [],
+    };
     let activeTab = 'exam';
 
     function switchStatementTab(tabKey) {
@@ -1676,24 +1800,50 @@
           : rawMsg;
         details.appendChild(message);
         
-        if (item.attachment_filename) {
-          const attachmentWrapper = document.createElement('div');
-          attachmentWrapper.className = 'statement-attachment';
-          const downloadBtn = document.createElement('button');
-          downloadBtn.type = 'button';
-          downloadBtn.className = 'statement-attachment-download';
-          downloadBtn.textContent = 'ჩამოტვირთვა';
-          const actorEmail = getActorEmail();
-          const downloadUrl = `${API_BASE}/statements/${encodeURIComponent(item.id)}/attachment${actorEmail ? `?actor=${encodeURIComponent(actorEmail)}` : ''}`;
-          downloadBtn.addEventListener('click', () => {
-            window.location.href = downloadUrl;
+        const itemAttachments = Array.isArray(item.attachments) && item.attachments.length
+          ? item.attachments
+          : (item.attachment_filename ? [{ slot: 1, filename: item.attachment_filename }] : []);
+        if (itemAttachments.length) {
+          itemAttachments.forEach((att) => {
+            if (!att?.filename) return;
+            const slotNum = Number(att.slot) || 1;
+            const attachmentWrapper = document.createElement('div');
+            attachmentWrapper.className = 'statement-attachment';
+            const downloadBtn = document.createElement('button');
+            downloadBtn.type = 'button';
+            downloadBtn.className = 'statement-attachment-download';
+            downloadBtn.textContent = 'ჩამოტვირთვა';
+            downloadBtn.addEventListener('click', async () => {
+              try {
+                const slotParam = slotNum > 1 ? `?slot=${encodeURIComponent(slotNum)}` : '';
+                const resp = await fetch(`${API_BASE}/statements/${encodeURIComponent(item.id)}/attachment${slotParam}`, {
+                  headers: { ...getActorHeaders() },
+                  credentials: 'include',
+                });
+                if (!resp.ok) {
+                  alert('ფაილის ჩამოტვირთვა ვერ მოხერხდა');
+                  return;
+                }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = att.filename || 'attachment';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              } catch {
+                alert('ფაილის ჩამოტვირთვა ვერ მოხერხდა');
+              }
+            });
+            const filenameSpan = document.createElement('span');
+            filenameSpan.className = 'statement-attachment-filename';
+            filenameSpan.textContent = att.filename;
+            attachmentWrapper.appendChild(downloadBtn);
+            attachmentWrapper.appendChild(filenameSpan);
+            details.appendChild(attachmentWrapper);
           });
-          const filenameSpan = document.createElement('span');
-          filenameSpan.className = 'statement-attachment-filename';
-          filenameSpan.textContent = item.attachment_filename;
-          attachmentWrapper.appendChild(downloadBtn);
-          attachmentWrapper.appendChild(filenameSpan);
-          details.appendChild(attachmentWrapper);
         }
         
         fragment.appendChild(details);
@@ -1779,23 +1929,30 @@
       }
     }
 
-    function renderExamFilesList() {
-      if (!statementsDOM.examFilesDisplay) return;
-      if (!examSelectedFiles.length) {
-        statementsDOM.examFilesDisplay.value = '';
-        statementsDOM.examFileControls?.classList?.remove?.('has-file');
-        if (statementsDOM.examFilesListWrap) statementsDOM.examFilesListWrap.setAttribute('hidden', '');
-        if (statementsDOM.examFilesList) statementsDOM.examFilesList.innerHTML = '';
+    function getAllExamSelectedFilesTotalSize() {
+      return [...examSlotFiles.id, ...examSlotFiles.diploma, ...examSlotFiles.experience]
+        .reduce((acc, f) => acc + (f.size || 0), 0);
+    }
+
+    function renderExamSlotFilesList(slotKey) {
+      const slotDOM = statementsDOM.examSlots?.[slotKey];
+      const files = examSlotFiles[slotKey] || [];
+      if (!slotDOM?.display) return;
+      if (!files.length) {
+        slotDOM.display.value = '';
+        slotDOM.controls?.classList?.remove?.('has-file');
+        if (slotDOM.listWrap) slotDOM.listWrap.setAttribute('hidden', '');
+        if (slotDOM.list) slotDOM.list.innerHTML = '';
         return;
       }
-      statementsDOM.examFilesDisplay.value = examSelectedFiles.length === 1
-        ? examSelectedFiles[0].name
-        : `არჩეულია ${examSelectedFiles.length} ფაილი`;
-      statementsDOM.examFileControls?.classList?.add?.('has-file');
-      if (statementsDOM.examFilesListWrap) statementsDOM.examFilesListWrap.removeAttribute('hidden');
-      if (statementsDOM.examFilesList) {
+      slotDOM.display.value = files.length === 1
+        ? files[0].name
+        : `არჩეულია ${files.length} ფაილი`;
+      slotDOM.controls?.classList?.add?.('has-file');
+      if (slotDOM.listWrap) slotDOM.listWrap.removeAttribute('hidden');
+      if (slotDOM.list) {
         const frag = document.createDocumentFragment();
-        examSelectedFiles.forEach((file, idx) => {
+        files.forEach((file, idx) => {
           const li = document.createElement('li');
           li.className = 'exam-uploaded-file-item';
           const nameSpan = document.createElement('span');
@@ -1807,42 +1964,57 @@
           removeBtn.textContent = '×';
           removeBtn.setAttribute('aria-label', `ფაილის წაშლა: ${file.name}`);
           removeBtn.addEventListener('click', () => {
-            examSelectedFiles.splice(idx, 1);
-            renderExamFilesList();
+            files.splice(idx, 1);
+            renderExamSlotFilesList(slotKey);
           });
           li.appendChild(nameSpan);
           li.appendChild(removeBtn);
           frag.appendChild(li);
         });
-        statementsDOM.examFilesList.innerHTML = '';
-        statementsDOM.examFilesList.appendChild(frag);
+        slotDOM.list.innerHTML = '';
+        slotDOM.list.appendChild(frag);
       }
     }
 
-    function handleExamFilesChange() {
-      if (!statementsDOM.examFilesInput) return;
-      const incoming = Array.from(statementsDOM.examFilesInput.files || []);
+    function renderAllExamSlotFiles() {
+      renderExamSlotFilesList('id');
+      renderExamSlotFilesList('diploma');
+      renderExamSlotFilesList('experience');
+    }
+
+    function resetAllExamSlotFiles() {
+      examSlotFiles.id = [];
+      examSlotFiles.diploma = [];
+      examSlotFiles.experience = [];
+      renderAllExamSlotFiles();
+    }
+
+    function handleExamSlotFilesChange(slotKey) {
+      const slotDOM = statementsDOM.examSlots?.[slotKey];
+      if (!slotDOM?.input) return;
+      const incoming = Array.from(slotDOM.input.files || []);
       if (!incoming.length) return;
-      let currentTotal = examSelectedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+      const slotList = examSlotFiles[slotKey];
+      let currentTotal = getAllExamSelectedFilesTotalSize();
       for (const file of incoming) {
         if (!/\.(zip|rar|pdf|jpg|jpeg|png|doc|docx)$/i.test(file.name || '')) {
           alert(`ფაილის ტიპი არ არის დაშვებული (${file.name}). დასაშვებია: PDF, JPG, JPEG, PNG, DOC, DOCX, ZIP, RAR`);
-          statementsDOM.examFilesInput.value = '';
+          slotDOM.input.value = '';
           return;
         }
         if ((file.size || 0) + currentTotal > 100 * 1024 * 1024) {
           alert('ფაილების ჯამური ზომა აღემატება 100MB-ს');
-          statementsDOM.examFilesInput.value = '';
+          slotDOM.input.value = '';
           return;
         }
-        const exists = examSelectedFiles.some((f) => f.name === file.name && f.size === file.size);
+        const exists = slotList.some((f) => f.name === file.name && f.size === file.size);
         if (!exists) {
-          examSelectedFiles.push(file);
+          slotList.push(file);
           currentTotal += (file.size || 0);
         }
       }
-      statementsDOM.examFilesInput.value = '';
-      renderExamFilesList();
+      slotDOM.input.value = '';
+      renderExamSlotFilesList(slotKey);
     }
 
     function syncExamSelectionState(changedInput) {
@@ -1886,6 +2058,19 @@
         return;
       }
 
+      if (!examSlotFiles.id.length) {
+        alert('გთხოვთ ატვირთოთ პირადობის დამადასტურებელი დოკუმენტის ასლი (პუნქტი 2.1)');
+        return;
+      }
+      if (!examSlotFiles.diploma.length) {
+        alert('გთხოვთ ატვირთოთ უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი ან განმარტებითი ბარათი (პუნქტი 2.2)');
+        return;
+      }
+      if (!examSlotFiles.experience.length) {
+        alert('გთხოვთ ატვირთოთ პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია (პუნქტი 2.3)');
+        return;
+      }
+
       if (!statementsDOM.examConfirmCheckbox?.checked) {
         alert('გთხოვთ მონიშნოთ განმცხადებლის დადასტურება (პუნქტი 4)');
         return;
@@ -1895,9 +2080,9 @@
       const fullName = user
         ? `${user.firstName || user.first_name || ''} ${user.lastName || user.last_name || ''}`.trim()
         : '';
-      const filesLine = examSelectedFiles.length
-        ? examSelectedFiles.map((f) => f.name).join(', ')
-        : 'არ არის წარმოდგენილი';
+      const idFilesLine = examSlotFiles.id.map((f) => f.name).join(', ');
+      const diplomaFilesLine = examSlotFiles.diploma.map((f) => f.name).join(', ');
+      const experienceFilesLine = examSlotFiles.experience.map((f) => f.name).join(', ');
       const extraInfo = (statementsDOM.examAdditionalInfo?.value || '').toString().trim() || '—';
 
       const message = [
@@ -1908,7 +2093,9 @@
         `☑ ${selectedCategory}`,
         '',
         '2. თანდართული დოკუმენტები',
-        `ატვირთული ფაილ(ებ)ი: ${filesLine}`,
+        `• 2.1. პირადობის დამადასტურებელი დოკუმენტის ასლი: ${idFilesLine}`,
+        `• 2.2. უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი / განმარტებითი ბარათი: ${diplomaFilesLine}`,
+        `• 2.3. პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია: ${experienceFilesLine}`,
         '',
         '3. დამატებითი ინფორმაცია / სპეციალური საჭიროება გამოცდაზე (არსებობისას)',
         extraInfo,
@@ -1921,13 +2108,16 @@
 
       const body = new FormData();
       body.set('message', message);
-      if (examSelectedFiles.length === 1) {
-        body.set('attachment', examSelectedFiles[0]);
-      } else if (examSelectedFiles.length > 1) {
-        examSelectedFiles.forEach((f) => {
-          if (typeof body.append === 'function') body.append('attachments', f);
-        });
-      }
+      body.set('is_exam_application', 'true');
+      examSlotFiles.id.forEach((f) => {
+        if (typeof body.append === 'function') body.append('id_attachments', f);
+      });
+      examSlotFiles.diploma.forEach((f) => {
+        if (typeof body.append === 'function') body.append('diploma_attachments', f);
+      });
+      examSlotFiles.experience.forEach((f) => {
+        if (typeof body.append === 'function') body.append('experience_attachments', f);
+      });
 
       const submitBtn = statementsDOM.examSubmitBtn || statementsDOM.examForm.querySelector?.('button[type="submit"]');
       submitBtn?.setAttribute('disabled', 'true');
@@ -1953,8 +2143,7 @@
         alert(`თქვენი განაცხადი მიღებულია!${docNumNotice}`);
         statementsDOM.examForm.reset?.();
         syncExamSelectionState();
-        examSelectedFiles = [];
-        renderExamFilesList();
+        resetAllExamSlotFiles();
         setMetaFromUser();
         handleNewStatement(data);
       } catch (error) {
@@ -2040,8 +2229,7 @@
 
     function reset() {
       cache = [];
-      examSelectedFiles = [];
-      renderExamFilesList();
+      resetAllExamSlotFiles();
       syncExamSelectionState();
       if (overlayOpen) {
         closeOverlay();
@@ -2081,14 +2269,17 @@
           syncExamSelectionState(event?.target || null);
         });
       }
-      if (statementsDOM.examFilesChoose) {
-        on(statementsDOM.examFilesChoose, 'click', () => {
-          if (statementsDOM.examFilesInput) statementsDOM.examFilesInput.click();
-        });
-      }
-      if (statementsDOM.examFilesInput) {
-        on(statementsDOM.examFilesInput, 'change', handleExamFilesChange);
-      }
+      (['id', 'diploma', 'experience']).forEach((slotKey) => {
+        const slotDOM = statementsDOM.examSlots?.[slotKey];
+        if (slotDOM?.choose) {
+          on(slotDOM.choose, 'click', () => {
+            if (slotDOM.input) slotDOM.input.click();
+          });
+        }
+        if (slotDOM?.input) {
+          on(slotDOM.input, 'change', () => handleExamSlotFilesChange(slotKey));
+        }
+      });
       if (statementsDOM.statementFileChoose) {
         on(statementsDOM.statementFileChoose, 'click', () => {
           if (statementsDOM.statementFileInput) statementsDOM.statementFileInput.click();
@@ -2132,11 +2323,1013 @@
     });
   }
 
+  function initCertBookingModule() {
+    const API_BASE = getApiBase();
+    const MONTHS_KA = [
+      'იანვარი', 'თებერვალი', 'მარტი', 'აპრილი', 'მაისი', 'ივნისი',
+      'ივლისი', 'აგვისტო', 'სექტემბერი', 'ოქტომბერი', 'ნოემბერი', 'დეკემბერი',
+    ];
+
+    const dom = {
+      headerWrap: document.getElementById('certBookingHeaderWrap'),
+      headerBtn: document.getElementById('certBookingHeaderBtn'),
+      headerText: document.getElementById('certBookingHeaderText'),
+      overlay: document.getElementById('certBookingOverlay'),
+      closeBtn: document.getElementById('certBookingModalClose'),
+      meta: document.getElementById('certBookingModalMeta'),
+      windowPill: document.getElementById('certBookingWindowPill'),
+      activeBanner: document.getElementById('certBookingActiveBanner'),
+      activeDateTime: document.getElementById('certBookingActiveDateTime'),
+      changeTrigger: document.getElementById('certBookingChangeTrigger'),
+      cancelTrigger: document.getElementById('certBookingCancelTrigger'),
+      notice: document.getElementById('certBookingNotice'),
+      pickerWrap: document.getElementById('certBookingPickerWrap'),
+      calPrev: document.getElementById('certCalPrevMonth'),
+      calNext: document.getElementById('certCalNextMonth'),
+      calMonthLabel: document.getElementById('certCalMonthLabel'),
+      calGrid: document.getElementById('certCalGrid'),
+      slotSelectedDateLabel: document.getElementById('certSlotSelectedDateLabel'),
+      slotsGrid: document.getElementById('certSlotsGrid'),
+      selectionPreview: document.getElementById('certBookingSelectionPreview'),
+      submitBtn: document.getElementById('certBookingSubmitBtn'),
+      historyCount: document.getElementById('certBookingHistoryCount'),
+      historyList: document.getElementById('certBookingHistoryList'),
+    };
+
+    let bookingState = null;
+    let isModalOpen = false;
+    let isSubmitting = false;
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth(); // 0..11
+    let selectedDateStr = null;
+    let selectedSlotTime = null;
+    let expiryTimerId = null;
+
+    function getAuthHeaders() {
+      try {
+        if (typeof window.Auth?.getAuthHeaders === 'function') {
+          return window.Auth.getAuthHeaders() || {};
+        }
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token');
+        return token ? { Authorization: `Bearer ${token}` } : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function getCurrentUserObj() {
+      try {
+        if (typeof window.Auth?.getCurrentUser === 'function') {
+          return window.Auth.getCurrentUser() || null;
+        }
+        const raw = localStorage.getItem('currentUser');
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function formatIsoToKa(dateStr) {
+      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || '—';
+      const [y, m, d] = dateStr.split('-');
+      return `${d}.${m}.${y}`;
+    }
+
+    function syncHeaderButton() {
+      if (!dom.headerWrap || !dom.headerBtn || !dom.headerText) return;
+      if (!isLoggedIn() || !bookingState || !bookingState.show_header_button) {
+        dom.headerWrap.hidden = true;
+        return;
+      }
+
+      if (bookingState.header_state === 'booked' && bookingState.active_booking) {
+        const ab = bookingState.active_booking;
+        dom.headerWrap.hidden = false;
+        dom.headerBtn.classList.remove('is-pulsing');
+        dom.headerBtn.classList.add('is-booked');
+        dom.headerText.textContent = `დაჯავშნილია: ${ab.booking_date_ka} — ${ab.slot_time}`;
+      } else if (bookingState.header_state === 'unbooked') {
+        dom.headerWrap.hidden = false;
+        dom.headerBtn.classList.add('is-pulsing');
+        dom.headerBtn.classList.remove('is-booked');
+        dom.headerText.textContent = 'სერტიფიკატის აღების დაჯავშნა';
+      } else {
+        dom.headerWrap.hidden = true;
+      }
+    }
+
+    function renderHistory() {
+      if (!dom.historyList || !dom.historyCount) return;
+      const items = Array.isArray(bookingState?.history) ? bookingState.history : [];
+      dom.historyCount.textContent = String(items.length);
+      dom.historyList.innerHTML = '';
+
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'statements-placeholder statements-empty';
+        empty.textContent = 'ჯავშნების ისტორია ცარიელია.';
+        dom.historyList.appendChild(empty);
+        return;
+      }
+
+      const frag = document.createDocumentFragment();
+      items.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = `cert-booking-history-item is-${item.status || 'completed'}`;
+        row.setAttribute('role', 'listitem');
+
+        const main = document.createElement('div');
+        main.className = 'cert-booking-history-main';
+
+        const dtSpan = document.createElement('span');
+        dtSpan.className = 'cert-booking-history-dt';
+        dtSpan.textContent = `${item.booking_date_ka} · ${item.time_range || item.slot_time}`;
+        main.appendChild(dtSpan);
+
+        if (item.created_at) {
+          const metaSpan = document.createElement('span');
+          metaSpan.className = 'cert-booking-history-meta';
+          metaSpan.textContent = `შექმნილია: ${item.created_at}`;
+          main.appendChild(metaSpan);
+        }
+
+        const rightWrap = document.createElement('div');
+        rightWrap.className = 'cert-booking-history-right';
+
+        const badge = document.createElement('span');
+        badge.className = `cert-booking-status-badge is-${item.status || 'completed'}`;
+        badge.textContent = item.status_label || 'დასრულებული';
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'cert-booking-history-delete';
+        delBtn.title = 'ისტორიიდან წაშლა';
+        delBtn.setAttribute('aria-label', 'ისტორიიდან წაშლა');
+        delBtn.textContent = '×';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          void handleDismissHistoryItem(item);
+        });
+
+        rightWrap.appendChild(badge);
+        rightWrap.appendChild(delBtn);
+
+        row.appendChild(main);
+        row.appendChild(rightWrap);
+        frag.appendChild(row);
+      });
+      dom.historyList.appendChild(frag);
+    }
+
+    function renderSlotsForSelectedDate() {
+      if (!dom.slotsGrid || !dom.slotSelectedDateLabel || !dom.selectionPreview || !dom.submitBtn) return;
+      dom.slotsGrid.innerHTML = '';
+
+      if (!selectedDateStr || !bookingState?.available_days?.[selectedDateStr]) {
+        dom.slotSelectedDateLabel.textContent = 'აირჩიეთ ხელმისაწვდომი დღე კალენდარში';
+        const empty = document.createElement('div');
+        empty.className = 'cert-slot-empty';
+        empty.textContent = 'გთხოვთ აირჩიოთ მწვანედ მონიშნული დღე მარცხენა კალენდარში.';
+        dom.slotsGrid.appendChild(empty);
+        dom.selectionPreview.textContent = 'დღე და საათი არ არის არჩეული';
+        dom.submitBtn.disabled = true;
+        return;
+      }
+
+      const dayInfo = bookingState.available_days[selectedDateStr];
+      dom.slotSelectedDateLabel.textContent = `არჩეული დღე: ${dayInfo.date_ka}`;
+
+      const slots = Array.isArray(dayInfo.slots) ? dayInfo.slots : [];
+      if (!slots.length) {
+        const empty = document.createElement('div');
+        empty.className = 'cert-slot-empty';
+        empty.textContent = 'ამ დღეს თავისუფალი საათები არ არის.';
+        dom.slotsGrid.appendChild(empty);
+        dom.selectionPreview.textContent = 'თავისუფალი საათი არ არის';
+        dom.submitBtn.disabled = true;
+        return;
+      }
+
+      const frag = document.createDocumentFragment();
+      slots.forEach((s) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cert-slot-btn';
+        if (s.is_mine) btn.classList.add('is-mine');
+        if (selectedSlotTime === s.slot_time) btn.classList.add('is-selected');
+        if (s.is_taken) {
+          btn.disabled = true;
+          btn.title = 'ეს დრო უკვე დაჯავშნილია';
+        }
+        btn.textContent = `${s.slot_time}–${s.end_time}`;
+        btn.addEventListener('click', () => {
+          if (s.is_taken) return;
+          selectedSlotTime = s.slot_time;
+          renderSlotsForSelectedDate();
+        });
+        frag.appendChild(btn);
+      });
+      dom.slotsGrid.appendChild(frag);
+
+      const isAlreadyMyExactSlot = Boolean(
+        bookingState?.active_booking &&
+        bookingState.active_booking.booking_date === selectedDateStr &&
+        bookingState.active_booking.slot_time === selectedSlotTime
+      );
+
+      if (selectedSlotTime) {
+        const slotObj = slots.find((x) => x.slot_time === selectedSlotTime);
+        const rangeLabel = slotObj ? `${slotObj.slot_time}–${slotObj.end_time}` : selectedSlotTime;
+        dom.selectionPreview.textContent = `არჩეულია: ${dayInfo.date_ka} · ${rangeLabel}`;
+        dom.submitBtn.disabled = isSubmitting || isAlreadyMyExactSlot;
+      } else {
+        dom.selectionPreview.textContent = `დღე: ${dayInfo.date_ka} — აირჩიეთ საათი`;
+        dom.submitBtn.disabled = true;
+      }
+
+      dom.submitBtn.textContent = bookingState?.active_booking
+        ? 'ჯავშნის შეცვლა'
+        : 'ჯავშნის დადასტურება';
+    }
+
+    function renderCalendar() {
+      if (!dom.calGrid || !dom.calMonthLabel) return;
+      dom.calMonthLabel.textContent = `${MONTHS_KA[currentMonth]} ${currentYear}`;
+      dom.calGrid.innerHTML = '';
+
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const startOffset = (firstDay.getDay() + 6) % 7; // Monday = 0 .. Sunday = 6
+
+      const availMap = bookingState?.available_days || {};
+      const activeBook = bookingState?.active_booking || null;
+
+      // Bound month navigation to the 30-day window if present
+      if (dom.calPrev && dom.calNext && bookingState?.window_start && bookingState?.window_end) {
+        const [wsY, wsM] = bookingState.window_start.split('-').map(Number);
+        const [weY, weM] = bookingState.window_end.split('-').map(Number);
+        const curYM = currentYear * 12 + (currentMonth + 1);
+        const minYM = wsY * 12 + wsM;
+        const maxYM = weY * 12 + weM;
+        dom.calPrev.disabled = curYM <= minYM;
+        dom.calNext.disabled = curYM >= maxYM;
+      }
+
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < startOffset; i += 1) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'cert-cal-cell is-empty';
+        frag.appendChild(emptyCell);
+      }
+
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const mm = String(currentMonth + 1).padStart(2, '0');
+        const dd = String(day).padStart(2, '0');
+        const dateStr = `${currentYear}-${mm}-${dd}`;
+        const dayObj = new Date(currentYear, currentMonth, day);
+        const isWeekend = dayObj.getDay() === 0 || dayObj.getDay() === 6;
+
+        const dayData = !isWeekend ? availMap[dateStr] : null;
+        const hasFree = Boolean(dayData && dayData.free_count > 0);
+        const isMyBookedDay = Boolean(activeBook && activeBook.booking_date === dateStr);
+
+        const cell = document.createElement('div');
+        cell.className = 'cert-cal-cell';
+        if (hasFree) cell.classList.add('is-available');
+        if (selectedDateStr === dateStr) cell.classList.add('is-selected');
+        if (isMyBookedDay) cell.classList.add('is-my-booked');
+
+        const numSpan = document.createElement('span');
+        numSpan.textContent = String(day);
+        cell.appendChild(numSpan);
+
+        if (hasFree) {
+          const sub = document.createElement('span');
+          sub.className = 'cert-cal-cell-sub';
+          sub.textContent = `${dayData.free_count} თავის.`;
+          cell.appendChild(sub);
+
+          cell.addEventListener('click', () => {
+            selectedDateStr = dateStr;
+            // Preselect user's own booked slot on this date if any, else first free slot
+            if (isMyBookedDay && activeBook) {
+              selectedSlotTime = activeBook.slot_time;
+            } else {
+              selectedSlotTime = dayData.free_slots?.[0] || null;
+            }
+            renderCalendar();
+            renderSlotsForSelectedDate();
+          });
+        }
+
+        frag.appendChild(cell);
+      }
+
+      dom.calGrid.appendChild(frag);
+    }
+
+    function renderModalContent() {
+      const user = getCurrentUserObj();
+      const fullName = user
+        ? `${user.firstName || user.first_name || ''} ${user.lastName || user.last_name || ''}`.trim()
+        : '';
+      if (dom.meta) {
+        const parts = [];
+        if (fullName) parts.push(fullName);
+        if (user?.code) parts.push(user.code);
+        if (bookingState?.category_label) parts.push(bookingState.category_label);
+        dom.meta.textContent = parts.join(' · ');
+      }
+
+      if (dom.windowPill) {
+        if (bookingState?.eligible_to_book && bookingState?.window_end_ka) {
+          dom.windowPill.hidden = false;
+          dom.windowPill.textContent = `30-დღიანი ვადა: ${bookingState.window_start_ka} – ${bookingState.window_end_ka} (დარჩა ${bookingState.days_remaining} დღე)`;
+        } else {
+          dom.windowPill.hidden = true;
+        }
+      }
+
+      const active = bookingState?.active_booking || null;
+      if (dom.activeBanner && dom.activeDateTime) {
+        if (active) {
+          dom.activeBanner.hidden = false;
+          dom.activeDateTime.textContent = `${active.booking_date_ka} · ${active.time_range || active.slot_time}`;
+        } else {
+          dom.activeBanner.hidden = true;
+        }
+      }
+
+      if (bookingState?.eligible_to_book) {
+        const availDates = Object.keys(bookingState.available_days || {}).sort();
+        if (dom.pickerWrap) dom.pickerWrap.hidden = false;
+        if (dom.notice) {
+          if (!availDates.length) {
+            dom.notice.hidden = false;
+            dom.notice.textContent = 'ამჟამად თქვენს 30-დღიან პერიოდში თავისუფალი საათები ჯერ არ არის მონიშნული. გთხოვთ გადაამოწმოთ მოგვიანებით ან დაუკავშირდეთ ადმინისტრაციას.';
+          } else {
+            dom.notice.hidden = true;
+          }
+        }
+
+        if (!selectedDateStr || !bookingState.available_days?.[selectedDateStr]) {
+          if (active && bookingState.available_days?.[active.booking_date]) {
+            selectedDateStr = active.booking_date;
+            selectedSlotTime = active.slot_time;
+          } else if (availDates.length) {
+            selectedDateStr = availDates[0];
+            selectedSlotTime = bookingState.available_days[selectedDateStr]?.free_slots?.[0] || null;
+          } else {
+            selectedDateStr = null;
+            selectedSlotTime = null;
+          }
+        }
+
+        const refDate = selectedDateStr || bookingState.window_start || bookingState.today;
+        if (refDate && /^\d{4}-\d{2}-\d{2}$/.test(refDate)) {
+          const [ry, rm] = refDate.split('-').map(Number);
+          currentYear = ry;
+          currentMonth = rm - 1;
+        }
+
+        renderCalendar();
+        renderSlotsForSelectedDate();
+      } else {
+        if (dom.pickerWrap) dom.pickerWrap.hidden = true;
+        if (dom.notice) {
+          dom.notice.hidden = false;
+          if (bookingState?.has_certificate) {
+            dom.notice.textContent = 'თქვენზე სერტიფიკატი უკვე გაცემულია და ასახულია სერტიფიცირებულ პირთა საჯარო რეესტრში.';
+          } else if (bookingState?.has_pass_letter && !bookingState?.within_30_days) {
+            dom.notice.textContent = `სერტიფიკატის აღების დაჯავშნის 30-კალენდარულდღიანი ვადა (${bookingState.window_end_ka || '—'}) ამოიწურა.`;
+          } else {
+            dom.notice.textContent = 'სერტიფიკატის აღების შეხვედრის დაჯავშნა ხელმისაწვდომია გამოცდის წარმატებით ჩაბარების შეტყობინების მიღებიდან 30 კალენდარული დღის განმავლობაში.';
+          }
+        }
+      }
+
+      renderHistory();
+    }
+
+    async function fetchBookingState() {
+      if (!isLoggedIn()) {
+        bookingState = null;
+        syncHeaderButton();
+        return null;
+      }
+      const headers = getAuthHeaders();
+      if (!headers.Authorization) {
+        bookingState = null;
+        syncHeaderButton();
+        return null;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/users/me/cert-booking`, {
+          headers: { ...headers, 'Cache-Control': 'no-cache' },
+        });
+        if (!res.ok) {
+          bookingState = null;
+          syncHeaderButton();
+          return null;
+        }
+        bookingState = await res.json();
+        syncHeaderButton();
+        if (isModalOpen) {
+          renderModalContent();
+        }
+        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
+        return bookingState;
+      } catch {
+        return null;
+      }
+    }
+
+    function openModal() {
+      if (!isLoggedIn()) {
+        alert('გთხოვთ გაიაროთ ავტორიზაცია');
+        openAuthModal();
+        return;
+      }
+      if (!dom.overlay) return;
+      isModalOpen = true;
+      dom.overlay.classList.add('open');
+      dom.overlay.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('modal-open');
+      renderModalContent();
+      void fetchBookingState();
+    }
+
+    function closeModal() {
+      if (!dom.overlay) return;
+      isModalOpen = false;
+      dom.overlay.classList.remove('open');
+      dom.overlay.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('modal-open');
+    }
+
+    async function handleConfirmBooking() {
+      if (!selectedDateStr || !selectedSlotTime || isSubmitting) return;
+      isSubmitting = true;
+      if (dom.submitBtn) dom.submitBtn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/users/me/cert-booking`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            booking_date: selectedDateStr,
+            slot_time: selectedSlotTime,
+          }),
+        });
+        if (!res.ok) {
+          let detail = 'ჯავშნის შენახვა ვერ მოხერხდა';
+          try {
+            const err = await res.json();
+            if (err?.detail) detail = String(err.detail);
+          } catch {}
+          alert(detail);
+          await fetchBookingState();
+          return;
+        }
+        bookingState = await res.json();
+        syncHeaderButton();
+        renderModalContent();
+        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
+      } catch {
+        alert('ქსელური შეცდომა — სცადეთ თავიდან');
+      } finally {
+        isSubmitting = false;
+        renderSlotsForSelectedDate();
+      }
+    }
+
+    async function handleCancelBooking() {
+      const active = bookingState?.active_booking;
+      if (!active || isSubmitting) return;
+      if (!confirm(`ნამდვილად გსურთ ჯავშნის გაუქმება (${active.booking_date_ka}, ${active.slot_time})?`)) {
+        return;
+      }
+      isSubmitting = true;
+      try {
+        const res = await fetch(`${API_BASE}/users/me/cert-booking/${encodeURIComponent(active.id)}`, {
+          method: 'DELETE',
+          headers: { ...getAuthHeaders() },
+        });
+        if (!res.ok) {
+          alert('ჯავშნის გაუქმება ვერ მოხერხდა');
+          return;
+        }
+        bookingState = await res.json();
+        syncHeaderButton();
+        renderModalContent();
+        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
+      } catch {
+        alert('ქსელური შეცდომა — სცადეთ თავიდან');
+      } finally {
+        isSubmitting = false;
+      }
+    }
+
+    async function handleDismissHistoryItem(item) {
+      if (!item?.id || isSubmitting) return;
+      if (item.status === 'active') {
+        if (!confirm(`ნამდვილად გსურთ აქტიური ჯავშნის (${item.booking_date_ka}, ${item.slot_time}) გაუქმება და ისტორიიდან წაშლა?`)) {
+          return;
+        }
+      }
+      isSubmitting = true;
+      try {
+        const res = await fetch(`${API_BASE}/users/me/cert-booking/${encodeURIComponent(item.id)}?dismiss=true`, {
+          method: 'DELETE',
+          headers: { ...getAuthHeaders() },
+        });
+        if (!res.ok) {
+          alert('ჯავშნის წაშლა ვერ მოხერხდა');
+          return;
+        }
+        bookingState = await res.json();
+        syncHeaderButton();
+        renderModalContent();
+        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
+      } catch {
+        alert('ქსელური შეცდომა — სცადეთ თავიდან');
+      } finally {
+        isSubmitting = false;
+      }
+    }
+
+    on(dom.headerBtn, 'click', openModal);
+    on(dom.closeBtn, 'click', closeModal);
+    on(dom.overlay, 'click', (e) => {
+      if (e.target === dom.overlay) closeModal();
+    });
+    on(dom.changeTrigger, 'click', () => {
+      dom.pickerWrap?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    });
+    on(dom.cancelTrigger, 'click', handleCancelBooking);
+    on(dom.submitBtn, 'click', handleConfirmBooking);
+    on(dom.calPrev, 'click', () => {
+      currentMonth -= 1;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear -= 1;
+      }
+      renderCalendar();
+    });
+    on(dom.calNext, 'click', () => {
+      currentMonth += 1;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear += 1;
+      }
+      renderCalendar();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isModalOpen) closeModal();
+    });
+
+    document.addEventListener('auth:login', () => {
+      void fetchBookingState();
+    });
+    document.addEventListener('auth:logout', () => {
+      bookingState = null;
+      selectedDateStr = null;
+      selectedSlotTime = null;
+      if (isModalOpen) closeModal();
+      syncHeaderButton();
+    });
+    document.addEventListener('certificate:loaded', () => {
+      void fetchBookingState();
+    });
+    window.addEventListener('focus', () => {
+      if (isLoggedIn()) void fetchBookingState();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isLoggedIn()) {
+        void fetchBookingState();
+      }
+    });
+
+    // Periodic check so the central header button appears/disappears automatically
+    if (expiryTimerId) clearInterval(expiryTimerId);
+    expiryTimerId = setInterval(() => {
+      if (isLoggedIn()) {
+        void fetchBookingState();
+      }
+    }, 30000);
+
+    window.CertBooking = {
+      openModal,
+      closeModal,
+      refresh: fetchBookingState,
+      getState: () => bookingState,
+    };
+
+    void fetchBookingState();
+  }
+
+  function initPublicAiAssistant() {
+    if (document.getElementById('publicAiFab') || window.location.pathname.includes('admin.html')) {
+      return;
+    }
+
+    const STORAGE_KEY = 'gipc_public_ai_chat_history_v2';
+    const API_BASE = getApiBase();
+
+    const ICONS = {
+      sparkle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/></svg>`,
+      book: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>`,
+      expand: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>`,
+      trash: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`,
+      close: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
+      send: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+    };
+
+    let isOpen = false;
+    let isExpanded = false;
+    let isSending = false;
+    let pubStatus = {
+      enabled: true,
+      configured: false,
+      model_label: 'Gemini 4 Argon',
+      reasoning_level_short: 'High',
+      knowledge_base_files_count: 45,
+    };
+    let messages = [];
+
+    function escapeHtmlSafe(val) {
+      return String(val ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatInlineMd(str) {
+      return str
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
+    function formatMarkdownSimple(text) {
+      const safe = escapeHtmlSafe(text);
+      const lines = safe.split(/\r?\n/);
+      const htmlLines = [];
+      let inList = false;
+
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        const bulletMatch = line.match(/^\s*[-*•]\s+(.*)$/);
+        const numMatch = line.match(/^\s*(\d+[.)])\s+(.*)$/);
+
+        if (bulletMatch || numMatch) {
+          if (!inList) {
+            htmlLines.push('<ul class="ai-msg-list">');
+            inList = true;
+          }
+          const itemContent = bulletMatch ? bulletMatch[1] : `${numMatch[1]} ${numMatch[2]}`;
+          htmlLines.push(`<li>${formatInlineMd(itemContent)}</li>`);
+          continue;
+        }
+
+        if (inList) {
+          htmlLines.push('</ul>');
+          inList = false;
+        }
+
+        if (/^#{1,3}\s+/.test(line)) {
+          const headingText = line.replace(/^#{1,3}\s+/, '');
+          htmlLines.push(`<div class="ai-msg-heading">${formatInlineMd(headingText)}</div>`);
+        } else if (!line.trim()) {
+          htmlLines.push('<div class="ai-msg-spacer"></div>');
+        } else {
+          htmlLines.push(`<p class="ai-msg-p">${formatInlineMd(line)}</p>`);
+        }
+      }
+
+      if (inList) {
+        htmlLines.push('</ul>');
+      }
+      return htmlLines.join('');
+    }
+
+    function loadHistory() {
+      try {
+        const raw = window.sessionStorage?.getItem?.(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            messages = parsed.slice(-24);
+          }
+        }
+      } catch {
+        messages = [];
+      }
+    }
+
+    function saveHistory() {
+      try {
+        window.sessionStorage?.setItem?.(STORAGE_KEY, JSON.stringify(messages.slice(-24)));
+      } catch {}
+    }
+
+    const fabEl = document.createElement('button');
+    fabEl.type = 'button';
+    fabEl.id = 'publicAiFab';
+    fabEl.className = 'ai-assistant-fab';
+    fabEl.innerHTML = `
+      <span class="ai-fab-icon">${ICONS.sparkle}</span>
+      <span class="ai-fab-label">AI ასისტენტი</span>
+      <span class="ai-fab-status-dot is-ready"></span>
+    `;
+    document.body.appendChild(fabEl);
+
+    const panelEl = document.createElement('aside');
+    panelEl.id = 'publicAiPanel';
+    panelEl.className = 'ai-assistant-panel';
+    panelEl.hidden = true;
+    panelEl.innerHTML = `
+      <div class="ai-panel-header">
+        <div class="ai-panel-header-left">
+          <div class="ai-panel-title-row">
+            <span class="ai-panel-brand-badge">${ICONS.sparkle}</span>
+            <h3 class="ai-panel-title">AI კონსულტანტი</h3>
+          </div>
+        </div>
+        <div class="ai-panel-header-actions">
+          <button type="button" class="ai-panel-icon-btn ai-btn-expand" title="ფანჯრის გაფართოება / დაპატარავება">${ICONS.expand}</button>
+          <button type="button" class="ai-panel-icon-btn ai-btn-clear" title="ჩატის გასუფთავება">${ICONS.trash}</button>
+          <button type="button" class="ai-panel-icon-btn ai-btn-close" title="დახურვა">${ICONS.close}</button>
+        </div>
+      </div>
+
+      <div class="ai-quick-toolbar" role="toolbar" aria-label="ხშირად დასმული საკითხები">
+        <button type="button" class="ai-quick-chip" data-question="რა კატეგორიებით ხდება არქიტექტორთა და ექსპერტთა სერტიფიცირება (A, B, C) და რა წინაპირობებია საჭირო?">
+          <span>კატეგორიები და პირობები</span>
+        </button>
+        <button type="button" class="ai-quick-chip" data-question="როგორ ტარდება სასერტიფიკაციო გამოცდა, რა არის გამსვლელი ქულა და რა ღირს გამოცდა და სერტიფიცირება?">
+          <span>გამოცდა და საფასური</span>
+        </button>
+        <button type="button" class="ai-quick-chip" data-question="როგორ და რა დოკუმენტებით უნდა წარვადგინო სერტიფიცირების განაცხადი საიტზე gipc.org.ge?">
+          <span>განაცხადის წარდგენა</span>
+        </button>
+      </div>
+
+      <div class="ai-messages-container" id="publicAiMessages"></div>
+
+      <form class="ai-input-bar" id="publicAiForm">
+        <textarea class="ai-chat-input" id="publicAiInput" rows="1" placeholder="დასვით კითხვა..."></textarea>
+        <button type="submit" class="ai-chat-send-btn" id="publicAiSendBtn"><span>გაგზავნა</span>${ICONS.send}</button>
+      </form>
+    `;
+    document.body.appendChild(panelEl);
+
+    const fabDotEl = fabEl.querySelector('.ai-fab-status-dot');
+    const messagesEl = document.getElementById('publicAiMessages');
+    const formEl = document.getElementById('publicAiForm');
+    const inputEl = document.getElementById('publicAiInput');
+    const sendBtnEl = document.getElementById('publicAiSendBtn');
+
+    function isExamActiveOnPage() {
+      if (document.body.classList.contains('exam-active')) return true;
+      const examModal = document.getElementById('examModal') || document.getElementById('examOverlay');
+      if (examModal && (examModal.classList.contains('open') || examModal.classList.contains('show') || examModal.getAttribute('aria-hidden') === 'false')) {
+        return true;
+      }
+      return false;
+    }
+
+    function syncVisibilityAndStatus() {
+      if (!pubStatus.enabled || isExamActiveOnPage()) {
+        fabEl.hidden = true;
+        panelEl.hidden = true;
+        isOpen = false;
+        fabEl.classList.remove('is-open');
+        return;
+      }
+      fabEl.hidden = false;
+      const ready = Boolean(pubStatus.configured);
+      if (fabDotEl) {
+        fabDotEl.className = `ai-fab-status-dot ${ready ? 'is-ready' : 'is-unconfigured'}`;
+      }
+    }
+
+    async function fetchPublicStatus() {
+      try {
+        const resp = await fetch(`${API_BASE}/guide/ai/status`, { cache: 'no-cache' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        pubStatus = { ...pubStatus, ...data };
+        syncVisibilityAndStatus();
+      } catch {}
+    }
+
+    function renderMessages() {
+      if (!messagesEl) return;
+      messagesEl.innerHTML = '';
+
+      if (!messages.length && !isSending) {
+        const empty = document.createElement('div');
+        empty.className = 'ai-empty-chat-hint';
+        empty.innerHTML = `
+          <div class="ai-empty-chat-hint-icon">${ICONS.sparkle}</div>
+          <span>გამარჯობა! მე ვარ <strong>საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის (GIPC)</strong> ოფიციალური AI კონსულტანტი. დამისვით ნებისმიერი შეკითხვა სერტიფიცირების სქემის, კატეგორიების (A, B, C), საგამოცდო პროცედურის, საფასურების, ვადების ან ხელშეკრულებების შესახებ.</span>
+        `;
+        messagesEl.appendChild(empty);
+        return;
+      }
+
+      messages.forEach((msg) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = `ai-msg-item ${msg.role === 'user' ? 'is-user' : 'is-assistant'}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = 'ai-msg-bubble';
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'ai-msg-content';
+        contentDiv.innerHTML = formatMarkdownSimple(msg.content);
+        bubble.appendChild(contentDiv);
+
+        itemEl.appendChild(bubble);
+        messagesEl.appendChild(itemEl);
+      });
+
+      if (isSending) {
+        const loadingEl = document.createElement('div');
+        loadingEl.className = 'ai-msg-item is-assistant is-loading';
+        loadingEl.innerHTML = `
+          <div class="ai-msg-bubble">
+            <span class="ai-typing-indicator">${ICONS.sparkle} <span>AI კონსულტანტი ამოწმებს ოფიციალურ დოკუმენტებს...</span></span>
+          </div>
+        `;
+        messagesEl.appendChild(loadingEl);
+      }
+
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function togglePanel(force) {
+      if (!pubStatus.enabled || isExamActiveOnPage()) return;
+      isOpen = typeof force === 'boolean' ? force : !isOpen;
+      panelEl.hidden = !isOpen;
+      fabEl.classList.toggle('is-open', isOpen);
+      if (isOpen) {
+        renderMessages();
+        setTimeout(() => inputEl?.focus(), 20);
+      }
+    }
+
+    async function sendQuestion(text) {
+      const clean = String(text || '').trim();
+      if (!clean || isSending) return;
+      if (!isOpen) togglePanel(true);
+
+      messages.push({
+        role: 'user',
+        content: clean,
+        timestamp: new Date().toISOString(),
+      });
+      saveHistory();
+      isSending = true;
+      if (sendBtnEl) sendBtnEl.disabled = true;
+      renderMessages();
+
+      try {
+        const apiMessages = messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+        const resp = await fetch(`${API_BASE}/guide/ai/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: apiMessages }),
+        });
+
+        if (!resp.ok) {
+          let detail = 'დროებით ვერ მოხერხდა პასუხის მიღება.';
+          try {
+            const errJson = await resp.json();
+            if (errJson?.detail) detail = String(errJson.detail);
+          } catch {}
+          throw new Error(detail);
+        }
+
+        const data = await resp.json();
+        messages.push({
+          role: 'assistant',
+          content: data.reply || 'პასუხი მომზადებულია.',
+          inspected_attachments: Array.isArray(data.inspected_attachments)
+            ? data.inspected_attachments
+            : [],
+          timestamp: new Date().toISOString(),
+        });
+        saveHistory();
+      } catch (err) {
+        messages.push({
+          role: 'assistant',
+          content: `⚠️ ${err?.message || 'მოთხოვნა ვერ შესრულდა.'}`,
+          inspected_attachments: [],
+          timestamp: new Date().toISOString(),
+        });
+        saveHistory();
+      } finally {
+        isSending = false;
+        if (sendBtnEl) sendBtnEl.disabled = false;
+        renderMessages();
+      }
+    }
+
+    on(fabEl, 'click', () => togglePanel());
+    on(panelEl.querySelector('.ai-btn-close'), 'click', () => togglePanel(false));
+    on(panelEl.querySelector('.ai-btn-expand'), 'click', () => {
+      isExpanded = !isExpanded;
+      panelEl.classList.toggle('is-expanded', isExpanded);
+    });
+    on(panelEl.querySelector('.ai-btn-clear'), 'click', () => {
+      messages = [];
+      saveHistory();
+      renderMessages();
+    });
+
+    panelEl.querySelectorAll('.ai-quick-chip').forEach((chip) => {
+      on(chip, 'click', () => {
+        const q = chip.getAttribute('data-question') || chip.textContent.trim();
+        void sendQuestion(q);
+      });
+    });
+
+    function syncInputHeight() {
+      if (!inputEl) return;
+      inputEl.style.height = '40px';
+      const nextH = Math.min(110, Math.max(40, inputEl.scrollHeight));
+      inputEl.style.height = `${nextH}px`;
+      inputEl.style.overflowY = inputEl.scrollHeight > 110 ? 'auto' : 'hidden';
+    }
+
+    on(inputEl, 'input', syncInputHeight);
+
+    on(formEl, 'submit', (e) => {
+      e.preventDefault();
+      const text = String(inputEl?.value || '').trim();
+      if (!text || isSending) return;
+      inputEl.value = '';
+      syncInputHeight();
+      void sendQuestion(text);
+    });
+
+    on(inputEl, 'keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        formEl.requestSubmit();
+      }
+    });
+
+    loadHistory();
+    void fetchPublicStatus();
+
+    window.PublicAiAssistant = {
+      open: () => togglePanel(true),
+      close: () => togglePanel(false),
+      toggle: togglePanel,
+    };
+
+    document.addEventListener('click', (e) => {
+      const trigger = closest(e.target, '[data-open-public-ai]');
+      if (!trigger) return;
+      e.preventDefault();
+      const statementsOverlay = document.getElementById('userStatementsOverlay');
+      if (statementsOverlay && statementsOverlay.classList.contains('open')) {
+        document.getElementById('userStatementsClose')?.click();
+      }
+      const siteInfoModal = document.getElementById('siteInfoModal');
+      if (siteInfoModal && siteInfoModal.classList.contains('open')) {
+        siteInfoModal.querySelector('.modal-close')?.click();
+      }
+      togglePanel(true);
+    });
+
+    // Watch for exam modal activation so AI is hidden during exams
+    const observer = new MutationObserver(() => {
+      syncVisibilityAndStatus();
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadHeader, { once: true });
+    document.addEventListener('DOMContentLoaded', () => {
+      loadHeader();
+      initPublicAiAssistant();
+    }, { once: true });
   } else {
     loadHeader();
+    initPublicAiAssistant();
   }
 })();
+
 
 

@@ -17,12 +17,28 @@
       subtitle: 'შენობა-ნაგებობის არქიტექტორი (GIPC-CON-001)',
     },
     {
+      key: 'cert_a_transitional',
+      code: 'GIPC-CON-001 (გარდამავალი)',
+      badge: 'კატეგორია A (გარდამავალი)',
+      badgeClass: 'is-cert-a',
+      title: 'სასერტიფიკაციო ხელშეკრულება — კატეგორია A (საგამონაკლისო)',
+      subtitle: 'შენობა-ნაგებობის არქიტექტორი — გარდამავალი წესით (GIPC-CON-001)',
+    },
+    {
       key: 'cert_b',
       code: 'GIPC-CON-002',
       badge: 'კატეგორია B',
       badgeClass: 'is-cert-b',
       title: 'სასერტიფიკაციო ხელშეკრულება — კატეგორია B',
       subtitle: 'არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (GIPC-CON-002)',
+    },
+    {
+      key: 'cert_b_transitional',
+      code: 'GIPC-CON-002 (გარდამავალი)',
+      badge: 'კატეგორია B (გარდამავალი)',
+      badgeClass: 'is-cert-b',
+      title: 'სასერტიფიკაციო ხელშეკრულება — კატეგორია B (საგამონაკლისო)',
+      subtitle: 'შემსწავლელი სპეციალისტი — გარდამავალი წესით (GIPC-CON-002)',
     },
     {
       key: 'cert_c',
@@ -200,12 +216,13 @@
     }
 
     function findContractDocForSlot(slotDef) {
-      return state.documents.find(
-        (d) =>
-          d.contract_type === slotDef.key ||
-          (d.title && d.title.includes(slotDef.code)) ||
-          (d.content && d.content.includes(slotDef.code))
-      ) || null;
+      const byType = state.documents.find((d) => d.contract_type === slotDef.key);
+      if (byType) return byType;
+      return (
+        state.documents.find(
+          (d) => !d.contract_type && d.title && d.title.includes(slotDef.code)
+        ) || null
+      );
     }
 
     function renderContractSlots() {

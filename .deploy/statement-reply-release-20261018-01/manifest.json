@@ -1,18 +1,18 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "created_at": "2026-10-18T17:57:52.788271+00:00",
+  "created_at": "2026-10-27T17:43:44.056047+00:00",
   "host": "gipcadmin@148.251.167.229",
   "files": [
     {
-      "path": "frontend/pages/admin.html",
-      "before_sha256": "0e061230931bab644672d9b69eb14601d691a800d755051bb42c5b4ddb30aa63",
-      "after_sha256": "92588e8e585175d1d1f88701249be34cee0320c080ef3e604683133ab0fe4b26",
+      "path": "frontend/pages/index.html",
+      "before_sha256": "668d88e268f063656f60e0ac412e7a2c150dbd169f669cb695d6e2a0a393683f",
+      "after_sha256": "0340a3d61245c215dc3d3bac4fb6fdc2eded6b54f010477d0cfb8ad709ca735a",
       "existed_before": true
     },
     {
-      "path": "frontend/styles/admin.css",
-      "before_sha256": "49b88b3ff0b6607fe7ef116bf0526700c6ee63b96035a88111ecc5cf7fdbeca0",
-      "after_sha256": "d4dd3b23b7a23a05ef13924badf9b2f73361fb4f56186999fc0bb3c0b550fb4b",
+      "path": "frontend/styles/styles.css",
+      "before_sha256": "49a7c1576238558cea523a75afe77a2ddc1875c08046bfa68a55b9da6a46e096",
+      "after_sha256": "2778ffc584dff8ee85cfdaee0e74127bba4e85674156028baeb1a21faa775d32",
       "existed_before": true
     }
   ]

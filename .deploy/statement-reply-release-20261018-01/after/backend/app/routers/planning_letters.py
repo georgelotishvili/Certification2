@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import hashlib
 import json
 from pathlib import Path
@@ -19,14 +19,16 @@ from ..models import Certificate, ExamSchedule, PlanningLetter, PlanningTemplate
 from ..services.bounded_upload import UploadTooLarge, save_upload_stream
 from ..services.candidate_status import (
     NON_EXAM_LETTER_PERIODS,
+    NON_PASS_CERT_PERIODS,
     VALID_CANDIDATE_CATEGORIES,
+    _cancel_active_bookings_for_user,
     get_user_latest_requested_category,
     normalize_cert_category,
     reconcile_user_candidate_status_after_delete,
 )
 from ..services.media_storage import ensure_media_root, relative_storage_path, resolve_storage_path
 from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
-from .admin import _require_admin
+from .admin import _require_admin, _today_in_tbilisi
 
 router = APIRouter()
 Kind = Literal["exam", "certificate"]
@@ -41,9 +43,9 @@ DEFAULT_TEMPLATES = {
             "მოგესალმებით,\n\n"
             "გაცნობებთ, რომ თქვენი განაცხადი დადასტურდა და დაშვებული ხართ სერტიფიცირების გამოცდაზე. თქვენი გამოცდა დაიგეგმა {date}, {time}-ზე, მისამართზე: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6.\n\n"
             "გამოცდაზე დასაშვებად აუცილებელია:\n"
-            "- საგამოცდო მომსახურების ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});\n"
+            "- საგამოცდო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});\n"
             "- საგამოცდო ცენტრში გამოცხადდეთ გამოცდის დაწყებამდე 30 წუთით ადრე პირადობის დამადასტურებელი მოქმედი დოკუმენტით, ხელშეკრულებაზე ხელმოწერისა და რეგისტრაციის გავლის მიზნით.\n\n"
-            "გთხოვთ წინასწარ გაეცნოთ შესაბამისი მომსახურების ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
+            "გთხოვთ წინასწარ გაეცნოთ საგამოცდო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
             "პატივისცემით,\n"
             "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
         ),
@@ -56,7 +58,7 @@ DEFAULT_TEMPLATES = {
             "გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და მიღებულია გადაწყვეტილება თქვენთვის [კატეგორია] სერტიფიკატის მინიჭების შესახებ.\n\n"
             "სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის ვადაში:\n"
             "- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});\n"
-            "- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.\n\n"
+            "- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6; ოფისში ვიზიტის დღე და საათი გთხოვთ წინასწარ დაჯავშნოთ საიტზე gipc.org.ge თქვენს პირად გვერდზე — „სერტიფიკატის აღების დაჯავშნა“) ან კვალიფიციური ელექტრონული ხელმოწერით.\n\n"
             "საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.\n\n"
             "გთხოვთ გაითვალისწინოთ, რომ დადგენილი წესის შესაბამისად, გამოცდის დადებითი შედეგი სერტიფიკატის მისაღებად მოქმედებს წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის განმავლობაში, ხოლო აღნიშნული ვადის გასვლის შემთხვევაში საგამოცდო შედეგი ძალას კარგავს.\n\n"
             "გთხოვთ წინასწარ გაეცნოთ შესაბამის სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
@@ -166,6 +168,9 @@ def _is_legacy_body(body: str | None) -> bool:
         or "შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“" in raw
         or 'შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"' in raw
         or "წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში" in raw
+        or "საგამოცდო მომსახურების ხელშეკრულებაზე" in raw
+        or "შესაბამისი მომსახურების ხელშეკრულებას" in raw
+        or ("გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში" in raw and "სერტიფიკატის აღების დაჯავშნა" not in raw)
     )
 
 
@@ -477,9 +482,9 @@ def send_letter(
     if action_mode not in ("save_and_send", "save_only", "send_only"):
         raise HTTPException(422, "მოქმედების რეჟიმი არასწორია.")
     custom_kind = period if period in ("rejection", "exam_fail", "custom") else None
-    if period is not None and period not in ("morning", "evening", "rejection", "exam_fail", "custom"):
+    if period is not None and period not in ("morning", "evening", "rejection", "exam_fail", "custom", "certificate", "cert_send_only"):
         raise HTTPException(422, "ცვლა (დილით/საღამოს) არასწორია.")
-    if custom_kind:
+    if custom_kind or kind == "certificate":
         if not event_date.strip():
             event_date = date.today().isoformat()
         if not event_time.strip():
@@ -492,6 +497,34 @@ def send_letter(
         day = date.fromisoformat(event_date)
     except ValueError as exc:
         raise HTTPException(422, "თარიღი, საათი ან მოთხოვნის კოდი არასწორია.") from exc
+    if kind == "exam" and not custom_kind:
+        if day.weekday() >= 5:
+            raise HTTPException(
+                422,
+                "გამოცდის დანიშვნა შაბათ-კვირას დაუშვებელია. გთხოვთ აირჩიოთ სამუშაო დღე (ორშაბათი–პარასკევი).",
+            )
+        unchanged_existing_date = False
+        if schedule_id is not None:
+            existing_sched_check = db.scalar(
+                select(ExamSchedule).where(ExamSchedule.id == schedule_id, ExamSchedule.user_id == user_id)
+            )
+            if existing_sched_check is not None and existing_sched_check.exam_date == day:
+                unchanged_existing_date = True
+        if not unchanged_existing_date and edit_letter_id is not None:
+            existing_letter_check = db.scalar(
+                select(PlanningLetter).where(PlanningLetter.id == edit_letter_id, PlanningLetter.user_id == user_id)
+            )
+            if existing_letter_check is not None and existing_letter_check.event_date == day:
+                unchanged_existing_date = True
+        min_exam_day = _today_in_tbilisi() + timedelta(days=8)
+        if not unchanged_existing_date and day < min_exam_day:
+            first_workday = min_exam_day
+            while first_workday.weekday() >= 5:
+                first_workday += timedelta(days=1)
+            raise HTTPException(
+                422,
+                f"გამოცდის დანიშვნა შესაძლებელია წერილის გაგზავნის დღიდან მინიმუმ მე-8 დღეს ({first_workday.strftime('%d-%m-%Y')}-დან).",
+            )
     digest = _upload_digest(attachment)
     fingerprint = hashlib.sha256(json.dumps({
         "user_id": user_id, "kind": kind, "date": event_date, "time": event_time,
@@ -521,7 +554,7 @@ def send_letter(
     elif not custom_kind:
         template = db.get(PlanningTemplate, kind)
         if use_template_attachment and not attachment and not keep_existing_attachment:
-            if template_updated_at != (_iso(template.updated_at) if template else None):
+            if template_updated_at and template_updated_at != (_iso(template.updated_at) if template else None):
                 raise HTTPException(409, "შაბლონი შეიცვალა. თავიდან გადაამოწმეთ წერილი და დანართი.")
     if custom_kind == "rejection":
         resolved_period = "rej_send_only" if action_mode == "send_only" else "rejection"
@@ -530,11 +563,10 @@ def send_letter(
     elif custom_kind == "custom":
         resolved_period = "cust_send_only" if action_mode == "send_only" else "custom"
     elif kind == "certificate":
-        base_p = period if period in ("morning", "evening") else ("morning" if event_time < "12:00" else "evening")
-        if action_mode == "send_only":
-            resolved_period = "cert_am_send" if base_p == "morning" else "cert_pm_send"
+        if period in ("morning", "evening"):
+            resolved_period = ("cert_am_send" if period == "morning" else "cert_pm_send") if action_mode == "send_only" else period
         else:
-            resolved_period = base_p
+            resolved_period = "cert_send_only" if action_mode == "send_only" else "certificate"
     else:
         resolved_period = (period or ("morning" if event_time < "12:00" else "evening")) if kind == "exam" else None
     is_save_only = action_mode == "save_only"
@@ -639,12 +671,12 @@ def send_letter(
         now = datetime.utcnow()
         clean_cat = (candidate_category or "").strip().upper()
         valid_cat = clean_cat if clean_cat in VALID_CANDIDATE_CATEGORIES else None
-        has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user_id)) is not None
-        if custom_kind in ("rejection", "exam_fail") or has_cert:
+        if custom_kind in ("rejection", "exam_fail"):
             user.candidate_status = None
             user.candidate_category = None
             user.candidate_updated_at = now
             db.add(user)
+            _cancel_active_bookings_for_user(db, user_id, now)
         elif kind == "exam" and not custom_kind:
             req_cat = get_user_latest_requested_category(db, user_id)
             user.candidate_status = "exam_candidate"
@@ -725,7 +757,8 @@ def delete_letter(user_id: int, letter_id: int, authorization: str | None = Head
     letter = _user_letter(db, user_id, letter_id)
     user = db.get(User, user_id)
     old_path = letter.attachment_path
-    if letter.kind == "certificate" and letter.period != "cert_issued":
+    linked_schedule_id = letter.exam_schedule_id
+    if letter.kind == "certificate" and (letter.period is None or letter.period not in NON_PASS_CERT_PERIODS):
         deleted_kind = "certificate_letter"
     elif letter.kind == "exam" and (letter.period is None or letter.period not in NON_EXAM_LETTER_PERIODS):
         deleted_kind = "exam_letter"
@@ -733,6 +766,18 @@ def delete_letter(user_id: int, letter_id: int, authorization: str | None = Head
         deleted_kind = "other_letter"
     db.delete(letter)
     db.flush()
+    if linked_schedule_id is not None:
+        other_ref = db.scalar(
+            select(PlanningLetter.id).where(
+                PlanningLetter.exam_schedule_id == linked_schedule_id,
+                PlanningLetter.id != letter_id,
+            )
+        )
+        if other_ref is None:
+            sched_row = db.get(ExamSchedule, linked_schedule_id)
+            if sched_row is not None and sched_row.user_id == user_id:
+                db.delete(sched_row)
+                db.flush()
     reconcile_user_candidate_status_after_delete(db, user, deleted_kind=deleted_kind)
     db.commit()
     if old_path:

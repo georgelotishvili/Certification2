@@ -8,10 +8,10 @@
     'გაცნობებთ, რომ თქვენი განაცხადი დადასტურდა და დაშვებული ხართ სერტიფიცირების გამოცდაზე. თქვენი გამოცდა დაიგეგმა {date}, {time}-ზე, მისამართზე: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6.',
     '',
     'გამოცდაზე დასაშვებად აუცილებელია:',
-    '- საგამოცდო მომსახურების ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});',
+    '- საგამოცდო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});',
     '- საგამოცდო ცენტრში გამოცხადდეთ გამოცდის დაწყებამდე 30 წუთით ადრე პირადობის დამადასტურებელი მოქმედი დოკუმენტით, ხელშეკრულებაზე ხელმოწერისა და რეგისტრაციის გავლის მიზნით.',
     '',
-    'გთხოვთ წინასწარ გაეცნოთ შესაბამისი მომსახურების ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.',
+    'გთხოვთ წინასწარ გაეცნოთ საგამოცდო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.',
     '',
     'პატივისცემით,',
     'საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი',
@@ -41,7 +41,7 @@
     '',
     'სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის ვადაში:',
     '- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});',
-    '- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.',
+    '- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6; ოფისში ვიზიტის დღე და საათი გთხოვთ წინასწარ დაჯავშნოთ საიტზე gipc.org.ge თქვენს პირად გვერდზე — „სერტიფიკატის აღების დაჯავშნა“) ან კვალიფიციური ელექტრონული ხელმოწერით.',
     '',
     'საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.',
     '',
@@ -115,21 +115,21 @@
       backendKind: 'certificate',
       templateKind: 'certificate',
       hasTemplate: true,
-      hasTimeAndPeriod: true,
-      createTitle: 'სერტიფიკატის გადაცემა (ჩაბარება)',
-      editTitle: 'სერტიფიკატის გადაცემის რედაქტირება',
-      dateLabel: 'გადაცემის თარიღი',
+      hasTimeAndPeriod: false,
+      createTitle: 'სერტიფიკატის მინიჭების შეტყობინება (ჩაბარება)',
+      editTitle: 'სერტიფიკატის მინიჭების შეტყობინების რედაქტირება',
+      dateLabel: 'შეტყობინების თარიღი',
       letterBoxTitle: 'ჩაბარებისა და სერტიფიკატის მინიჭების წერილი',
       historyTypeLabel: 'სერტიფიკატის გადაცემა',
       defaultSubject: DEFAULT_CERTIFICATE_SUBJECT,
       defaultBody: DEFAULT_CERTIFICATE_BODY,
       modalClass: 'is-certificate-modal',
       rowClass: 'is-certificate-row',
-      saveAndSendDesc: 'შეინახავს სერტიფიკატის გადაცემის შეხვედრას და გაუგზავნის მილოცვის წერილს კანდიდატს მეილზე.',
-      saveOnlyDesc: 'შეინახავს მხოლოდ სერტიფიკატის გადაცემის შეხვედრას სისტემაში, მეილის გაგზავნის გარეშე.',
-      sendOnlyDesc: 'გაუგზავნის მხოლოდ ჩაბარებისა და სერტიფიკატის მინიჭების წერილს კანდიდატს მეილზე.',
-      toastSaved: 'სერტიფიკატის გადაცემის შეხვედრა შეინახა',
-      toastSavedAndSent: 'სერტიფიკატის გადაცემა დაიგეგმა და წერილი გაიგზავნა',
+      saveAndSendDesc: 'შეინახავს ჩაბარების შეტყობინებას სისტემაში, გაუგზავნის წერილს მეილზე და გაუაქტიურებს კანდიდატს სერტიფიკატის აღების დაჯავშნის 30-დღიან ღილაკს.',
+      saveOnlyDesc: 'შეინახავს ჩაბარების შეტყობინებას სისტემაში და გაუაქტიურებს დაჯავშნის ღილაკს, მეილზე წერილის გაგზავნის გარეშე.',
+      sendOnlyDesc: 'გაუგზავნის ჩაბარებისა და სერტიფიკატის მინიჭების წერილს კანდიდატს მეილზე და გაუაქტიურებს დაჯავშნის ღილაკს.',
+      toastSaved: 'სერტიფიკატის მინიჭების შეტყობინება შეინახა',
+      toastSavedAndSent: 'სერტიფიკატის მინიჭების წერილი შეინახა და გაიგზავნა',
     },
     exam_fail: {
       mode: 'exam_fail',
@@ -185,12 +185,56 @@
     { key: 'custom', label: 'სხვა შეტყობინება', pillClass: 'type-custom' },
   ];
 
+  const GEORGIAN_MONTHS = [
+    'იანვარი', 'თებერვალი', 'მარტი', 'აპრილი', 'მაისი', 'ივნისი',
+    'ივლისი', 'აგვისტო', 'სექტემბერი', 'ოქტომბერი', 'ნოემბერი', 'დეკემბერი',
+  ];
+  const GEORGIAN_WEEKDAYS_SHORT = ['ორშ', 'სამ', 'ოთხ', 'ხუთ', 'პარ', 'შაბ', 'კვი'];
+
   function todayIsoDate() {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
     const d = String(now.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+  }
+
+  function addDaysToIsoDate(isoDate, days) {
+    const parts = String(isoDate || '').split('-').map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return '';
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    d.setDate(d.getDate() + Number(days || 0));
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function isWeekendIsoDate(isoDate) {
+    if (!isValidDate(isoDate)) return false;
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const wd = new Date(y, m - 1, d).getDay();
+    return wd === 0 || wd === 6;
+  }
+
+  function minSelectableExamIsoDate() {
+    // Letter day (Day 0) + next 7 days (Days +1..+7) are blocked; 8th day (Day +8) and onwards are selectable
+    return addDaysToIsoDate(todayIsoDate(), 8);
+  }
+
+  function firstSelectableExamWorkdayIso() {
+    let candidate = minSelectableExamIsoDate();
+    while (isWeekendIsoDate(candidate)) {
+      candidate = addDaysToIsoDate(candidate, 1);
+    }
+    return candidate;
+  }
+
+  function isSelectableExamDate(isoDate, existingAllowedDate = '') {
+    if (!isValidDate(isoDate)) return false;
+    if (isWeekendIsoDate(isoDate)) return false;
+    if (existingAllowedDate && isoDate === existingAllowedDate) return true;
+    return isoDate >= minSelectableExamIsoDate();
   }
 
   function formatDisplayDate(isoDate) {
@@ -247,6 +291,7 @@
   function periodLabelText(period) {
     if (period === 'morning' || period === 'cert_am_send') return 'დილით';
     if (period === 'evening' || period === 'cert_pm_send') return 'საღამოს';
+    if (period === 'certificate' || period === 'cert_send_only') return 'სერტიფიკატის მინიჭება';
     if (period === 'cert_issued') return 'საჯარო რეესტრში ასახვა';
     if (period === 'rejection' || period === 'rej_send_only' || period === 'rejection_send_only') return 'უარყოფითი პასუხი';
     if (period === 'exam_fail' || period === 'fail_send_only') return 'ჩაჭრის შეტყობინება';
@@ -621,6 +666,7 @@
         if (mode === 'exam_fail') return 'exam_fail';
         if (mode === 'custom') return 'custom';
         if (letter.period === 'cert_issued') return 'cert_issued';
+        if (mode === 'certificate') return 'certificate';
         if (letter.period === 'morning' || letter.period === 'cert_am_send') return 'morning';
         if (letter.period === 'evening' || letter.period === 'cert_pm_send') return 'evening';
         return (letter.event_time || '') < '12:00' ? 'morning' : 'evening';
@@ -637,7 +683,7 @@
           return letter.period === 'cust_send_only';
         }
         if (mode === 'certificate') {
-          return letter.period === 'cert_am_send' || letter.period === 'cert_pm_send';
+          return letter.period === 'cert_send_only' || letter.period === 'cert_am_send' || letter.period === 'cert_pm_send';
         }
         return letter.exam_schedule_id == null;
       }
@@ -949,6 +995,15 @@
             if (outcomeData) {
               examOutcome = outcomeData;
               user.exam_outcome = outcomeData;
+              if ('candidate_status' in outcomeData) {
+                user.candidate_status = outcomeData.candidate_status ?? null;
+              }
+              if ('candidate_category' in outcomeData) {
+                user.candidate_category = outcomeData.candidate_category ?? null;
+              }
+              if ('requested_category' in outcomeData) {
+                user.requested_category = outcomeData.requested_category ?? null;
+              }
             }
           }
           updateCardButtonBadge();
@@ -1271,9 +1326,36 @@
 
                 ${hasTimeAndPeriod ? `
                   <div class="exam-schedule-controls">
-                    <label class="exam-schedule-date-label">${escapeHtml(meta.dateLabel)}
-                      <input class="exam-schedule-date users-filter-date" type="date" value="${escapeHtml(initialDate)}" />
-                    </label>
+                    <div class="exam-schedule-date-label">
+                      <span>${escapeHtml(meta.dateLabel)}</span>
+                      <div class="exam-schedule-date-picker-wrap">
+                        <input class="exam-schedule-date" type="hidden" value="${escapeHtml(initialDate)}" />
+                        <button type="button" class="exam-schedule-date-trigger${initialDate ? ' has-value' : ''}" aria-expanded="false" title="აირჩიეთ გამოცდის სამუშაო დღე (მე-8 დღიდან)">
+                          <svg class="exam-schedule-cal-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                          </svg>
+                          <span class="exam-schedule-date-trigger-text">${initialDate ? escapeHtml(formatDisplayDate(initialDate)) : 'აირჩიეთ თარიღი'}</span>
+                          <span class="exam-schedule-date-trigger-caret">▾</span>
+                        </button>
+                        <div class="exam-schedule-date-popover" hidden>
+                          <div class="exam-schedule-cal-head">
+                            <button type="button" class="exam-schedule-cal-nav" data-cal-nav="-1" aria-label="წინა თვე">‹</button>
+                            <span class="exam-schedule-cal-title"></span>
+                            <button type="button" class="exam-schedule-cal-nav" data-cal-nav="1" aria-label="შემდეგი თვე">›</button>
+                          </div>
+                          <div class="exam-schedule-cal-weekdays">
+                            ${GEORGIAN_WEEKDAYS_SHORT.map((wd, idx) => `<span class="exam-schedule-cal-wd${idx >= 5 ? ' is-weekend' : ''}">${wd}</span>`).join('')}
+                          </div>
+                          <div class="exam-schedule-cal-grid"></div>
+                          <div class="exam-schedule-cal-foot">
+                            მონიშვნადია მე-8 დღიდან (${escapeHtml(formatDisplayDate(firstSelectableExamWorkdayIso()))}-დან), შაბათ-კვირის გარდა
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
                     <div class="exam-schedule-period-group ${initialPeriod === 'morning' ? 'is-active' : ''}" data-period-group="morning">
                       <label class="users-filter-label exam-schedule-period-check">
@@ -1350,11 +1432,7 @@
                     </div>
                   </div>
                 ` : `
-                  <div class="exam-schedule-controls exam-rejection-controls">
-                    <label class="exam-schedule-date-label">${escapeHtml(meta.dateLabel)}
-                      <input class="exam-schedule-date users-filter-date" type="date" value="${escapeHtml(initialDate)}" />
-                    </label>
-                  </div>
+                  <input class="exam-schedule-date" type="hidden" value="${escapeHtml(initialDate)}" />
                 `}
 
                 ${hasCategorySelect ? `
@@ -1455,6 +1533,11 @@
         const footerStep2 = overlay.querySelector('.exam-schedule-footer-step2');
 
         const dateInput = overlay.querySelector('.exam-schedule-date');
+        const dateTrigger = overlay.querySelector('.exam-schedule-date-trigger');
+        const dateTriggerText = overlay.querySelector('.exam-schedule-date-trigger-text');
+        const datePopover = overlay.querySelector('.exam-schedule-date-popover');
+        const calTitleEl = overlay.querySelector('.exam-schedule-cal-title');
+        const calGridEl = overlay.querySelector('.exam-schedule-cal-grid');
         const morning = overlay.querySelector('.exam-schedule-morning');
         const evening = overlay.querySelector('.exam-schedule-evening');
         const morningTimeInput = overlay.querySelector('.exam-schedule-morning-time');
@@ -1518,7 +1601,92 @@
           if (eveningBadge) eveningBadge.hidden = modalEveningTime === defEvening;
         }
 
-        function closeTimePopovers() {
+        const firstSelectableIso = firstSelectableExamWorkdayIso();
+        const initialCalSeed = isValidDate(initialDate) ? initialDate : firstSelectableIso;
+        let calYear = Number(initialCalSeed.slice(0, 4));
+        let calMonth = Number(initialCalSeed.slice(5, 7)) - 1;
+
+        function renderExamCalendarGrid() {
+          if (!calGridEl || !calTitleEl) return;
+          calTitleEl.textContent = `${GEORGIAN_MONTHS[calMonth] || ''} ${calYear}`;
+          const firstDayOfMonth = new Date(calYear, calMonth, 1);
+          const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+          // Convert Sunday=0..Saturday=6 to Monday=0..Sunday=6
+          const startOffset = (firstDayOfMonth.getDay() + 6) % 7;
+          const todayIso = todayIsoDate();
+          const minExamIso = minSelectableExamIsoDate();
+          const selectedIso = dateInput?.value || '';
+          const existingAllowedIso = editingItem?.examDate || '';
+
+          const cells = [];
+          for (let i = 0; i < startOffset; i += 1) {
+            cells.push('<span class="exam-schedule-cal-empty" aria-hidden="true"></span>');
+          }
+          for (let dayNum = 1; dayNum <= daysInMonth; dayNum += 1) {
+            const mStr = String(calMonth + 1).padStart(2, '0');
+            const dStr = String(dayNum).padStart(2, '0');
+            const cellIso = `${calYear}-${mStr}-${dStr}`;
+            const wdIndex = (startOffset + dayNum - 1) % 7;
+            const isWeekend = wdIndex >= 5;
+            const isBlockedRange = cellIso >= todayIso && cellIso < minExamIso;
+            const isSelectable = isSelectableExamDate(cellIso, existingAllowedIso);
+            const isSelected = cellIso === selectedIso;
+            const isToday = cellIso === todayIso;
+
+            const classes = ['exam-schedule-cal-day'];
+            if (isWeekend) classes.push('is-weekend');
+            if (isBlockedRange) classes.push('is-blocked-window');
+            if (!isSelectable) classes.push('is-disabled');
+            if (isSelected) classes.push('is-selected');
+            if (isToday) classes.push('is-today');
+
+            let titleAttr = formatDisplayDate(cellIso);
+            if (isWeekend) {
+              titleAttr += ' — შაბათ-კვირა არ ინიშნება';
+            } else if (cellIso === todayIso) {
+              titleAttr += ' — წერილის გაგზავნის დღე არ ინიშნება';
+            } else if (isBlockedRange) {
+              titleAttr += ' — მოსამზადებელი 7-დღიანი პერიოდი (მონიშვნადია მე-8 დღიდან)';
+            } else if (!isSelectable) {
+              titleAttr += ' — გასული თარიღი';
+            }
+
+            cells.push(
+              `<button type="button" class="${classes.join(' ')}" data-cal-date="${cellIso}" ${isSelectable ? '' : 'disabled'} title="${escapeHtml(titleAttr)}">${dayNum}</button>`
+            );
+          }
+          calGridEl.innerHTML = cells.join('');
+        }
+
+        function closeDatePopover() {
+          if (datePopover) datePopover.hidden = true;
+          dateTrigger?.setAttribute('aria-expanded', 'false');
+          dateTrigger?.classList.remove('is-open');
+        }
+
+        function openDatePopover() {
+          if (!datePopover) return;
+          closeTimePopovers({ keepDate: true });
+          const seedIso = isValidDate(dateInput?.value) ? dateInput.value : firstSelectableExamWorkdayIso();
+          calYear = Number(seedIso.slice(0, 4));
+          calMonth = Number(seedIso.slice(5, 7)) - 1;
+          renderExamCalendarGrid();
+          datePopover.hidden = false;
+          dateTrigger?.setAttribute('aria-expanded', 'true');
+          dateTrigger?.classList.add('is-open');
+        }
+
+        function toggleDatePopover() {
+          if (!datePopover) return;
+          if (datePopover.hidden) {
+            openDatePopover();
+          } else {
+            closeDatePopover();
+          }
+        }
+
+        function closeTimePopovers({ keepDate = false } = {}) {
+          if (!keepDate) closeDatePopover();
           if (morningPopover) morningPopover.hidden = true;
           if (eveningPopover) eveningPopover.hidden = true;
           morningTrigger?.setAttribute('aria-expanded', 'false');
@@ -1656,6 +1824,35 @@
         dateInput?.addEventListener('change', () => {
           setModalStatus('');
           refreshRenderedText();
+        });
+
+        dateTrigger?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleDatePopover();
+        });
+
+        datePopover?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const navBtn = e.target.closest('[data-cal-nav]');
+          if (navBtn) {
+            const delta = Number(navBtn.getAttribute('data-cal-nav') || 0);
+            const nextMonthDate = new Date(calYear, calMonth + delta, 1);
+            calYear = nextMonthDate.getFullYear();
+            calMonth = nextMonthDate.getMonth();
+            renderExamCalendarGrid();
+            return;
+          }
+          const dayBtn = e.target.closest('[data-cal-date]');
+          if (dayBtn && !dayBtn.disabled) {
+            const pickedIso = dayBtn.getAttribute('data-cal-date') || '';
+            if (!isSelectableExamDate(pickedIso, editingItem?.examDate || '')) return;
+            if (dateInput) dateInput.value = pickedIso;
+            if (dateTriggerText) dateTriggerText.textContent = formatDisplayDate(pickedIso);
+            dateTrigger?.classList.add('has-value');
+            closeDatePopover();
+            setModalStatus('');
+            refreshRenderedText();
+          }
         });
 
         categorySelect?.addEventListener('change', () => {
@@ -1902,11 +2099,29 @@
           const examDate = dateInput.value;
           if (!isValidDate(examDate)) {
             setModalStatus('ჯერ აირჩიეთ თარიღი.', true);
-            dateInput.focus();
+            if (dateTrigger) {
+              openDatePopover();
+              dateTrigger.focus();
+            } else {
+              dateInput?.focus();
+            }
             return;
           }
           const period = currentPeriod();
           if (hasTimeAndPeriod) {
+            if (isWeekendIsoDate(examDate)) {
+              setModalStatus('გამოცდის დანიშვნა შაბათ-კვირას დაუშვებელია. გთხოვთ აირჩიოთ სამუშაო დღე (ორშაბათი–პარასკევი).', true);
+              openDatePopover();
+              return;
+            }
+            if (!isSelectableExamDate(examDate, editingItem?.examDate || '')) {
+              setModalStatus(
+                `გამოცდის დანიშვნა შესაძლებელია წერილის დღიდან მინიმუმ მე-8 დღეს (${formatDisplayDate(firstSelectableExamWorkdayIso())}-დან).`,
+                true
+              );
+              openDatePopover();
+              return;
+            }
             if (!period) {
               setModalStatus('აირჩიეთ „დილით“ ან „საღამოს“.', true);
               morning?.focus();
@@ -2048,9 +2263,16 @@
             });
 
             if (!response.ok) {
-              const fallback = response.status === 409
-                ? 'ამ თარიღისა და ჯგუფის ჩანაწერი უკვე არსებობს.'
-                : 'მოქმედება ვერ შესრულდა.';
+              let errText = '';
+              try {
+                const errPayload = await response.clone().json();
+                errText = typeof errPayload?.detail === 'string' ? errPayload.detail : '';
+              } catch {}
+              const fallback = errText || (
+                response.status === 409
+                  ? 'მოქმედება ვერ შესრულდა (კონფლიქტი).'
+                  : 'მოქმედება ვერ შესრულდა.'
+              );
               setModalStatus(fallback, true);
               await handleAdminErrorResponse(response, fallback, showToast);
               return;
@@ -2407,9 +2629,8 @@
             await load();
             if (item.isIncomingStatement) {
               notifyStatementState();
-            } else {
-              await notifyChanged();
             }
+            await notifyChanged();
             renderModalList();
             setListStatus('ჩანაწერი წაიშალა.');
             showToast(item.isIncomingStatement ? 'განცხადება წაიშალა' : 'ჩანაწერი წაიშალა');

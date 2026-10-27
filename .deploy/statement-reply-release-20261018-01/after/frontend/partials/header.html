@@ -1,0 +1,489 @@
+<header>
+  <!-- City silhouette SVG (sky is transparent) -->
+  <img src="../assets/svg/header.svg" alt="" class="header-hero" />
+
+  <!-- Login Modal -->
+  <div class="login-modal" id="loginModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-content" role="document">
+      <button class="modal-close" id="modalClose" aria-label="დახურვა">&times;</button>
+      <h3>ავტორიზაცია / რეგისტრაცია</h3>
+      <div class="modal-buttons">
+        <button class="modal-btn login-option">ავტორიზაცია</button>
+        <button class="modal-btn register-option">რეგისტრაცია</button>
+      </div>
+      <form class="login-form" id="loginForm" novalidate>
+        <div class="field">
+          <input type="email" name="email" placeholder="ელფოსტა" required />
+        </div>
+        <div class="field">
+          <input type="password" name="password" placeholder="პაროლი" required />
+        </div>
+        <div class="forgot-password-link">
+          <a href="#" id="forgotPasswordLink">დაგავიწყდათ პაროლი?</a>
+        </div>
+        <div class="modal-buttons">
+          <button type="submit" class="modal-btn submit">ავტორიზაცია</button>
+        </div>
+      </form>
+
+      <form class="register-form" id="registerForm" novalidate>
+        <!-- Step 1: Basic info -->
+        <div class="register-step" id="registerStep1">
+          <div class="field">
+            <input type="text" name="personalId" inputmode="numeric" maxlength="11" placeholder="პირადი ნომერი" required />
+          </div>
+          <div class="field">
+            <input type="text" name="firstName" placeholder="სახელი (ქართულად, პირადობის მიხედვით)" required />
+          </div>
+          <div class="field">
+            <input type="text" name="lastName" placeholder="გვარი (ქართულად, პირადობის მიხედვით)" required />
+            <small class="register-name-hint">სახელი და გვარი შეიყვანეთ ქართულად, პირადობის დოკუმენტის შესაბამისად</small>
+          </div>
+          <div class="field">
+            <input type="tel" name="phone" placeholder="ტელეფონი" required />
+          </div>
+          <div class="field">
+            <input type="email" name="email" placeholder="ელფოსტა" required />
+          </div>
+          <div class="field">
+            <input type="password" name="password" placeholder="პაროლი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="confirmPassword" placeholder="გაიმეორეთ პაროლი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="button" class="modal-btn submit" id="registerSendCodeBtn">კოდის გაგზავნა</button>
+          </div>
+        </div>
+        <!-- Step 2: Verification code -->
+        <div class="register-step" id="registerStep2" style="display:none;">
+          <p class="verification-info">4-ნიშნა კოდი გაგზავნილია თქვენს ელფოსტაზე</p>
+          <div class="field">
+            <input type="text" name="verificationCode" inputmode="numeric" maxlength="4" placeholder="შეიყვანეთ კოდი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">რეგისტრაცია</button>
+            <button type="button" class="modal-btn back-to-login" id="registerBackBtn">უკან დაბრუნება</button>
+          </div>
+        </div>
+      </form>
+
+      <form class="forgot-password-form" id="forgotPasswordForm" novalidate>
+        <div class="forgot-step" id="forgotStep1">
+          <div class="field">
+            <input type="email" name="email" placeholder="ელფოსტა" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">კოდის გაგზავნა</button>
+            <button type="button" class="modal-btn back-to-login">უკან დაბრუნება</button>
+          </div>
+        </div>
+        <div class="forgot-step" id="forgotStep2" style="display:none;">
+          <p class="verification-info">4-ნიშნა კოდი გაგზავნილია თქვენს ელფოსტაზე</p>
+          <div class="field">
+            <input type="text" name="resetCode" inputmode="numeric" maxlength="4" placeholder="შეიყვანეთ კოდი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="newPassword" placeholder="ახალი პაროლი" required />
+          </div>
+          <div class="field">
+            <input type="password" name="confirmNewPassword" placeholder="გაიმეორეთ ახალი პაროლი" required />
+          </div>
+          <div class="modal-buttons">
+            <button type="submit" class="modal-btn submit">პაროლის შეცვლა</button>
+            <button type="button" class="modal-btn back-to-login" id="forgotBackBtn">უკან დაბრუნება</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Site Info Modal -->
+  <div class="site-info-modal" id="siteInfoModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="site-info-content" role="document" aria-labelledby="siteInfoTitle">
+      <div class="site-info-head">
+        <h3 id="siteInfoTitle">ინფორმაცია</h3>
+        <div class="site-info-head-actions">
+          <button type="button" class="site-info-download-btn" id="siteInfoDownloadPdfBtn" hidden aria-label="დოკუმენტის ჩამოტვირთვა PDF ფორმატში">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>PDF ჩამოტვირთვა</span>
+          </button>
+          <button class="modal-close site-info-close" aria-label="დახურვა" type="button">&times;</button>
+        </div>
+      </div>
+      <div class="site-info-body" id="siteInfoBody"></div>
+    </div>
+  </div>
+
+  <div class="overlay" aria-hidden="true"></div>
+  <aside id="mobile-drawer" class="drawer" aria-label="მობილური მენიუ">
+    <button class="drawer-close" aria-label="დახურვა" type="button"></button>
+    <div class="drawer-auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
+    <nav class="drawer-nav">
+      <a href="../pages/index.html" class="drawer-home" data-page-link>მთავარი</a>
+      <a href="../pages/registry.html" class="drawer-registry" data-page-link>რეესტრი</a>
+      <a href="#" class="drawer-statements">განცხადებები</a>
+      <div class="drawer-item drawer-about">
+        <a href="#" class="drawer-about-trigger" aria-haspopup="true" aria-expanded="false">ინფორმაცია</a>
+        <div class="drawer-about-submenu drawer-submenu" role="menu" hidden>
+          <!-- ფიქსირებული პუნქტები -->
+          <a href="../pages/documents.html" class="drawer-submenu-item drawer-documents" data-page-link>დოკუმენტები</a>
+          <button type="button" class="drawer-submenu-item guide">გზამკვლევი</button>
+        </div>
+      </div>
+      <a href="../pages/my.html" class="drawer-profile" data-page-link>ჩემი გვერდი</a>
+    </nav>
+    <button class="drawer-login" data-auth-btn>ავტორიზაცია</button>
+  </aside>
+
+  <div class="nav-bar">
+    <div class="logo">
+      <img src="../assets/svg/logo.svg?v=20261016-1" alt="GIPC" />
+    </div>
+    <div class="auth-banner">გთხოვთ შეხვიდეთ სისტემაში</div>
+    <nav class="nav">
+      <a href="../pages/index.html" class="nav-home" data-page-link>მთავარი</a>
+      <a href="../pages/registry.html" class="nav-registry" data-page-link>რეესტრი</a>
+      <a href="#" class="nav-statements">განცხადებები</a>
+      <div class="nav-item nav-about">
+        <a href="#" class="about-trigger" aria-haspopup="true" aria-expanded="false">ინფორმაცია</a>
+        <div class="dropdown about-dropdown" role="menu" aria-hidden="true">
+          <!-- ფიქსირებული პუნქტები -->
+          <a href="../pages/documents.html" class="dropdown-item nav-documents" data-page-link>დოკუმენტები</a>
+          <button type="button" class="dropdown-item guide">გზამკვლევი</button>
+        </div>
+      </div>
+      <a href="../pages/my.html" class="nav-profile" data-page-link>ჩემი გვერდი</a>
+    </nav>
+    <button class="login-btn" data-auth-btn>შესვლა</button>
+    <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </div>
+
+  <!-- Central Certificate Appointment Booking Button (Hanging ~1/4 below Header) -->
+  <div class="cert-booking-header-wrap" id="certBookingHeaderWrap" hidden>
+    <button type="button" class="cert-booking-header-btn is-pulsing" id="certBookingHeaderBtn">
+      <span class="cert-booking-header-dot" aria-hidden="true"></span>
+      <span class="cert-booking-header-text" id="certBookingHeaderText">სერტიფიკატის აღების დაჯავშნა</span>
+    </button>
+  </div>
+
+  <!-- Statements Modal -->
+  <div class="results-overlay" id="userStatementsOverlay" aria-hidden="true">
+    <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
+      <div class="results-modal-head">
+        <div class="results-modal-titles">
+          <h2 id="userStatementsTitle">განცხადებები</h2>
+          <div class="results-modal-meta">
+            <span class="meta-item" id="userStatementsMeta"></span>
+          </div>
+        </div>
+        <div class="results-modal-actions">
+          <button type="button" class="modal-close" id="userStatementsClose" aria-label="დახურვა">×</button>
+        </div>
+      </div>
+      <div class="results-modal-body">
+        <div class="statement-tabs" role="tablist" aria-label="განაცხადის ტიპი">
+          <button type="button" class="statement-tab is-active" id="statementTabExam" role="tab" aria-selected="true" aria-controls="examApplicationForm" data-statement-tab="exam">
+            გამოცდაზე დაშვების განაცხადი
+          </button>
+          <button type="button" class="statement-tab" id="statementTabOther" role="tab" aria-selected="false" aria-controls="userStatementForm" data-statement-tab="other">
+            სხვა განაცხადი
+          </button>
+        </div>
+
+        <!-- Tab 1: Exam Admission Application Form (Default Active) -->
+        <form id="examApplicationForm" class="statement-compose statement-exam-compose" role="tabpanel" aria-labelledby="statementTabExam">
+          <div class="exam-app-header-banner">
+            <div class="exam-app-header-title">სერტიფიცირების განაცხადი</div>
+            <p class="exam-app-header-sub">შეავსეთ ქვემოთ მოცემული ველები სასერტიფიკაციო გამოცდაზე დაშვებისთვის.</p>
+          </div>
+
+          <!-- Section 1: Category -->
+          <div class="statement-message-field exam-app-section">
+            <div class="statement-field-heading">
+              <span class="statement-field-label">1. მოთხოვნილი სერტიფიკატის კატეგორია</span>
+              <span class="statement-required-badge">სავალდებულო</span>
+            </div>
+            <p class="exam-app-lead">ვითხოვ სასერტიფიკაციო გამოცდაზე დაშვებას და ქვემოთ მონიშნული კატეგორიის სერტიფიკატის გაცემას:</p>
+            <div class="exam-category-list" role="group" aria-label="მოთხოვნილი სერტიფიკატის კატეგორია">
+              <label class="exam-category-option">
+                <input type="checkbox" name="exam_category" value="1) კატეგორია A — შენობა-ნაგებობის არქიტექტორი" />
+                <span class="exam-category-text"><strong>1) კატეგორია A</strong> — შენობა-ნაგებობის არქიტექტორი</span>
+              </label>
+              <label class="exam-category-option">
+                <input type="checkbox" name="exam_category" value="2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
+                <span class="exam-category-text"><strong>2) კატეგორია C ან A</strong> (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
+              </label>
+              <label class="exam-category-option">
+                <input type="checkbox" name="exam_category" value="3) კატეგორია B ან A (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
+                <span class="exam-category-text"><strong>3) კატეგორია B ან A</strong> (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
+              </label>
+              <label class="exam-category-option">
+                <input type="checkbox" name="exam_category" value="4) კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი" />
+                <span class="exam-category-text"><strong>4) კატეგორია B</strong> — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი</span>
+              </label>
+              <label class="exam-category-option">
+                <input type="checkbox" name="exam_category" value="5) კატეგორია C — არქიტექტურული პროექტის ექსპერტი" />
+                <span class="exam-category-text"><strong>5) კატეგორია C</strong> — არქიტექტურული პროექტის ექსპერტი</span>
+              </label>
+            </div>
+            <div class="exam-app-warning" role="note">
+              <strong>გაითვალისწინეთ:</strong> თუ წარმოდგენილი დოკუმენტებით (განათლებითა და სამუშაო გამოცდილებით) ვერ დააკმაყოფილებთ მოთხოვნილ კატეგორიას, განაცხადზე მიიღებთ უარს.
+            </div>
+          </div>
+
+          <!-- Section 2: Attached Documents (3 Mandatory Upload Slots) -->
+          <div class="statement-file exam-app-section">
+            <div class="statement-field-heading">
+              <span class="statement-field-label">2. თანდართული დოკუმენტები</span>
+              <span class="statement-required-badge">სავალდებულო (სამივე ველი)</span>
+            </div>
+            <ul class="exam-doc-requirements">
+              <li><strong>პირადობის დამადასტურებელი დოკუმენტის ასლი</strong> (პირადობის მოწმობა ან პასპორტი);</li>
+              <li><strong>უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი</strong> <span class="exam-doc-req-note">(A და B კატეგორიისთვის — არანაკლებ ბაკალავრის ან მასთან გათანაბრებული აკადემიური ხარისხი; C კატეგორიისთვის — მაგისტრის ან მასთან გათანაბრებული აკადემიური ხარისხი; უმაღლესი განათლების დამადასტურებელი დოკუმენტის გარეშე, საგამონაკლისო წესით სერტიფიცირების მოთხოვნის შემთხვევაში — წარმოადგინეთ განმარტებითი ბარათი)</span>;</li>
+              <li><strong>სპეციალობით მუშაობის / საექსპერტო პრაქტიკის დამადასტურებელი დოკუმენტაცია</strong> <span class="exam-doc-req-note">(A და B კატეგორიისთვის — არანაკლებ 3 წელი, მათ შორის ბოლო 2 წლის უწყვეტი პრაქტიკა; C კატეგორიისთვის — არანაკლებ 10 წელი, მათ შორის ბოლო 2 წლის უწყვეტი საექსპერტო პრაქტიკა)</span>.</li>
+            </ul>
+
+            <div class="exam-upload-slots-grid">
+              <!-- Slot 1: ID Document Copy -->
+              <div class="exam-upload-slot" data-exam-slot="id">
+                <div class="exam-upload-slot-head">
+                  <span class="exam-upload-slot-title">2.1. პირადობის დამადასტურებელი დოკუმენტის ასლი</span>
+                  <span class="statement-required-badge">სავალდებულო</span>
+                </div>
+                <div class="statement-file-controls" id="examIdFileControls">
+                  <button type="button" class="statement-file-choose" id="examIdFilesChoose" aria-describedby="examFilesHint">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+                    ფაილ(ებ)ის არჩევა
+                  </button>
+                  <input type="file" id="examIdFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="პირადობის დამადასტურებელი დოკუმენტის ასლი" aria-describedby="examFilesHint" tabindex="-1" />
+                  <input type="text" class="statement-file-display" id="examIdFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="პირადობის დამადასტურებელი დოკუმენტის არჩეული ფაილები" readonly />
+                </div>
+                <div class="exam-uploaded-files-wrap" id="examIdFilesListWrap" hidden>
+                  <div class="exam-uploaded-files-head">
+                    <span class="exam-uploaded-files-title">ატვირთული ფაილ(ებ)ი:</span>
+                  </div>
+                  <ul class="exam-uploaded-files-list" id="examIdFilesList"></ul>
+                </div>
+              </div>
+
+              <!-- Slot 2: Diploma Copy / Explanatory Note -->
+              <div class="exam-upload-slot" data-exam-slot="diploma">
+                <div class="exam-upload-slot-head">
+                  <div class="exam-upload-slot-title-group">
+                    <span class="exam-upload-slot-title">2.2. უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი</span>
+                    <span class="exam-upload-slot-side-note">უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) გარეშე, საგამონაკლისო წესით სერტიფიცირების მოთხოვნის შემთხვევაში, გთხოვთ ატვირთოთ განმარტებითი ბარათი</span>
+                  </div>
+                  <span class="statement-required-badge">სავალდებულო</span>
+                </div>
+                <div class="statement-file-controls" id="examDiplomaFileControls">
+                  <button type="button" class="statement-file-choose" id="examDiplomaFilesChoose" aria-describedby="examFilesHint">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+                    ფაილ(ებ)ის არჩევა
+                  </button>
+                  <input type="file" id="examDiplomaFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი ან განმარტებითი ბარათი" aria-describedby="examFilesHint" tabindex="-1" />
+                  <input type="text" class="statement-file-display" id="examDiplomaFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="დიპლომის ან განმარტებითი ბარათის არჩეული ფაილები" readonly />
+                </div>
+                <div class="exam-uploaded-files-wrap" id="examDiplomaFilesListWrap" hidden>
+                  <div class="exam-uploaded-files-head">
+                    <span class="exam-uploaded-files-title">ატვირთული ფაილ(ებ)ი:</span>
+                  </div>
+                  <ul class="exam-uploaded-files-list" id="examDiplomaFilesList"></ul>
+                </div>
+              </div>
+
+              <!-- Slot 3: Experience Documents -->
+              <div class="exam-upload-slot" data-exam-slot="experience">
+                <div class="exam-upload-slot-head">
+                  <span class="exam-upload-slot-title">2.3. პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია</span>
+                  <span class="statement-required-badge">სავალდებულო</span>
+                </div>
+                <div class="statement-file-controls" id="examExperienceFileControls">
+                  <button type="button" class="statement-file-choose" id="examExperienceFilesChoose" aria-describedby="examFilesHint">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+                    ფაილ(ებ)ის არჩევა
+                  </button>
+                  <input type="file" id="examExperienceFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია" aria-describedby="examFilesHint" tabindex="-1" />
+                  <input type="text" class="statement-file-display" id="examExperienceFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="გამოცდილების არჩეული ფაილები" readonly />
+                </div>
+                <div class="exam-uploaded-files-wrap" id="examExperienceFilesListWrap" hidden>
+                  <div class="exam-uploaded-files-head">
+                    <span class="exam-uploaded-files-title">ატვირთული ფაილ(ებ)ი:</span>
+                  </div>
+                  <ul class="exam-uploaded-files-list" id="examExperienceFilesList"></ul>
+                </div>
+              </div>
+            </div>
+
+            <p id="examFilesHint" class="statement-hint">თითოეულ ველში შეგიძლიათ აირჩიოთ ერთი ან რამდენიმე ფაილი (PDF, JPG, JPEG, PNG, DOC, DOCX, ZIP, RAR · ჯამში მაქსიმუმ 100 მბ). განაცხადის გასაგზავნად სამივე ველში დოკუმენტის ატვირთვა სავალდებულოა.</p>
+          </div>
+
+          <!-- Section 3: Additional Info -->
+          <div class="statement-message-field exam-app-section">
+            <div class="statement-field-heading">
+              <label for="examAdditionalInfo" class="statement-field-label">3. დამატებითი ინფორმაცია / სპეციალური საჭიროება გამოცდაზე (არსებობისას)</label>
+              <span class="statement-optional">არასავალდებულო</span>
+            </div>
+            <textarea id="examAdditionalInfo" name="additional_info" placeholder="მიუთითეთ დამატებითი ინფორმაცია ან სპეციალური საჭიროება გამოცდაზე (არსებობისას)…" rows="3"></textarea>
+          </div>
+
+          <!-- Section 4: Applicant Confirmation -->
+          <div class="statement-message-field exam-app-section">
+            <div class="statement-field-heading">
+              <span class="statement-field-label">4. განმცხადებლის დადასტურება</span>
+              <span class="statement-required-badge">სავალდებულო</span>
+            </div>
+            <label class="exam-confirm-option" id="examConfirmLabel">
+              <input type="checkbox" id="examConfirmCheckbox" name="exam_confirm" />
+              <span class="exam-category-text">ვადასტურებ, რომ გავეცანი საიტზე gipc.org.ge გამოქვეყნებულ სერტიფიცირების პირობებს, წარმოდგენილი დოკუმენტები უტყუარია, ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები, წარვადგინო შეფასებისთვის საჭირო ნებისმიერი ინფორმაცია და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.</span>
+            </label>
+            <div class="exam-app-warning exam-app-deadline-warning" role="note">
+              <strong>განაცხადის განხილვის ვადა:</strong> განაცხადი განიხილება წარდგენიდან არაუმეტეს 10 სამუშაო დღის ვადაში, რის შესახებაც გეცნობებათ ელექტრონულად.
+            </div>
+            <div class="exam-applicant-signature" id="examApplicantSignature">
+              განმცხადებელი: — (დადასტურებულია ელექტრონულად).
+            </div>
+          </div>
+
+          <div class="compose-actions">
+            <p class="compose-archive-note">გაგზავნილი განაცხადი მიიღებს უნიკალურ ნომერს და შეინახება ისტორიაში.</p>
+            <button type="submit" class="submit" id="examApplicationSubmit">განაცხადის გაგზავნა</button>
+          </div>
+        </form>
+
+        <!-- Tab 2: Other Statement Form -->
+        <form id="userStatementForm" class="statement-compose" role="tabpanel" aria-labelledby="statementTabOther" hidden>
+          <div class="statement-message-field">
+            <div class="statement-field-heading">
+              <label for="userStatementMessage" class="statement-field-label">სხვა განაცხადი / შეტყობინება</label>
+              <span class="statement-required-badge">სავალდებულო</span>
+            </div>
+            <p id="statementMessageHint" class="statement-hint">მოგვწერეთ თქვენი საკითხის შესახებ.</p>
+            <textarea id="userStatementMessage" name="message" placeholder="დაწერეთ განცხადების ტექსტი…" rows="5" aria-describedby="statementMessageHint" required></textarea>
+          </div>
+          <div class="statement-file">
+            <div class="statement-field-heading">
+              <span class="statement-field-label">ფაილის მიმაგრება</span>
+              <span class="statement-optional">არასავალდებულო</span>
+            </div>
+            <div class="statement-file-controls" id="statementFileControls">
+              <button type="button" class="statement-file-choose" id="statementFileChoose" aria-describedby="statementFileHint">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+                ფაილის არჩევა
+              </button>
+              <input type="file" name="attachment" id="statementFileInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.doc,.docx" aria-label="განცხადებაზე მისამაგრებელი ფაილი" aria-describedby="statementFileHint" tabindex="-1" />
+              <input type="text" class="statement-file-display" id="statementFileDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="არჩეული ფაილის სახელი" readonly />
+            </div>
+            <p id="statementFileHint" class="statement-hint">ZIP, RAR, PDF, JPG, JPEG, DOC, DOCX · მაქსიმუმ 100 მბ</p>
+          </div>
+          <div class="statement-app-form" hidden style="display:none;">
+            <div class="statement-app-form-info">
+              <span class="statement-app-form-label">განაცხადის ფორმა</span>
+              <p class="statement-hint">საჭიროების შემთხვევაში ჩამოტვირთეთ და შეავსეთ.</p>
+            </div>
+            <button type="button" class="statement-file-choose statement-app-form-download" id="appFormDownloadBtn" aria-label="განაცხადის ფორმის ჩამოტვირთვა" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              ჩამოტვირთვა
+            </button>
+          </div>
+          <div class="compose-actions">
+            <p class="statement-hint">გაგზავნილი განცხადება შეინახება ისტორიაში.</p>
+            <button type="submit" class="submit">განცხადების გაგზავნა</button>
+          </div>
+        </form>
+        <section class="statement-history" aria-labelledby="statementHistoryTitle">
+          <div class="statement-history-head">
+            <h3 id="statementHistoryTitle">გაგზავნილი განცხადებები</h3>
+            <span class="statement-history-count" id="userStatementsCount" aria-live="polite">0</span>
+          </div>
+          <div id="userStatementsList" class="statements-list" role="list"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Certificate Appointment Booking Modal -->
+  <div class="results-overlay cert-booking-overlay" id="certBookingOverlay" aria-hidden="true">
+    <div class="results-modal cert-booking-modal" role="dialog" aria-modal="true" aria-labelledby="certBookingModalTitle">
+      <div class="results-modal-head">
+        <div class="results-modal-titles">
+          <h2 id="certBookingModalTitle">სერტიფიკატის აღების დაჯავშნა</h2>
+          <div class="results-modal-meta">
+            <span class="meta-item" id="certBookingModalMeta"></span>
+            <span class="meta-item cert-booking-window-pill" id="certBookingWindowPill" hidden></span>
+          </div>
+        </div>
+        <div class="results-modal-actions">
+          <button type="button" class="modal-close" id="certBookingModalClose" aria-label="დახურვა">×</button>
+        </div>
+      </div>
+      <div class="results-modal-body cert-booking-modal-body">
+        <!-- Active Booking Banner -->
+        <div class="cert-booking-active-banner" id="certBookingActiveBanner" hidden>
+          <div class="cert-booking-active-info">
+            <div class="cert-booking-active-badge">აქტიური ჯავშანი</div>
+            <div class="cert-booking-active-datetime" id="certBookingActiveDateTime">—</div>
+            <div class="cert-booking-active-address">მისამართი: ქ. თბილისი, მირიან მეფის ქ. №98, მე-2 სართული, საოფისე ფართი №6</div>
+          </div>
+          <div class="cert-booking-active-actions">
+            <button type="button" class="cert-booking-btn-secondary" id="certBookingChangeTrigger">დროის შეცვლა</button>
+            <button type="button" class="cert-booking-btn-danger" id="certBookingCancelTrigger">ჯავშნის გაუქმება</button>
+          </div>
+        </div>
+
+        <!-- Ineligible / Info Notice -->
+        <div class="cert-booking-notice" id="certBookingNotice" hidden></div>
+
+        <!-- Calendar & Slot Picker Section -->
+        <div class="cert-booking-picker-wrap" id="certBookingPickerWrap" hidden>
+          <div class="cert-booking-step-box">
+            <div class="cert-booking-step-head">
+              <div class="cert-booking-step-title">1. აირჩიეთ შეხვედრის დღე</div>
+              <div class="cert-booking-month-nav">
+                <button type="button" class="cert-cal-nav-btn" id="certCalPrevMonth" aria-label="წინა თვე">‹</button>
+                <span class="cert-cal-month-label" id="certCalMonthLabel">—</span>
+                <button type="button" class="cert-cal-nav-btn" id="certCalNextMonth" aria-label="შემდეგი თვე">›</button>
+              </div>
+            </div>
+            <div class="cert-cal-weekdays">
+              <span>ორშ</span><span>სამ</span><span>ოთხ</span><span>ხუთ</span><span>პარ</span><span class="is-weekend">შაბ</span><span class="is-weekend">კვი</span>
+            </div>
+            <div class="cert-cal-grid" id="certCalGrid"></div>
+            <div class="cert-cal-legend">
+              <span class="legend-item"><i class="dot is-available"></i> ხელმისაწვდომი დღე</span>
+              <span class="legend-item"><i class="dot is-selected"></i> არჩეული დღე</span>
+              <span class="legend-item"><i class="dot is-booked"></i> თქვენი ჯავშანი</span>
+              <span class="legend-item"><i class="dot is-disabled"></i> მიუწვდომელი / შაბათ-კვირა</span>
+            </div>
+          </div>
+
+          <div class="cert-booking-step-box" id="certSlotStepBox">
+            <div class="cert-booking-step-head">
+              <div class="cert-booking-step-title" id="certSlotStepTitle">2. აირჩიეთ საათი (11:00 – 16:00, 20-წუთიანი შუალედით)</div>
+              <span class="cert-slot-selected-date" id="certSlotSelectedDateLabel">აირჩიეთ დღე კალენდარში</span>
+            </div>
+            <div class="cert-slots-grid" id="certSlotsGrid"></div>
+            <div class="cert-booking-submit-row">
+              <div class="cert-booking-selection-preview" id="certBookingSelectionPreview">დღე და საათი არ არის არჩეული</div>
+              <button type="button" class="cert-booking-btn-primary" id="certBookingSubmitBtn" disabled>ჯავშნის დადასტურება</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Booking History Section -->
+        <section class="cert-booking-history" id="certBookingHistorySection" aria-labelledby="certBookingHistoryTitle">
+          <div class="statement-history-head">
+            <h3 id="certBookingHistoryTitle">ჯავშნების ისტორია</h3>
+            <span class="statement-history-count" id="certBookingHistoryCount">0</span>
+          </div>
+          <div class="cert-booking-history-list" id="certBookingHistoryList" role="list"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</header>
+

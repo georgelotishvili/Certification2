@@ -33,10 +33,16 @@ main.documents-page {
   flex: 1 0 auto;
   width: 84%;
   max-width: 1160px;
-  margin: 70px auto 0;
-  padding: 96px 0 56px;
+  margin: max(70px, 3.65vw) auto 0;
+  padding: max(96px, 5.2vw) 0 56px;
   background: none;
   aspect-ratio: auto;
+}
+
+@media (min-width: 1921px) {
+  main.documents-page {
+    max-width: min(1680px, 60.4vw);
+  }
 }
 
 .documents-footer {

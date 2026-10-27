@@ -15,7 +15,16 @@ from sqlalchemy.orm import Session, selectinload
 from ..config import get_settings
 from ..database import get_db
 from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
-from ..models import ExamSchedule, PlanningLetter, MultiApartmentEvaluation, MultiFunctionalEvaluation, format_statement_doc_number
+from ..models import (
+    CertBooking,
+    ExamSchedule,
+    PlanningLetter,
+    MultiApartmentEvaluation,
+    MultiFunctionalEvaluation,
+    build_statement_attachments_list,
+    format_statement_doc_number,
+    iter_statement_attachment_paths,
+)
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -45,6 +54,8 @@ from ..schemas import (
     StatementSeenRequest,
     StatementAnsweredRequest,
     StatementAnsweredResponse,
+    TransitionalDeadlineOut,
+    TransitionalDeadlineUpdateRequest,
 )
 from ..services.exam_lifecycle import auto_close_expired_sessions, auto_close_session_if_expired
 from ..services.offline_grading import guard_pending_session_delete, lock_exam_content
@@ -61,9 +72,18 @@ from ..services.media_storage import resolve_storage_path, ensure_media_root, de
 from ..services.expert_certificate_cleanup import delete_expert_certificate_files
 from ..services.user_codes import UserCodeConflict, move_user_code, remember_user_code
 from ..services.candidate_status import (
+    NON_PASS_CERT_PERIODS,
+    _cancel_active_bookings_for_user,
     get_user_latest_requested_category,
     normalize_cert_category,
+    reconcile_user_candidate_status_after_delete,
     sync_all_user_candidates,
+    compute_effective_certificate_status,
+    get_transitional_deadline_date,
+    is_transitional_eligible_level,
+    set_transitional_deadline_date,
+    sync_transitional_certificates,
+    today_in_tbilisi,
 )
 from ..services.bounded_upload import (
     DEFAULT_UPLOAD_MAX_BYTES,
@@ -932,17 +952,28 @@ def delete_result(
 @router.get("/statements/{statement_id}/file")
 def admin_download_statement_file(
     statement_id: int,
+    slot: int = Query(1, ge=1, le=3),
     authorization: str | None = Header(None, alias="Authorization"),
     actor: str | None = Query(None, alias="actor"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, authorization)
     st = db.get(Statement, statement_id)
-    if not st or not st.attachment_path:
+    if not st:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if slot == 2:
+        rel_path, orig_filename, mime_type = st.attachment2_path, st.attachment2_filename, st.attachment2_mime_type
+    elif slot == 3:
+        rel_path, orig_filename, mime_type = st.attachment3_path, st.attachment3_filename, st.attachment3_mime_type
+    else:
+        rel_path, orig_filename, mime_type = st.attachment_path, st.attachment_filename, st.attachment_mime_type
+
+    if not rel_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     try:
-        path = resolve_storage_path(st.attachment_path)
+        path = resolve_storage_path(rel_path)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     if not path.exists():
@@ -950,8 +981,8 @@ def admin_download_statement_file(
 
     return FileResponse(
         path,
-        media_type=st.attachment_mime_type or "application/octet-stream",
-        filename=st.attachment_filename or path.name,
+        media_type=mime_type or "application/octet-stream",
+        filename=orig_filename or path.name,
     )
 
 
@@ -1223,7 +1254,11 @@ def _compute_exam_outcomes_for_users(db: Session, users: list[User]) -> dict[int
         .where(
             PlanningLetter.user_id.in_(user_ids),
             or_(
-                PlanningLetter.kind == "certificate",
+                (PlanningLetter.kind == "certificate")
+                & or_(
+                    PlanningLetter.period.is_(None),
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
+                ),
                 PlanningLetter.period.in_(("exam_fail", "fail_send_only")),
             ),
         )
@@ -1333,7 +1368,11 @@ def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
         ).where(
             PlanningLetter.user_id.in_(list(existing_uids)),
             or_(
-                PlanningLetter.kind == "certificate",
+                (PlanningLetter.kind == "certificate")
+                & or_(
+                    PlanningLetter.period.is_(None),
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
+                ),
                 PlanningLetter.period.in_(("exam_fail", "fail_send_only")),
             ),
         )
@@ -1443,7 +1482,11 @@ def admin_user_exam_outcome(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     outcomes = _compute_exam_outcomes_for_users(db, [user])
-    return outcomes.get(user.id) or _build_exam_outcome_payload(None, None, None, None)
+    payload = dict(outcomes.get(user.id) or _build_exam_outcome_payload(None, None, None, None))
+    payload["candidate_status"] = user.candidate_status
+    payload["candidate_category"] = user.candidate_category
+    payload["requested_category"] = get_user_latest_requested_category(db, user.id)
+    return payload
 
 
 @router.get("/users", response_model=None)
@@ -1479,12 +1522,30 @@ def admin_users(
     sent_fail_letter: bool = False,
     sent_custom_letter: bool = False,
     sent_letter_date: date | None = None,
+    filter_date: date | None = None,
 ):
     _require_admin(db, authorization)
     settings = get_settings()
 
     exam_histories = _compute_all_exam_histories(db)
     requested_categories = sync_all_user_candidates(db, exam_histories)
+    transitional_deadline = sync_transitional_certificates(db)
+
+    f_day_start: datetime | None = None
+    f_day_end: datetime | None = None
+    f_date_str: str | None = None
+    if filter_date is not None:
+        try:
+            f_day_start = datetime.combine(
+                filter_date, time.min, tzinfo=timezone(timedelta(hours=4))
+            ).astimezone(timezone.utc).replace(tzinfo=None)
+            f_day_end = f_day_start + timedelta(days=1)
+        except OverflowError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="filter_date is outside the supported range",
+            )
+        f_date_str = filter_date.isoformat()
 
     stmt = select(User)
     if search:
@@ -1510,21 +1571,51 @@ def admin_users(
         "architect": ("architect", "architect_expert"),
         "expert": ("expert",),
         "municipal": ("municipal",),
-        "certified": ("architect", "expert", "municipal"),
+        "certified": ("architect", "architect_expert", "expert", "municipal"),
     }
+    today_tb_str = today_in_tbilisi().isoformat()
     if qualification:
         if qualification == "suspended_expired":
-            stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
-                Certificate.status.in_(("suspended", "expired"))
-            )))
+            cert_subq = select(Certificate.user_id).where(
+                or_(
+                    Certificate.status.in_(("suspended", "expired")),
+                    (Certificate.valid_until.is_not(None)) & (func.date(Certificate.valid_until) < today_tb_str),
+                )
+            )
+            if filter_date is not None and f_day_start is not None and f_day_end is not None:
+                cert_subq = cert_subq.where(
+                    or_(
+                        func.date(Certificate.issue_date) == f_date_str,
+                        func.date(Certificate.valid_until) == f_date_str,
+                        (Certificate.issue_date >= f_day_start) & (Certificate.issue_date < f_day_end),
+                        (Certificate.valid_until >= f_day_start) & (Certificate.valid_until < f_day_end),
+                    )
+                )
+            stmt = stmt.where(User.id.in_(cert_subq))
         elif qualification == "exam_candidate":
             stmt = stmt.where(User.candidate_status == "exam_candidate")
         elif qualification == "cert_candidate":
             stmt = stmt.where(User.candidate_status == "cert_candidate")
         elif qualification in qualification_levels:
-            stmt = stmt.where(User.id.in_(select(Certificate.user_id).where(
-                Certificate.level.in_(qualification_levels[qualification])
-            )))
+            cert_subq = select(Certificate.user_id).where(
+                Certificate.level.in_(qualification_levels[qualification]),
+                or_(
+                    Certificate.status.is_(None),
+                    ~Certificate.status.in_(("suspended", "expired")),
+                ),
+                or_(
+                    Certificate.valid_until.is_(None),
+                    func.date(Certificate.valid_until) >= today_tb_str,
+                ),
+            )
+            if filter_date is not None and f_day_start is not None and f_day_end is not None:
+                cert_subq = cert_subq.where(
+                    or_(
+                        func.date(Certificate.issue_date) == f_date_str,
+                        (Certificate.issue_date >= f_day_start) & (Certificate.issue_date < f_day_end),
+                    )
+                )
+            stmt = stmt.where(User.id.in_(cert_subq))
         else:
             raise HTTPException(status_code=422, detail="Unknown qualification filter")
 
@@ -1536,27 +1627,106 @@ def admin_users(
             cand_statuses.append("cert_candidate")
         stmt = stmt.where(User.candidate_status.in_(cand_statuses))
 
+    letter_ts_expr = func.coalesce(PlanningLetter.sent_at, PlanningLetter.created_at)
+
+    # Context-aware date filtering for Exam Candidates / Certificate Candidates
+    if filter_date is not None and f_day_start is not None and f_day_end is not None:
+        if (qualification == "exam_candidate" or exam_candidate) and not (exam_morning or exam_evening):
+            stmt = stmt.where(
+                or_(
+                    User.id.in_(select(ExamSchedule.user_id).where(ExamSchedule.exam_date == filter_date)),
+                    User.id.in_(
+                        select(PlanningLetter.user_id).where(
+                            PlanningLetter.kind == "exam",
+                            or_(
+                                PlanningLetter.event_date == filter_date,
+                                (letter_ts_expr >= f_day_start) & (letter_ts_expr < f_day_end),
+                            ),
+                        )
+                    ),
+                    User.id.in_(
+                        select(Statement.user_id).where(
+                            Statement.created_at >= f_day_start,
+                            Statement.created_at < f_day_end,
+                        )
+                    ),
+                )
+            )
+        if qualification == "cert_candidate" or cert_candidate:
+            cert_cand_sitting_uids = [
+                uid
+                for uid, h in exam_histories.items()
+                if any(
+                    filter_date in (sitting.get("dates") or ())
+                    and sitting.get("outcome") in ("pass_bc", "pass_a")
+                    for sitting in (h.get("sittings") or [])
+                )
+            ]
+            cert_cand_conds = [
+                User.id.in_(
+                    select(CertBooking.user_id).where(
+                        CertBooking.status == "active",
+                        CertBooking.booking_date == f_date_str,
+                    )
+                ),
+                User.id.in_(
+                    select(PlanningLetter.user_id).where(
+                        PlanningLetter.kind == "certificate",
+                        or_(
+                            PlanningLetter.event_date == filter_date,
+                            (letter_ts_expr >= f_day_start) & (letter_ts_expr < f_day_end),
+                        ),
+                    )
+                ),
+            ]
+            if cert_cand_sitting_uids:
+                cert_cand_conds.append(User.id.in_(cert_cand_sitting_uids))
+            stmt = stmt.where(or_(*cert_cand_conds))
+
+    stmt_action_cond = None
     if statement_date is None and (new_statements or pending_statements or all_statements):
         if all_statements:
-            has_any_stmt = select(Statement.id).where(Statement.user_id == User.id).exists()
-            stmt = stmt.where(has_any_stmt)
+            stmt_q = select(Statement.id).where(Statement.user_id == User.id)
+            if filter_date is not None and f_day_start is not None and f_day_end is not None:
+                stmt_q = stmt_q.where(
+                    Statement.created_at >= f_day_start,
+                    Statement.created_at < f_day_end,
+                )
+            stmt_action_cond = stmt_q.exists()
         else:
-            has_new = select(Statement.id).where(
+            new_q = select(Statement.id).where(
                 Statement.user_id == User.id, Statement.seen_at.is_(None)
-            ).exists()
-            has_pending = select(Statement.id).where(
-                Statement.user_id == User.id, Statement.seen_at.is_not(None),
+            )
+            pending_q = select(Statement.id).where(
+                Statement.user_id == User.id,
+                Statement.seen_at.is_not(None),
                 Statement.answered_at.is_(None),
-            ).exists()
+            )
+            if filter_date is not None and f_day_start is not None and f_day_end is not None:
+                new_q = new_q.where(
+                    Statement.created_at >= f_day_start,
+                    Statement.created_at < f_day_end,
+                )
+                pending_q = pending_q.where(
+                    Statement.created_at >= f_day_start,
+                    Statement.created_at < f_day_end,
+                )
+            has_new = new_q.exists()
+            has_pending = pending_q.exists()
             colors = []
             if new_statements:
                 colors.append(has_new)
             if pending_statements:
-                colors.append(~has_new & has_pending)
-            stmt = stmt.where(or_(*colors))
+                colors.append(has_pending if filter_date is not None else (~has_new & has_pending))
+            stmt_action_cond = or_(*colors)
 
-    if exam_date is not None or exam_morning or exam_evening or certificate_handover:
-        target_schedule_date = exam_date if exam_date is not None else _today_in_tbilisi()
+    effective_exam_date = exam_date
+    if effective_exam_date is None and filter_date is not None and (exam_morning or exam_evening or certificate_handover):
+        effective_exam_date = filter_date
+
+    if effective_exam_date is not None or exam_morning or exam_evening or certificate_handover:
+        target_schedule_date = effective_exam_date if effective_exam_date is not None else _today_in_tbilisi()
+        target_date_str = target_schedule_date.isoformat()
         schedule_conditions = []
         if exam_morning or exam_evening or not certificate_handover:
             schedule_query = select(ExamSchedule.user_id).where(
@@ -1569,15 +1739,24 @@ def admin_users(
                 schedule_query = schedule_query.where(ExamSchedule.period == "evening")
             schedule_conditions.append(User.id.in_(schedule_query))
         if certificate_handover:
-            cert_handover_query = select(PlanningLetter.user_id).where(
-                PlanningLetter.kind == "certificate",
-                PlanningLetter.event_date == target_schedule_date,
-                or_(
-                    PlanningLetter.period.is_(None),
+            if effective_exam_date is not None:
+                booking_query = select(CertBooking.user_id).where(
+                    CertBooking.status == "active",
+                    CertBooking.booking_date == target_date_str,
+                )
+                cert_handover_query = select(PlanningLetter.user_id).where(
+                    PlanningLetter.kind == "certificate",
+                    PlanningLetter.event_date == target_schedule_date,
                     PlanningLetter.period.in_(("morning", "evening", "cert_am_send", "cert_pm_send")),
-                ),
-            )
-            schedule_conditions.append(User.id.in_(cert_handover_query))
+                )
+                schedule_conditions.append(User.id.in_(booking_query))
+                schedule_conditions.append(User.id.in_(cert_handover_query))
+            else:
+                booking_query = select(CertBooking.user_id).where(
+                    CertBooking.status == "active",
+                    CertBooking.booking_date >= target_date_str,
+                )
+                schedule_conditions.append(User.id.in_(booking_query))
         stmt = stmt.where(or_(*schedule_conditions))
 
     if statement_date is not None:
@@ -1631,7 +1810,7 @@ def admin_users(
                 (PlanningLetter.kind == "certificate")
                 & or_(
                     PlanningLetter.period.is_(None),
-                    PlanningLetter.period.in_(("morning", "evening", "cert_am_send", "cert_pm_send")),
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
                 )
             )
         if sent_fail_letter:
@@ -1679,10 +1858,16 @@ def admin_users(
         and h["latest_outcome"].get("outcome") == "fail"
     )
 
+    effective_exam_result_date = exam_result_date
+    if effective_exam_result_date is None and filter_date is not None and (
+        exam_passed or exam_failed or pending_pass_letter or pending_fail_letter
+    ):
+        effective_exam_result_date = filter_date
+
     if (
         exam_passed
         or exam_failed
-        or exam_result_date is not None
+        or effective_exam_result_date is not None
         or pending_pass_letter
         or pending_fail_letter
     ):
@@ -1698,7 +1883,7 @@ def admin_users(
             if has_outcome_filter:
                 outcome_ok = False
                 for sitting in sittings:
-                    if exam_result_date is not None and exam_result_date not in sitting["dates"]:
+                    if effective_exam_result_date is not None and effective_exam_result_date not in sitting["dates"]:
                         continue
                     if exam_passed and sitting["outcome"] in ("pass_bc", "pass_a"):
                         outcome_ok = True
@@ -1706,15 +1891,15 @@ def admin_users(
                     if exam_failed and sitting["outcome"] == "fail":
                         outcome_ok = True
                         break
-            elif exam_result_date is not None and not has_pending_filter:
-                outcome_ok = any(exam_result_date in sitting["dates"] for sitting in sittings)
+            elif effective_exam_result_date is not None and not has_pending_filter:
+                outcome_ok = any(effective_exam_result_date in sitting["dates"] for sitting in sittings)
 
             pending_ok = True
             if has_pending_filter:
                 pending_ok = False
                 if latest.get("unacknowledged"):
                     latest_sitting = sittings[-1]
-                    date_ok = exam_result_date is None or exam_result_date in latest_sitting["dates"]
+                    date_ok = effective_exam_result_date is None or effective_exam_result_date in latest_sitting["dates"]
                     if date_ok:
                         if pending_pass_letter and latest.get("outcome") in ("pass_bc", "pass_a"):
                             pending_ok = True
@@ -1724,10 +1909,75 @@ def admin_users(
             if outcome_ok and pending_ok:
                 matching_uids.append(uid)
 
-        if matching_uids:
-            stmt = stmt.where(User.id.in_(matching_uids))
+        outcome_cond = User.id.in_(matching_uids) if matching_uids else (User.id == -1)
+        if stmt_action_cond is not None and not has_outcome_filter and exam_result_date is None:
+            stmt = stmt.where(or_(stmt_action_cond, outcome_cond))
         else:
-            stmt = stmt.where(User.id == -1)
+            if stmt_action_cond is not None:
+                stmt = stmt.where(stmt_action_cond)
+            stmt = stmt.where(outcome_cond)
+    elif stmt_action_cond is not None:
+        stmt = stmt.where(stmt_action_cond)
+
+    # Universal date fallback when no specific filter checkbox is active:
+    # show all users who had any activity on filter_date.
+    any_context_chip_active = bool(
+        qualification
+        or exam_candidate
+        or cert_candidate
+        or new_statements
+        or pending_statements
+        or all_statements
+        or exam_morning
+        or exam_evening
+        or certificate_handover
+        or exam_passed
+        or exam_failed
+        or pending_pass_letter
+        or pending_fail_letter
+        or has_sent_type_filter
+    )
+    if filter_date is not None and f_day_start is not None and f_day_end is not None and not any_context_chip_active:
+        sitting_uids_on_date = [
+            uid
+            for uid, h in exam_histories.items()
+            if any(filter_date in (s.get("dates") or ()) for s in (h.get("sittings") or []))
+        ]
+        activity_conds = [
+            (User.created_at >= f_day_start) & (User.created_at < f_day_end),
+            User.id.in_(
+                select(Statement.user_id).where(
+                    Statement.created_at >= f_day_start,
+                    Statement.created_at < f_day_end,
+                )
+            ),
+            User.id.in_(select(ExamSchedule.user_id).where(ExamSchedule.exam_date == filter_date)),
+            User.id.in_(
+                select(PlanningLetter.user_id).where(
+                    or_(
+                        PlanningLetter.event_date == filter_date,
+                        (letter_ts_expr >= f_day_start) & (letter_ts_expr < f_day_end),
+                    )
+                )
+            ),
+            User.id.in_(
+                select(CertBooking.user_id).where(
+                    CertBooking.status == "active",
+                    CertBooking.booking_date == f_date_str,
+                )
+            ),
+            User.id.in_(
+                select(Certificate.user_id).where(
+                    or_(
+                        func.date(Certificate.issue_date) == f_date_str,
+                        (Certificate.issue_date >= f_day_start) & (Certificate.issue_date < f_day_end),
+                    )
+                )
+            ),
+        ]
+        if sitting_uids_on_date:
+            activity_conds.append(User.id.in_(sitting_uids_on_date))
+        stmt = stmt.where(or_(*activity_conds))
 
     if letter_match_cond is not None and sort in ("date_desc", "date_asc"):
         sent_ts_subq = (
@@ -1745,6 +1995,11 @@ def admin_users(
             stmt_ts_query = stmt_ts_query.where(
                 Statement.created_at >= day_start,
                 Statement.created_at < day_end,
+            )
+        elif filter_date is not None and f_day_start is not None and f_day_end is not None:
+            stmt_ts_query = stmt_ts_query.where(
+                Statement.created_at >= f_day_start,
+                Statement.created_at < f_day_end,
             )
         stmt_ts_subq = stmt_ts_query.scalar_subquery()
         if sort == "date_asc":
@@ -1813,10 +2068,12 @@ def admin_users(
             cert_data = {
                 'unique_code': u.certificate.unique_code,
                 'level': u.certificate.level,
-                'status': u.certificate.status,
+                'status': compute_effective_certificate_status(u.certificate, transitional_deadline),
                 'issue_date': u.certificate.issue_date,
                 'validity_term': u.certificate.validity_term,
                 'valid_until': u.certificate.valid_until,
+                'is_transitional': bool(u.certificate.is_transitional) and is_transitional_eligible_level(u.certificate.level),
+                'transitional_deadline': transitional_deadline.isoformat(),
             }
         is_founder_user = (u.email.lower() == founder_email)
         is_admin_user = is_founder_user or bool(u.is_admin)
@@ -1913,6 +2170,7 @@ def admin_users(
                     "exam_stage_remaining_seconds", "exam_stage_permissions",
                     "has_unseen_statements", "unseen_statement_count",
                     "has_pending_statements", "pending_statement_count",
+                    "candidate_status", "candidate_category", "requested_category",
                 )}
             payload["display_revision"] = revision
             page_items.append(payload)
@@ -2003,13 +2261,16 @@ def _stage_permission_user_out(db: Session, user: User) -> UserOut:
     req_cat = get_user_latest_requested_category(db, user.id)
     cert_data = None
     if user.certificate:
+        transitional_deadline = get_transitional_deadline_date(db)
         cert_data = {
             "unique_code": user.certificate.unique_code,
             "level": user.certificate.level,
-            "status": user.certificate.status,
+            "status": compute_effective_certificate_status(user.certificate, transitional_deadline),
             "issue_date": user.certificate.issue_date,
             "validity_term": user.certificate.validity_term,
             "valid_until": user.certificate.valid_until,
+            "is_transitional": bool(user.certificate.is_transitional) and is_transitional_eligible_level(user.certificate.level),
+            "transitional_deadline": transitional_deadline.isoformat(),
         }
     return UserOut(
         id=user.id,
@@ -2063,6 +2324,9 @@ def admin_update_candidate_status(
             chosen_cat = normalize_cert_category(chosen_cat)
         user.candidate_category = chosen_cat
         user.candidate_updated_at = now
+
+    if payload.candidate_status != "cert_candidate":
+        _cancel_active_bookings_for_user(db, user.id, now)
 
     db.add(user)
     db.commit()
@@ -2247,6 +2511,19 @@ def admin_update_user(
     exam_state = exam_state_with_permissions(
         db, user, is_admin_user=is_admin_user
     )
+    cert_data = None
+    if user.certificate:
+        transitional_deadline = get_transitional_deadline_date(db)
+        cert_data = {
+            "unique_code": user.certificate.unique_code,
+            "level": user.certificate.level,
+            "status": compute_effective_certificate_status(user.certificate, transitional_deadline),
+            "issue_date": user.certificate.issue_date,
+            "validity_term": user.certificate.validity_term,
+            "valid_until": user.certificate.valid_until,
+            "is_transitional": bool(user.certificate.is_transitional) and is_transitional_eligible_level(user.certificate.level),
+            "transitional_deadline": transitional_deadline.isoformat(),
+        }
 
     return UserOut(
         id=user.id,
@@ -2266,6 +2543,9 @@ def admin_update_user(
         exam_stage_remaining_seconds=exam_state["exam_stage_remaining_seconds"],
         exam_stage_permissions=exam_state["exam_stage_permissions"],
         created_at=user.created_at,
+        photo_filename=user.photo_filename,
+        certificate=cert_data,
+        certificate_info=cert_data,
         has_unseen_statements=unseen_count > 0,
         unseen_statement_count=unseen_count,
         has_pending_statements=pending_count > 0,
@@ -2304,9 +2584,9 @@ def admin_delete_user(
     # Delete statement attachment files before cascade delete
     statements = db.scalars(select(Statement).where(Statement.user_id == user_id)).all()
     for statement in statements:
-        if statement.attachment_path:
+        for att_path in iter_statement_attachment_paths(statement):
             try:
-                delete_storage_file(statement.attachment_path)
+                delete_storage_file(att_path)
             except Exception:
                 # Best-effort: continue even if file deletion fails
                 pass
@@ -2393,9 +2673,9 @@ def admin_delete_all_users(
         # Delete statement attachment files before cascade delete
         statements = db.scalars(select(Statement).where(Statement.user_id == u.id)).all()
         for statement in statements:
-            if statement.attachment_path:
+            for att_path in iter_statement_attachment_paths(statement):
                 try:
-                    delete_storage_file(statement.attachment_path)
+                    delete_storage_file(att_path)
                 except Exception:
                     # Best-effort: continue even if file deletion fails
                     pass
@@ -2451,6 +2731,7 @@ def _admin_statement_payload(statement: Statement, user: User) -> AdminStatement
         answered_by=statement.answered_by,
         attachment_filename=statement.attachment_filename,
         attachment_size_bytes=statement.attachment_size_bytes,
+        attachments=build_statement_attachments_list(statement),
     )
 
 
@@ -2546,16 +2827,17 @@ def admin_delete_statement(
     db: Session = Depends(get_db),
 ):
     _require_admin(db, authorization)
-    if not _is_founder_actor(authorization, db):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete statements")
 
     statement = db.get(Statement, statement_id)
     if not statement:
         return
-    # Remove stored attachment if present
-    if statement.attachment_path:
-        delete_storage_file(statement.attachment_path)
+    user = db.get(User, statement.user_id)
+    # Remove stored attachments if present
+    for att_path in iter_statement_attachment_paths(statement):
+        delete_storage_file(att_path)
     db.delete(statement)
+    db.flush()
+    reconcile_user_candidate_status_after_delete(db, user, deleted_kind="statement")
     db.commit()
     return
 
@@ -2801,3 +3083,37 @@ def admin_delete_user_photo(
     db.add(user)
     db.commit()
     return
+
+
+@router.get("/certificate-transitional-deadline", response_model=TransitionalDeadlineOut)
+def admin_get_certificate_transitional_deadline(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    deadline = sync_transitional_certificates(db)
+    return TransitionalDeadlineOut(
+        transitional_deadline=deadline,
+        reactivated_count=0,
+        expired_count=0,
+    )
+
+
+@router.put("/certificate-transitional-deadline", response_model=TransitionalDeadlineOut)
+def admin_update_certificate_transitional_deadline(
+    payload: TransitionalDeadlineUpdateRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    admin_user = _require_admin(db, authorization)
+    res = set_transitional_deadline_date(
+        db,
+        payload.transitional_deadline,
+        actor_email=admin_user.email,
+    )
+    return TransitionalDeadlineOut(
+        transitional_deadline=res["transitional_deadline"],
+        reactivated_count=int(res["reactivated_count"]),
+        expired_count=int(res["expired_count"]),
+    )
+

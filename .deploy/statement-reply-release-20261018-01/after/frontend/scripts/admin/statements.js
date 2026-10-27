@@ -283,42 +283,49 @@
         bindDownload(downloadBtn, item);
         actions.appendChild(downloadBtn);
 
-        // Attachment download button, if present
-        if (item.attachment_filename) {
-          const actorEmail = (window.Auth?.getSavedEmail?.() || '').trim();
-          const attachBtn = document.createElement('button');
-          attachBtn.type = 'button';
-          attachBtn.className = 'statement-attachment-download';
-          attachBtn.textContent = 'ფაილის ჩამოტვირთვა';
-          attachBtn.setAttribute('aria-label', 'ატვირთული ფაილის ჩამოტვირთვა');
-          attachBtn.addEventListener('click', async () => {
-            try {
-              const url = `${API_BASE}/admin/statements/${encodeURIComponent(item.id)}/file`;
-              const resp = await fetch(url, { headers: { ...getAdminHeaders(), ...getActorHeaders() } });
-              if (!resp.ok) { showToast('ფაილის ჩამოტვირთვა ვერ მოხერხდა', 'error'); return; }
-              const blob = await resp.blob();
-              const link = document.createElement('a');
-              link.href = URL.createObjectURL(blob);
-              link.download = item.attachment_filename || 'file';
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              URL.revokeObjectURL(link.href);
-            } catch { showToast('ფაილის ჩამოტვირთვა ვერ მოხერხდა', 'error'); }
+        // Attachment download button(s), if present
+        const itemAttachments = Array.isArray(item.attachments) && item.attachments.length
+          ? item.attachments
+          : (item.attachment_filename ? [{ slot: 1, filename: item.attachment_filename }] : []);
+        if (itemAttachments.length) {
+          itemAttachments.forEach((att) => {
+            if (!att?.filename) return;
+            const slotNum = Number(att.slot) || 1;
+            const attachBtn = document.createElement('button');
+            attachBtn.type = 'button';
+            attachBtn.className = 'statement-attachment-download';
+            attachBtn.textContent = itemAttachments.length > 1
+              ? `📎 ${att.filename}`
+              : 'ფაილის ჩამოტვირთვა';
+            attachBtn.setAttribute('aria-label', `ატვირთული ფაილის ჩამოტვირთვა: ${att.filename}`);
+            attachBtn.addEventListener('click', async () => {
+              try {
+                const slotParam = slotNum > 1 ? `?slot=${encodeURIComponent(slotNum)}` : '';
+                const url = `${API_BASE}/admin/statements/${encodeURIComponent(item.id)}/file${slotParam}`;
+                const resp = await fetch(url, { headers: { ...getAdminHeaders(), ...getActorHeaders() } });
+                if (!resp.ok) { showToast('ფაილის ჩამოტვირთვა ვერ მოხერხდა', 'error'); return; }
+                const blob = await resp.blob();
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = att.filename || 'file';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+              } catch { showToast('ფაილის ჩამოტვირთვა ვერ მოხერხდა', 'error'); }
+            });
+            actions.appendChild(attachBtn);
           });
-          actions.appendChild(attachBtn);
         }
 
-        if (isFounderActor()) {
-          const deleteBtn = document.createElement('button');
-          deleteBtn.type = 'button';
-          deleteBtn.className = 'statement-delete head-delete';
-          deleteBtn.textContent = '×';
-          deleteBtn.setAttribute('aria-label', 'წაშლა');
-          deleteBtn.title = 'წაშლა';
-          bindDelete(deleteBtn, item.id);
-          actions.appendChild(deleteBtn);
-        }
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'statement-delete head-delete';
+        deleteBtn.textContent = '×';
+        deleteBtn.setAttribute('aria-label', 'წაშლა');
+        deleteBtn.title = 'წაშლა';
+        bindDelete(deleteBtn, item.id);
+        actions.appendChild(deleteBtn);
 
         messageWrapper.appendChild(actions);
 

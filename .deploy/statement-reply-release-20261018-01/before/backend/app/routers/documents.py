@@ -43,6 +43,7 @@ from ..services.contract_assembler import (
     CONTRACT_SLOTS,
     PUBLIC_DOCUMENTS,
     docx_bytes_to_html,
+    sanitize_document_html,
     extract_user_fields,
     markdown_to_docx_bytes,
     markdown_to_html,
@@ -236,12 +237,14 @@ def _stored_file_exists(file_path: str | None) -> bool:
         return False
 
 
-def _doc_matches_item(doc: SiteDocument, code: str, source_docx: str) -> bool:
-    if code and code in (doc.title or ""):
-        return True
+def _doc_matches_item(doc: SiteDocument, code: str, source_docx: str, default_title: str = "") -> bool:
     if source_docx and (doc.filename or "") == source_docx:
         return True
-    head = (doc.content or "")[:700]
+    if default_title and (doc.title or "").strip() == default_title.strip():
+        return True
+    if code and code in (doc.title or ""):
+        return True
+    head = (doc.content or "")[:350]
     return bool(code and code in head)
 
 
@@ -256,21 +259,37 @@ def _ensure_default_contracts(db: Session) -> None:
         for item in PUBLIC_DOCUMENTS:
             code = item["code"]
             source_docx = item["source_docx"]
+            default_title = item["default_title"]
             matched = next(
                 (
                     d
                     for d in existing_docs
-                    if not d.contract_type and _doc_matches_item(d, code, source_docx)
+                    if not d.contract_type and _doc_matches_item(d, code, source_docx, default_title)
                 ),
                 None,
             )
 
+            bundled_docx = BUNDLED_CONTRACTS_DIR / source_docx
+            expected_size = bundled_docx.stat().st_size if bundled_docx.is_file() else None
             needs_refresh = (
                 matched is None
                 or not _stored_file_exists(matched.file_path)
-                or (item.get("strip_annex_1") and "IMP-2026-001" in (matched.content or ""))
+                or "<p>– " in (matched.content or "")
+                or "იოსებიძ" in (matched.content or "")
+                or (expected_size is not None and matched.file_size_bytes != expected_size)
+                or (
+                    item.get("strip_annex_1")
+                    and (
+                        "IMP-2026-001" in (matched.content or "")
+                        or "შიდა მოხმარების" in (matched.content or "")
+                    )
+                )
             )
             if not needs_refresh:
+                if matched is not None and matched.title != default_title and code in (matched.title or ""):
+                    matched.title = default_title
+                    db.add(matched)
+                    changed = True
                 continue
 
             md_path = BUNDLED_CONTRACTS_DIR / item["source_md"]
@@ -283,7 +302,6 @@ def _ensure_default_contracts(db: Session) -> None:
             )
             html_content = markdown_to_html(md_text)
 
-            bundled_docx = BUNDLED_CONTRACTS_DIR / source_docx
             if bundled_docx.is_file():
                 docx_bytes = bundled_docx.read_bytes()
             else:
@@ -296,7 +314,7 @@ def _ensure_default_contracts(db: Session) -> None:
 
             if matched is not None:
                 old_file = matched.file_path
-                matched.title = item["default_title"]
+                matched.title = default_title
                 matched.content = html_content
                 matched.file_path = file_path
                 matched.filename = filename
@@ -306,7 +324,7 @@ def _ensure_default_contracts(db: Session) -> None:
                     _delete_document_file(old_file)
             else:
                 doc = SiteDocument(
-                    title=item["default_title"],
+                    title=default_title,
                     content=html_content,
                     order_index=int(item.get("order_index") or 1),
                     contract_type=None,
@@ -323,10 +341,25 @@ def _ensure_default_contracts(db: Session) -> None:
         by_type = {d.contract_type: d for d in existing_docs if d.contract_type}
         for key, slot in CONTRACT_SLOTS.items():
             existing_slot_doc = by_type.get(key)
-            if existing_slot_doc is not None and _stored_file_exists(existing_slot_doc.file_path):
-                target_order = int(slot.get("order_index") or 5)
-                if seeded_public_any and (existing_slot_doc.order_index or 0) <= 4:
+            bundled_docx = BUNDLED_CONTRACTS_DIR / slot["source_docx"]
+            expected_size = bundled_docx.stat().st_size if bundled_docx.is_file() else None
+            slot_needs_refresh = (
+                existing_slot_doc is None
+                or not _stored_file_exists(existing_slot_doc.file_path)
+                or "<p>– " in (existing_slot_doc.content or "")
+                or "იოსებიძ" in (existing_slot_doc.content or "")
+                or (expected_size is not None and existing_slot_doc.file_size_bytes != expected_size)
+            )
+            if not slot_needs_refresh and existing_slot_doc is not None:
+                target_order = int(slot.get("order_index") or 6)
+                if (seeded_public_any or (existing_slot_doc.order_index or 0) == target_order - 1) and (
+                    existing_slot_doc.order_index or 0
+                ) < target_order:
                     existing_slot_doc.order_index = target_order
+                    db.add(existing_slot_doc)
+                    changed = True
+                if existing_slot_doc.title != slot["default_title"] and slot["code"] in (existing_slot_doc.title or ""):
+                    existing_slot_doc.title = slot["default_title"]
                     db.add(existing_slot_doc)
                     changed = True
                 continue
@@ -337,7 +370,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 (
                     d
                     for d in existing_docs
-                    if not d.contract_type and _doc_matches_item(d, code, source_docx)
+                    if not d.contract_type and _doc_matches_item(d, code, source_docx, slot["default_title"])
                 ),
                 None,
             )
@@ -362,7 +395,7 @@ def _ensure_default_contracts(db: Session) -> None:
             if matched is not None:
                 old_file = matched.file_path
                 matched.contract_type = key
-                matched.title = matched.title or slot["default_title"]
+                matched.title = slot["default_title"]
                 matched.content = html_content
                 matched.order_index = int(slot.get("order_index") or 5)
                 matched.file_path = file_path
@@ -424,7 +457,8 @@ def _resolve_target_user(
 
 def _is_contract_document(doc: SiteDocument) -> bool:
     return bool(doc.contract_type) or (
-        "პირადი ნომერი" in (doc.content or "") and "___" in (doc.content or "")
+        "პირადი ნომერი" in (doc.content or "")
+        and ("___" in (doc.content or "") or "[პირადი ნომერი]" in (doc.content or ""))
     )
 
 
@@ -531,7 +565,7 @@ async def admin_upload_contract_slot(
         if doc is None:
             doc = SiteDocument(
                 title=resolved_title,
-                content=resolved_content,
+                content=sanitize_document_html(resolved_content),
                 order_index=int(slot_info.get("order_index") or 1),
                 contract_type=slot_key,
                 file_path=new_file_path,
@@ -541,7 +575,7 @@ async def admin_upload_contract_slot(
         else:
             doc.title = resolved_title
             if resolved_content or (file and file.filename):
-                doc.content = resolved_content
+                doc.content = sanitize_document_html(resolved_content)
             if new_file_path:
                 doc.file_path = new_file_path
                 doc.filename = filename
@@ -597,7 +631,7 @@ async def admin_create_document(
     try:
         doc = SiteDocument(
             title=title.strip(),
-            content=resolved_content,
+            content=sanitize_document_html(resolved_content),
             order_index=int(max_order) + 1,
             contract_type=slot_key,
             file_path=file_path,
@@ -661,7 +695,7 @@ async def admin_update_document(
             raise
 
     if resolved_content is not None:
-        doc.content = resolved_content
+        doc.content = sanitize_document_html(resolved_content)
 
     try:
         db.add(doc)

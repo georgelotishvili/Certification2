@@ -128,23 +128,48 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r".*",
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://([a-z0-9-]+\.)?gipc\.(org\.)?ge$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
+    from fastapi.responses import JSONResponse
+
+    @app.middleware("http")
+    async def security_headers_and_docs_guard(request: Request, call_next):
+        if request.url.path in ("/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"):
+            peer_host = (request.client.host if request.client else "").strip()
+            proxied_ip = (
+                request.headers.get("x-real-ip")
+                or request.headers.get("x-forwarded-for")
+                or ""
+            ).split(",")[0].strip()
+            is_local_direct = peer_host in ("127.0.0.1", "::1", "localhost", "testclient") and proxied_ip in ("", "127.0.0.1", "::1")
+            if not is_local_direct:
+                return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        return response
+
     from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents, taxonomy
-    from .routers import exam_schedules, planning_letters, ai_assistant
+    from .routers import exam_schedules, planning_letters, ai_assistant, cert_bookings
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
     app.include_router(exam_schedules.router, prefix="/admin", tags=["admin"])
     app.include_router(planning_letters.router, prefix="/admin", tags=["admin"])
+    app.include_router(cert_bookings.admin_router, prefix="/admin", tags=["admin-cert-bookings"])
     app.include_router(ai_assistant.router, prefix="/admin", tags=["admin-ai"])
+    app.include_router(ai_assistant.public_router, tags=["public-ai"])
     app.include_router(taxonomy.router, prefix="/taxonomy", tags=["taxonomy"])
     app.include_router(users.router, prefix="/users", tags=["users"])
+    app.include_router(cert_bookings.user_router, prefix="/users", tags=["user-cert-bookings"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])
     app.include_router(registry.router, prefix="/certified-persons", tags=["registry"])
     app.include_router(reviews.router, prefix="/reviews", tags=["reviews"])

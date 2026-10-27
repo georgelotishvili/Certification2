@@ -485,7 +485,7 @@
       if (DOM.filterExamMorning?.checked) params.set('exam_morning', 'true');
       if (DOM.filterExamEvening?.checked) params.set('exam_evening', 'true');
       if (DOM.filterCertificateHandover?.checked) params.set('certificate_handover', 'true');
-      if (DOM.examScheduleDate?.value) params.set('exam_date', DOM.examScheduleDate.value);
+      if (DOM.examScheduleDate?.value) params.set('filter_date', DOM.examScheduleDate.value);
       if (DOM.filterExamPassed?.checked) params.set('exam_passed', 'true');
       if (DOM.filterExamFailed?.checked) params.set('exam_failed', 'true');
       if (DOM.filterPendingPassLetter?.checked) params.set('pending_pass_letter', 'true');
@@ -639,8 +639,19 @@
       }
     }
 
-    async function refreshAfterScheduleChange() {
+    async function refreshAfterScheduleChange(detail = {}) {
       schedulesStateVersion += 1;
+      if (detail?.userId != null) {
+        const existing = cachedUsersById.get(String(detail.userId));
+        const card = findUserCard(detail.userId);
+        if (existing && card) {
+          syncCandidateControls(card, existing);
+          if (card.classList.contains('open')) {
+            void renderUserContractsSection(card, existing);
+          }
+        }
+      }
+      void refreshUnseenSummary();
       return render({ preserveExisting: true, keepPage: true });
     }
 
@@ -2127,12 +2138,11 @@
 
     function findTemplateDocForSlot(docs, slotDef) {
       if (!Array.isArray(docs)) return null;
+      const byType = docs.find((d) => d.contract_type === slotDef.key);
+      if (byType) return byType;
       return (
         docs.find(
-          (d) =>
-            d.contract_type === slotDef.key ||
-            (d.title && d.title.includes(slotDef.code)) ||
-            (d.content && d.content.includes(slotDef.code))
+          (d) => !d.contract_type && d.title && d.title.includes(slotDef.code)
         ) || null
       );
     }
@@ -2262,7 +2272,7 @@
 
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
-        const marginX = 48;
+        const marginX = 52;
         const marginTop = 52;
         const marginBottom = 54;
         const usableWidth = pageWidth - marginX * 2;
@@ -2275,36 +2285,58 @@
           }
         };
 
+        const drawFormattedLine = (lineText, x, y, targetWidth, isLastLine, align = 'justify') => {
+          const clean = String(lineText || '').trim();
+          if (!clean) return;
+          if (align === 'center') {
+            const w = pdf.getTextWidth(clean);
+            pdf.text(clean, x + Math.max(0, (targetWidth - w) / 2), y);
+            return;
+          }
+          if (align === 'justify' && !isLastLine && !clean.includes('___')) {
+            const words = clean.split(/\s+/).filter(Boolean);
+            if (words.length > 1) {
+              const wordsWidth = words.reduce((sum, w) => sum + pdf.getTextWidth(w), 0);
+              const extra = targetWidth - wordsWidth;
+              if (extra > 0) {
+                const gap = extra / (words.length - 1);
+                let curX = x;
+                words.forEach((word) => {
+                  pdf.text(word, curX, y);
+                  curX += pdf.getTextWidth(word) + gap;
+                });
+                return;
+              }
+            }
+          }
+          pdf.text(clean, x, y);
+        };
+
         const assembledHtml = populateContractHtmlForUser(doc.content || '', user);
         const tempContainer = document.createElement('div');
         tempContainer.innerHTML = assembledHtml;
 
         const docTitle = String(doc.title || 'ხელშეკრულება').replace(/\s+/g, ' ').trim();
+        const hasOwnH1 = Boolean(tempContainer.querySelector('h1'));
 
-        pdf.setFont(fontName, 'normal');
-        pdf.setFontSize(9);
-        pdf.setTextColor(100, 116, 139);
-        pdf.text('საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი (GIPC)', marginX, cursorY);
-        cursorY += 18;
-
-        pdf.setFont(fontName, 'bold');
-        pdf.setFontSize(14);
-        pdf.setTextColor(28, 70, 140);
-        const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
-        titleLines.forEach((line) => {
-          ensureSpace(19);
-          pdf.text(line, marginX, cursorY);
-          cursorY += 19;
-        });
-
-        cursorY += 4;
-        pdf.setDrawColor(203, 213, 225);
-        pdf.setLineWidth(0.75);
-        pdf.line(marginX, cursorY, pageWidth - marginX, cursorY);
-        cursorY += 16;
+        if (!hasOwnH1) {
+          pdf.setFont(fontName, 'bold');
+          pdf.setFontSize(13.5);
+          pdf.setTextColor(0, 0, 0);
+          const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
+          titleLines.forEach((line, idx) => {
+            ensureSpace(19);
+            drawFormattedLine(line, marginX, cursorY, usableWidth, idx === titleLines.length - 1, 'center');
+            cursorY += 19;
+          });
+          cursorY += 10;
+        }
 
         const writeWrappedBlock = (text, opts = {}) => {
-          const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+          const normalized = String(text || '')
+            .replace(/([ა-ჰa-zA-Z0-9])\/([ა-ჰa-zA-Z0-9])/g, '$1 / $2')
+            .replace(/\s+/g, ' ')
+            .trim();
           if (!normalized) return;
           const {
             x = marginX,
@@ -2312,17 +2344,16 @@
             fontStyle = 'normal',
             fontSize = 10.5,
             lineHeight = 16,
-            color = [30, 41, 59],
             spaceBefore = 0,
             spaceAfter = 7,
-            prefix = '',
-            prefixX = marginX,
+            align = 'justify',
+            bottomBorder = false,
           } = opts;
 
           if (spaceBefore > 0 && cursorY > marginTop + 10) cursorY += spaceBefore;
           pdf.setFont(fontName, fontStyle);
           pdf.setFontSize(fontSize);
-          pdf.setTextColor(color[0], color[1], color[2]);
+          pdf.setTextColor(0, 0, 0);
 
           const lines = pdf.splitTextToSize(normalized, width);
           if (!lines.length) return;
@@ -2331,10 +2362,16 @@
           }
           lines.forEach((line, idx) => {
             ensureSpace(lineHeight);
-            if (idx === 0 && prefix) pdf.text(prefix, prefixX, cursorY);
-            pdf.text(line, x, cursorY);
+            const isLast = idx === lines.length - 1;
+            drawFormattedLine(line, x, cursorY, width, isLast, align);
             cursorY += lineHeight;
           });
+          if (bottomBorder) {
+            pdf.setDrawColor(0, 0, 0);
+            pdf.setLineWidth(0.6);
+            pdf.line(x, cursorY - lineHeight + 4, x + width, cursorY - lineHeight + 4);
+            cursorY += 2;
+          }
           cursorY += spaceAfter;
         };
 
@@ -2348,51 +2385,64 @@
             const isHeader = cells.every((c) => c.tagName === 'TH');
             return {
               isHeader,
+              tags: cells.map((c) => c.tagName),
               texts: cells.map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()),
             };
           });
           if (!maxCols) return;
-          const colWidth = usableWidth / maxCols;
+
+          let colWidths = Array(maxCols).fill(usableWidth / maxCols);
+          if (maxCols === 2) {
+            colWidths = [usableWidth * 0.30, usableWidth * 0.70];
+          } else if (maxCols === 3) {
+            colWidths = [usableWidth * 0.24, usableWidth * 0.50, usableWidth * 0.26];
+          } else if (maxCols === 4) {
+            const firstHeader = (parsedRows[0]?.texts?.[0] || '').trim();
+            if (firstHeader === '№' || firstHeader === '#') {
+              colWidths = [usableWidth * 0.07, usableWidth * 0.25, usableWidth * 0.34, usableWidth * 0.34];
+            }
+          }
+
           const cellPadX = 6;
           const cellPadY = 5;
           const lineH = 13.5;
           if (cursorY > marginTop + 10) cursorY += 6;
 
           parsedRows.forEach((row) => {
-            pdf.setFont(fontName, row.isHeader ? 'bold' : 'normal');
             pdf.setFontSize(9.5);
             const cellLines = [];
             let maxLines = 1;
             for (let c = 0; c < maxCols; c++) {
+              const isBoldCell = row.isHeader || row.tags[c] === 'TH';
+              pdf.setFont(fontName, isBoldCell ? 'bold' : 'normal');
               const txt = row.texts[c] || '';
-              const wrapped = pdf.splitTextToSize(txt, Math.max(24, colWidth - cellPadX * 2));
+              const wrapped = pdf.splitTextToSize(txt, Math.max(24, colWidths[c] - cellPadX * 2));
               cellLines.push(wrapped);
               if (wrapped.length > maxLines) maxLines = wrapped.length;
             }
             const rowHeight = maxLines * lineH + cellPadY * 2;
             ensureSpace(rowHeight + 4);
+            let cellX = marginX;
             for (let c = 0; c < maxCols; c++) {
-              const cellX = marginX + c * colWidth;
-              pdf.setDrawColor(203, 213, 225);
+              const cw = colWidths[c];
+              const isBoldCell = row.isHeader || row.tags[c] === 'TH';
+              pdf.setDrawColor(0, 0, 0);
               pdf.setLineWidth(0.5);
-              if (row.isHeader) {
-                pdf.setFillColor(248, 250, 252);
-                pdf.rect(cellX, cursorY, colWidth, rowHeight, 'FD');
-                pdf.setTextColor(28, 70, 140);
-              } else {
-                pdf.rect(cellX, cursorY, colWidth, rowHeight, 'S');
-                pdf.setTextColor(30, 41, 59);
-              }
+              pdf.rect(cellX, cursorY, cw, rowHeight, 'S');
+              pdf.setFont(fontName, isBoldCell ? 'bold' : 'normal');
+              pdf.setTextColor(0, 0, 0);
               const lines = cellLines[c] || [];
               lines.forEach((ln, idx) => {
                 pdf.text(ln, cellX + cellPadX, cursorY + cellPadY + 9.5 + idx * lineH);
               });
+              cellX += cw;
             }
             cursorY += rowHeight;
           });
           cursorY += 10;
         };
 
+        let seenH1 = false;
         const renderDomNodes = (parent) => {
           Array.from(parent.childNodes).forEach((node) => {
             if (node.nodeType === 3) {
@@ -2405,25 +2455,41 @@
             const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
             if (!text && tag !== 'TABLE') return;
 
-            if (tag === 'H1' || tag === 'H2') {
+            if (tag === 'H1') {
+              seenH1 = true;
               writeWrappedBlock(text, {
                 fontStyle: 'bold',
-                fontSize: 12,
-                lineHeight: 17,
-                color: [28, 70, 140],
-                spaceBefore: 10,
-                spaceAfter: 6,
+                fontSize: 13.5,
+                lineHeight: 18,
+                spaceBefore: 0,
+                spaceAfter: 4,
+                align: 'center',
+              });
+              return;
+            }
+            if (tag === 'H2') {
+              const isCenteredSubtitle =
+                (node.getAttribute('style') || '').includes('center') ||
+                (seenH1 && node.previousElementSibling?.tagName === 'H1');
+              writeWrappedBlock(text, {
+                fontStyle: 'bold',
+                fontSize: 11.5,
+                lineHeight: 16.5,
+                spaceBefore: isCenteredSubtitle ? 2 : 12,
+                spaceAfter: isCenteredSubtitle ? 10 : 6,
+                align: isCenteredSubtitle ? 'center' : 'left',
+                bottomBorder: !isCenteredSubtitle,
               });
               return;
             }
             if (tag === 'H3' || tag === 'H4') {
               writeWrappedBlock(text, {
                 fontStyle: 'bold',
-                fontSize: 11,
-                lineHeight: 16,
-                color: [15, 23, 42],
+                fontSize: 10.5,
+                lineHeight: 15.5,
                 spaceBefore: 8,
-                spaceAfter: 5,
+                spaceAfter: 4,
+                align: 'left',
               });
               return;
             }
@@ -2436,17 +2502,21 @@
               items.forEach((li, idx) => {
                 const liText = (li.textContent || '').replace(/\s+/g, ' ').trim();
                 if (!liText) return;
-                writeWrappedBlock(liText, {
-                  x: marginX + 18,
-                  width: usableWidth - 18,
-                  prefix: tag === 'OL' ? `${idx + 1}.` : '•',
-                  prefixX: marginX + 4,
+                const prefix = tag === 'OL' ? `${idx + 1}. ` : '– ';
+                writeWrappedBlock(`${prefix}${liText}`, {
+                  x: marginX,
+                  width: usableWidth,
                   spaceAfter: 5,
+                  align: 'justify',
                 });
               });
+              cursorY += 2;
               return;
             }
-            writeWrappedBlock(text);
+            const isLeftField = text.includes('___') || /^(სახელი|პირადი|ტელეფონი|ელ\.?\s*ფოსტა|თარიღი|ხელმოწერა|საიდენტიფიკაციო|იურიდიული|წარმომადგენელი)/.test(text);
+            writeWrappedBlock(text, {
+              align: isLeftField ? 'left' : 'justify',
+            });
           });
         };
 
@@ -2456,12 +2526,12 @@
         for (let i = 1; i <= totalPages; i++) {
           pdf.setPage(i);
           const footerY = pageHeight - 26;
-          pdf.setDrawColor(226, 232, 240);
+          pdf.setDrawColor(0, 0, 0);
           pdf.setLineWidth(0.5);
           pdf.line(marginX, footerY - 12, pageWidth - marginX, footerY - 12);
           pdf.setFont(fontName, 'normal');
           pdf.setFontSize(8.5);
-          pdf.setTextColor(100, 116, 139);
+          pdf.setTextColor(0, 0, 0);
           pdf.text('gipc.org.ge', marginX, footerY);
           const pageLabel = `გვერდი ${i} / ${totalPages}`;
           const pageLabelWidth = pdf.getTextWidth(pageLabel);

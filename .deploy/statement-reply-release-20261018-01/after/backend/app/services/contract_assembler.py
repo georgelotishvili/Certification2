@@ -26,7 +26,7 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
     {
         "key": "scheme",
         "code": "GIPC-SCH-001",
-        "default_title": "სერტიფიცირების სქემა (GIPC-SCH-001)",
+        "default_title": "სერტიფიცირების სქემა",
         "order_index": 1,
         "source_md": "01_სერტიფიკაციის_სქემა.md",
         "source_docx": "01_სერტიფიკაციის_სქემა.docx",
@@ -35,7 +35,7 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
     {
         "key": "impartiality",
         "code": "GIPC-POL-001",
-        "default_title": "მიუკერძოებლობის პოლიტიკა (GIPC-POL-001)",
+        "default_title": "მიუკერძოებლობის პოლიტიკა",
         "order_index": 2,
         "source_md": "03_მიუკერძოებლობის_პოლიტიკა.md",
         "source_docx": "03_მიუკერძოებლობის_პოლიტიკა.docx",
@@ -44,7 +44,7 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
     {
         "key": "confidentiality",
         "code": "GIPC-POL-002",
-        "default_title": "კონფიდენციალურობისა და პერსონალურ მონაცემთა დაცვის პოლიტიკა (GIPC-POL-002)",
+        "default_title": "კონფიდენციალურობისა და პერსონალურ მონაცემთა დაცვის პოლიტიკა",
         "order_index": 3,
         "source_md": "04_კონფიდენციალურობის_პოლიტიკა.md",
         "source_docx": "04_კონფიდენციალურობის_პოლიტიკა.docx",
@@ -53,11 +53,20 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
     {
         "key": "complaints_appeals",
         "code": "GIPC-PRO-003",
-        "default_title": "საჩივრებისა და აპელაციების პროცედურა (GIPC-PRO-003)",
+        "default_title": "საჩივრებისა და აპელაციების პროცედურა",
         "order_index": 4,
         "source_md": "07_საჩივრებისა_და_აპელაციების_პროცედურა.md",
         "source_docx": "07_საჩივრებისა_და_აპელაციების_პროცედურა.docx",
         "strip_annex_1": True,
+    },
+    {
+        "key": "application_form",
+        "code": "GIPC-FRM-001",
+        "default_title": "სერტიფიცირების განაცხადის ფორმა",
+        "order_index": 5,
+        "source_md": "12_ფორმა_განაცხადი.md",
+        "source_docx": "12_ფორმა_განაცხადი.docx",
+        "strip_annex_1": False,
     },
 ]
 
@@ -66,9 +75,9 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "key": "exam",
         "code": "GIPC-CON-004",
         "short_title": "საგამოცდო ხელშეკრულება",
-        "default_title": "საგამოცდო ხელშეკრულება (GIPC-CON-004)",
+        "default_title": "საგამოცდო ხელშეკრულება",
         "category": "EXAM",
-        "order_index": 5,
+        "order_index": 6,
         "source_md": "10_საგამოცდო_ხელშეკრულება.md",
         "source_docx": "10_საგამოცდო_ხელშეკრულება.docx",
     },
@@ -76,29 +85,49 @@ CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
         "key": "cert_a",
         "code": "GIPC-CON-001",
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია A (არქიტექტორი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი (GIPC-CON-001)",
+        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი",
         "category": "A",
-        "order_index": 6,
+        "order_index": 7,
         "source_md": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.md",
         "source_docx": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.docx",
+    },
+    "cert_a_transitional": {
+        "key": "cert_a_transitional",
+        "code": "GIPC-CON-001 (გარდამავალი)",
+        "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია A (საგამონაკლისო/გარდამავალი)",
+        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი (საგამონაკლისო/გარდამავალი წესით)",
+        "category": "A",
+        "order_index": 8,
+        "source_md": "08a_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი_საგამონაკლისო.md",
+        "source_docx": "08a_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი_საგამონაკლისო.docx",
     },
     "cert_b": {
         "key": "cert_b",
         "code": "GIPC-CON-002",
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია B (სპეციალისტი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (GIPC-CON-002)",
+        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი",
         "category": "B",
-        "order_index": 7,
+        "order_index": 9,
         "source_md": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.md",
         "source_docx": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.docx",
+    },
+    "cert_b_transitional": {
+        "key": "cert_b_transitional",
+        "code": "GIPC-CON-002 (გარდამავალი)",
+        "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია B (საგამონაკლისო/გარდამავალი)",
+        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (საგამონაკლისო/გარდამავალი წესით)",
+        "category": "B",
+        "order_index": 10,
+        "source_md": "09b_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი_საგამონაკლისო.md",
+        "source_docx": "09b_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი_საგამონაკლისო.docx",
     },
     "cert_c": {
         "key": "cert_c",
         "code": "GIPC-CON-003",
         "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია C (ექსპერტი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია C: არქიტექტურული პროექტის ექსპერტი (GIPC-CON-003)",
+        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია C: არქიტექტურული პროექტის ექსპერტი",
         "category": "C",
-        "order_index": 8,
+        "order_index": 11,
         "source_md": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.md",
         "source_docx": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.docx",
     },
@@ -140,12 +169,14 @@ def extract_user_fields(user: Any, date_str: str | None = None) -> dict[str, str
         personal_id = str(user.get("personal_id") or user.get("personalId") or "").strip()
         phone = str(user.get("phone") or "").strip()
         email = str(user.get("email") or "").strip()
+        code = str(user.get("code") or "").strip()
     else:
         first = str(getattr(user, "first_name", "") or "").strip()
         last = str(getattr(user, "last_name", "") or "").strip()
         personal_id = str(getattr(user, "personal_id", "") or "").strip()
         phone = str(getattr(user, "phone", "") or "").strip()
         email = str(getattr(user, "email", "") or "").strip()
+        code = str(getattr(user, "code", "") or "").strip()
 
     full_name = f"{first} {last}".strip()
     return {
@@ -153,6 +184,7 @@ def extract_user_fields(user: Any, date_str: str | None = None) -> dict[str, str
         "personal_id": personal_id,
         "phone": phone,
         "email": email,
+        "code": code,
         "date": (date_str or current_tbilisi_date_str()).strip(),
     }
 
@@ -197,7 +229,7 @@ _HTML_FIELD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 
 def populate_contract_html(content: str, user: Any, date_str: str | None = None) -> str:
-    """Replace blank underscore lines in contract HTML with the user's data and date."""
+    """Replace blank underscore lines or bracket placeholders in contract/form HTML with the user's data and date."""
     if not content or not user:
         return content or ""
 
@@ -212,6 +244,22 @@ def populate_contract_html(content: str, user: Any, date_str: str | None = None)
             continue
         safe_val = html.escape(val)
         result = pattern.sub(lambda m, v=safe_val: f"{m.group(1)}<strong>{v}</strong>", result)
+
+    bracket_replacements = [
+        (r"\[სახელი,\s*გვარი\]", fields.get("full_name", "")),
+        (r"\[სახელი\s+გვარი\]", fields.get("full_name", "")),
+        (r"\[პირადი\s*ნომერი\]", fields.get("personal_id", "")),
+        (r"\[ტელეფონის\s*ნომერი\]", fields.get("phone", "")),
+        (r"\[ტელეფონი\]", fields.get("phone", "")),
+        (r"\[ელექტრონული\s*ფოსტა\]", fields.get("email", "")),
+        (r"\[ელ\.?\s*ფოსტა\]", fields.get("email", "")),
+        (r"\[უნიკალური\s*კოდი\]", fields.get("code", "")),
+        (r"\[თარიღი\]", fields.get("date", "")),
+    ]
+    for pat_str, val in bracket_replacements:
+        if val:
+            safe_val = html.escape(val)
+            result = re.sub(pat_str, f"<strong>{safe_val}</strong>", result)
 
     return result
 
@@ -295,7 +343,10 @@ _MD_LINK_PLAIN_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
 
 
 def _inline_md_to_html(text: str) -> str:
-    escaped = html.escape(text)
+    placeholder = "\u0000AST\u0000"
+    prepared = re.sub(r"[🟢🟡🔴]\s*", "", (text or "")).replace(r"\*", placeholder)
+    escaped = html.escape(prepared)
+    escaped = re.sub(r"&lt;br\s*/?&gt;", "<br>", escaped, flags=re.IGNORECASE)
     escaped = _MD_LINK_ESCAPED_RE.sub(
         r'<a href="\2" target="_blank" rel="noopener noreferrer">\1</a>',
         escaped,
@@ -303,12 +354,15 @@ def _inline_md_to_html(text: str) -> str:
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
     escaped = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<em>\1</em>", escaped)
     escaped = re.sub(r"`([^`]+?)`", r"<strong>\1</strong>", escaped)
+    escaped = escaped.replace(placeholder, "*")
     return escaped
 
 
 _META_LINE_RE = re.compile(
-    r"^\*\*(დოკუმენტის კოდი|ვერსია|თარიღი|კონფიდენციალურობა|სქემის მფლობელი):\*\*\s*(.+)$"
+    r"^\*\*(დოკუმენტის კოდი|ფორმის კოდი|ვერსია|თარიღი|კონფიდენციალურობა|სქემის მფლობელი|სერტიფიცირების ორგანო|საიდენტიფიკაციო კოდი|იურიდიული მისამართი|ფაქტობრივი \(საოფისე და საგამოცდო\) მისამართი|ვებგვერდი):\*\*\s*(.+)$"
 )
+_MD_UL_ITEM_RE = re.compile(r"^[-*•–—]\s+(.+)$")
+_MD_OL_ITEM_RE = re.compile(r"^\d+\.\s+(.+)$")
 
 
 def markdown_to_html(md_text: str) -> str:
@@ -341,7 +395,7 @@ def markdown_to_html(md_text: str) -> str:
                     break
                 meta_rows.append((m.group(1).strip(), m.group(2).strip()))
                 i += 1
-            out.append('<table>')
+            out.append("<table>")
             for label, val in meta_rows:
                 out.append(
                     f"<tr><th>{_inline_md_to_html(label)}</th>"
@@ -359,10 +413,31 @@ def markdown_to_html(md_text: str) -> str:
             i += 1
             continue
 
+        if (
+            seen_h1
+            and len(out) == 1
+            and stripped.startswith("**")
+            and stripped.endswith("**")
+            and ":" not in stripped
+        ):
+            subtitle_text = stripped.strip("*").strip()
+            out.append(f'<h2 style="text-align:center;">{_inline_md_to_html(subtitle_text)}</h2>')
+            i += 1
+            continue
+
         if stripped.startswith("## "):
             heading_text = stripped[3:].strip()
-            # Subtitle right after H1 (before metadata table)
-            if seen_h1 and len(out) == 1:
+            # Subtitle right after H1 (before metadata table in official documents)
+            is_doc_subtitle = (
+                seen_h1
+                and len(out) == 1
+                and not re.match(r"^(?:\d+\.|[IVX]+\.)\s", heading_text)
+                and any(
+                    kw in heading_text
+                    for kw in ("შპს", "ინსტიტუტი", "არქიტექტორთა სერტიფიცირება", "კატეგორია")
+                )
+            )
+            if is_doc_subtitle:
                 out.append(
                     f'<h2 style="text-align:center;">{_inline_md_to_html(heading_text)}</h2>'
                 )
@@ -381,12 +456,44 @@ def markdown_to_html(md_text: str) -> str:
             i += 1
             continue
 
-        # Consecutive "- " items -> en-dash bullet items matching Word layout
-        if stripped.startswith("- "):
-            while i < n and lines[i].strip().startswith("- "):
-                item_text = lines[i].strip()[2:].strip()
-                out.append(f"<p>– {_inline_md_to_html(item_text)}</p>")
-                i += 1
+        # Consecutive bullet items ("- " or "* ") -> semantic <ul><li> list
+        ul_match = _MD_UL_ITEM_RE.match(stripped)
+        if ul_match:
+            out.append("<ul>")
+            while i < n:
+                cur_s = lines[i].strip()
+                m_ul = _MD_UL_ITEM_RE.match(cur_s)
+                m_ol_sub = _MD_OL_ITEM_RE.match(cur_s) if lines[i].startswith(("  ", "\t")) else None
+                if m_ul:
+                    out.append(f"<li>{_inline_md_to_html(m_ul.group(1).strip())}</li>")
+                    i += 1
+                elif m_ol_sub:
+                    out.append(f"<li>{_inline_md_to_html(m_ol_sub.group(1).strip())}</li>")
+                    i += 1
+                elif lines[i].startswith(("  ", "\t")) and cur_s and not cur_s.startswith(("#", "|", "---")):
+                    out[-1] = out[-1][:-5] + f"<br>{_inline_md_to_html(cur_s)}</li>"
+                    i += 1
+                else:
+                    break
+            out.append("</ul>")
+            continue
+
+        # Consecutive numbered items ("1. ", "2. ") -> semantic <ol><li> list
+        ol_match = _MD_OL_ITEM_RE.match(stripped)
+        if ol_match:
+            out.append("<ol>")
+            while i < n:
+                cur_s = lines[i].strip()
+                m_ol = _MD_OL_ITEM_RE.match(cur_s)
+                if m_ol:
+                    out.append(f"<li>{_inline_md_to_html(m_ol.group(1).strip())}</li>")
+                    i += 1
+                elif lines[i].startswith(("  ", "\t")) and cur_s and not cur_s.startswith(("#", "|", "---")):
+                    out[-1] = out[-1][:-5] + f"<br>{_inline_md_to_html(cur_s)}</li>"
+                    i += 1
+                else:
+                    break
+            out.append("</ol>")
             continue
 
         # Markdown Table
@@ -407,7 +514,10 @@ def markdown_to_html(md_text: str) -> str:
                 out.append("</table>")
             continue
 
-        out.append(f"<p>{_inline_md_to_html(stripped)}</p>")
+        if "___" in stripped:
+            out.append(f'<p style="text-align:left;">{_inline_md_to_html(stripped)}</p>')
+        else:
+            out.append(f"<p>{_inline_md_to_html(stripped)}</p>")
         i += 1
 
     return "\n".join(out)
@@ -555,13 +665,10 @@ def _make_table(rows: list[list[str]], col_widths: list[int], *, is_meta_table: 
             tc = _w_el("tc")
             tcPr = _w_el("tcPr")
             tcPr.append(_w_el("tcW", {"type": "dxa", "w": str(width)}))
-            shade = (is_meta_table and c_idx == 0) or (not is_meta_table and r_idx == 0)
-            if shade:
-                tcPr.append(_w_el("shd", {"val": "clear", "color": "auto", "fill": "F2F2F2"}))
+            cell_bold = (is_meta_table and c_idx == 0) or (not is_meta_table and r_idx == 0)
             tcPr.append(_w_el("vAlign", {"val": "center"}))
             tc.append(tcPr)
 
-            cell_bold = shade
             p = _make_paragraph(
                 cell_text,
                 jc="left",
@@ -719,7 +826,7 @@ def build_docx_elements_from_md(md_text: str) -> list[ET.Element]:
                         before="0",
                         after="50",
                         line="276",
-                        hanging_indent=True,
+                        hanging_indent=False,
                     )
                 )
                 i += 1
@@ -827,6 +934,18 @@ def _minimal_docx_From_elements(elements: list[ET.Element]) -> bytes:
     return buf.getvalue()
 
 
+def _sanitize_docx_styles_xml(xml_bytes: bytes) -> bytes:
+    try:
+        text = xml_bytes.decode("utf-8")
+        text = re.sub(r'\s+w:theme(?:Color|Shade|Tint|Fill|FillShade|FillTint)="[^"]*"', "", text)
+        text = re.sub(r'w:color\s+w:val="(?!FFFFFF"[,\s/>])[^"]*"', 'w:color w:val="000000"', text)
+        text = re.sub(r'w:color="(?!FFFFFF"|auto")[^"]*"', 'w:color="000000"', text)
+        text = re.sub(r'w:fill="(?!FFFFFF"|auto")[^"]*"', 'w:fill="FFFFFF"', text)
+        return text.encode("utf-8")
+    except Exception:
+        return xml_bytes
+
+
 def markdown_to_docx_bytes(md_text: str, template_docx: Path | bytes | None = None) -> bytes:
     """Convert contract Markdown (.md) into a styled Word (.docx) binary."""
     elements = build_docx_elements_from_md(md_text)
@@ -850,6 +969,8 @@ def markdown_to_docx_bytes(md_text: str, template_docx: Path | bytes | None = No
                         for item in zin.infolist():
                             if item.filename == "word/document.xml":
                                 zout.writestr(item, updated_xml)
+                            elif item.filename in ("word/styles.xml", "word/stylesWithEffects.xml"):
+                                zout.writestr(item, _sanitize_docx_styles_xml(zin.read(item.filename)))
                             else:
                                 zout.writestr(item, zin.read(item.filename))
                     return out_mem.getvalue()
@@ -858,8 +979,241 @@ def markdown_to_docx_bytes(md_text: str, template_docx: Path | bytes | None = No
     return _minimal_docx_From_elements(elements)
 
 
+_SECTION_H2_RE = re.compile(
+    r"^(?:(?:ნაწილი|თავი|ეტაპი|ნაბიჯი|მუხლი|კატეგორია|დანართი)\s*[№#]?\s*[0-9IVX]+|[IVX]+\.|[0-9]{1,2}\.)\s+.+$",
+    re.IGNORECASE,
+)
+_SECTION_H3_RE = re.compile(r"^[0-9]{1,2}\.[0-9]{1,2}(?:\.[0-9]{1,2})?\.?\s+.+$")
+_BULLET_LINE_RE = re.compile(r"^(?:[-•*–—]|\([ა-ჰ0-9]+\)|[ა-ჰ]\))\s+(.+)$")
+_LABEL_PREFIX_RE = re.compile(
+    r"^((?:შენიშვნა|მნიშვნელოვანია|ყურადღება|გაითვალისწინეთ|სავალდებულოა|რეკომენდაცია|მაგალითი)\s*:)\s*(.+)$",
+    re.IGNORECASE,
+)
+
+
+def _format_inline_with_labels(text: str) -> str:
+    m = _LABEL_PREFIX_RE.match(text)
+    if m:
+        return f"<strong>{_inline_md_to_html(m.group(1))}</strong> {_inline_md_to_html(m.group(2))}"
+    return _inline_md_to_html(text)
+
+
+_DANGEROUS_TAG_BLOCK_RE = re.compile(
+    r"<\s*(script|iframe|object|embed|style|form|meta|link|base)\b[^>]*>.*?<\s*/\s*\1\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_DANGEROUS_TAG_SINGLE_RE = re.compile(
+    r"</?\s*(script|iframe|object|embed|style|form|meta|link|base|input|button|textarea|select)\b[^>]*>",
+    re.IGNORECASE,
+)
+_ON_EVENT_ATTR_RE = re.compile(
+    r"\s+on[a-z]+\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)",
+    re.IGNORECASE,
+)
+_JS_PROTOCOL_ATTR_RE = re.compile(
+    r"((?:href|src|action)\s*=\s*[\"']?)\s*(?:javascript|vbscript|data\s*:\s*text/html)\s*:[^\"'\s>]*",
+    re.IGNORECASE,
+)
+
+
+def sanitize_document_html(raw_html: str) -> str:
+    """Strip executable tags, inline event attributes, and javascript: URLs from document HTML."""
+    if not raw_html:
+        return ""
+    cleaned = _DANGEROUS_TAG_BLOCK_RE.sub("", raw_html)
+    cleaned = _DANGEROUS_TAG_SINGLE_RE.sub("", cleaned)
+    cleaned = _ON_EVENT_ATTR_RE.sub("", cleaned)
+    cleaned = _JS_PROTOCOL_ATTR_RE.sub(r'\1#', cleaned)
+    return cleaned.strip()
+
+
+def structured_text_to_html(raw_text: str) -> str:
+    """Convert plain text or Markdown into a symmetric, well-structured HTML document."""
+    if not raw_text or not raw_text.strip():
+        return ""
+    trimmed = raw_text.strip()
+    if re.search(r"<(?:h1|h2|h3|p|ul|ol|table|div|article)\b", trimmed, re.IGNORECASE):
+        return sanitize_document_html(trimmed)
+
+    # If the text already uses standard Markdown headings (# or ##), use markdown_to_html
+    if re.search(r"(?m)^#{1,4}\s+\S", trimmed):
+        return markdown_to_html(trimmed)
+
+    lines = trimmed.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    out: list[str] = []
+    i = 0
+    n = len(lines)
+    seen_h1 = False
+
+    while i < n:
+        stripped = lines[i].strip()
+        if not stripped or stripped == "---":
+            i += 1
+            continue
+
+        # Markdown table support
+        if stripped.startswith("|") and stripped.endswith("|"):
+            table_rows: list[list[str]] = []
+            while i < n and lines[i].strip().startswith("|") and lines[i].strip().endswith("|"):
+                row_str = lines[i].strip()[1:-1]
+                cells = [c.strip() for c in row_str.split("|")]
+                if not all(re.fullmatch(r"[:\-]+", c or "-") for c in cells):
+                    table_rows.append(cells)
+                i += 1
+            if table_rows:
+                out.append("<table>")
+                for r_idx, row in enumerate(table_rows):
+                    tag = "th" if r_idx == 0 else "td"
+                    cells_html = "".join(f"<{tag}>{_inline_md_to_html(c)}</{tag}>" for c in row)
+                    out.append(f"<tr>{cells_html}</tr>")
+                out.append("</table>")
+            continue
+
+        # Bullet list items
+        b_match = _BULLET_LINE_RE.match(stripped)
+        if b_match:
+            out.append("<ul>")
+            while i < n:
+                bm = _BULLET_LINE_RE.match(lines[i].strip())
+                if not bm:
+                    break
+                out.append(f"<li>{_format_inline_with_labels(bm.group(1).strip())}</li>")
+                i += 1
+            out.append("</ul>")
+            continue
+
+        # First short non-sentence line becomes centered H1 title
+        if not seen_h1 and len(out) == 0 and len(stripped) <= 115 and not stripped.endswith((".", ";", ",")):
+            seen_h1 = True
+            clean_t = stripped.strip("*").strip()
+            out.append(f'<h1 style="text-align:center;">{_inline_md_to_html(clean_t)}</h1>')
+            i += 1
+            continue
+
+        # Sub-numbered heading (1.1, 1.2, etc.) -> H3 if relatively short
+        if _SECTION_H3_RE.match(stripped) and len(stripped) <= 120 and not stripped.endswith((".", ";", ",")):
+            clean_h3 = stripped.strip("*").strip()
+            out.append(f"<h3>{_inline_md_to_html(clean_h3)}</h3>")
+            i += 1
+            continue
+
+        # Major numbered/titled section -> H2 if relatively short and not a long sentence
+        if _SECTION_H2_RE.match(stripped) and len(stripped) <= 110 and not stripped.endswith((";", ",")):
+            clean_h2 = stripped.strip("*").strip()
+            out.append(f"<h2>{_inline_md_to_html(clean_h2)}</h2>")
+            i += 1
+            continue
+
+        # Standalone bold or short heading line surrounded by blank lines
+        prev_blank = (i == 0) or (not lines[i - 1].strip())
+        next_blank = (i + 1 >= n) or (not lines[i + 1].strip())
+        is_wrapped_bold = stripped.startswith("**") and stripped.endswith("**") and len(stripped) > 4
+        if (
+            (is_wrapped_bold or (prev_blank and next_blank and len(stripped) <= 85 and not stripped.endswith((".", ";", ","))))
+            and len(stripped) <= 105
+        ):
+            clean_h = stripped.strip("*").strip()
+            if not seen_h1 and len(out) == 0:
+                seen_h1 = True
+                out.append(f'<h1 style="text-align:center;">{_inline_md_to_html(clean_h)}</h1>')
+            else:
+                out.append(f"<h2>{_inline_md_to_html(clean_h)}</h2>")
+            i += 1
+            continue
+
+        out.append(f"<p>{_format_inline_with_labels(stripped)}</p>")
+        i += 1
+
+    return "\n".join(out)
+
+
+def _docx_runs_to_html(p_el: ET.Element, strip_bullet_prefix: bool = False) -> str:
+    """Extract inline HTML from a <w:p> element preserving run-level bold and italic."""
+    segments: list[tuple[str, bool, bool]] = []
+    for r in p_el.findall(f".//{{{W_NS}}}r"):
+        r_text = "".join(r.itertext())
+        if not r_text:
+            continue
+        r_pr = r.find(f"./{{{W_NS}}}rPr")
+        is_b = False
+        is_i = False
+        if r_pr is not None:
+            b_el = r_pr.find(f"./{{{W_NS}}}b")
+            if b_el is not None and (b_el.get(f"{{{W_NS}}}val") or "1") not in ("0", "false"):
+                is_b = True
+            i_el = r_pr.find(f"./{{{W_NS}}}i")
+            if i_el is not None and (i_el.get(f"{{{W_NS}}}val") or "1") not in ("0", "false"):
+                is_i = True
+        if segments and segments[-1][1] == is_b and segments[-1][2] == is_i:
+            segments[-1] = (segments[-1][0] + r_text, is_b, is_i)
+        else:
+            segments.append((r_text, is_b, is_i))
+
+    if not segments:
+        raw = "".join(p_el.itertext()).strip()
+        return _format_inline_with_labels(raw) if raw else ""
+
+    if strip_bullet_prefix:
+        first_txt, first_b, first_i = segments[0]
+        m = _BULLET_LINE_RE.match(first_txt.lstrip())
+        if m:
+            rem = m.group(1)
+            if rem:
+                segments[0] = (rem, first_b, first_i)
+            else:
+                segments.pop(0)
+        else:
+            # Handle case where bullet symbol is in first segment and space/rest in next
+            full_joined = "".join(s[0] for s in segments).lstrip()
+            m_full = _BULLET_LINE_RE.match(full_joined)
+            if m_full:
+                prefix_len = len(full_joined) - len(m_full.group(1))
+                # Strip prefix_len chars from start of segments
+                to_strip = len("".join(s[0] for s in segments)) - len(full_joined) + prefix_len
+                while segments and to_strip > 0:
+                    s_txt, s_b, s_i = segments[0]
+                    if len(s_txt) <= to_strip:
+                        to_strip -= len(s_txt)
+                        segments.pop(0)
+                    else:
+                        segments[0] = (s_txt[to_strip:], s_b, s_i)
+                        to_strip = 0
+
+    # Clean stray markdown escape artifacts from converted docx (e.g. leading '\' before 'შენიშვნა:' and trailing '.*')
+    if segments:
+        s0_txt, s0_b, s0_i = segments[0]
+        if s0_txt.startswith("\\"):
+            s0_txt = s0_txt.lstrip("\\")
+            if s0_txt:
+                segments[0] = (s0_txt, s0_b, s0_i)
+            else:
+                segments.pop(0)
+    if segments:
+        sl_txt, sl_b, sl_i = segments[-1]
+        if sl_txt.endswith(").*"):
+            segments[-1] = (sl_txt[:-1], sl_b, sl_i)
+
+    has_any_formatting = any(b or i for _, b, i in segments)
+    if not has_any_formatting:
+        plain = "".join(t for t, _, _ in segments).strip()
+        return _format_inline_with_labels(plain)
+
+    parts: list[str] = []
+    for seg_txt, is_b, is_i in segments:
+        esc = _inline_md_to_html(seg_txt)
+        if is_b and is_i:
+            parts.append(f"<strong><em>{esc}</em></strong>")
+        elif is_b:
+            parts.append(f"<strong>{esc}</strong>")
+        elif is_i:
+            parts.append(f"<em>{esc}</em>")
+        else:
+            parts.append(esc)
+    return "".join(parts).strip()
+
+
 def docx_bytes_to_html(docx_bytes: bytes) -> str:
-    """Fallback converter from .docx bytes to clean HTML when frontend HTML is not provided."""
+    """Convert .docx bytes into clean, structured HTML preserving headings, lists, and tables."""
     try:
         with zipfile.ZipFile(io.BytesIO(docx_bytes), "r") as z:
             root = ET.fromstring(z.read("word/document.xml"))
@@ -867,28 +1221,99 @@ def docx_bytes_to_html(docx_bytes: bytes) -> str:
         if body is None:
             return ""
         out: list[str] = []
+        seen_h1 = False
+        in_ul = False
+
+        def close_ul() -> None:
+            nonlocal in_ul
+            if in_ul:
+                out.append("</ul>")
+                in_ul = False
+
         for child in body:
             tag = child.tag.split("}")[-1]
             if tag == "p":
                 text = "".join(child.itertext()).strip()
                 if not text:
                     continue
-                out.append(f"<p>{html.escape(text)}</p>")
+
+                p_pr = child.find(f"./{{{W_NS}}}pPr")
+                style_val = ""
+                jc_val = ""
+                has_num_pr = False
+                has_bottom_bdr = False
+                if p_pr is not None:
+                    p_style = p_pr.find(f"./{{{W_NS}}}pStyle")
+                    if p_style is not None:
+                        style_val = (p_style.get(f"{{{W_NS}}}val") or "").lower()
+                    jc_el = p_pr.find(f"./{{{W_NS}}}jc")
+                    if jc_el is not None:
+                        jc_val = (jc_el.get(f"{{{W_NS}}}val") or "").lower()
+                    if p_pr.find(f"./{{{W_NS}}}numPr") is not None:
+                        has_num_pr = True
+                    p_bdr = p_pr.find(f"./{{{W_NS}}}pBdr")
+                    if p_bdr is not None and p_bdr.find(f"./{{{W_NS}}}bottom") is not None:
+                        has_bottom_bdr = True
+
+                runs = [r for r in child.findall(f".//{{{W_NS}}}r") if "".join(r.itertext()).strip()]
+                all_bold = bool(runs) and all(
+                    r.find(f"./{{{W_NS}}}rPr/{{{W_NS}}}b") is not None
+                    and (r.find(f"./{{{W_NS}}}rPr/{{{W_NS}}}b").get(f"{{{W_NS}}}val") or "1") not in ("0", "false")
+                    for r in runs
+                )
+
+                b_match = _BULLET_LINE_RE.match(text)
+                if has_num_pr or b_match:
+                    if not in_ul:
+                        out.append("<ul>")
+                        in_ul = True
+                    out.append(f"<li>{_docx_runs_to_html(child, strip_bullet_prefix=True)}</li>")
+                    continue
+
+                close_ul()
+
+                if "heading1" in style_val or "title" in style_val or (
+                    not seen_h1 and len(out) == 0 and jc_val == "center" and len(text) <= 120
+                ):
+                    seen_h1 = True
+                    out.append(f'<h1 style="text-align:center;">{html.escape(text)}</h1>')
+                elif (
+                    "heading2" in style_val
+                    or has_bottom_bdr
+                    or (all_bold and len(text) <= 115 and not text.endswith((":", ".", ";", ",")))
+                ):
+                    if seen_h1 and len(out) == 1 and jc_val == "center":
+                        out.append(f'<h2 style="text-align:center;">{html.escape(text)}</h2>')
+                    else:
+                        out.append(f"<h2>{html.escape(text)}</h2>")
+                elif "heading3" in style_val or (
+                    all_bold and _SECTION_H3_RE.match(text) and len(text) <= 120 and not text.endswith((".", ";", ","))
+                ):
+                    out.append(f"<h3>{html.escape(text)}</h3>")
+                else:
+                    out.append(f"<p>{_docx_runs_to_html(child, strip_bullet_prefix=False)}</p>")
             elif tag == "tbl":
+                close_ul()
                 out.append("<table>")
                 for r_idx, tr in enumerate(child.findall(f".//{{{W_NS}}}tr")):
                     cells = []
                     cell_tag = "th" if r_idx == 0 else "td"
                     for tc in tr.findall(f"./{{{W_NS}}}tc"):
-                        c_text = " ".join(
-                            "".join(p.itertext()).strip()
-                            for p in tc.findall(f".//{{{W_NS}}}p")
-                            if "".join(p.itertext()).strip()
-                        )
-                        cells.append(f"<{cell_tag}>{html.escape(c_text)}</{cell_tag}>")
+                        c_parts = []
+                        for p in tc.findall(f".//{{{W_NS}}}p"):
+                            if "".join(p.itertext()).strip():
+                                c_parts.append(
+                                    html.escape("".join(p.itertext()).strip())
+                                    if cell_tag == "th"
+                                    else _docx_runs_to_html(p, strip_bullet_prefix=False)
+                                )
+                        cells.append(f"<{cell_tag}>{' '.join(c_parts)}</{cell_tag}>")
                     if cells:
                         out.append(f"<tr>{''.join(cells)}</tr>")
                 out.append("</table>")
+
+        close_ul()
         return "\n".join(out)
     except Exception:
         return ""
+
