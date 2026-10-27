@@ -724,20 +724,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         card.dataset.level = String(data.level || '').toLowerCase();
       } catch {}
       // Disable download if inactive (suspended/expired) or expired by date / transitional deadline
+      const parseLocalCalendarDate = (rawVal) => {
+        if (!rawVal) return null;
+        const s = String(rawVal).trim();
+        const ymd = s.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+        if (ymd) {
+          return new Date(parseInt(ymd[1], 10), parseInt(ymd[2], 10) - 1, parseInt(ymd[3], 10));
+        }
+        const dmy = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+        if (dmy) {
+          return new Date(parseInt(dmy[3], 10), parseInt(dmy[2], 10) - 1, parseInt(dmy[1], 10));
+        }
+        const dt = window.Utils?.parseUtcDate?.(s) || new Date(s);
+        return dt && !Number.isNaN(dt.getTime()) ? dt : null;
+      };
       const isExpired = (() => {
         try {
           if (data.is_transitional) {
             const rawTrans = String(data.transitional_deadline || '2029-01-01').trim();
-            const dtTrans = window.Utils?.parseUtcDate?.(rawTrans) || new Date(rawTrans);
+            const dtTrans = parseLocalCalendarDate(rawTrans);
             if (dtTrans && !Number.isNaN(dtTrans.getTime())) {
               const transStart = new Date(dtTrans.getFullYear(), dtTrans.getMonth(), dtTrans.getDate(), 0, 0, 0, 0);
               if (Date.now() >= transStart.getTime()) return true;
             }
           }
-          const dt = window.Utils?.parseUtcDate?.(data.valid_until);
+          const dt = parseLocalCalendarDate(data.valid_until);
           if (!dt) return false;
-          const end = new Date(dt);
-          end.setHours(23, 59, 59, 999);
+          const end = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 23, 59, 59, 999);
           return end.getTime() < Date.now();
         } catch { return false; }
       })();

@@ -188,6 +188,7 @@ def sync_all_user_candidates(
         .where(
             PlanningLetter.user_id.in_(candidate_user_ids),
             PlanningLetter.kind == "certificate",
+            PlanningLetter.status != "failed",
         )
         .order_by(PlanningLetter.created_at.desc(), PlanningLetter.id.desc())
     ).all()

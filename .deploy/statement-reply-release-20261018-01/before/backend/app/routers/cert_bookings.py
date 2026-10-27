@@ -159,6 +159,28 @@ def _save_weekday_template(db: Session, weekdays: list[int], slots: list[str], a
         db.add(row)
 
 
+def _has_booking_flag(booking: CertBooking, flag: str) -> bool:
+    raw = booking.cancelled_by or ""
+    return f"|{flag}|" in raw
+
+
+def _add_booking_flag(booking: CertBooking, flag: str) -> None:
+    token = f"|{flag}|"
+    raw = booking.cancelled_by or ""
+    if token not in raw:
+        booking.cancelled_by = f"{raw}{token}"
+
+
+def _set_cancelled_by_preserving_flags(booking: CertBooking, actor_email: str) -> None:
+    raw = booking.cancelled_by or ""
+    flags = "".join(
+        token
+        for token in ("|hide_user|", "|hide_admin|")
+        if token in raw
+    )
+    booking.cancelled_by = f"{actor_email or ''}{flags}"
+
+
 def _effective_booking_status(booking: CertBooking, now_tb_str: str) -> tuple[str, str, bool]:
     """Return (effective_status, status_label_ka, is_past)."""
     is_past = f"{booking.booking_date} {booking.slot_time}" <= now_tb_str
@@ -319,7 +341,8 @@ def _build_user_booking_payload(db: Session, user: User) -> dict[str, Any]:
 
     for b in user_bookings:
         serialized = _serialize_booking_for_user(b, now_tb_str)
-        history.append(serialized)
+        if not _has_booking_flag(b, "hide_user"):
+            history.append(serialized)
         if serialized["status"] == "active" and active_booking is None:
             active_booking = serialized
         elif serialized["status"] == "completed":
@@ -551,6 +574,7 @@ def create_or_update_my_cert_booking(
 @user_router.delete("/me/cert-booking/{booking_id}")
 def cancel_my_cert_booking(
     booking_id: int,
+    dismiss: bool = False,
     authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
@@ -564,11 +588,24 @@ def cancel_my_cert_booking(
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ჯავშანი ვერ მოიძებნა")
 
-    if booking.status == "active":
+    now_tb_str = _now_tbilisi().strftime("%Y-%m-%d %H:%M")
+    _, _, is_past = _effective_booking_status(booking, now_tb_str)
+    now_utc = datetime.utcnow()
+    changed = False
+
+    if booking.status == "active" and not is_past:
         booking.status = "cancelled"
-        booking.cancelled_at = datetime.utcnow()
-        booking.cancelled_by = user.email
-        booking.updated_at = datetime.utcnow()
+        booking.cancelled_at = now_utc
+        _set_cancelled_by_preserving_flags(booking, user.email)
+        booking.updated_at = now_utc
+        changed = True
+
+    if dismiss and not _has_booking_flag(booking, "hide_user"):
+        _add_booking_flag(booking, "hide_user")
+        booking.updated_at = now_utc
+        changed = True
+
+    if changed:
         db.add(booking)
         db.commit()
 
@@ -671,6 +708,8 @@ def _build_admin_overview(db: Session) -> dict[str, Any]:
         if u is None:
             continue
         eff_status, status_label, is_past = _effective_booking_status(b, now_tb_str)
+        if _has_booking_flag(b, "hide_admin") and eff_status != "active":
+            continue
         if eff_status == "active":
             upcoming_active_count += 1
             if b.booking_date == today_str:
@@ -914,6 +953,7 @@ class _SimpleBookingEmailPayload:
 @admin_router.delete("/cert-bookings/{booking_id}")
 def admin_cancel_cert_booking(
     booking_id: int,
+    dismiss: bool = False,
     authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
@@ -921,15 +961,31 @@ def admin_cancel_cert_booking(
     booking = db.get(CertBooking, booking_id)
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ჯავშანი ვერ მოიძებნა")
-    if booking.status == "active":
-        now_utc = datetime.utcnow()
+
+    now_tb_str = _now_tbilisi().strftime("%Y-%m-%d %H:%M")
+    eff_status, _, is_past = _effective_booking_status(booking, now_tb_str)
+    now_utc = datetime.utcnow()
+
+    should_cancel = (booking.status == "active") and (not dismiss or not is_past)
+    changed = False
+
+    if should_cancel:
         booking.status = "cancelled"
         booking.cancelled_at = now_utc
-        booking.cancelled_by = actor.email
+        _set_cancelled_by_preserving_flags(booking, actor.email)
         booking.updated_at = now_utc
+        changed = True
+
+    if dismiss and not _has_booking_flag(booking, "hide_admin"):
+        _add_booking_flag(booking, "hide_admin")
+        booking.updated_at = now_utc
+        changed = True
+
+    if changed:
         db.add(booking)
         db.commit()
 
+    if should_cancel:
         user = db.get(User, booking.user_id)
         if user and user.email:
             full_name = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip() or user.email

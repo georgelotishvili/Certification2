@@ -2184,11 +2184,14 @@
           overlay.querySelector('.exam-schedule-confirm-preview-text').textContent = finalBody;
 
           setModalStatus('');
+          currentRequestId = generateUuid();
           stepForm.hidden = true;
           stepConfirm.hidden = false;
           footerStep1.hidden = true;
           footerStep2.hidden = false;
         });
+
+        let currentRequestId = generateUuid();
 
         // Step 2 -> Step 1 ("უკან / რედაქტირება")
         backBtn.addEventListener('click', () => {
@@ -2232,7 +2235,7 @@
             formData.append('period', period);
             formData.append('subject', finalSubject);
             formData.append('body', finalBody);
-            formData.append('request_id', generateUuid());
+            formData.append('request_id', currentRequestId);
             formData.append('confirmed', 'true');
             formData.append('expected_to_email', String(user.email || '').trim());
             if (hasCategorySelect) {
@@ -2294,12 +2297,12 @@
             if (actionMode === 'save_only') {
               showToast(meta.toastSaved);
             } else if (actionMode === 'send_only') {
-              if (letterResult.status === 'failed') {
+              if (letterResult.status !== 'sent') {
                 showToast(letterResult.error || 'წერილის გაგზავნა ვერ მოხერხდა', 'error');
               } else {
                 showToast('წერილი გაიგზავნა კანდიდატის მეილზე');
               }
-            } else if (letterResult.status === 'failed') {
+            } else if (letterResult.status !== 'sent') {
               showToast(`ჩანაწერი შეინახა, თუმცა მეილი ვერ გაიგზავნა: ${letterResult.error || ''}`, 'error');
             } else {
               showToast(meta.toastSavedAndSent);
@@ -2585,9 +2588,16 @@
               await handleAdminErrorResponse(response, 'წერილის თავიდან გაგზავნა ვერ მოხერხდა.', showToast);
               return;
             }
+            const retryResult = await response.json().catch(() => null);
             await load();
             await notifyChanged();
             renderModalList();
+            if (retryResult && retryResult.status !== 'sent') {
+              const errMsg = retryResult.error || 'წერილის თავიდან გაგზავნა ვერ მოხერხდა.';
+              setListStatus(errMsg, true);
+              showToast(errMsg, 'error');
+              return;
+            }
             setListStatus('წერილი წარმატებით გაიგზავნა.');
             showToast('წერილი თავიდან გაიგზავნა');
           } catch {

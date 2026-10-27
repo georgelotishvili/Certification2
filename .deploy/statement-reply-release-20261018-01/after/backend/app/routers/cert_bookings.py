@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -566,7 +567,14 @@ def create_or_update_my_cert_booking(
         updated_at=now_utc,
     )
     db.add(new_booking)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ეს დრო უკვე დაჯავშნილია სხვა კანდიდატის მიერ. გთხოვთ აირჩიოთ სხვა საათი",
+        ) from exc
 
     return _build_user_booking_payload(db, user)
 

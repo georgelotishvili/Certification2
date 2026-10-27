@@ -43,9 +43,9 @@ DEFAULT_TEMPLATES = {
             "მოგესალმებით,\n\n"
             "გაცნობებთ, რომ თქვენი განაცხადი დადასტურდა და დაშვებული ხართ სერტიფიცირების გამოცდაზე. თქვენი გამოცდა დაიგეგმა {date}, {time}-ზე, მისამართზე: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6.\n\n"
             "გამოცდაზე დასაშვებად აუცილებელია:\n"
-            "- საგამოცდო მომსახურების ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});\n"
+            "- საგამოცდო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});\n"
             "- საგამოცდო ცენტრში გამოცხადდეთ გამოცდის დაწყებამდე 30 წუთით ადრე პირადობის დამადასტურებელი მოქმედი დოკუმენტით, ხელშეკრულებაზე ხელმოწერისა და რეგისტრაციის გავლის მიზნით.\n\n"
-            "გთხოვთ წინასწარ გაეცნოთ შესაბამისი მომსახურების ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
+            "გთხოვთ წინასწარ გაეცნოთ საგამოცდო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
             "პატივისცემით,\n"
             "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
         ),
@@ -58,7 +58,7 @@ DEFAULT_TEMPLATES = {
             "გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და მიღებულია გადაწყვეტილება თქვენთვის [კატეგორია] სერტიფიკატის მინიჭების შესახებ.\n\n"
             "სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის ვადაში:\n"
             "- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});\n"
-            "- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.\n\n"
+            "- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6; ოფისში ვიზიტის დღე და საათი გთხოვთ წინასწარ დაჯავშნოთ საიტზე gipc.org.ge თქვენს პირად გვერდზე — „სერტიფიკატის აღების დაჯავშნა“) ან კვალიფიციური ელექტრონული ხელმოწერით.\n\n"
             "საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.\n\n"
             "გთხოვთ გაითვალისწინოთ, რომ დადგენილი წესის შესაბამისად, გამოცდის დადებითი შედეგი სერტიფიკატის მისაღებად მოქმედებს წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის განმავლობაში, ხოლო აღნიშნული ვადის გასვლის შემთხვევაში საგამოცდო შედეგი ძალას კარგავს.\n\n"
             "გთხოვთ წინასწარ გაეცნოთ შესაბამის სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
@@ -168,6 +168,9 @@ def _is_legacy_body(body: str | None) -> bool:
         or "შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“" in raw
         or 'შპს "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"' in raw
         or "წინამდებარე შეტყობინების მიღებიდან 1 თვის ვადაში" in raw
+        or "საგამოცდო მომსახურების ხელშეკრულებაზე" in raw
+        or "შესაბამისი მომსახურების ხელშეკრულებას" in raw
+        or ("გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში" in raw and "სერტიფიკატის აღების დაჯავშნა" not in raw)
     )
 
 
@@ -440,7 +443,7 @@ def list_letters(user_id: int, authorization: str | None = Header(None), db: Ses
     return {"items": [_letter_out(letter) for letter in letters]}
 
 
-def _deliver(db: Session, letter: PlanningLetter):
+def _deliver(db: Session, letter: PlanningLetter, *, actor_email: str | None = None, statement_id: int | None = None):
     # The committed sending state is the durable claim. Duplicate requests and
     # simultaneous retries see it and cannot submit this letter a second time.
     try:
@@ -451,7 +454,28 @@ def _deliver(db: Session, letter: PlanningLetter):
         delivery_status, error = "uncertain", "გაგზავნის შედეგი დაუდასტურებელია. გადაამოწმეთ ოფიციალური ელფოსტა."
     letter.status, letter.error = delivery_status, error
     if delivery_status == "sent":
-        letter.sent_at = datetime.utcnow()
+        now = datetime.utcnow()
+        letter.sent_at = now
+        target_stmt = None
+        if statement_id is not None:
+            target_stmt = db.scalar(
+                select(Statement).where(Statement.id == statement_id, Statement.user_id == letter.user_id)
+            )
+        if target_stmt is None:
+            target_stmt = db.scalar(
+                select(Statement)
+                .where(Statement.user_id == letter.user_id, Statement.answered_at.is_(None))
+                .order_by(Statement.created_at.desc(), Statement.id.desc())
+            )
+        if target_stmt is not None:
+            by_email = actor_email or letter.created_by
+            if target_stmt.seen_at is None:
+                target_stmt.seen_at = now
+                target_stmt.seen_by = by_email
+            if target_stmt.answered_at is None:
+                target_stmt.answered_at = now
+                target_stmt.answered_by = by_email
+            db.add(target_stmt)
     db.commit()
     db.refresh(letter)
     return _letter_out(letter)
@@ -689,25 +713,21 @@ def send_letter(
             user.candidate_updated_at = now
             db.add(user)
 
-        # Automatically mark the replied statement (or latest unanswered statement) as seen & answered
+        # Mark the replied statement as seen; answered_at is set when the letter is actually sent
         target_stmt = None
         if statement_id is not None:
             target_stmt = db.scalar(
                 select(Statement).where(Statement.id == statement_id, Statement.user_id == user_id)
             )
-        if target_stmt is None:
+        if target_stmt is None and not is_save_only:
             target_stmt = db.scalar(
                 select(Statement)
                 .where(Statement.user_id == user_id, Statement.answered_at.is_(None))
                 .order_by(Statement.created_at.desc(), Statement.id.desc())
             )
-        if target_stmt is not None:
-            if target_stmt.seen_at is None:
-                target_stmt.seen_at = now
-                target_stmt.seen_by = actor.email
-            if target_stmt.answered_at is None:
-                target_stmt.answered_at = now
-                target_stmt.answered_by = actor.email
+        if target_stmt is not None and target_stmt.seen_at is None:
+            target_stmt.seen_at = now
+            target_stmt.seen_by = actor.email
             db.add(target_stmt)
 
         db.add(letter)
@@ -731,7 +751,7 @@ def send_letter(
     db.refresh(letter)
     if is_save_only:
         return _letter_out(letter)
-    return _deliver(db, letter)
+    return _deliver(db, letter, actor_email=actor.email, statement_id=statement_id)
 
 
 def _user_letter(db, user_id, letter_id):
@@ -784,7 +804,7 @@ def delete_letter(user_id: int, letter_id: int, authorization: str | None = Head
 
 @router.post("/users/{user_id}/planning-letters/{letter_id}/retry")
 def retry_letter(user_id: int, letter_id: int, authorization: str | None = Header(None), db: Session = Depends(get_db)):
-    _require_admin(db, authorization)
+    actor = _require_admin(db, authorization)
     letter = _user_letter(db, user_id, letter_id)
     user = db.get(User, user_id)
     if user is None or user.email != letter.to_email:
@@ -798,4 +818,4 @@ def retry_letter(user_id: int, letter_id: int, authorization: str | None = Heade
     db.refresh(letter)
     if not claimed.rowcount:
         return _letter_out(letter)
-    return _deliver(db, letter)
+    return _deliver(db, letter, actor_email=actor.email)

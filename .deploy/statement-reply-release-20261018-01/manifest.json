@@ -1,18 +1,36 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "created_at": "2026-10-27T17:43:44.056047+00:00",
+  "created_at": "2026-10-27T20:18:56.903069+00:00",
   "host": "gipcadmin@148.251.167.229",
   "files": [
     {
-      "path": "frontend/pages/index.html",
-      "before_sha256": "668d88e268f063656f60e0ac412e7a2c150dbd169f669cb695d6e2a0a393683f",
-      "after_sha256": "0340a3d61245c215dc3d3bac4fb6fdc2eded6b54f010477d0cfb8ad709ca735a",
+      "path": "backend/app/routers/planning_letters.py",
+      "before_sha256": "61e03f0b9674313d799ef8b67194fdceaaeecefb4d53b59290c67715b0d60606",
+      "after_sha256": "24931cff53ee6facaf76a6afc902a7669f9f62cdad19cd35dac28c75678aad43",
       "existed_before": true
     },
     {
-      "path": "frontend/styles/styles.css",
-      "before_sha256": "49a7c1576238558cea523a75afe77a2ddc1875c08046bfa68a55b9da6a46e096",
-      "after_sha256": "2778ffc584dff8ee85cfdaee0e74127bba4e85674156028baeb1a21faa775d32",
+      "path": "frontend/pages/admin.html",
+      "before_sha256": "589c0afff2731793a90bd0a6c287eeaa25b9bee840f35d2b44b0527a7027ff92",
+      "after_sha256": "da2b05bf8a9d9897c66a4d5782dc4b834be45f3fc613f71a89640a89c8c6c40d",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/pages/documents.html",
+      "before_sha256": "fdc89898e2d94a2458be205649556c3bbe13e542fa2c7cd7112106e9208dffd1",
+      "after_sha256": "dbb79ba9bac84572286a8c3ced94137cdb9a101449f7e64b85d6186c4d5d4b88",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin/exam-schedules.js",
+      "before_sha256": "eac140ae9b2a2859375b694195d50f2830690bf467a0e93f6766e32fd440ef89",
+      "after_sha256": "0e8b558f76e23a8f0ee201d9a860f05e65a211cd1ca1248a19bfb15bea2c96e1",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/documents.js",
+      "before_sha256": "8b202f70c90349bd889d95ad490e518acf0d121326599f739f72627a405cf2be",
+      "after_sha256": "9249030fb7ef8c57e04dd27ab6b360d929a99897a82c8f848acebc3c319f7819",
       "existed_before": true
     }
   ]

@@ -17,13 +17,13 @@
     <script src="../scripts/vendor/qrcode-generator.js?v=1" defer></script>
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
     <script src="../scripts/admin/certificate.js?v=20261027-trans3" defer></script>
-    <script src="../scripts/admin/exam-schedules.js?v=20261027-uploads3" defer></script>
-    <script src="../scripts/admin/users.js?v=20261026-date1" defer></script>
+    <script src="../scripts/admin/exam-schedules.js?v=20261027-fix1" defer></script>
+    <script src="../scripts/admin/users.js?v=20261027-docs1" defer></script>
     <script src="../scripts/admin/guide-videos.js?v=20261020-guide3" defer></script>
     <script src="../scripts/admin/regulations.js?v=20261019-bw1" defer></script>
     <script src="../scripts/admin/app-files.js?v=20261016-app1" defer></script>
     <script src="../scripts/admin/application-form.js?v=20261019-bw1" defer></script>
-    <script src="../scripts/admin/documents.js?v=20261019-bw1" defer></script>
+    <script src="../scripts/admin/documents.js?v=20261027-docs1" defer></script>
     <script src="../scripts/admin/ai-assistant.js?v=20261026-examcal1" defer></script>
     <link rel="stylesheet" href="../styles/admin.css?v=20261027-trans1" />
   </head>
@@ -422,10 +422,10 @@
       <section id="documents-section" class="exam-settings" style="display:none;">
         <div class="exam-content">
           <div class="exam-blocks-header" aria-label="ხელშეკრულებების მართვა">
-            <h2 class="exam-blocks-title">ხელშეკრულებების ატვირთვა (4 ძირითადი ხელშეკრულება)</h2>
+            <h2 class="exam-blocks-title">ხელშეკრულებების ატვირთვა (6 ძირითადი ხელშეკრულება)</h2>
           </div>
-          <div class="contract-slots-panel" id="contractSlotsGrid" aria-label="ოთხივე ხელშეკრულების ატვირთვის ველი">
-            <!-- 4 ხელშეკრულების სლოტი იტვირთება JS-ით (exam, cert_a, cert_b, cert_c) -->
+          <div class="contract-slots-panel" id="contractSlotsGrid" aria-label="ექვსივე ხელშეკრულების ატვირთვის ველი">
+            <!-- 6 ხელშეკრულების სლოტი იტვირთება JS-ით (exam, cert_a, cert_a_transitional, cert_b, cert_b_transitional, cert_c) -->
           </div>
 
           <div class="exam-blocks-header" aria-label="დოკუმენტები" style="margin-top:28px;">

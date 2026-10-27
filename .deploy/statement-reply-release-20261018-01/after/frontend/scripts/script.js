@@ -1410,6 +1410,11 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         const data = await response.json();
+        if (data.token) {
+          try {
+            localStorage.setItem('auth_token', data.token);
+          } catch {}
+        }
         const normalizedUser = {
           id: data.id,
           firstName: data.first_name || registerData.firstName,

@@ -611,6 +611,7 @@ def set_transitional_deadline_date(
 
     return {
         "transitional_deadline": new_deadline,
+        "deadline_date": new_deadline,
         "transitional_count": len(eligible_certs),
         "reactivated_count": reactivated_count,
         "expired_count": expired_count,
