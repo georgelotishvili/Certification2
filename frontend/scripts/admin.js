@@ -147,6 +147,9 @@ document.addEventListener('DOMContentLoaded', () => {
     certificateFormValidityTerm: document.getElementById('certificateFormValidityTerm'),
     certificateFormValidUntil: document.getElementById('certificateFormValidUntil'),
     certificateFormValidUntilDisplay: document.getElementById('certificateFormValidUntilDisplay'),
+    certificateTransitionalBox: document.getElementById('certificateTransitionalBox'),
+    certificateTransitionalDeadlineInput: document.getElementById('certificateTransitionalDeadlineInput'),
+    certificateTransitionalDeadlineSave: document.getElementById('certificateTransitionalDeadlineSave'),
     certificateFormNotifyEditor: document.getElementById('certificateFormNotifyEditor'),
     certificateFormNotifyEditBtn: document.getElementById('certificateFormNotifyEditBtn'),
     certificateFormNotifyReset: document.getElementById('certificateFormNotifyReset'),
@@ -534,7 +537,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const certificateModule = createModuleWithContext(modules.createCertificateModule, {
       ...moduleContextBase,
       onUserCertificateUpdated: (userId, certificateData) => {
-        usersModule.updateUserCardColor?.(userId, certificateData);
+        if (userId != null) {
+          usersModule.updateUserCardColor?.(userId, certificateData);
+        }
         usersModule.refreshLiveUserStates?.({ force: true });
         try {
           window.dispatchEvent(new CustomEvent('admin:certificateUpdated', { detail: { userId, certificateData } }));

@@ -1,13 +1,16 @@
 """Candidate lifecycle service for Exam Candidate and Certificate Candidate statuses."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+import json
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import CertBooking, Certificate, ExamSchedule, PlanningLetter, Statement, User
+from .media_storage import ensure_media_root
 
 VALID_CANDIDATE_STATUSES = ("exam_candidate", "cert_candidate")
 VALID_CANDIDATE_CATEGORIES = ("A", "B", "C", "B_A", "C_A")
@@ -433,4 +436,166 @@ def reconcile_user_candidate_status_after_delete(
             return True
 
     return False
+
+
+# ================= Transitional (Exception Term) Certificate Helpers =================
+
+DEFAULT_TRANSITIONAL_DEADLINE = date(2029, 1, 1)
+
+
+def today_in_tbilisi() -> date:
+    return datetime.now(timezone(timedelta(hours=4))).date()
+
+
+def is_transitional_eligible_level(level: str | None) -> bool:
+    """Exception term (without diploma) applies only to Architect (A) and Municipal Specialist (B), never Expert (C)."""
+    norm = (level or "").strip().lower()
+    if norm in (
+        "expert",
+        "architect_expert",
+        "არქიტექტორი ექსპერტი",
+        "არქიტექტურული პროექტის ექსპერტი",
+    ):
+        return False
+    return True
+
+
+def _transitional_settings_path() -> Path:
+    root = ensure_media_root().resolve()
+    folder = root / "certificates"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / "transitional_settings.json"
+
+
+def get_transitional_deadline_date(db: Session | None = None) -> date:
+    try:
+        path = _transitional_settings_path()
+        if path.is_file():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                raw = str(data.get("deadline_date") or "").strip()
+                if raw:
+                    return date.fromisoformat(raw[:10])
+    except Exception:
+        pass
+    return DEFAULT_TRANSITIONAL_DEADLINE
+
+
+def compute_effective_certificate_status(
+    cert: Certificate,
+    deadline_date: date | None = None,
+) -> str:
+    raw_status = (cert.status or "active").strip().lower()
+    if raw_status == "suspended":
+        return "suspended"
+    if raw_status == "expired":
+        return "expired"
+    if cert.valid_until is not None:
+        vu = cert.valid_until
+        if vu.tzinfo is not None:
+            vu = vu.astimezone(timezone.utc).replace(tzinfo=None)
+        if vu < datetime.utcnow():
+            return "expired"
+    if bool(getattr(cert, "is_transitional", False)) and is_transitional_eligible_level(cert.level):
+        dl = deadline_date or get_transitional_deadline_date()
+        if today_in_tbilisi() >= dl:
+            return "expired"
+    return "active"
+
+
+def sync_transitional_certificates(
+    db: Session,
+    deadline_date: date | None = None,
+) -> date:
+    """
+    Ensure transitional certificates whose global exception deadline has been reached
+    are marked 'expired' in the database, and return the active global deadline date.
+    """
+    dl = deadline_date or get_transitional_deadline_date()
+    today_tb = today_in_tbilisi()
+    if today_tb >= dl:
+        now_utc = datetime.utcnow()
+        active_trans = db.scalars(
+            select(Certificate).where(
+                Certificate.is_transitional == True,  # noqa: E712
+                Certificate.status == "active",
+            )
+        ).all()
+        dirty = False
+        for c in active_trans:
+            if is_transitional_eligible_level(c.level):
+                c.status = "expired"
+                c.updated_at = now_utc
+                db.add(c)
+                dirty = True
+        if dirty:
+            db.commit()
+    return dl
+
+
+def set_transitional_deadline_date(
+    db: Session,
+    new_deadline: date,
+    actor_email: str | None = None,
+) -> dict[str, Any]:
+    """
+    Update the global exception deadline date and synchronize all transitional certificates:
+    - If today < new_deadline: any 'expired' transitional certificate (whose 5-year valid_until
+      has not expired) is automatically restored to 'active'.
+    - If today >= new_deadline: any 'active' transitional certificate is marked 'expired'.
+    """
+    path = _transitional_settings_path()
+    now_utc = datetime.utcnow()
+    payload = {
+        "deadline_date": new_deadline.isoformat(),
+        "updated_at": now_utc.isoformat(),
+        "updated_by": actor_email or "admin",
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    today_tb = today_in_tbilisi()
+    trans_certs = db.scalars(
+        select(Certificate).where(Certificate.is_transitional == True)  # noqa: E712
+    ).all()
+    eligible_certs = [c for c in trans_certs if is_transitional_eligible_level(c.level)]
+
+    reactivated_count = 0
+    expired_count = 0
+    dirty = False
+
+    for c in eligible_certs:
+        status_norm = (c.status or "active").strip().lower()
+        if status_norm == "suspended":
+            continue
+        vu_expired = False
+        if c.valid_until is not None:
+            vu = c.valid_until
+            if vu.tzinfo is not None:
+                vu = vu.astimezone(timezone.utc).replace(tzinfo=None)
+            if vu < now_utc:
+                vu_expired = True
+        if today_tb < new_deadline and not vu_expired:
+            if status_norm != "active":
+                c.status = "active"
+                c.updated_at = now_utc
+                db.add(c)
+                reactivated_count += 1
+                dirty = True
+        else:
+            if status_norm == "active":
+                c.status = "expired"
+                c.updated_at = now_utc
+                db.add(c)
+                expired_count += 1
+                dirty = True
+
+    if dirty:
+        db.commit()
+
+    return {
+        "deadline_date": new_deadline,
+        "transitional_count": len(eligible_certs),
+        "reactivated_count": reactivated_count,
+        "expired_count": expired_count,
+    }
 

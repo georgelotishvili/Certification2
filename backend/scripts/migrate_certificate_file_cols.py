@@ -25,6 +25,8 @@ def run() -> None:
             statements.append("ALTER TABLE certificates ADD COLUMN mime_type VARCHAR(128) DEFAULT 'application/pdf'")
         if "size_bytes" not in columns:
             statements.append("ALTER TABLE certificates ADD COLUMN size_bytes INTEGER")
+        if "is_transitional" not in columns:
+            statements.append("ALTER TABLE certificates ADD COLUMN is_transitional BOOLEAN NOT NULL DEFAULT 0")
         for sql in statements:
             connection.execute(text(sql))
         if statements:

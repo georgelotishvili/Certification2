@@ -18,8 +18,13 @@ from ..database import get_db
 from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter, CertBooking
 from ..services.candidate_status import (
     NON_PASS_CERT_PERIODS,
+    compute_effective_certificate_status,
+    get_transitional_deadline_date,
     get_user_latest_requested_category,
+    is_transitional_eligible_level,
     normalize_cert_category,
+    sync_transitional_certificates,
+    today_in_tbilisi,
 )
 from ..schemas import (
     UserCreate, UserOut, PublicUserOut, PublicPersonPageOut, PublicCertificateOut,
@@ -357,15 +362,8 @@ def _public_person_page(db: Session, *, user_id: int | None = None, code: str | 
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user, cert = row
-    effective_status = cert.status
-    if effective_status == "active" and cert.valid_until is not None:
-        # Stored timestamps are naive UTC; tolerate aware timestamps without
-        # changing the record or making a guest GET perform database writes.
-        valid_until = cert.valid_until
-        if valid_until.tzinfo is not None:
-            valid_until = valid_until.astimezone(timezone.utc).replace(tzinfo=None)
-        if valid_until < datetime.utcnow():
-            effective_status = "expired"
+    deadline = get_transitional_deadline_date()
+    effective_status = compute_effective_certificate_status(cert, deadline)
     return PublicPersonPageOut(
         id=user.id,
         code=user.code,
@@ -380,6 +378,8 @@ def _public_person_page(db: Session, *, user_id: int | None = None, code: str | 
             issue_date=cert.issue_date,
             validity_term=cert.validity_term,
             valid_until=cert.valid_until,
+            is_transitional=bool(cert.is_transitional) and is_transitional_eligible_level(cert.level),
+            transitional_deadline=deadline,
         ),
     )
 
@@ -810,8 +810,13 @@ def _certificate_out_with_notification(
     cert: Certificate,
     notification_status: str | None = None,
     notification_error: str | None = None,
+    deadline_date=None,
 ) -> CertificateOut:
+    dl = deadline_date or get_transitional_deadline_date()
     out = CertificateOut.model_validate(cert)
+    out.status = compute_effective_certificate_status(cert, dl)
+    out.is_transitional = bool(cert.is_transitional) and is_transitional_eligible_level(cert.level)
+    out.transitional_deadline = dl
     out.notification_status = notification_status
     out.notification_error = notification_error
     return out
@@ -829,12 +834,13 @@ def get_certificate(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     # AuthZ: allow any authenticated actor to view certificate metadata
     _require_auth(db, authorization)
+    dl = sync_transitional_certificates(db)
     
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
     
-    return CertificateOut.model_validate(cert)
+    return _certificate_out_with_notification(cert, deadline_date=dl)
 
 
 def _complete_active_bookings_for_user(db: Session, user_id: int, now: datetime) -> None:
@@ -869,14 +875,22 @@ def create_certificate(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Certificate already exists")
     
     now = datetime.utcnow()
+    level_val = payload.level or "architect"
+    is_trans = bool(payload.is_transitional) and is_transitional_eligible_level(level_val)
+    dl = get_transitional_deadline_date()
+    status_val = payload.status or "active"
+    if is_trans and status_val == "active" and today_in_tbilisi() >= dl:
+        status_val = "expired"
+
     cert = Certificate(
         user_id=user_id,
         unique_code=payload.unique_code or user.code,
-        level=payload.level or "architect",
-        status=payload.status or "active",
+        level=level_val,
+        status=status_val,
         issue_date=payload.issue_date,
         validity_term=payload.validity_term,
         valid_until=payload.valid_until,
+        is_transitional=is_trans,
         exam_score=None,
     )
     user.candidate_status = None
@@ -895,7 +909,7 @@ def create_certificate(
             db, user, cert, actor.email, payload.notification_subject, payload.notification_body
         )
     
-    return _certificate_out_with_notification(cert, notif_status, notif_error)
+    return _certificate_out_with_notification(cert, notif_status, notif_error, deadline_date=dl)
 
 
 @router.put("/{user_id}/certificate", response_model=CertificateOut)
@@ -916,6 +930,7 @@ def update_certificate(
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
     
+    was_transitional = bool(cert.is_transitional)
     if payload.unique_code is not None:
         cert.unique_code = payload.unique_code
     if payload.level is not None:
@@ -928,9 +943,27 @@ def update_certificate(
         cert.validity_term = payload.validity_term
     if payload.valid_until is not None:
         cert.valid_until = payload.valid_until
+    if payload.is_transitional is not None:
+        cert.is_transitional = bool(payload.is_transitional)
+    if not is_transitional_eligible_level(cert.level):
+        cert.is_transitional = False
     cert.exam_score = None
-    
+
     now = datetime.utcnow()
+    dl = get_transitional_deadline_date()
+    if was_transitional and not cert.is_transitional and cert.status == "expired":
+        vu_ok = True
+        if cert.valid_until is not None:
+            vu = cert.valid_until
+            if vu.tzinfo is not None:
+                vu = vu.astimezone(timezone.utc).replace(tzinfo=None)
+            if vu < now:
+                vu_ok = False
+        if vu_ok:
+            cert.status = "active"
+    elif cert.is_transitional and cert.status == "active" and today_in_tbilisi() >= dl:
+        cert.status = "expired"
+    
     user.candidate_status = None
     user.candidate_category = None
     user.candidate_updated_at = now
@@ -947,7 +980,7 @@ def update_certificate(
             db, user, cert, actor.email, payload.notification_subject, payload.notification_body
         )
     
-    return _certificate_out_with_notification(cert, notif_status, notif_error)
+    return _certificate_out_with_notification(cert, notif_status, notif_error, deadline_date=dl)
 
 
 @router.post("/{user_id}/certificate/notify", response_model=CertificateOut)
@@ -1180,10 +1213,8 @@ def download_certificate_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     # Allow public download only if certificate is active and not expired
-    status_norm = (cert.status or "").strip().lower()
-    if status_norm in ("suspended", "expired"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="certificate inactive")
-    if cert.valid_until is not None and cert.valid_until < datetime.utcnow():
+    effective_status = compute_effective_certificate_status(cert)
+    if effective_status in ("suspended", "expired"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="certificate inactive")
 
     try:

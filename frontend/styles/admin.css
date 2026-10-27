@@ -5517,6 +5517,52 @@ body.modal-open {
   color: #163049;
 }
 
+.certificate-form__transitional {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(22, 48, 73, 0.16);
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.certificate-form__transitional-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  flex: 1 1 280px;
+}
+
+.certificate-form__transitional-label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: #163049;
+  font-weight: 600;
+}
+
+.certificate-form__transitional-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.certificate-form__transitional-controls input {
+  width: 150px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(22, 48, 73, 0.2);
+  background: #ffffff;
+  color: #163049;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'DejaVu Sans', sans-serif;
+}
+
 .certificate-form__field input:focus,
 .certificate-form__field select:focus,
 .certificate-form__field textarea:focus {

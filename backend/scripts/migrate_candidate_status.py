@@ -28,6 +28,10 @@ def run() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN candidate_updated_at DATETIME")
         conn.execute("CREATE INDEX IF NOT EXISTS ix_users_candidate_status ON users (candidate_status)")
 
+        cert_cols = {row[1] for row in conn.execute("PRAGMA table_info(certificates)")}
+        if cert_cols and "is_transitional" not in cert_cols:
+            conn.execute("ALTER TABLE certificates ADD COLUMN is_transitional BOOLEAN NOT NULL DEFAULT 0")
+
 
 if __name__ == "__main__":
     run()

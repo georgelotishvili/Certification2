@@ -549,6 +549,7 @@ class Certificate(Base):
     issue_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     validity_term: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # years
     valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    is_transitional: Mapped[bool] = mapped_column(Boolean, default=False)
     exam_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # File metadata
     file_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)

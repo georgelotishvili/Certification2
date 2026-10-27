@@ -466,6 +466,8 @@ class PublicCertificateOut(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None
     valid_until: datetime | None = None
+    is_transitional: bool = False
+    transitional_deadline: date | None = None
 
 
 class PublicPersonPageOut(PublicUserOut):
@@ -625,6 +627,8 @@ class CertificateOut(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
+    is_transitional: bool = False
+    transitional_deadline: date | None = None
     filename: str | None = None
     mime_type: str | None = None
     size_bytes: int | None = None
@@ -641,6 +645,7 @@ class CertificateCreate(BaseModel):
     issue_date: datetime | None = None
     validity_term: int | None = None  # years
     valid_until: datetime | None = None
+    is_transitional: bool = False
     send_notification: bool = False
     notification_subject: str | None = None
     notification_body: str | None = None
@@ -653,9 +658,21 @@ class CertificateUpdate(CamelModel):
     issue_date: Optional[datetime] = None
     validity_term: Optional[int] = None
     valid_until: Optional[datetime] = None
+    is_transitional: Optional[bool] = None
     send_notification: Optional[bool] = False
     notification_subject: Optional[str] = None
     notification_body: Optional[str] = None
+
+
+class TransitionalDeadlineUpdateRequest(BaseModel):
+    deadline_date: date
+
+
+class TransitionalDeadlineOut(BaseModel):
+    deadline_date: date
+    transitional_count: int = 0
+    reactivated_count: int = 0
+    expired_count: int = 0
 
 
 class CertificateNotifyRequest(BaseModel):

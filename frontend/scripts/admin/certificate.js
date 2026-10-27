@@ -37,6 +37,9 @@
     const form = DOM.certificateForm;
     const formSubmitBtn = DOM.certificateFormSubmit;
     const validUntilDisplayNode = DOM.certificateFormValidUntilDisplay;
+    const transitionalBox = DOM.certificateTransitionalBox || overlay?.querySelector('#certificateTransitionalBox');
+    const transitionalDeadlineInput = DOM.certificateTransitionalDeadlineInput || overlay?.querySelector('#certificateTransitionalDeadlineInput');
+    const transitionalDeadlineSaveBtn = DOM.certificateTransitionalDeadlineSave || overlay?.querySelector('#certificateTransitionalDeadlineSave');
     const notifyEditor = DOM.certificateFormNotifyEditor || overlay?.querySelector('#certificateFormNotifyEditor');
     const notifyEditBtn = DOM.certificateFormNotifyEditBtn || overlay?.querySelector('#certificateFormNotifyEditBtn');
     const notifyResetBtn = DOM.certificateFormNotifyReset || overlay?.querySelector('#certificateFormNotifyReset');
@@ -66,6 +69,16 @@
     let certIssuedTemplateLoaded = false;
     let notifyEditorOpen = false;
     let notifyManuallyEdited = false;
+
+    const DEFAULT_TRANSITIONAL_DEADLINE_ISO = '2029-01-01';
+    let globalTransitionalDeadlineIso = DEFAULT_TRANSITIONAL_DEADLINE_ISO;
+    let globalTransitionalDeadlineLoaded = false;
+    let savingTransitionalDeadline = false;
+
+    function isTransitionalEligibleLevel(rawLevel) {
+      const key = resolveLevelKey(rawLevel);
+      return key === 'architect' || key === 'municipal';
+    }
 
     const formFields = {
       uniqueCode: DOM.certificateFormCode,
@@ -539,7 +552,7 @@
 
         yearSel = document.createElement('select');
         const nowY = new Date().getFullYear();
-        for (let y = nowY + 5; y >= nowY - 60; y--) {
+        for (let y = nowY + 15; y >= nowY - 60; y--) {
           const opt = document.createElement('option');
           opt.value = String(y);
           opt.textContent = String(y);
@@ -658,13 +671,13 @@
     })();
 
     function attachIssueDatePicker() {
-      const input = formFields.issueDate;
-      if (!input) return;
-      input.addEventListener('focus', () => datePicker.open(input, input.value));
-      input.addEventListener('click', () => datePicker.open(input, input.value));
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowDown') { e.preventDefault(); datePicker.open(input, input.value); }
-        if (e.key === 'Escape') { datePicker.close(); }
+      [formFields.issueDate, transitionalDeadlineInput].filter(Boolean).forEach((input) => {
+        input.addEventListener('focus', () => datePicker.open(input, input.value));
+        input.addEventListener('click', () => datePicker.open(input, input.value));
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); datePicker.open(input, input.value); }
+          if (e.key === 'Escape') { datePicker.close(); }
+        });
       });
     }
 
@@ -695,7 +708,24 @@
       return derivedValidUntil;
     }
 
-    function normalizeStatus(rawStatus, validUntilDate) {
+    function isFiveYearTermStillActive(validUntilValue) {
+      const expiration = parseDate(validUntilValue);
+      if (!expiration) return true;
+      const now = new Date();
+      const expirationMoment = new Date(expiration);
+      expirationMoment.setHours(23, 59, 59, 999);
+      return expirationMoment.getTime() >= now.getTime();
+    }
+
+    function isTransitionalDeadlineReached(deadlineValue) {
+      const deadline = parseDate(deadlineValue || globalTransitionalDeadlineIso);
+      if (!deadline) return false;
+      const now = new Date();
+      const deadlineStart = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate(), 0, 0, 0, 0);
+      return now.getTime() >= deadlineStart.getTime();
+    }
+
+    function normalizeStatus(rawStatus, validUntilDate, options = {}) {
       const fallback = STATUS_MAP.get('active');
       const rawKey = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : '';
       let normalized = STATUS_MAP.get(rawStatus) || STATUS_MAP.get(rawKey) || fallback;
@@ -706,6 +736,12 @@
         const expirationMoment = new Date(expiration);
         expirationMoment.setHours(23, 59, 59, 999);
         if (expirationMoment.getTime() < now.getTime()) {
+          normalized = STATUS_MAP.get('expired');
+        }
+      }
+
+      if (options.isTransitional && normalized.key !== 'suspended') {
+        if (isTransitionalDeadlineReached(options.transitionalDeadline || globalTransitionalDeadlineIso)) {
           normalized = STATUS_MAP.get('expired');
         }
       }
@@ -819,9 +855,18 @@
       });
       const validUntilDate = computedValidUntil || parseDate(validUntilSource);
 
+      const isTransitional =
+        !!(certificate.is_transitional ?? certificate.isTransitional) &&
+        isTransitionalEligibleLevel(level.key);
+      if (certificate.transitional_deadline) {
+        globalTransitionalDeadlineIso = String(certificate.transitional_deadline).trim() || DEFAULT_TRANSITIONAL_DEADLINE_ISO;
+        globalTransitionalDeadlineLoaded = true;
+      }
+
       const status = normalizeStatus(
         certificate.status || certificate.state || user?.certificate_status,
-        validUntilDate
+        validUntilDate,
+        { isTransitional, transitionalDeadline: globalTransitionalDeadlineIso }
       );
       const termNumber = parseNumber(validityTermRaw);
       return {
@@ -844,6 +889,8 @@
         validUntil: formatDate(validUntilDate),
         validUntilInputValue: formatInputDate(validUntilDate),
         rawValidUntil: validUntilSource,
+        isTransitional,
+        transitionalDeadline: formatDate(globalTransitionalDeadlineIso) || '01/01/2029',
         isInactive: status.key === 'suspended' || status.key === 'expired',
         hasCertificate,
       };
@@ -1240,6 +1287,160 @@
       }
     }
 
+    async function loadTransitionalDeadline({ force = false } = {}) {
+      if (globalTransitionalDeadlineLoaded && !force) {
+        if (transitionalDeadlineInput && document.activeElement !== transitionalDeadlineInput) {
+          transitionalDeadlineInput.value = formatDate(globalTransitionalDeadlineIso) || '01/01/2029';
+        }
+        return globalTransitionalDeadlineIso;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/admin/certificate-transitional-deadline`, {
+          headers: { ...getAdminHeaders(), ...getActorHeaders() },
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.transitional_deadline) {
+            globalTransitionalDeadlineIso = String(data.transitional_deadline).trim() || DEFAULT_TRANSITIONAL_DEADLINE_ISO;
+            globalTransitionalDeadlineLoaded = true;
+            if (transitionalDeadlineInput && document.activeElement !== transitionalDeadlineInput) {
+              transitionalDeadlineInput.value = formatDate(globalTransitionalDeadlineIso) || '01/01/2029';
+            }
+          }
+        }
+      } catch {}
+      return globalTransitionalDeadlineIso;
+    }
+
+    function syncTransitionalBoxVisibility() {
+      const levelVal = formFields.level?.value || activeData?.level?.key || 'architect';
+      const isTrans =
+        formOpen &&
+        formFields.validityTerm?.value === 'transitional' &&
+        isTransitionalEligibleLevel(levelVal);
+      if (transitionalBox) {
+        transitionalBox.classList.toggle('hidden', !isTrans);
+      }
+    }
+
+    function syncValidityTermOptionsForLevel(levelValue) {
+      const eligible = isTransitionalEligibleLevel(levelValue);
+      const transOption = formFields.validityTerm?.querySelector('option[value="transitional"]');
+      if (transOption) {
+        transOption.disabled = !eligible;
+        transOption.hidden = !eligible;
+      }
+      if (!eligible && formFields.validityTerm && formFields.validityTerm.value === 'transitional') {
+        formFields.validityTerm.value = '5';
+        if (formFields.status && formFields.status.value === 'expired') {
+          const validUntilCandidate = formFields.validUntil?.value || activeData?.rawValidUntil;
+          if (isFiveYearTermStillActive(validUntilCandidate)) {
+            formFields.status.value = 'active';
+          }
+        }
+      }
+      syncTransitionalBoxVisibility();
+    }
+
+    async function saveTransitionalDeadlineInternal(newIsoDate, { silentToast = false } = {}) {
+      if (!newIsoDate || savingTransitionalDeadline) return null;
+      savingTransitionalDeadline = true;
+      if (transitionalDeadlineSaveBtn) transitionalDeadlineSaveBtn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/admin/certificate-transitional-deadline`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAdminHeaders(),
+            ...getActorHeaders(),
+          },
+          body: JSON.stringify({ transitional_deadline: newIsoDate }),
+        });
+        if (!res.ok) {
+          await handleAdminErrorResponse(res, 'გამონაკლისის ვადის განახლება ვერ მოხერხდა');
+          return null;
+        }
+        const saved = await res.json();
+        globalTransitionalDeadlineIso = String(saved.transitional_deadline || newIsoDate).trim() || DEFAULT_TRANSITIONAL_DEADLINE_ISO;
+        globalTransitionalDeadlineLoaded = true;
+        const formattedDeadline = formatDate(globalTransitionalDeadlineIso) || '01/01/2029';
+        if (transitionalDeadlineInput) {
+          transitionalDeadlineInput.value = formattedDeadline;
+        }
+
+        // Update current certificate status in form & card if applicable
+        const validUntilRef = formFields.validUntil?.value || activeData?.rawValidUntil || activeData?.validUntil;
+        const deadlineReached = isTransitionalDeadlineReached(globalTransitionalDeadlineIso);
+        const fiveYearActive = isFiveYearTermStillActive(validUntilRef);
+
+        if (formOpen && formFields.validityTerm?.value === 'transitional' && formFields.status) {
+          if (deadlineReached && formFields.status.value === 'active') {
+            formFields.status.value = 'expired';
+          } else if (!deadlineReached && formFields.status.value === 'expired' && fiveYearActive) {
+            formFields.status.value = 'active';
+          }
+          renderNotifyFields({ force: false });
+        }
+
+        if (activeData && activeData.hasCertificate && activeData.isTransitional && activeData.status?.key !== 'suspended') {
+          const nextStatusKey = (!deadlineReached && fiveYearActive) ? 'active' : 'expired';
+          const nextStatusObj = STATUS_MAP.get(nextStatusKey) || activeData.status;
+          activeData.status = nextStatusObj;
+          activeData.isInactive = nextStatusObj.key === 'suspended' || nextStatusObj.key === 'expired';
+          activeData.transitionalDeadline = formattedDeadline;
+          if (activeUserRef?.certificate) {
+            activeUserRef.certificate.status = nextStatusObj.key;
+            activeUserRef.certificate.transitional_deadline = globalTransitionalDeadlineIso;
+          }
+          if (activeUserRef?.certificate_info) {
+            activeUserRef.certificate_info.status = nextStatusObj.key;
+            activeUserRef.certificate_info.transitional_deadline = globalTransitionalDeadlineIso;
+          }
+          applyCardStyling(activeData);
+          renderStatus(activeData);
+          updateView();
+        }
+
+        if (onUserCertificateUpdated) {
+          onUserCertificateUpdated(
+            activeUser?.id || null,
+            activeUserRef?.certificate || null
+          );
+        }
+
+        if (!silentToast) {
+          const reactivated = Number(saved.reactivated_count || 0);
+          const expired = Number(saved.expired_count || 0);
+          if (reactivated > 0) {
+            showToast(`გამონაკლისის ვადა განახლდა (${formattedDeadline}). მოქმედ სტატუსზე დაბრუნდა ${reactivated} სერტიფიკატი.`, 'success');
+          } else if (expired > 0) {
+            showToast(`გამონაკლისის ვადა განახლდა (${formattedDeadline}). ვადაგასულ სტატუსზე გადავიდა ${expired} სერტიფიკატი.`, 'info');
+          } else {
+            showToast(`გამონაკლისის ვადა განახლდა: ${formattedDeadline}`, 'success');
+          }
+        }
+        return saved;
+      } catch {
+        if (!silentToast) {
+          showToast('გამონაკლისის ვადის განახლება ვერ მოხერხდა', 'error');
+        }
+        return null;
+      } finally {
+        savingTransitionalDeadline = false;
+        if (transitionalDeadlineSaveBtn) transitionalDeadlineSaveBtn.disabled = false;
+      }
+    }
+
+    async function handleSaveTransitionalDeadline() {
+      const raw = (transitionalDeadlineInput?.value || '').trim();
+      const iso = formatInputDate(raw);
+      if (!iso) {
+        showToast('გთხოვთ მიუთითოთ სწორი თარიღი ფორმატით DD/MM/YYYY', 'error');
+        return;
+      }
+      await saveTransitionalDeadlineInternal(iso, { silentToast: false });
+    }
+
     function resetForm() {
       form?.reset();
       setFormSummary(null);
@@ -1252,6 +1453,10 @@
       if (formFields.sendNotification) {
         formFields.sendNotification.checked = true;
       }
+      if (transitionalDeadlineInput) {
+        transitionalDeadlineInput.value = formatDate(globalTransitionalDeadlineIso) || '01/01/2029';
+      }
+      syncTransitionalBoxVisibility();
       notifyEditorOpen = false;
       notifyManuallyEdited = false;
       updateNotifyEditorVisibility();
@@ -1260,16 +1465,16 @@
     function populateFormFields() {
       if (!form || !activeData) return;
 
+      const levelKey = activeData.level?.key || 'architect';
+      const isTrans = !!(activeData.isTransitional && isTransitionalEligibleLevel(levelKey));
+
       const defaults = {
         uniqueCode: activeData.uniqueCode || activeUser?.code || '',
-        level: activeData.level?.key || 'architect',
+        level: levelKey,
         status: activeData.status?.key || 'active',
         // Display DD/MM/YYYY in the input
         issueDate: activeData.issueDate || '',
-        validityTerm:
-          activeData.rawValidityTerm != null
-            ? String(activeData.rawValidityTerm)
-            : formFields.validityTerm?.defaultValue || '5',
+        validityTerm: isTrans ? 'transitional' : '5',
         validUntil: activeData.validUntilInputValue || '',
         validUntilDisplay: activeData.validUntil || '—',
       };
@@ -1277,26 +1482,35 @@
       if (formFields.uniqueCode) formFields.uniqueCode.value = defaults.uniqueCode;
       if (formSummaryNodes.code) formSummaryNodes.code.textContent = defaults.uniqueCode || '—';
       if (formFields.level) formFields.level.value = defaults.level;
+      syncValidityTermOptionsForLevel(defaults.level);
       if (formFields.status) formFields.status.value = defaults.status;
       if (formFields.issueDate) formFields.issueDate.value = defaults.issueDate;
       if (formFields.validityTerm) formFields.validityTerm.value = defaults.validityTerm;
       if (formFields.validUntil) formFields.validUntil.value = defaults.validUntil;
       if (validUntilDisplayNode) validUntilDisplayNode.textContent = defaults.validUntilDisplay || '—';
+      if (transitionalDeadlineInput) {
+        transitionalDeadlineInput.value = formatDate(globalTransitionalDeadlineIso) || '01/01/2029';
+      }
       if (formFields.sendNotification) formFields.sendNotification.checked = true;
       setFormSummary(activeData);
+      syncTransitionalBoxVisibility();
 
       notifyManuallyEdited = false;
       updateAutoValidity();
       renderNotifyFields({ force: true });
       void loadCertIssuedTemplate();
+      void loadTransitionalDeadline();
     }
 
     function updateAutoValidity() {
       if (!formOpen) return;
       if (!formFields.issueDate || !formFields.validityTerm || !formFields.validUntil) return;
 
+      syncTransitionalBoxVisibility();
+
       const issueDateValue = formFields.issueDate.value;
-      const termNumber = parseNumber(formFields.validityTerm.value);
+      const rawTermValue = formFields.validityTerm.value;
+      const termNumber = rawTermValue === 'transitional' ? 5 : (parseNumber(rawTermValue) || 5);
       if (!issueDateValue || termNumber == null) {
         formFields.validUntil.value = '';
         if (validUntilDisplayNode) validUntilDisplayNode.textContent = '—';
@@ -1318,6 +1532,34 @@
       formFields.validUntil.value = formatted || '';
       if (validUntilDisplayNode) {
         validUntilDisplayNode.textContent = formatted ? formatDate(suggestion) : '—';
+      }
+      renderNotifyFields({ force: false });
+    }
+
+    function handleValidityTermChange() {
+      updateAutoValidity();
+      if (!formOpen || !formFields.status) return;
+      const isTrans =
+        formFields.validityTerm?.value === 'transitional' &&
+        isTransitionalEligibleLevel(formFields.level?.value);
+      const validUntilRef = formFields.validUntil?.value || activeData?.rawValidUntil;
+      const fiveYearActive = isFiveYearTermStillActive(validUntilRef);
+
+      if (!isTrans) {
+        // Switched to standard 5-year term (e.g., presented diploma): reactivate if 5-year term is still valid
+        if (formFields.status.value === 'expired' && fiveYearActive) {
+          formFields.status.value = 'active';
+        }
+      } else {
+        // Switched to transitional term: check against global exception deadline
+        const deadlineInputIso = formatInputDate(transitionalDeadlineInput?.value || '') || globalTransitionalDeadlineIso;
+        if (isTransitionalDeadlineReached(deadlineInputIso)) {
+          if (formFields.status.value === 'active') {
+            formFields.status.value = 'expired';
+          }
+        } else if (formFields.status.value === 'expired' && fiveYearActive) {
+          formFields.status.value = 'active';
+        }
       }
       renderNotifyFields({ force: false });
     }
@@ -1468,9 +1710,12 @@
 
       const uniqueCode = formFields.uniqueCode?.value?.trim() || '';
       const levelValue = formFields.level?.value || 'architect';
-      const statusValue = formFields.status?.value || 'active';
+      let statusValue = formFields.status?.value || 'active';
       const issueDateValue = formFields.issueDate?.value || null;
-      const validityTermValue = parseNumber(formFields.validityTerm?.value);
+      const rawTermSelection = formFields.validityTerm?.value || '5';
+      const isTransitional =
+        rawTermSelection === 'transitional' && isTransitionalEligibleLevel(levelValue);
+      const validityTermValue = 5;
       const validUntilValue = formFields.validUntil?.value || null;
       const shouldSendNotification = formFields.sendNotification ? !!formFields.sendNotification.checked : false;
       if (!notifyManuallyEdited) {
@@ -1484,9 +1729,17 @@
         return;
       }
 
-      if (validityTermValue == null || validityTermValue <= 0) {
-        showToast('მოქმედების ვადა უნდა იყოს დადებითი წელი', 'error');
-        return;
+      if (isTransitional && transitionalDeadlineInput?.value) {
+        const candidateDeadlineIso = formatInputDate(transitionalDeadlineInput.value.trim());
+        if (!candidateDeadlineIso) {
+          showToast('გთხოვთ მიუთითოთ გამონაკლისის სწორი თარიღი (DD/MM/YYYY)', 'error');
+          return;
+        }
+        if (candidateDeadlineIso !== globalTransitionalDeadlineIso) {
+          const updatedDeadlineRes = await saveTransitionalDeadlineInternal(candidateDeadlineIso, { silentToast: true });
+          if (!updatedDeadlineRes) return;
+          statusValue = formFields.status?.value || statusValue;
+        }
       }
 
       const payload = {
@@ -1497,6 +1750,7 @@
         issue_date: formatInputDate(issueDateValue),
         validity_term: validityTermValue,
         valid_until: validUntilValue,
+        is_transitional: isTransitional,
         send_notification: false,
       };
 
@@ -1526,7 +1780,18 @@
 
         // Trust the selected level in the form for UI consistency
         const normalizedLevel = normalizeLevel(levelValue);
-        const normalizedStatus = normalizeStatus(certificateData.status, certificateData.valid_until);
+        if (certificateData.transitional_deadline) {
+          globalTransitionalDeadlineIso = String(certificateData.transitional_deadline).trim() || DEFAULT_TRANSITIONAL_DEADLINE_ISO;
+          globalTransitionalDeadlineLoaded = true;
+        }
+        const savedIsTransitional =
+          !!(certificateData.is_transitional ?? isTransitional) &&
+          isTransitionalEligibleLevel(levelValue);
+        const normalizedStatus = normalizeStatus(
+          certificateData.status,
+          certificateData.valid_until,
+          { isTransitional: savedIsTransitional, transitionalDeadline: globalTransitionalDeadlineIso }
+        );
 
         const formattedIssueDate = formatDate(certificateData.issue_date);
         const formattedValidUntil = formatDate(certificateData.valid_until);
@@ -1553,12 +1818,19 @@
           validUntil: formattedValidUntil,
           validUntilInputValue: certificateData.valid_until,
           rawValidUntil: certificateData.valid_until,
+          isTransitional: savedIsTransitional,
+          transitionalDeadline: formatDate(globalTransitionalDeadlineIso) || '01/01/2029',
           isInactive: normalizedStatus.key === 'suspended' || normalizedStatus.key === 'expired',
           hasCertificate: true,
         };
 
         if (activeUserRef) {
-          activeUserRef.certificate = { ...certificateData, level: levelValue };
+          activeUserRef.certificate = {
+            ...certificateData,
+            level: levelValue,
+            is_transitional: savedIsTransitional,
+            transitional_deadline: globalTransitionalDeadlineIso,
+          };
           activeUserRef.certificate_info = {
             unique_code: certificateData.unique_code,
             level: levelValue,
@@ -1566,6 +1838,8 @@
             issue_date: certificateData.issue_date,
             validity_term: certificateData.validity_term,
             valid_until: certificateData.valid_until,
+            is_transitional: savedIsTransitional,
+            transitional_deadline: globalTransitionalDeadlineIso,
           };
           activeUserRef.certificate_status = certificateData.status;
           activeUserRef.certificate_valid_until = certificateData.valid_until;
@@ -2051,11 +2325,16 @@
               issue_date: certificateData.issue_date,
               validity_term: certificateData.validity_term,
               valid_until: certificateData.valid_until,
+              is_transitional: certificateData.is_transitional,
+              transitional_deadline: certificateData.transitional_deadline,
             },
             certificate_status: certificateData.status,
             certificate_valid_until: certificateData.valid_until,
           }
         : user;
+      if (!certificateData) {
+        void loadTransitionalDeadline();
+      }
       
       activeData = buildCertificateData(userWithCert || {});
       formOpen = false;
@@ -2083,8 +2362,10 @@
       notifySubjectInput?.addEventListener('input', () => { notifyManuallyEdited = true; });
       notifyBodyInput?.addEventListener('input', () => { notifyManuallyEdited = true; });
       formFields.issueDate?.addEventListener('change', () => updateAutoValidity());
+      formFields.validityTerm?.addEventListener('change', () => handleValidityTermChange());
       formFields.validityTerm?.addEventListener('input', () => updateAutoValidity());
       formFields.status?.addEventListener('change', () => renderNotifyFields({ force: false }));
+      transitionalDeadlineSaveBtn?.addEventListener('click', () => { void handleSaveTransitionalDeadline(); });
       downloadBtn?.addEventListener('click', handleDownload);
       attachIssueDatePicker();
       
@@ -2092,6 +2373,7 @@
       formFields.level?.addEventListener('change', async (event) => {
         if (exportBusy) return;
         const level = event.target.value;
+        syncValidityTermOptionsForLevel(level);
         // Update activeData level and re-render; populateView will load correct template
         if (activeData) {
           const normalized = normalizeLevel(level);

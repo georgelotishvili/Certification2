@@ -45,6 +45,8 @@ from ..schemas import (
     StatementSeenRequest,
     StatementAnsweredRequest,
     StatementAnsweredResponse,
+    TransitionalDeadlineOut,
+    TransitionalDeadlineUpdateRequest,
 )
 from ..services.exam_lifecycle import auto_close_expired_sessions, auto_close_session_if_expired
 from ..services.offline_grading import guard_pending_session_delete, lock_exam_content
@@ -67,6 +69,11 @@ from ..services.candidate_status import (
     normalize_cert_category,
     reconcile_user_candidate_status_after_delete,
     sync_all_user_candidates,
+    compute_effective_certificate_status,
+    get_transitional_deadline_date,
+    is_transitional_eligible_level,
+    set_transitional_deadline_date,
+    sync_transitional_certificates,
 )
 from ..services.bounded_upload import (
     DEFAULT_UPLOAD_MAX_BYTES,
@@ -1501,6 +1508,7 @@ def admin_users(
 
     exam_histories = _compute_all_exam_histories(db)
     requested_categories = sync_all_user_candidates(db, exam_histories)
+    transitional_deadline = sync_transitional_certificates(db)
 
     f_day_start: datetime | None = None
     f_day_end: datetime | None = None
@@ -2039,10 +2047,12 @@ def admin_users(
             cert_data = {
                 'unique_code': u.certificate.unique_code,
                 'level': u.certificate.level,
-                'status': u.certificate.status,
+                'status': compute_effective_certificate_status(u.certificate, transitional_deadline),
                 'issue_date': u.certificate.issue_date,
                 'validity_term': u.certificate.validity_term,
                 'valid_until': u.certificate.valid_until,
+                'is_transitional': bool(u.certificate.is_transitional) and is_transitional_eligible_level(u.certificate.level),
+                'transitional_deadline': transitional_deadline.isoformat(),
             }
         is_founder_user = (u.email.lower() == founder_email)
         is_admin_user = is_founder_user or bool(u.is_admin)
@@ -2230,13 +2240,16 @@ def _stage_permission_user_out(db: Session, user: User) -> UserOut:
     req_cat = get_user_latest_requested_category(db, user.id)
     cert_data = None
     if user.certificate:
+        transitional_deadline = get_transitional_deadline_date(db)
         cert_data = {
             "unique_code": user.certificate.unique_code,
             "level": user.certificate.level,
-            "status": user.certificate.status,
+            "status": compute_effective_certificate_status(user.certificate, transitional_deadline),
             "issue_date": user.certificate.issue_date,
             "validity_term": user.certificate.validity_term,
             "valid_until": user.certificate.valid_until,
+            "is_transitional": bool(user.certificate.is_transitional) and is_transitional_eligible_level(user.certificate.level),
+            "transitional_deadline": transitional_deadline.isoformat(),
         }
     return UserOut(
         id=user.id,
@@ -3032,3 +3045,37 @@ def admin_delete_user_photo(
     db.add(user)
     db.commit()
     return
+
+
+@router.get("/certificate-transitional-deadline", response_model=TransitionalDeadlineOut)
+def admin_get_certificate_transitional_deadline(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, authorization)
+    deadline = sync_transitional_certificates(db)
+    return TransitionalDeadlineOut(
+        transitional_deadline=deadline,
+        reactivated_count=0,
+        expired_count=0,
+    )
+
+
+@router.put("/certificate-transitional-deadline", response_model=TransitionalDeadlineOut)
+def admin_update_certificate_transitional_deadline(
+    payload: TransitionalDeadlineUpdateRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    admin_user = _require_admin(db, authorization)
+    res = set_transitional_deadline_date(
+        db,
+        payload.transitional_deadline,
+        actor_email=admin_user.email,
+    )
+    return TransitionalDeadlineOut(
+        transitional_deadline=res["transitional_deadline"],
+        reactivated_count=int(res["reactivated_count"]),
+        expired_count=int(res["expired_count"]),
+    )
+

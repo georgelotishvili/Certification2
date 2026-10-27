@@ -723,9 +723,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         card.dataset.status = String(data.status || '').toLowerCase();
         card.dataset.level = String(data.level || '').toLowerCase();
       } catch {}
-      // Disable download if inactive (suspended/expired) or expired by date
+      // Disable download if inactive (suspended/expired) or expired by date / transitional deadline
       const isExpired = (() => {
         try {
+          if (data.is_transitional) {
+            const rawTrans = String(data.transitional_deadline || '2029-01-01').trim();
+            const dtTrans = window.Utils?.parseUtcDate?.(rawTrans) || new Date(rawTrans);
+            if (dtTrans && !Number.isNaN(dtTrans.getTime())) {
+              const transStart = new Date(dtTrans.getFullYear(), dtTrans.getMonth(), dtTrans.getDate(), 0, 0, 0, 0);
+              if (Date.now() >= transStart.getTime()) return true;
+            }
+          }
           const dt = window.Utils?.parseUtcDate?.(data.valid_until);
           if (!dt) return false;
           const end = new Date(dt);
@@ -735,6 +743,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       })();
       const statusKey = String(data.status || '').trim().toLowerCase();
       const inactive = statusKey === 'suspended' || statusKey === 'expired' || isExpired;
+      try {
+        card.dataset.status = statusKey === 'suspended' ? 'suspended' : (inactive ? 'expired' : 'active');
+      } catch {}
       if (DOM.certDownloadBtn) {
         if (inactive) {
           DOM.certDownloadBtn.setAttribute('disabled', 'true');

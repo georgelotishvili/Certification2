@@ -16,7 +16,7 @@
     <script src="../scripts/admin/project-results.js?v=20261018-outcome2" defer></script>
     <script src="../scripts/vendor/qrcode-generator.js?v=1" defer></script>
     <script src="../scripts/certificate-qr.js?v=20261008-2" defer></script>
-    <script src="../scripts/admin/certificate.js?v=20261026-audit1" defer></script>
+    <script src="../scripts/admin/certificate.js?v=20261027-trans1" defer></script>
     <script src="../scripts/admin/exam-schedules.js?v=20261026-tmpl27" defer></script>
     <script src="../scripts/admin/users.js?v=20261026-date1" defer></script>
     <script src="../scripts/admin/guide-videos.js?v=20261020-guide3" defer></script>
@@ -25,7 +25,7 @@
     <script src="../scripts/admin/application-form.js?v=20261019-bw1" defer></script>
     <script src="../scripts/admin/documents.js?v=20261019-bw1" defer></script>
     <script src="../scripts/admin/ai-assistant.js?v=20261026-examcal1" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261026-examcal1" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261027-trans1" />
   </head>
   <body>
     <header>
@@ -596,13 +596,25 @@
                 <input type="text" id="certificateFormIssueDate" name="issueDate" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off" required />
               </label>
               <label class="certificate-form__field certificate-form__field--validity-term">
-                <span class="certificate-form__label">მოქმედების ვადა (წელი)</span>
-                <input type="number" min="1" max="20" step="1" id="certificateFormValidityTerm" name="validityTerm" value="5" required />
+                <span class="certificate-form__label">მოქმედების ვადა</span>
+                <select id="certificateFormValidityTerm" name="validityTerm" required>
+                  <option value="5">5 წელი</option>
+                  <option value="transitional">ვადა გამონაკლისით</option>
+                </select>
               </label>
             </div>
             <div class="certificate-form__meta">
               <div class="certificate-form__meta-label">მოქმედების საბოლოო თარიღი</div>
               <div class="certificate-form__meta-value" id="certificateFormValidUntilDisplay">—</div>
+            </div>
+            <div class="certificate-form__transitional hidden" id="certificateTransitionalBox">
+              <div class="certificate-form__transitional-info">
+                <span class="certificate-form__transitional-label">გამონაკლისის ვადა (დიპლომის წარდგენის ბოლო თარიღი — ყველა გამონაკლისი სერტიფიკატისთვის)</span>
+              </div>
+              <div class="certificate-form__transitional-controls">
+                <input type="text" id="certificateTransitionalDeadlineInput" inputmode="numeric" placeholder="DD/MM/YYYY" value="01/01/2029" autocomplete="off" />
+                <button type="button" class="secondary-btn certificate-action-btn" id="certificateTransitionalDeadlineSave">თარიღის განახლება</button>
+              </div>
             </div>
             <div class="certificate-form__notify-editor hidden" id="certificateFormNotifyEditor">
               <div class="certificate-form__notify-head">
@@ -1042,6 +1054,6 @@
       </div>
     </footer>
 
-    <script src="../scripts/admin.js?v=20261026-bookingx1" defer></script>
+    <script src="../scripts/admin.js?v=20261027-trans1" defer></script>
   </body>
 </html>
