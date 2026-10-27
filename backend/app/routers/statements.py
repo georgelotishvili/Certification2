@@ -194,17 +194,17 @@ def create_statement(
             if not slot1_list:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="გთხოვთ ატვირთოთ პირადობის დამადასტურებელი დოკუმენტის სკანერი",
+                    detail="გთხოვთ ატვირთოთ პირადობის დამადასტურებელი დოკუმენტის ასლი",
                 )
             if not slot2_list:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="გთხოვთ ატვირთოთ დიპლომის სკანერი (ან განმარტებითი ბარათი საგამონაკლისო წესით სერტიფიცირებისას)",
+                    detail="გთხოვთ ატვირთოთ უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი ან განმარტებითი ბარათი",
                 )
             if not slot3_list:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="გთხოვთ ატვირთოთ გამოცდილების დამადასტურებელი დოკუმენტები",
+                    detail="გთხოვთ ატვირთოთ პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია",
                 )
             for item in (*slot1_list, *slot2_list, *slot3_list):
                 _validate_attachment(item)

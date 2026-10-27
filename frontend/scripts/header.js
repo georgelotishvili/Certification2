@@ -1496,8 +1496,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-uploads3';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_uploads3';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-uploads4';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_uploads4';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -2059,15 +2059,15 @@
       }
 
       if (!examSlotFiles.id.length) {
-        alert('გთხოვთ ატვირთოთ პირადობის სკანერები (პუნქტი 2.1)');
+        alert('გთხოვთ ატვირთოთ პირადობის დამადასტურებელი დოკუმენტის ასლი (პუნქტი 2.1)');
         return;
       }
       if (!examSlotFiles.diploma.length) {
-        alert('გთხოვთ ატვირთოთ დიპლომის სკანერები ან განმარტებითი ბარათი (პუნქტი 2.2)');
+        alert('გთხოვთ ატვირთოთ უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი ან განმარტებითი ბარათი (პუნქტი 2.2)');
         return;
       }
       if (!examSlotFiles.experience.length) {
-        alert('გთხოვთ ატვირთოთ გამოცდილების დამადასტურებელი დოკუმენტები (პუნქტი 2.3)');
+        alert('გთხოვთ ატვირთოთ პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია (პუნქტი 2.3)');
         return;
       }
 
@@ -2093,9 +2093,9 @@
         `☑ ${selectedCategory}`,
         '',
         '2. თანდართული დოკუმენტები',
-        `• 2.1. პირადობის სკანერები: ${idFilesLine}`,
-        `• 2.2. დიპლომის სკანერები / განმარტებითი ბარათი: ${diplomaFilesLine}`,
-        `• 2.3. გამოცდილების დამადასტურებელი დოკუმენტები: ${experienceFilesLine}`,
+        `• 2.1. პირადობის დამადასტურებელი დოკუმენტის ასლი: ${idFilesLine}`,
+        `• 2.2. უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი / განმარტებითი ბარათი: ${diplomaFilesLine}`,
+        `• 2.3. პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია: ${experienceFilesLine}`,
         '',
         '3. დამატებითი ინფორმაცია / სპეციალური საჭიროება გამოცდაზე (არსებობისას)',
         extraInfo,

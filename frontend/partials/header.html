@@ -244,15 +244,15 @@
             </div>
             <ul class="exam-doc-requirements">
               <li><strong>პირადობის დამადასტურებელი დოკუმენტის ასლი</strong> (პირადობის მოწმობა ან პასპორტი);</li>
-              <li><strong>უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი</strong> <span class="exam-doc-req-note">(A და B კატეგორიისთვის — არანაკლებ ბაკალავრის ან მასთან გათანაბრებული აკადემიური ხარისხი; C კატეგორიისთვის — მაგისტრის ან მასთან გათანაბრებული აკადემიური ხარისხი; დიპლომის გარეშე საგამონაკლისო წესით სერტიფიცირების სურვილის შემთხვევაში ატვირთეთ განმარტებითი ბარათი)</span>;</li>
-              <li><strong>სპეციალობით მუშაობის / საექსპერტო პრაქტიკის დამადასტურებელი დოკუმენტ(ებ)ი</strong> <span class="exam-doc-req-note">(A და B კატეგორიისთვის — არანაკლებ 3 წელი, მათ შორის ბოლო 2 წლის უწყვეტი პრაქტიკა; C კატეგორიისთვის — არანაკლებ 10 წელი, მათ შორის ბოლო 2 წლის უწყვეტი საექსპერტო პრაქტიკა)</span>.</li>
+              <li><strong>უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი</strong> <span class="exam-doc-req-note">(A და B კატეგორიისთვის — არანაკლებ ბაკალავრის ან მასთან გათანაბრებული აკადემიური ხარისხი; C კატეგორიისთვის — მაგისტრის ან მასთან გათანაბრებული აკადემიური ხარისხი; უმაღლესი განათლების დამადასტურებელი დოკუმენტის გარეშე, საგამონაკლისო წესით სერტიფიცირების მოთხოვნის შემთხვევაში — წარმოადგინეთ განმარტებითი ბარათი)</span>;</li>
+              <li><strong>სპეციალობით მუშაობის / საექსპერტო პრაქტიკის დამადასტურებელი დოკუმენტაცია</strong> <span class="exam-doc-req-note">(A და B კატეგორიისთვის — არანაკლებ 3 წელი, მათ შორის ბოლო 2 წლის უწყვეტი პრაქტიკა; C კატეგორიისთვის — არანაკლებ 10 წელი, მათ შორის ბოლო 2 წლის უწყვეტი საექსპერტო პრაქტიკა)</span>.</li>
             </ul>
 
             <div class="exam-upload-slots-grid">
-              <!-- Slot 1: ID Scans -->
+              <!-- Slot 1: ID Document Copy -->
               <div class="exam-upload-slot" data-exam-slot="id">
                 <div class="exam-upload-slot-head">
-                  <span class="exam-upload-slot-title">2.1. პირადობის სკანერები</span>
+                  <span class="exam-upload-slot-title">2.1. პირადობის დამადასტურებელი დოკუმენტის ასლი</span>
                   <span class="statement-required-badge">სავალდებულო</span>
                 </div>
                 <div class="statement-file-controls" id="examIdFileControls">
@@ -260,8 +260,8 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
                     ფაილ(ებ)ის არჩევა
                   </button>
-                  <input type="file" id="examIdFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="პირადობის სკანერები" aria-describedby="examFilesHint" tabindex="-1" />
-                  <input type="text" class="statement-file-display" id="examIdFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="პირადობის არჩეული ფაილები" readonly />
+                  <input type="file" id="examIdFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="პირადობის დამადასტურებელი დოკუმენტის ასლი" aria-describedby="examFilesHint" tabindex="-1" />
+                  <input type="text" class="statement-file-display" id="examIdFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="პირადობის დამადასტურებელი დოკუმენტის არჩეული ფაილები" readonly />
                 </div>
                 <div class="exam-uploaded-files-wrap" id="examIdFilesListWrap" hidden>
                   <div class="exam-uploaded-files-head">
@@ -271,12 +271,12 @@
                 </div>
               </div>
 
-              <!-- Slot 2: Diploma Scans / Explanatory Note -->
+              <!-- Slot 2: Diploma Copy / Explanatory Note -->
               <div class="exam-upload-slot" data-exam-slot="diploma">
                 <div class="exam-upload-slot-head">
                   <div class="exam-upload-slot-title-group">
-                    <span class="exam-upload-slot-title">2.2. დიპლომის სკანერები</span>
-                    <span class="exam-upload-slot-side-note">დიპლომის გარეშე საგამონაკლისო წესით სერტიფიცირების სურვილის შემთხვევაში ატვირთეთ განმარტებითი ბარათი</span>
+                    <span class="exam-upload-slot-title">2.2. უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი</span>
+                    <span class="exam-upload-slot-side-note">უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) გარეშე, საგამონაკლისო წესით სერტიფიცირების მოთხოვნის შემთხვევაში, გთხოვთ ატვირთოთ განმარტებითი ბარათი</span>
                   </div>
                   <span class="statement-required-badge">სავალდებულო</span>
                 </div>
@@ -285,8 +285,8 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
                     ფაილ(ებ)ის არჩევა
                   </button>
-                  <input type="file" id="examDiplomaFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="დიპლომის სკანერები ან განმარტებითი ბარათი" aria-describedby="examFilesHint" tabindex="-1" />
-                  <input type="text" class="statement-file-display" id="examDiplomaFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="დიპლომის არჩეული ფაილები" readonly />
+                  <input type="file" id="examDiplomaFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="უმაღლესი განათლების დამადასტურებელი დოკუმენტის (დიპლომის) ასლი ან განმარტებითი ბარათი" aria-describedby="examFilesHint" tabindex="-1" />
+                  <input type="text" class="statement-file-display" id="examDiplomaFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="დიპლომის ან განმარტებითი ბარათის არჩეული ფაილები" readonly />
                 </div>
                 <div class="exam-uploaded-files-wrap" id="examDiplomaFilesListWrap" hidden>
                   <div class="exam-uploaded-files-head">
@@ -299,7 +299,7 @@
               <!-- Slot 3: Experience Documents -->
               <div class="exam-upload-slot" data-exam-slot="experience">
                 <div class="exam-upload-slot-head">
-                  <span class="exam-upload-slot-title">2.3. გამოცდილების დამადასტურებელი დოკუმენტები</span>
+                  <span class="exam-upload-slot-title">2.3. პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია</span>
                   <span class="statement-required-badge">სავალდებულო</span>
                 </div>
                 <div class="statement-file-controls" id="examExperienceFileControls">
@@ -307,7 +307,7 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
                     ფაილ(ებ)ის არჩევა
                   </button>
-                  <input type="file" id="examExperienceFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="გამოცდილების დამადასტურებელი დოკუმენტები" aria-describedby="examFilesHint" tabindex="-1" />
+                  <input type="file" id="examExperienceFilesInput" class="statement-file-input" accept=".zip,.rar,.pdf,.jpg,.jpeg,.png,.doc,.docx" multiple aria-label="პროფესიული გამოცდილების დამადასტურებელი დოკუმენტაცია" aria-describedby="examFilesHint" tabindex="-1" />
                   <input type="text" class="statement-file-display" id="examExperienceFilesDisplay" placeholder="ფაილი არ არის არჩეული" aria-label="გამოცდილების არჩეული ფაილები" readonly />
                 </div>
                 <div class="exam-uploaded-files-wrap" id="examExperienceFilesListWrap" hidden>
