@@ -15,7 +15,16 @@ from sqlalchemy.orm import Session, selectinload
 from ..config import get_settings
 from ..database import get_db
 from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
-from ..models import CertBooking, ExamSchedule, PlanningLetter, MultiApartmentEvaluation, MultiFunctionalEvaluation, format_statement_doc_number
+from ..models import (
+    CertBooking,
+    ExamSchedule,
+    PlanningLetter,
+    MultiApartmentEvaluation,
+    MultiFunctionalEvaluation,
+    build_statement_attachments_list,
+    format_statement_doc_number,
+    iter_statement_attachment_paths,
+)
 from ..schemas import (
     AdminBlocksResponse,
     AdminBlocksUpdateRequest,
@@ -943,17 +952,28 @@ def delete_result(
 @router.get("/statements/{statement_id}/file")
 def admin_download_statement_file(
     statement_id: int,
+    slot: int = Query(1, ge=1, le=3),
     authorization: str | None = Header(None, alias="Authorization"),
     actor: str | None = Query(None, alias="actor"),
     db: Session = Depends(get_db),
 ):
     _require_admin(db, authorization)
     st = db.get(Statement, statement_id)
-    if not st or not st.attachment_path:
+    if not st:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if slot == 2:
+        rel_path, orig_filename, mime_type = st.attachment2_path, st.attachment2_filename, st.attachment2_mime_type
+    elif slot == 3:
+        rel_path, orig_filename, mime_type = st.attachment3_path, st.attachment3_filename, st.attachment3_mime_type
+    else:
+        rel_path, orig_filename, mime_type = st.attachment_path, st.attachment_filename, st.attachment_mime_type
+
+    if not rel_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     try:
-        path = resolve_storage_path(st.attachment_path)
+        path = resolve_storage_path(rel_path)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     if not path.exists():
@@ -961,8 +981,8 @@ def admin_download_statement_file(
 
     return FileResponse(
         path,
-        media_type=st.attachment_mime_type or "application/octet-stream",
-        filename=st.attachment_filename or path.name,
+        media_type=mime_type or "application/octet-stream",
+        filename=orig_filename or path.name,
     )
 
 
@@ -2564,9 +2584,9 @@ def admin_delete_user(
     # Delete statement attachment files before cascade delete
     statements = db.scalars(select(Statement).where(Statement.user_id == user_id)).all()
     for statement in statements:
-        if statement.attachment_path:
+        for att_path in iter_statement_attachment_paths(statement):
             try:
-                delete_storage_file(statement.attachment_path)
+                delete_storage_file(att_path)
             except Exception:
                 # Best-effort: continue even if file deletion fails
                 pass
@@ -2653,9 +2673,9 @@ def admin_delete_all_users(
         # Delete statement attachment files before cascade delete
         statements = db.scalars(select(Statement).where(Statement.user_id == u.id)).all()
         for statement in statements:
-            if statement.attachment_path:
+            for att_path in iter_statement_attachment_paths(statement):
                 try:
-                    delete_storage_file(statement.attachment_path)
+                    delete_storage_file(att_path)
                 except Exception:
                     # Best-effort: continue even if file deletion fails
                     pass
@@ -2711,6 +2731,7 @@ def _admin_statement_payload(statement: Statement, user: User) -> AdminStatement
         answered_by=statement.answered_by,
         attachment_filename=statement.attachment_filename,
         attachment_size_bytes=statement.attachment_size_bytes,
+        attachments=build_statement_attachments_list(statement),
     )
 
 
@@ -2811,9 +2832,9 @@ def admin_delete_statement(
     if not statement:
         return
     user = db.get(User, statement.user_id)
-    # Remove stored attachment if present
-    if statement.attachment_path:
-        delete_storage_file(statement.attachment_path)
+    # Remove stored attachments if present
+    for att_path in iter_statement_attachment_paths(statement):
+        delete_storage_file(att_path)
     db.delete(statement)
     db.flush()
     reconcile_user_candidate_status_after_delete(db, user, deleted_kind="statement")

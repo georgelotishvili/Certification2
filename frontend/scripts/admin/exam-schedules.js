@@ -742,6 +742,9 @@
             answeredAt: stmt.answered_at,
             error: null,
             attachmentFilename: stmt.attachment_filename || null,
+            attachments: Array.isArray(stmt.attachments) && stmt.attachments.length
+              ? stmt.attachments
+              : (stmt.attachment_filename ? [{ slot: 1, filename: stmt.attachment_filename }] : []),
             toEmail: user.email || '',
             sentAt: createdAtRaw,
             sentAtDisplay: formatTimestampDisplay(createdAtRaw),
@@ -1037,9 +1040,11 @@
         }
       }
 
-      async function downloadStatementAttachment(statementId, filename) {
+      async function downloadStatementAttachment(statementId, filename, slot = 1) {
         try {
-          const response = await fetch(`${API_BASE}/admin/statements/${encodeURIComponent(statementId)}/file`, {
+          const slotNum = Number(slot) || 1;
+          const slotParam = slotNum > 1 ? `?slot=${encodeURIComponent(slotNum)}` : '';
+          const response = await fetch(`${API_BASE}/admin/statements/${encodeURIComponent(statementId)}/file${slotParam}`, {
             headers: { ...getAdminHeaders(), ...getActorHeaders() },
           });
           if (!response.ok) {
@@ -2855,20 +2860,33 @@
               : `მიმღები: ${item.toEmail || user.email || '—'}`;
             bodyMeta.appendChild(recipientEl);
 
-            if (item.attachmentFilename) {
+            if (item.isIncomingStatement) {
+              const stmtAttachments = Array.isArray(item.attachments) && item.attachments.length
+                ? item.attachments
+                : (item.attachmentFilename ? [{ slot: 1, filename: item.attachmentFilename }] : []);
+              stmtAttachments.forEach((att) => {
+                if (!att?.filename) return;
+                const fileBtn = document.createElement('button');
+                fileBtn.type = 'button';
+                fileBtn.className = 'exam-schedule-attachment-link';
+                fileBtn.textContent = `📎 ${att.filename}`;
+                if (item.statementId != null) {
+                  fileBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    if (item.seenAt == null) {
+                      void markStatementSeenInModal(item.statementId, item, row, badge);
+                    }
+                    void downloadStatementAttachment(item.statementId, att.filename, att.slot || 1);
+                  });
+                }
+                bodyMeta.appendChild(fileBtn);
+              });
+            } else if (item.attachmentFilename) {
               const fileBtn = document.createElement('button');
               fileBtn.type = 'button';
               fileBtn.className = 'exam-schedule-attachment-link';
               fileBtn.textContent = `📎 ${item.attachmentFilename}`;
-              if (item.isIncomingStatement && item.statementId != null) {
-                fileBtn.addEventListener('click', (ev) => {
-                  ev.stopPropagation();
-                  if (item.seenAt == null) {
-                    void markStatementSeenInModal(item.statementId, item, row, badge);
-                  }
-                  void downloadStatementAttachment(item.statementId, item.attachmentFilename);
-                });
-              } else if (item.letterId != null) {
+              if (item.letterId != null) {
                 fileBtn.addEventListener('click', (ev) => {
                   ev.stopPropagation();
                   void downloadLetterAttachment(item.letterId, item.attachmentFilename);

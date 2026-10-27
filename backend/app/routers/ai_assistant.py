@@ -39,6 +39,7 @@ from ..models import (
     SiteDocument,
     Statement,
     User,
+    build_statement_attachments_list,
     format_letter_doc_number,
     format_statement_doc_number,
 )
@@ -913,25 +914,29 @@ def _unpack_zip_bytes_to_parts(
     return parts, used, unpacked_names
 
 
-def _read_statement_attachment_parts(
+def _read_single_statement_attachment_parts(
     statement: Statement,
     user: User | None,
     *,
+    rel_path: str | None,
+    orig_filename: str | None,
+    slot_label: str = "",
     budget_bytes: int,
 ) -> tuple[list[dict[str, Any]], int, str | None]:
-    """Read a statement attachment and return content parts + bytes used + description."""
-    if not statement.attachment_path:
+    """Read a single statement attachment slot and return content parts + bytes used + description."""
+    if not rel_path:
         return [], 0, None
     try:
-        path = resolve_storage_path(statement.attachment_path)
+        path = resolve_storage_path(rel_path)
     except Exception:
         return [], 0, None
     if not path.is_file():
         return [], 0, None
 
-    filename = statement.attachment_filename or path.name
+    filename = orig_filename or path.name
     suffix = Path(filename).suffix.lower()
     doc_num = format_statement_doc_number(statement) or f"ID-{statement.id}"
+    slot_suffix = f" [{slot_label}]" if slot_label else ""
     user_label = f"{user.first_name} {user.last_name}".strip() if user else f"User#{statement.user_id}"
 
     try:
@@ -945,7 +950,7 @@ def _read_statement_attachment_parts(
             [
                 {
                     "text": (
-                        f"[განცხადება {doc_num} ({user_label}) — მიბმულია ფაილი '{filename}' "
+                        f"[განცხადება {doc_num}{slot_suffix} ({user_label}) — მიბმულია ფაილი '{filename}' "
                         f"({size} ბაიტი), რომელიც ზომის ლიმიტის გამო პირდაპირ არ ჩაიტვირთა.]"
                     )
                 }
@@ -971,7 +976,7 @@ def _read_statement_attachment_parts(
     if suffix == ".pdf":
         pdf_txt = _extract_pdf_text(raw_bytes, max_chars=45000)
         header_txt = (
-            f"📎 ქვემოთ მოცემულია განცხადებაზე ({doc_num}, ავტორი: {user_label}) "
+            f"📎 ქვემოთ მოცემულია განცხადებაზე ({doc_num}{slot_suffix}, ავტორი: {user_label}) "
             f"მიბმული PDF დოკუმენტი: '{filename}'. გთხოვ დეტალურად წაიკითხო და გააანალიზო მისი შინაარსი:"
         )
         if pdf_txt:
@@ -989,7 +994,7 @@ def _read_statement_attachment_parts(
                 }
             )
             used = len(raw_bytes)
-        return parts, used, f"{doc_num}: {filename}"
+        return parts, used, f"{doc_num}{slot_suffix}: {filename}"
 
     if suffix in mime_map:
         if len(raw_bytes) > budget_bytes:
@@ -997,7 +1002,7 @@ def _read_statement_attachment_parts(
         parts.append(
             {
                 "text": (
-                    f"📎 ქვემოთ მოცემულია განცხადებაზე ({doc_num}, ავტორი: {user_label}) "
+                    f"📎 ქვემოთ მოცემულია განცხადებაზე ({doc_num}{slot_suffix}, ავტორი: {user_label}) "
                     f"მიბმული დოკუმენტი: '{filename}'. გთხოვ დეტალურად წაიკითხო და გააანალიზო მისი შინაარსი:"
                 )
             }
@@ -1011,7 +1016,7 @@ def _read_statement_attachment_parts(
                 }
             }
         )
-        return parts, len(raw_bytes), f"{doc_num}: {filename}"
+        return parts, len(raw_bytes), f"{doc_num}{slot_suffix}: {filename}"
 
     if suffix == ".docx":
         extracted = _extract_docx_text(raw_bytes)
@@ -1019,36 +1024,85 @@ def _read_statement_attachment_parts(
             parts.append(
                 {
                     "text": (
-                        f"📎 განცხადებაზე ({doc_num}, ავტორი: {user_label}) მიბმული Word დოკუმენტის "
+                        f"📎 განცხადებაზე ({doc_num}{slot_suffix}, ავტორი: {user_label}) მიბმული Word დოკუმენტის "
                         f"('{filename}') ამოღებული ტექსტი:\n---\n{extracted}\n---"
                     )
                 }
             )
-            return parts, len(extracted.encode("utf-8")), f"{doc_num}: {filename}"
+            return parts, len(extracted.encode("utf-8")), f"{doc_num}{slot_suffix}: {filename}"
 
     if suffix == ".zip":
         zip_parts, used, unpacked_names = _unpack_zip_bytes_to_parts(
             raw_bytes,
             filename,
-            f"განცხადება {doc_num} (ავტორი: {user_label})",
+            f"განცხადება {doc_num}{slot_suffix} (ავტორი: {user_label})",
             budget_bytes=budget_bytes,
             max_files=30,
         )
         if zip_parts:
             count_note = f" ({len(unpacked_names)} ფაილი)" if unpacked_names else ""
-            return zip_parts, used, f"{doc_num}: {filename}{count_note}"
+            return zip_parts, used, f"{doc_num}{slot_suffix}: {filename}{count_note}"
 
     return (
         [
             {
                 "text": (
-                    f"[განცხადებაზე {doc_num} ({user_label}) მიბმულია ფაილი '{filename}' ({size} ბაიტი).]"
+                    f"[განცხადებაზე {doc_num}{slot_suffix} ({user_label}) მიბმულია ფაილი '{filename}' ({size} ბაიტი).]"
                 )
             }
         ],
         0,
-        f"{doc_num}: {filename}",
+        f"{doc_num}{slot_suffix}: {filename}",
     )
+
+
+def _read_statement_attachment_parts(
+    statement: Statement,
+    user: User | None,
+    *,
+    budget_bytes: int,
+) -> tuple[list[dict[str, Any]], int, str | None]:
+    """Read all statement attachments (up to 3 slots) and return combined parts + bytes used + description."""
+    has_multi = bool(getattr(statement, "attachment2_path", None) or getattr(statement, "attachment3_path", None))
+    slots = [
+        (
+            statement.attachment_path,
+            statement.attachment_filename,
+            "1. პირადობა" if has_multi else "",
+        ),
+        (
+            getattr(statement, "attachment2_path", None),
+            getattr(statement, "attachment2_filename", None),
+            "2. დიპლომი / განმარტებითი ბარათი",
+        ),
+        (
+            getattr(statement, "attachment3_path", None),
+            getattr(statement, "attachment3_filename", None),
+            "3. გამოცდილება",
+        ),
+    ]
+    all_parts: list[dict[str, Any]] = []
+    total_used = 0
+    labels: list[str] = []
+    rem = budget_bytes
+    for rel_path, orig_filename, slot_label in slots:
+        if not rel_path:
+            continue
+        p, u_bytes, lbl = _read_single_statement_attachment_parts(
+            statement,
+            user,
+            rel_path=rel_path,
+            orig_filename=orig_filename,
+            slot_label=slot_label,
+            budget_bytes=max(0, rem),
+        )
+        if p:
+            all_parts.extend(p)
+            total_used += u_bytes
+            rem = max(0, rem - u_bytes)
+        if lbl:
+            labels.append(lbl)
+    return all_parts, total_used, (", ".join(labels) if labels else None)
 
 
 def _next_workday(today: date) -> date:
@@ -1225,9 +1279,10 @@ def _build_site_context_and_attachments(
                     else ("ნანახი, მაგრამ უპასუხო" if s.answered_at is None else "პასუხი გაცემულია")
                 ),
                 "message": s.message,
-                "has_attachment": bool(s.attachment_path),
+                "has_attachment": bool(s.attachment_path or getattr(s, "attachment2_path", None) or getattr(s, "attachment3_path", None)),
                 "attachment_filename": s.attachment_filename,
                 "attachment_size_bytes": s.attachment_size_bytes,
+                "attachments": build_statement_attachments_list(s),
                 "download_source": (
                     {"source_type": "statement", "source_id": s.id}
                     if s.attachment_path
@@ -1450,6 +1505,7 @@ def _build_site_context_and_attachments(
                 "created_at": st_obj.created_at.isoformat() if st_obj.created_at else None,
                 "message": st_obj.message,
                 "attachment_filename": st_obj.attachment_filename,
+                "attachments": build_statement_attachments_list(st_obj),
                 "answered_at": st_obj.answered_at.isoformat() if st_obj.answered_at else None,
                 "download_source": (
                     {"source_type": "statement", "source_id": st_obj.id}

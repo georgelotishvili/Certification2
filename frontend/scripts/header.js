@@ -1496,8 +1496,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261025-booking2';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261025_booking2';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-uploads3';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_uploads3';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1600,12 +1600,32 @@
       tabExam: document.getElementById('statementTabExam'),
       tabOther: document.getElementById('statementTabOther'),
       examForm: document.getElementById('examApplicationForm'),
-      examFileControls: document.getElementById('examFileControls'),
-      examFilesChoose: document.getElementById('examFilesChoose'),
-      examFilesInput: document.getElementById('examFilesInput'),
-      examFilesDisplay: document.getElementById('examFilesDisplay'),
-      examFilesListWrap: document.getElementById('examFilesListWrap'),
-      examFilesList: document.getElementById('examFilesList'),
+      examSlots: {
+        id: {
+          controls: document.getElementById('examIdFileControls'),
+          choose: document.getElementById('examIdFilesChoose'),
+          input: document.getElementById('examIdFilesInput'),
+          display: document.getElementById('examIdFilesDisplay'),
+          listWrap: document.getElementById('examIdFilesListWrap'),
+          list: document.getElementById('examIdFilesList'),
+        },
+        diploma: {
+          controls: document.getElementById('examDiplomaFileControls'),
+          choose: document.getElementById('examDiplomaFilesChoose'),
+          input: document.getElementById('examDiplomaFilesInput'),
+          display: document.getElementById('examDiplomaFilesDisplay'),
+          listWrap: document.getElementById('examDiplomaFilesListWrap'),
+          list: document.getElementById('examDiplomaFilesList'),
+        },
+        experience: {
+          controls: document.getElementById('examExperienceFileControls'),
+          choose: document.getElementById('examExperienceFilesChoose'),
+          input: document.getElementById('examExperienceFilesInput'),
+          display: document.getElementById('examExperienceFilesDisplay'),
+          listWrap: document.getElementById('examExperienceFilesListWrap'),
+          list: document.getElementById('examExperienceFilesList'),
+        },
+      },
       examAdditionalInfo: document.getElementById('examAdditionalInfo'),
       examConfirmCheckbox: document.getElementById('examConfirmCheckbox'),
       examApplicantSignature: document.getElementById('examApplicantSignature'),
@@ -1615,7 +1635,11 @@
     let overlayOpen = false;
     let isLoading = false;
     let cache = [];
-    let examSelectedFiles = [];
+    const examSlotFiles = {
+      id: [],
+      diploma: [],
+      experience: [],
+    };
     let activeTab = 'exam';
 
     function switchStatementTab(tabKey) {
@@ -1776,24 +1800,50 @@
           : rawMsg;
         details.appendChild(message);
         
-        if (item.attachment_filename) {
-          const attachmentWrapper = document.createElement('div');
-          attachmentWrapper.className = 'statement-attachment';
-          const downloadBtn = document.createElement('button');
-          downloadBtn.type = 'button';
-          downloadBtn.className = 'statement-attachment-download';
-          downloadBtn.textContent = 'ჩამოტვირთვა';
-          const actorEmail = getActorEmail();
-          const downloadUrl = `${API_BASE}/statements/${encodeURIComponent(item.id)}/attachment${actorEmail ? `?actor=${encodeURIComponent(actorEmail)}` : ''}`;
-          downloadBtn.addEventListener('click', () => {
-            window.location.href = downloadUrl;
+        const itemAttachments = Array.isArray(item.attachments) && item.attachments.length
+          ? item.attachments
+          : (item.attachment_filename ? [{ slot: 1, filename: item.attachment_filename }] : []);
+        if (itemAttachments.length) {
+          itemAttachments.forEach((att) => {
+            if (!att?.filename) return;
+            const slotNum = Number(att.slot) || 1;
+            const attachmentWrapper = document.createElement('div');
+            attachmentWrapper.className = 'statement-attachment';
+            const downloadBtn = document.createElement('button');
+            downloadBtn.type = 'button';
+            downloadBtn.className = 'statement-attachment-download';
+            downloadBtn.textContent = 'ჩამოტვირთვა';
+            downloadBtn.addEventListener('click', async () => {
+              try {
+                const slotParam = slotNum > 1 ? `?slot=${encodeURIComponent(slotNum)}` : '';
+                const resp = await fetch(`${API_BASE}/statements/${encodeURIComponent(item.id)}/attachment${slotParam}`, {
+                  headers: { ...getActorHeaders() },
+                  credentials: 'include',
+                });
+                if (!resp.ok) {
+                  alert('ფაილის ჩამოტვირთვა ვერ მოხერხდა');
+                  return;
+                }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = att.filename || 'attachment';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              } catch {
+                alert('ფაილის ჩამოტვირთვა ვერ მოხერხდა');
+              }
+            });
+            const filenameSpan = document.createElement('span');
+            filenameSpan.className = 'statement-attachment-filename';
+            filenameSpan.textContent = att.filename;
+            attachmentWrapper.appendChild(downloadBtn);
+            attachmentWrapper.appendChild(filenameSpan);
+            details.appendChild(attachmentWrapper);
           });
-          const filenameSpan = document.createElement('span');
-          filenameSpan.className = 'statement-attachment-filename';
-          filenameSpan.textContent = item.attachment_filename;
-          attachmentWrapper.appendChild(downloadBtn);
-          attachmentWrapper.appendChild(filenameSpan);
-          details.appendChild(attachmentWrapper);
         }
         
         fragment.appendChild(details);
@@ -1879,23 +1929,30 @@
       }
     }
 
-    function renderExamFilesList() {
-      if (!statementsDOM.examFilesDisplay) return;
-      if (!examSelectedFiles.length) {
-        statementsDOM.examFilesDisplay.value = '';
-        statementsDOM.examFileControls?.classList?.remove?.('has-file');
-        if (statementsDOM.examFilesListWrap) statementsDOM.examFilesListWrap.setAttribute('hidden', '');
-        if (statementsDOM.examFilesList) statementsDOM.examFilesList.innerHTML = '';
+    function getAllExamSelectedFilesTotalSize() {
+      return [...examSlotFiles.id, ...examSlotFiles.diploma, ...examSlotFiles.experience]
+        .reduce((acc, f) => acc + (f.size || 0), 0);
+    }
+
+    function renderExamSlotFilesList(slotKey) {
+      const slotDOM = statementsDOM.examSlots?.[slotKey];
+      const files = examSlotFiles[slotKey] || [];
+      if (!slotDOM?.display) return;
+      if (!files.length) {
+        slotDOM.display.value = '';
+        slotDOM.controls?.classList?.remove?.('has-file');
+        if (slotDOM.listWrap) slotDOM.listWrap.setAttribute('hidden', '');
+        if (slotDOM.list) slotDOM.list.innerHTML = '';
         return;
       }
-      statementsDOM.examFilesDisplay.value = examSelectedFiles.length === 1
-        ? examSelectedFiles[0].name
-        : `არჩეულია ${examSelectedFiles.length} ფაილი`;
-      statementsDOM.examFileControls?.classList?.add?.('has-file');
-      if (statementsDOM.examFilesListWrap) statementsDOM.examFilesListWrap.removeAttribute('hidden');
-      if (statementsDOM.examFilesList) {
+      slotDOM.display.value = files.length === 1
+        ? files[0].name
+        : `არჩეულია ${files.length} ფაილი`;
+      slotDOM.controls?.classList?.add?.('has-file');
+      if (slotDOM.listWrap) slotDOM.listWrap.removeAttribute('hidden');
+      if (slotDOM.list) {
         const frag = document.createDocumentFragment();
-        examSelectedFiles.forEach((file, idx) => {
+        files.forEach((file, idx) => {
           const li = document.createElement('li');
           li.className = 'exam-uploaded-file-item';
           const nameSpan = document.createElement('span');
@@ -1907,42 +1964,57 @@
           removeBtn.textContent = '×';
           removeBtn.setAttribute('aria-label', `ფაილის წაშლა: ${file.name}`);
           removeBtn.addEventListener('click', () => {
-            examSelectedFiles.splice(idx, 1);
-            renderExamFilesList();
+            files.splice(idx, 1);
+            renderExamSlotFilesList(slotKey);
           });
           li.appendChild(nameSpan);
           li.appendChild(removeBtn);
           frag.appendChild(li);
         });
-        statementsDOM.examFilesList.innerHTML = '';
-        statementsDOM.examFilesList.appendChild(frag);
+        slotDOM.list.innerHTML = '';
+        slotDOM.list.appendChild(frag);
       }
     }
 
-    function handleExamFilesChange() {
-      if (!statementsDOM.examFilesInput) return;
-      const incoming = Array.from(statementsDOM.examFilesInput.files || []);
+    function renderAllExamSlotFiles() {
+      renderExamSlotFilesList('id');
+      renderExamSlotFilesList('diploma');
+      renderExamSlotFilesList('experience');
+    }
+
+    function resetAllExamSlotFiles() {
+      examSlotFiles.id = [];
+      examSlotFiles.diploma = [];
+      examSlotFiles.experience = [];
+      renderAllExamSlotFiles();
+    }
+
+    function handleExamSlotFilesChange(slotKey) {
+      const slotDOM = statementsDOM.examSlots?.[slotKey];
+      if (!slotDOM?.input) return;
+      const incoming = Array.from(slotDOM.input.files || []);
       if (!incoming.length) return;
-      let currentTotal = examSelectedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+      const slotList = examSlotFiles[slotKey];
+      let currentTotal = getAllExamSelectedFilesTotalSize();
       for (const file of incoming) {
         if (!/\.(zip|rar|pdf|jpg|jpeg|png|doc|docx)$/i.test(file.name || '')) {
           alert(`ფაილის ტიპი არ არის დაშვებული (${file.name}). დასაშვებია: PDF, JPG, JPEG, PNG, DOC, DOCX, ZIP, RAR`);
-          statementsDOM.examFilesInput.value = '';
+          slotDOM.input.value = '';
           return;
         }
         if ((file.size || 0) + currentTotal > 100 * 1024 * 1024) {
           alert('ფაილების ჯამური ზომა აღემატება 100MB-ს');
-          statementsDOM.examFilesInput.value = '';
+          slotDOM.input.value = '';
           return;
         }
-        const exists = examSelectedFiles.some((f) => f.name === file.name && f.size === file.size);
+        const exists = slotList.some((f) => f.name === file.name && f.size === file.size);
         if (!exists) {
-          examSelectedFiles.push(file);
+          slotList.push(file);
           currentTotal += (file.size || 0);
         }
       }
-      statementsDOM.examFilesInput.value = '';
-      renderExamFilesList();
+      slotDOM.input.value = '';
+      renderExamSlotFilesList(slotKey);
     }
 
     function syncExamSelectionState(changedInput) {
@@ -1986,6 +2058,19 @@
         return;
       }
 
+      if (!examSlotFiles.id.length) {
+        alert('გთხოვთ ატვირთოთ პირადობის სკანერები (პუნქტი 2.1)');
+        return;
+      }
+      if (!examSlotFiles.diploma.length) {
+        alert('გთხოვთ ატვირთოთ დიპლომის სკანერები ან განმარტებითი ბარათი (პუნქტი 2.2)');
+        return;
+      }
+      if (!examSlotFiles.experience.length) {
+        alert('გთხოვთ ატვირთოთ გამოცდილების დამადასტურებელი დოკუმენტები (პუნქტი 2.3)');
+        return;
+      }
+
       if (!statementsDOM.examConfirmCheckbox?.checked) {
         alert('გთხოვთ მონიშნოთ განმცხადებლის დადასტურება (პუნქტი 4)');
         return;
@@ -1995,9 +2080,9 @@
       const fullName = user
         ? `${user.firstName || user.first_name || ''} ${user.lastName || user.last_name || ''}`.trim()
         : '';
-      const filesLine = examSelectedFiles.length
-        ? examSelectedFiles.map((f) => f.name).join(', ')
-        : 'არ არის წარმოდგენილი';
+      const idFilesLine = examSlotFiles.id.map((f) => f.name).join(', ');
+      const diplomaFilesLine = examSlotFiles.diploma.map((f) => f.name).join(', ');
+      const experienceFilesLine = examSlotFiles.experience.map((f) => f.name).join(', ');
       const extraInfo = (statementsDOM.examAdditionalInfo?.value || '').toString().trim() || '—';
 
       const message = [
@@ -2008,7 +2093,9 @@
         `☑ ${selectedCategory}`,
         '',
         '2. თანდართული დოკუმენტები',
-        `ატვირთული ფაილ(ებ)ი: ${filesLine}`,
+        `• 2.1. პირადობის სკანერები: ${idFilesLine}`,
+        `• 2.2. დიპლომის სკანერები / განმარტებითი ბარათი: ${diplomaFilesLine}`,
+        `• 2.3. გამოცდილების დამადასტურებელი დოკუმენტები: ${experienceFilesLine}`,
         '',
         '3. დამატებითი ინფორმაცია / სპეციალური საჭიროება გამოცდაზე (არსებობისას)',
         extraInfo,
@@ -2021,13 +2108,16 @@
 
       const body = new FormData();
       body.set('message', message);
-      if (examSelectedFiles.length === 1) {
-        body.set('attachment', examSelectedFiles[0]);
-      } else if (examSelectedFiles.length > 1) {
-        examSelectedFiles.forEach((f) => {
-          if (typeof body.append === 'function') body.append('attachments', f);
-        });
-      }
+      body.set('is_exam_application', 'true');
+      examSlotFiles.id.forEach((f) => {
+        if (typeof body.append === 'function') body.append('id_attachments', f);
+      });
+      examSlotFiles.diploma.forEach((f) => {
+        if (typeof body.append === 'function') body.append('diploma_attachments', f);
+      });
+      examSlotFiles.experience.forEach((f) => {
+        if (typeof body.append === 'function') body.append('experience_attachments', f);
+      });
 
       const submitBtn = statementsDOM.examSubmitBtn || statementsDOM.examForm.querySelector?.('button[type="submit"]');
       submitBtn?.setAttribute('disabled', 'true');
@@ -2053,8 +2143,7 @@
         alert(`თქვენი განაცხადი მიღებულია!${docNumNotice}`);
         statementsDOM.examForm.reset?.();
         syncExamSelectionState();
-        examSelectedFiles = [];
-        renderExamFilesList();
+        resetAllExamSlotFiles();
         setMetaFromUser();
         handleNewStatement(data);
       } catch (error) {
@@ -2140,8 +2229,7 @@
 
     function reset() {
       cache = [];
-      examSelectedFiles = [];
-      renderExamFilesList();
+      resetAllExamSlotFiles();
       syncExamSelectionState();
       if (overlayOpen) {
         closeOverlay();
@@ -2181,14 +2269,17 @@
           syncExamSelectionState(event?.target || null);
         });
       }
-      if (statementsDOM.examFilesChoose) {
-        on(statementsDOM.examFilesChoose, 'click', () => {
-          if (statementsDOM.examFilesInput) statementsDOM.examFilesInput.click();
-        });
-      }
-      if (statementsDOM.examFilesInput) {
-        on(statementsDOM.examFilesInput, 'change', handleExamFilesChange);
-      }
+      (['id', 'diploma', 'experience']).forEach((slotKey) => {
+        const slotDOM = statementsDOM.examSlots?.[slotKey];
+        if (slotDOM?.choose) {
+          on(slotDOM.choose, 'click', () => {
+            if (slotDOM.input) slotDOM.input.click();
+          });
+        }
+        if (slotDOM?.input) {
+          on(slotDOM.input, 'change', () => handleExamSlotFilesChange(slotKey));
+        }
+      });
       if (statementsDOM.statementFileChoose) {
         on(statementsDOM.statementFileChoose, 'click', () => {
           if (statementsDOM.statementFileInput) statementsDOM.statementFileInput.click();

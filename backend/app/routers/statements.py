@@ -12,7 +12,13 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Statement, User, UserSession, format_statement_doc_number
+from ..models import (
+    Statement,
+    User,
+    UserSession,
+    build_statement_attachments_list,
+    format_statement_doc_number,
+)
 from ..schemas import StatementOut
 from ..services.email_verification import send_statement_confirmation_email
 from ..services.media_storage import ensure_statement_dir, relative_storage_path, resolve_storage_path, delete_storage_file
@@ -80,7 +86,13 @@ def _save_attachment(user_id: int, statement_id: int, upload: UploadFile) -> tup
     return rel, safe_name, mime, total or None
 
 
-def _save_multiple_attachments(user_id: int, statement_id: int, uploads: List[UploadFile]) -> tuple[str, str, str | None, int | None]:
+def _save_multiple_attachments(
+    user_id: int,
+    statement_id: int,
+    uploads: List[UploadFile],
+    *,
+    zip_prefix: str = "documents",
+) -> tuple[str, str, str | None, int | None]:
     directory = ensure_statement_dir(user_id, statement_id)
     temp_paths = []
     used_names: dict[str, int] = {}
@@ -121,18 +133,51 @@ def _save_multiple_attachments(user_id: int, statement_id: int, uploads: List[Up
 
     zip_size = zip_path.stat().st_size if zip_path.exists() else total_bytes
     rel = relative_storage_path(zip_path)
-    return rel, f"documents_{statement_id}.zip", "application/zip", zip_size or None
+    return rel, f"{zip_prefix}_{statement_id}.zip", "application/zip", zip_size or None
+
+
+def _clean_upload_list(items: List[UploadFile] | None) -> List[UploadFile]:
+    out: List[UploadFile] = []
+    if isinstance(items, list):
+        for item in items:
+            if item is not None and getattr(item, "filename", None):
+                out.append(item)
+    return out
+
+
+def _save_slot_uploads(
+    user_id: int,
+    statement_id: int,
+    uploads: List[UploadFile],
+    *,
+    zip_prefix: str = "documents",
+) -> tuple[str, str, str | None, int | None]:
+    if len(uploads) == 1:
+        return _save_attachment(user_id, statement_id, uploads[0])
+    return _save_multiple_attachments(user_id, statement_id, uploads, zip_prefix=zip_prefix)
+
+
+def _get_statement_slot_fields(statement: Statement, slot: int = 1) -> tuple[str | None, str | None, str | None]:
+    if slot == 2:
+        return statement.attachment2_path, statement.attachment2_filename, statement.attachment2_mime_type
+    if slot == 3:
+        return statement.attachment3_path, statement.attachment3_filename, statement.attachment3_mime_type
+    return statement.attachment_path, statement.attachment_filename, statement.attachment_mime_type
 
 
 @router.post("", response_model=StatementOut, status_code=status.HTTP_201_CREATED)
 def create_statement(
     message: str = Form(...),
     attachment: UploadFile | None = File(None),
-    attachments: List[UploadFile] | None = File(None),
+    attachments: List[UploadFile] = File(default=[]),
+    id_attachments: List[UploadFile] = File(default=[]),
+    diploma_attachments: List[UploadFile] = File(default=[]),
+    experience_attachments: List[UploadFile] = File(default=[]),
+    is_exam_application: bool = Form(default=False),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ) -> StatementOut:
-    saved_storage_path: str | None = None
+    saved_storage_paths: list[str] = []
     committed = False
     try:
         user = _get_actor_user(db, authorization)
@@ -140,16 +185,36 @@ def create_statement(
         if not msg:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="message required")
 
-        upload_list: List[UploadFile] = []
-        if isinstance(attachments, list):
-            for item in attachments:
-                if item is not None and getattr(item, "filename", None):
-                    upload_list.append(item)
-        if not upload_list and attachment is not None and getattr(attachment, "filename", None):
-            upload_list.append(attachment)
+        slot1_list = _clean_upload_list(id_attachments)
+        slot2_list = _clean_upload_list(diploma_attachments)
+        slot3_list = _clean_upload_list(experience_attachments)
+        using_three_slots = bool(is_exam_application or slot1_list or slot2_list or slot3_list)
 
-        for item in upload_list:
-            _validate_attachment(item)
+        if using_three_slots:
+            if not slot1_list:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="გთხოვთ ატვირთოთ პირადობის დამადასტურებელი დოკუმენტის სკანერი",
+                )
+            if not slot2_list:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="გთხოვთ ატვირთოთ დიპლომის სკანერი (ან განმარტებითი ბარათი საგამონაკლისო წესით სერტიფიცირებისას)",
+                )
+            if not slot3_list:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="გთხოვთ ატვირთოთ გამოცდილების დამადასტურებელი დოკუმენტები",
+                )
+            for item in (*slot1_list, *slot2_list, *slot3_list):
+                _validate_attachment(item)
+            upload_list: List[UploadFile] = []
+        else:
+            upload_list = _clean_upload_list(attachments)
+            if not upload_list and attachment is not None and getattr(attachment, "filename", None):
+                upload_list.append(attachment)
+            for item in upload_list:
+                _validate_attachment(item)
 
         st = Statement(user_id=user.id, message=msg)
         db.add(st)
@@ -157,16 +222,38 @@ def create_statement(
         if not st.doc_number:
             st.doc_number = format_statement_doc_number(st)
 
-        if len(upload_list) == 1:
-            rel, name, mime, size = _save_attachment(user.id, st.id, upload_list[0])
-            saved_storage_path = rel
-            st.attachment_path = rel
-            st.attachment_filename = name
-            st.attachment_mime_type = mime
-            st.attachment_size_bytes = size
-        elif len(upload_list) > 1:
-            rel, name, mime, size = _save_multiple_attachments(user.id, st.id, upload_list)
-            saved_storage_path = rel
+        if using_three_slots:
+            rel1, name1, mime1, size1 = _save_slot_uploads(
+                user.id, st.id, slot1_list, zip_prefix="piradoba"
+            )
+            saved_storage_paths.append(rel1)
+            st.attachment_path = rel1
+            st.attachment_filename = name1
+            st.attachment_mime_type = mime1
+            st.attachment_size_bytes = size1
+
+            rel2, name2, mime2, size2 = _save_slot_uploads(
+                user.id, st.id, slot2_list, zip_prefix="diplomi"
+            )
+            saved_storage_paths.append(rel2)
+            st.attachment2_path = rel2
+            st.attachment2_filename = name2
+            st.attachment2_mime_type = mime2
+            st.attachment2_size_bytes = size2
+
+            rel3, name3, mime3, size3 = _save_slot_uploads(
+                user.id, st.id, slot3_list, zip_prefix="gamocdileba"
+            )
+            saved_storage_paths.append(rel3)
+            st.attachment3_path = rel3
+            st.attachment3_filename = name3
+            st.attachment3_mime_type = mime3
+            st.attachment3_size_bytes = size3
+        elif upload_list:
+            rel, name, mime, size = _save_slot_uploads(
+                user.id, st.id, upload_list, zip_prefix="documents"
+            )
+            saved_storage_paths.append(rel)
             st.attachment_path = rel
             st.attachment_filename = name
             st.attachment_mime_type = mime
@@ -187,6 +274,7 @@ def create_statement(
             message=st.message,
             created_at=st.created_at,
             attachment_filename=getattr(st, 'attachment_filename', None),
+            attachments=build_statement_attachments_list(st),
         )
     except HTTPException:
         if not committed:
@@ -194,8 +282,8 @@ def create_statement(
                 db.rollback()
             except Exception:
                 pass
-            if saved_storage_path:
-                delete_storage_file(saved_storage_path)
+            for sp in saved_storage_paths:
+                delete_storage_file(sp)
         raise
     except Exception as e:
         import traceback
@@ -205,8 +293,8 @@ def create_statement(
                 db.rollback()
             except Exception:
                 pass
-            if saved_storage_path:
-                delete_storage_file(saved_storage_path)
+            for sp in saved_storage_paths:
+                delete_storage_file(sp)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
@@ -229,6 +317,7 @@ def list_my_statements(
                 message=statement.message,
                 created_at=statement.created_at,
                 attachment_filename=getattr(statement, 'attachment_filename', None),
+                attachments=build_statement_attachments_list(statement),
             )
             for statement in statements
         ]
@@ -254,6 +343,7 @@ def statements_summary(
 @router.get("/{statement_id}/attachment")
 def download_statement_attachment(
     statement_id: int,
+    slot: int = Query(1, ge=1, le=3),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
@@ -265,18 +355,19 @@ def download_statement_attachment(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Statement not found")
         if statement.user_id != user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-        if not statement.attachment_path:
+        rel_path, orig_filename, mime_type = _get_statement_slot_fields(statement, slot)
+        if not rel_path:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
         try:
-            abs_path = resolve_storage_path(statement.attachment_path)
+            abs_path = resolve_storage_path(rel_path)
         except ValueError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
         if not abs_path.exists():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
-        filename = statement.attachment_filename or abs_path.name
+        filename = orig_filename or abs_path.name
         return FileResponse(
             abs_path,
-            media_type=statement.attachment_mime_type or "application/octet-stream",
+            media_type=mime_type or "application/octet-stream",
             filename=filename,
         )
     except HTTPException:

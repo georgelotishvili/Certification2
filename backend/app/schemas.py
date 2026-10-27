@@ -542,12 +542,19 @@ class StatementCreate(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
 
 
+class StatementAttachmentItem(BaseModel):
+    slot: int = 1
+    filename: str
+    size_bytes: int | None = None
+
+
 class StatementOut(BaseModel):
     id: int
     doc_number: str | None = None
     message: str
     created_at: datetime
     attachment_filename: str | None = None
+    attachments: List[StatementAttachmentItem] = Field(default_factory=list)
 
 
 class AdminStatementOut(BaseModel):
@@ -565,6 +572,7 @@ class AdminStatementOut(BaseModel):
     answered_by: str | None = None
     attachment_filename: str | None = None
     attachment_size_bytes: int | None = None
+    attachments: List[StatementAttachmentItem] = Field(default_factory=list)
 
 
 class AdminStatementsResponse(BaseModel):

@@ -2192,6 +2192,56 @@ body.modal-open {
   font-size: 12.5px;
 }
 
+#userStatementsOverlay .exam-upload-slots-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+#userStatementsOverlay .exam-upload-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #cbd8e8;
+  background: #ffffff;
+}
+
+#userStatementsOverlay .exam-upload-slot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+#userStatementsOverlay .exam-upload-slot-title-group {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+#userStatementsOverlay .exam-upload-slot-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+#userStatementsOverlay .exam-upload-slot-side-note {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid #cbd8e8;
+  background: #f1f5f9;
+  color: #1e3a5f;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 #userStatementsOverlay .exam-uploaded-files-wrap {
   display: flex;
   flex-direction: column;

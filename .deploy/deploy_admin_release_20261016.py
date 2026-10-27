@@ -73,6 +73,7 @@ CANDIDATE_FILES = [
     "backend/scripts/migrate_documents.py",
     "backend/scripts/migrate_guide_videos.py",
     "backend/scripts/migrate_planning_letters.py",
+    "backend/scripts/migrate_statements_attachment.py",
     "backend/scripts/migrate_doc_numbers.py",
     "frontend/assets/svg/logo.svg",
     "frontend/pages/admin.html",

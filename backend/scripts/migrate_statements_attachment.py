@@ -25,25 +25,24 @@ def run():
 
     changes = False
 
-    if "attachment_path" not in columns:
-        cursor.execute("ALTER TABLE statements ADD COLUMN attachment_path VARCHAR(1024)")
-        changes = True
-        print("Added attachment_path column")
-
-    if "attachment_filename" not in columns:
-        cursor.execute("ALTER TABLE statements ADD COLUMN attachment_filename VARCHAR(255)")
-        changes = True
-        print("Added attachment_filename column")
-
-    if "attachment_mime_type" not in columns:
-        cursor.execute("ALTER TABLE statements ADD COLUMN attachment_mime_type VARCHAR(128)")
-        changes = True
-        print("Added attachment_mime_type column")
-
-    if "attachment_size_bytes" not in columns:
-        cursor.execute("ALTER TABLE statements ADD COLUMN attachment_size_bytes INTEGER")
-        changes = True
-        print("Added attachment_size_bytes column")
+    for col_name, col_type in (
+        ("attachment_path", "VARCHAR(1024)"),
+        ("attachment_filename", "VARCHAR(255)"),
+        ("attachment_mime_type", "VARCHAR(128)"),
+        ("attachment_size_bytes", "INTEGER"),
+        ("attachment2_path", "VARCHAR(1024)"),
+        ("attachment2_filename", "VARCHAR(255)"),
+        ("attachment2_mime_type", "VARCHAR(128)"),
+        ("attachment2_size_bytes", "INTEGER"),
+        ("attachment3_path", "VARCHAR(1024)"),
+        ("attachment3_filename", "VARCHAR(255)"),
+        ("attachment3_mime_type", "VARCHAR(128)"),
+        ("attachment3_size_bytes", "INTEGER"),
+    ):
+        if col_name not in columns:
+            cursor.execute(f"ALTER TABLE statements ADD COLUMN {col_name} {col_type}")
+            changes = True
+            print(f"Added {col_name} column")
 
     if changes:
         conn.commit()
@@ -56,4 +55,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
