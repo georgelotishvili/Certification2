@@ -2294,12 +2294,12 @@
             if (actionMode === 'save_only') {
               showToast(meta.toastSaved);
             } else if (actionMode === 'send_only') {
-              if (letterResult.status === 'failed') {
+              if (letterResult.status !== 'sent') {
                 showToast(letterResult.error || 'წერილის გაგზავნა ვერ მოხერხდა', 'error');
               } else {
                 showToast('წერილი გაიგზავნა კანდიდატის მეილზე');
               }
-            } else if (letterResult.status === 'failed') {
+            } else if (letterResult.status !== 'sent') {
               showToast(`ჩანაწერი შეინახა, თუმცა მეილი ვერ გაიგზავნა: ${letterResult.error || ''}`, 'error');
             } else {
               showToast(meta.toastSavedAndSent);
@@ -2585,9 +2585,16 @@
               await handleAdminErrorResponse(response, 'წერილის თავიდან გაგზავნა ვერ მოხერხდა.', showToast);
               return;
             }
+            const retryResult = await response.json().catch(() => null);
             await load();
             await notifyChanged();
             renderModalList();
+            if (retryResult && retryResult.status !== 'sent') {
+              const errMsg = retryResult.error || 'წერილის თავიდან გაგზავნა ვერ მოხერხდა.';
+              setListStatus(errMsg, true);
+              showToast(errMsg, 'error');
+              return;
+            }
             setListStatus('წერილი წარმატებით გაიგზავნა.');
             showToast('წერილი თავიდან გაიგზავნა');
           } catch {

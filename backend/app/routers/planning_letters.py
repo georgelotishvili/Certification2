@@ -443,7 +443,7 @@ def list_letters(user_id: int, authorization: str | None = Header(None), db: Ses
     return {"items": [_letter_out(letter) for letter in letters]}
 
 
-def _deliver(db: Session, letter: PlanningLetter):
+def _deliver(db: Session, letter: PlanningLetter, *, actor_email: str | None = None, statement_id: int | None = None):
     # The committed sending state is the durable claim. Duplicate requests and
     # simultaneous retries see it and cannot submit this letter a second time.
     try:
@@ -454,7 +454,28 @@ def _deliver(db: Session, letter: PlanningLetter):
         delivery_status, error = "uncertain", "გაგზავნის შედეგი დაუდასტურებელია. გადაამოწმეთ ოფიციალური ელფოსტა."
     letter.status, letter.error = delivery_status, error
     if delivery_status == "sent":
-        letter.sent_at = datetime.utcnow()
+        now = datetime.utcnow()
+        letter.sent_at = now
+        target_stmt = None
+        if statement_id is not None:
+            target_stmt = db.scalar(
+                select(Statement).where(Statement.id == statement_id, Statement.user_id == letter.user_id)
+            )
+        if target_stmt is None:
+            target_stmt = db.scalar(
+                select(Statement)
+                .where(Statement.user_id == letter.user_id, Statement.answered_at.is_(None))
+                .order_by(Statement.created_at.desc(), Statement.id.desc())
+            )
+        if target_stmt is not None:
+            by_email = actor_email or letter.created_by
+            if target_stmt.seen_at is None:
+                target_stmt.seen_at = now
+                target_stmt.seen_by = by_email
+            if target_stmt.answered_at is None:
+                target_stmt.answered_at = now
+                target_stmt.answered_by = by_email
+            db.add(target_stmt)
     db.commit()
     db.refresh(letter)
     return _letter_out(letter)
@@ -692,25 +713,21 @@ def send_letter(
             user.candidate_updated_at = now
             db.add(user)
 
-        # Automatically mark the replied statement (or latest unanswered statement) as seen & answered
+        # Mark the replied statement as seen; answered_at is set when the letter is actually sent
         target_stmt = None
         if statement_id is not None:
             target_stmt = db.scalar(
                 select(Statement).where(Statement.id == statement_id, Statement.user_id == user_id)
             )
-        if target_stmt is None:
+        if target_stmt is None and not is_save_only:
             target_stmt = db.scalar(
                 select(Statement)
                 .where(Statement.user_id == user_id, Statement.answered_at.is_(None))
                 .order_by(Statement.created_at.desc(), Statement.id.desc())
             )
-        if target_stmt is not None:
-            if target_stmt.seen_at is None:
-                target_stmt.seen_at = now
-                target_stmt.seen_by = actor.email
-            if target_stmt.answered_at is None:
-                target_stmt.answered_at = now
-                target_stmt.answered_by = actor.email
+        if target_stmt is not None and target_stmt.seen_at is None:
+            target_stmt.seen_at = now
+            target_stmt.seen_by = actor.email
             db.add(target_stmt)
 
         db.add(letter)
@@ -734,7 +751,7 @@ def send_letter(
     db.refresh(letter)
     if is_save_only:
         return _letter_out(letter)
-    return _deliver(db, letter)
+    return _deliver(db, letter, actor_email=actor.email, statement_id=statement_id)
 
 
 def _user_letter(db, user_id, letter_id):
@@ -787,7 +804,7 @@ def delete_letter(user_id: int, letter_id: int, authorization: str | None = Head
 
 @router.post("/users/{user_id}/planning-letters/{letter_id}/retry")
 def retry_letter(user_id: int, letter_id: int, authorization: str | None = Header(None), db: Session = Depends(get_db)):
-    _require_admin(db, authorization)
+    actor = _require_admin(db, authorization)
     letter = _user_letter(db, user_id, letter_id)
     user = db.get(User, user_id)
     if user is None or user.email != letter.to_email:
@@ -801,4 +818,4 @@ def retry_letter(user_id: int, letter_id: int, authorization: str | None = Heade
     db.refresh(letter)
     if not claimed.rowcount:
         return _letter_out(letter)
-    return _deliver(db, letter)
+    return _deliver(db, letter, actor_email=actor.email)

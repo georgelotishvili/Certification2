@@ -39,6 +39,7 @@ CANDIDATE_FILES = [
     "backend/app/routers/documents.py",
     "backend/app/routers/exam.py",
     "backend/app/routers/exam_schedules.py",
+    "backend/app/routers/expert_uploads.py",
     "backend/app/routers/guide.py",
     "backend/app/routers/planning_letters.py",
     "backend/app/routers/registry.py",

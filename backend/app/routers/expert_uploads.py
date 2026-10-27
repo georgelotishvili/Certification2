@@ -15,6 +15,7 @@ from ..database import get_db
 from ..config import get_settings
 from ..models import User, Certificate, ExpertUpload, UserSession
 from ..schemas import ExpertUploadOut
+from ..services.candidate_status import compute_effective_certificate_status, get_transitional_deadline_date
 from ..services.media_storage import ensure_media_root, resolve_storage_path, delete_storage_file
 from ..services.bounded_upload import (
     DEFAULT_UPLOAD_MAX_BYTES,
@@ -63,12 +64,19 @@ def _require_admin(db: Session, authorization: str | None) -> User:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
 
 
-def _must_expert(db: Session, user_id: int) -> Certificate:
+def _must_expert(db: Session, user_id: int, *, require_active: bool = True) -> Certificate:
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="not certified")
     if (cert.level or "").lower() != "expert":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="not expert")
+    if require_active:
+        eff_status = compute_effective_certificate_status(cert, get_transitional_deadline_date())
+        if eff_status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="სერტიფიკატი არ არის აქტიური (შეჩერებულია ან ვადაგასულია)",
+            )
     return cert
 
 
@@ -80,9 +88,15 @@ def _ensure_owner(upload: ExpertUpload, user_id: int):
 def _gen_unique_code(db: Session) -> str:
     today = datetime.utcnow().strftime("%Y-%m-%d")
     prefix = f"EX-{today}-"
-    count = db.scalar(select(func.count(ExpertUpload.id)).where(ExpertUpload.unique_code.like(f"{prefix}%"))) or 0
-    seq = f"{count + 1:03d}"
-    return prefix + seq
+    existing_codes = db.scalars(
+        select(ExpertUpload.unique_code).where(ExpertUpload.unique_code.like(f"{prefix}%"))
+    ).all()
+    max_seq = 0
+    for code in existing_codes:
+        suffix = (code or "")[len(prefix):]
+        if suffix.isdigit():
+            max_seq = max(max_seq, int(suffix))
+    return f"{prefix}{max_seq + 1:03d}"
 
 
 def _expert_dir(unique_code: str) -> Path:
@@ -197,7 +211,7 @@ def list_public_of(user_id: int, db: Session = Depends(get_db)):
     """
     # Ensure user is expert-certified; otherwise allow but will likely be empty
     try:
-        cert = _must_expert(db, user_id)
+        cert = _must_expert(db, user_id, require_active=False)
         _ = cert  # silence linter
     except HTTPException:
         # Not expert or not certified -> return empty list
@@ -357,6 +371,7 @@ def submit_upload(
     db: Session = Depends(get_db),
 ):
     user = _require_auth(db, authorization)
+    _must_expert(db, user.id)
     eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
     if not eu:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")

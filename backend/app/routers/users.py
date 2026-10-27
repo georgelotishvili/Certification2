@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, Header, UploadFile, File, Request
 from fastapi.responses import FileResponse
-from sqlalchemy import select, or_, func
+from sqlalchemy import delete, select, or_, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,7 @@ from ..schemas import (
     UserCreateWithVerification,
 )
 from ..config import get_settings
-from ..security import hash_code, verify_code, validate_password_strength, get_current_user
+from ..security import generate_session_token, hash_code, verify_code, validate_password_strength, get_current_user
 from ..services.media_storage import resolve_storage_path, relative_storage_path, certificate_file_path, delete_storage_file, ensure_media_root
 from ..services.expert_certificate_cleanup import delete_expert_certificate_files
 from ..services.bounded_upload import (
@@ -312,6 +312,23 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
             raise
     db.refresh(user)
 
+    token: str | None = None
+    try:
+        now = datetime.utcnow()
+        session_token = generate_session_token()
+        session = UserSession(
+            user_id=user.id,
+            token=session_token,
+            created_at=now,
+            expires_at=now + timedelta(days=30),
+            last_used_at=now,
+        )
+        db.add(session)
+        db.commit()
+        token = session_token
+    except Exception:
+        db.rollback()
+
     is_admin_user = is_founder or bool(user.is_admin)
     # მთავარ ადმინს ყოველთვის exam_permission = true
     # სხვა ადმინებს exam_permission = true
@@ -341,6 +358,7 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
         exam_stage_remaining_seconds=exam_state["exam_stage_remaining_seconds"],
         exam_stage_permissions=exam_state["exam_stage_permissions"],
         created_at=user.created_at,
+        token=token,
     )
 
 
@@ -483,6 +501,7 @@ def profile(
 @router.patch("/profile", response_model=UserOut)
 def update_profile(
     payload: UserProfileUpdateRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -511,6 +530,7 @@ def update_profile(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="სახელი ცარიელი არ უნდა იყოს")
     if last_name is not None and not last_name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="გვარი ცარიელი არ უნდა იყოს")
+    _validate_georgian_name(first_name, last_name)
     if phone is not None and not phone:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ტელეფონი ცარიელი არ უნდა იყოს")
 
@@ -593,6 +613,18 @@ def update_profile(
 
     if wants_password_change:
         user.password_hash = hash_code((new_password or "").strip())
+        current_token = None
+        if authorization and authorization.lower().startswith("bearer "):
+            current_token = authorization.split(" ", 1)[1].strip()
+        if current_token:
+            db.execute(
+                delete(UserSession).where(
+                    UserSession.user_id == user.id,
+                    UserSession.token != current_token,
+                )
+            )
+        else:
+            db.execute(delete(UserSession).where(UserSession.user_id == user.id))
 
     db.add(user)
     db.commit()
