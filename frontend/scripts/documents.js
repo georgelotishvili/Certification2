@@ -27,7 +27,7 @@
       const cleanTitle = rawTitle.slice(0, codeMatch.index).trim() || rawTitle;
       return { title: cleanTitle, code: codeMatch[1], fullTitle: rawTitle };
     }
-    const contentMatch = String(doc?.content || '').match(/GIPC-[A-Z]+-\d+/);
+    const contentMatch = String(doc?.content || '').match(/GIPC-[A-Z]+-\d+(?:\s*\(გარდამავალი\))?/);
     return {
       title: rawTitle,
       code: contentMatch ? contentMatch[0] : '',
