@@ -186,11 +186,12 @@ main {
 }
 
 .main-hero p.main-hero-test-note {
-  margin-top: 10px;
-  max-width: 490px;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: #4D4D4D;
+  margin-top: 14px;
+  max-width: 560px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #dc2626;
   background: none;
 }
 
@@ -207,6 +208,11 @@ main {
 
   .main-hero p {
     font-size: 0.97vw;
+  }
+
+  .main-hero p.main-hero-test-note {
+    font-size: clamp(15px, 0.85vw, 24px);
+    max-width: 32vw;
   }
 
   .main-hero .gi-line .initial {
