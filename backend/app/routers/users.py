@@ -21,6 +21,7 @@ from ..services.candidate_status import (
     compute_effective_certificate_status,
     get_transitional_deadline_date,
     get_user_latest_requested_category,
+    is_five_year_term_expired,
     is_transitional_eligible_level,
     normalize_cert_category,
     sync_transitional_certificates,
@@ -879,8 +880,13 @@ def create_certificate(
     is_trans = bool(payload.is_transitional) and is_transitional_eligible_level(level_val)
     dl = get_transitional_deadline_date()
     status_val = payload.status or "active"
-    if is_trans and status_val == "active" and today_in_tbilisi() >= dl:
-        status_val = "expired"
+    term_val = payload.validity_term or 5
+    valid_until_val = payload.valid_until
+    if valid_until_val is None and payload.issue_date is not None:
+        try:
+            valid_until_val = payload.issue_date.replace(year=payload.issue_date.year + int(term_val))
+        except ValueError:
+            valid_until_val = payload.issue_date.replace(year=payload.issue_date.year + int(term_val), day=28)
 
     cert = Certificate(
         user_id=user_id,
@@ -888,11 +894,14 @@ def create_certificate(
         level=level_val,
         status=status_val,
         issue_date=payload.issue_date,
-        validity_term=payload.validity_term,
-        valid_until=payload.valid_until,
+        validity_term=term_val,
+        valid_until=valid_until_val,
         is_transitional=is_trans,
         exam_score=None,
     )
+    if cert.status == "active":
+        if is_five_year_term_expired(cert) or (is_trans and today_in_tbilisi() >= dl):
+            cert.status = "expired"
     user.candidate_status = None
     user.candidate_category = None
     user.candidate_updated_at = now
@@ -951,18 +960,20 @@ def update_certificate(
 
     now = datetime.utcnow()
     dl = get_transitional_deadline_date()
+    if cert.valid_until is None and cert.issue_date is not None:
+        term_years = int(cert.validity_term or 5)
+        try:
+            cert.valid_until = cert.issue_date.replace(year=cert.issue_date.year + term_years)
+        except ValueError:
+            cert.valid_until = cert.issue_date.replace(year=cert.issue_date.year + term_years, day=28)
+
+    five_year_expired = is_five_year_term_expired(cert)
     if was_transitional and not cert.is_transitional and cert.status == "expired":
-        vu_ok = True
-        if cert.valid_until is not None:
-            vu = cert.valid_until
-            if vu.tzinfo is not None:
-                vu = vu.astimezone(timezone.utc).replace(tzinfo=None)
-            if vu < now:
-                vu_ok = False
-        if vu_ok:
+        if not five_year_expired:
             cert.status = "active"
-    elif cert.is_transitional and cert.status == "active" and today_in_tbilisi() >= dl:
-        cert.status = "expired"
+    if cert.status == "active":
+        if five_year_expired or (cert.is_transitional and today_in_tbilisi() >= dl):
+            cert.status = "expired"
     
     user.candidate_status = None
     user.candidate_category = None

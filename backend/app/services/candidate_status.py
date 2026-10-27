@@ -481,24 +481,40 @@ def get_transitional_deadline_date(db: Session | None = None) -> date:
     return DEFAULT_TRANSITIONAL_DEADLINE
 
 
+def is_five_year_term_expired(
+    cert: Certificate,
+    today_tb: date | None = None,
+) -> bool:
+    """Check whether the certificate's 5-year cycle (valid_until) has expired."""
+    if cert.valid_until is None:
+        return False
+    ref_day = today_tb or today_in_tbilisi()
+    vu_date = cert.valid_until.date() if isinstance(cert.valid_until, datetime) else cert.valid_until
+    return ref_day > vu_date
+
+
 def compute_effective_certificate_status(
     cert: Certificate,
     deadline_date: date | None = None,
 ) -> str:
+    """
+    Dual-deadline rule:
+    1) 5-year cycle (valid_until): expires after valid_until date.
+    2) Exception deadline (deadline_date, default 01/01/2029): for transitional certificates,
+       expires on/after deadline_date.
+    Whichever deadline is reached first makes the certificate 'expired'.
+    """
     raw_status = (cert.status or "active").strip().lower()
     if raw_status == "suspended":
         return "suspended"
     if raw_status == "expired":
         return "expired"
-    if cert.valid_until is not None:
-        vu = cert.valid_until
-        if vu.tzinfo is not None:
-            vu = vu.astimezone(timezone.utc).replace(tzinfo=None)
-        if vu < datetime.utcnow():
-            return "expired"
+    today_tb = today_in_tbilisi()
+    if is_five_year_term_expired(cert, today_tb):
+        return "expired"
     if bool(getattr(cert, "is_transitional", False)) and is_transitional_eligible_level(cert.level):
         dl = deadline_date or get_transitional_deadline_date()
-        if today_in_tbilisi() >= dl:
+        if today_tb >= dl:
             return "expired"
     return "active"
 
@@ -508,28 +524,33 @@ def sync_transitional_certificates(
     deadline_date: date | None = None,
 ) -> date:
     """
-    Ensure transitional certificates whose global exception deadline has been reached
-    are marked 'expired' in the database, and return the active global deadline date.
+    Synchronize all active certificates against the dual-deadline rule:
+    - Any active certificate whose 5-year valid_until has expired is marked 'expired'.
+    - Any active transitional certificate whose global exception deadline has been reached
+      is marked 'expired'.
+    Returns the active global exception deadline date.
     """
     dl = deadline_date or get_transitional_deadline_date()
     today_tb = today_in_tbilisi()
-    if today_tb >= dl:
-        now_utc = datetime.utcnow()
-        active_trans = db.scalars(
-            select(Certificate).where(
-                Certificate.is_transitional == True,  # noqa: E712
-                Certificate.status == "active",
-            )
-        ).all()
-        dirty = False
-        for c in active_trans:
-            if is_transitional_eligible_level(c.level):
-                c.status = "expired"
-                c.updated_at = now_utc
-                db.add(c)
-                dirty = True
-        if dirty:
-            db.commit()
+    now_utc = datetime.utcnow()
+    active_certs = db.scalars(
+        select(Certificate).where(Certificate.status == "active")
+    ).all()
+    dirty = False
+    for c in active_certs:
+        expired_by_five_year = is_five_year_term_expired(c, today_tb)
+        expired_by_exception = (
+            bool(getattr(c, "is_transitional", False))
+            and is_transitional_eligible_level(c.level)
+            and today_tb >= dl
+        )
+        if expired_by_five_year or expired_by_exception:
+            c.status = "expired"
+            c.updated_at = now_utc
+            db.add(c)
+            dirty = True
+    if dirty:
+        db.commit()
     return dl
 
 
@@ -539,10 +560,12 @@ def set_transitional_deadline_date(
     actor_email: str | None = None,
 ) -> dict[str, Any]:
     """
-    Update the global exception deadline date and synchronize all transitional certificates:
-    - If today < new_deadline: any 'expired' transitional certificate (whose 5-year valid_until
-      has not expired) is automatically restored to 'active'.
-    - If today >= new_deadline: any 'active' transitional certificate is marked 'expired'.
+    Update the global exception deadline date and synchronize all transitional certificates
+    according to the dual-deadline rule (whichever comes earlier: 5-year valid_until or new_deadline):
+    - If today < new_deadline AND 5-year valid_until has NOT expired: any 'expired' transitional
+      certificate is automatically restored to 'active'.
+    - If today >= new_deadline OR 5-year valid_until HAS expired: any 'active' transitional
+      certificate is marked 'expired'.
     """
     path = _transitional_settings_path()
     now_utc = datetime.utcnow()
@@ -567,13 +590,7 @@ def set_transitional_deadline_date(
         status_norm = (c.status or "active").strip().lower()
         if status_norm == "suspended":
             continue
-        vu_expired = False
-        if c.valid_until is not None:
-            vu = c.valid_until
-            if vu.tzinfo is not None:
-                vu = vu.astimezone(timezone.utc).replace(tzinfo=None)
-            if vu < now_utc:
-                vu_expired = True
+        vu_expired = is_five_year_term_expired(c, today_tb)
         if today_tb < new_deadline and not vu_expired:
             if status_norm != "active":
                 c.status = "active"
@@ -593,7 +610,7 @@ def set_transitional_deadline_date(
         db.commit()
 
     return {
-        "deadline_date": new_deadline,
+        "transitional_deadline": new_deadline,
         "transitional_count": len(eligible_certs),
         "reactivated_count": reactivated_count,
         "expired_count": expired_count,

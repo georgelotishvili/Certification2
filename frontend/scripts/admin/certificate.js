@@ -1374,9 +1374,9 @@
         const fiveYearActive = isFiveYearTermStillActive(validUntilRef);
 
         if (formOpen && formFields.validityTerm?.value === 'transitional' && formFields.status) {
-          if (deadlineReached && formFields.status.value === 'active') {
+          if ((!fiveYearActive || deadlineReached) && formFields.status.value === 'active') {
             formFields.status.value = 'expired';
-          } else if (!deadlineReached && formFields.status.value === 'expired' && fiveYearActive) {
+          } else if (!deadlineReached && fiveYearActive && formFields.status.value === 'expired') {
             formFields.status.value = 'active';
           }
           renderNotifyFields({ force: false });
@@ -1536,8 +1536,7 @@
       renderNotifyFields({ force: false });
     }
 
-    function handleValidityTermChange() {
-      updateAutoValidity();
+    function syncStatusWithDualDeadlines() {
       if (!formOpen || !formFields.status) return;
       const isTrans =
         formFields.validityTerm?.value === 'transitional' &&
@@ -1545,23 +1544,33 @@
       const validUntilRef = formFields.validUntil?.value || activeData?.rawValidUntil;
       const fiveYearActive = isFiveYearTermStillActive(validUntilRef);
 
-      if (!isTrans) {
-        // Switched to standard 5-year term (e.g., presented diploma): reactivate if 5-year term is still valid
-        if (formFields.status.value === 'expired' && fiveYearActive) {
+      if (!fiveYearActive) {
+        // 5-year cycle has expired: must be expired even if exception deadline was extended beyond 5 years
+        if (formFields.status.value === 'active') {
+          formFields.status.value = 'expired';
+        }
+      } else if (!isTrans) {
+        // Standard 5-year term and 5-year cycle is still active
+        if (formFields.status.value === 'expired') {
           formFields.status.value = 'active';
         }
       } else {
-        // Switched to transitional term: check against global exception deadline
+        // Transitional term: obey whichever comes first (5-year cycle is active here, so check exception deadline)
         const deadlineInputIso = formatInputDate(transitionalDeadlineInput?.value || '') || globalTransitionalDeadlineIso;
         if (isTransitionalDeadlineReached(deadlineInputIso)) {
           if (formFields.status.value === 'active') {
             formFields.status.value = 'expired';
           }
-        } else if (formFields.status.value === 'expired' && fiveYearActive) {
+        } else if (formFields.status.value === 'expired') {
           formFields.status.value = 'active';
         }
       }
       renderNotifyFields({ force: false });
+    }
+
+    function handleValidityTermChange() {
+      updateAutoValidity();
+      syncStatusWithDualDeadlines();
     }
 
     function updateView() {
@@ -2361,7 +2370,10 @@
       notifySaveTemplateBtn?.addEventListener('click', () => { void handleNotifySaveTemplate(); });
       notifySubjectInput?.addEventListener('input', () => { notifyManuallyEdited = true; });
       notifyBodyInput?.addEventListener('input', () => { notifyManuallyEdited = true; });
-      formFields.issueDate?.addEventListener('change', () => updateAutoValidity());
+      formFields.issueDate?.addEventListener('change', () => {
+        updateAutoValidity();
+        syncStatusWithDualDeadlines();
+      });
       formFields.validityTerm?.addEventListener('change', () => handleValidityTermChange());
       formFields.validityTerm?.addEventListener('input', () => updateAutoValidity());
       formFields.status?.addEventListener('change', () => renderNotifyFields({ force: false }));
