@@ -163,6 +163,23 @@
     </button>
   </div>
 
+  <!-- Temporary Test Mode Notice Banner (Remove #siteTestModeWrap when launching certification) -->
+  <div class="site-test-mode-wrap" id="siteTestModeWrap" role="status" aria-live="polite">
+    <div class="site-test-mode-banner">
+      <span class="site-test-mode-badge">
+        <span class="site-test-mode-dot" aria-hidden="true"></span>
+        <span>სატესტო რეჟიმი</span>
+      </span>
+      <span class="site-test-mode-text">
+        ვებგვერდი მუშაობს სატესტო რეჟიმში — სერტიფიცირების პროცესი ჯერ არ დაწყებულა. დეტალური ინფორმაცია შეგიძლიათ მოიპოვოთ საიტზე არსებული <button type="button" class="site-test-mode-inline-link" data-open-public-ai>AI ასისტენტის</button> მეშვეობით.
+      </span>
+      <button type="button" class="site-test-mode-ai-btn" data-open-public-ai>
+        <span>AI ასისტენტი</span>
+        <span aria-hidden="true">→</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Central Certificate Appointment Booking Button (Hanging ~1/4 below Header) -->
   <div class="cert-booking-header-wrap" id="certBookingHeaderWrap" hidden>
     <button type="button" class="cert-booking-header-btn is-pulsing" id="certBookingHeaderBtn">
@@ -186,6 +203,23 @@
         </div>
       </div>
       <div class="results-modal-body">
+        <!-- Temporary Test Mode Notice inside Statements Modal -->
+        <div class="site-test-mode-modal-notice" role="status">
+          <div class="site-test-mode-modal-body">
+            <span class="site-test-mode-badge">
+              <span class="site-test-mode-dot" aria-hidden="true"></span>
+              <span>სატესტო რეჟიმი</span>
+            </span>
+            <span class="site-test-mode-modal-text">
+              ვებგვერდი მუშაობს სატესტო რეჟიმში — სერტიფიცირების პროცესი ჯერ არ დაწყებულა. დეტალური ინფორმაცია შეგიძლიათ მოიპოვოთ საიტზე არსებული <button type="button" class="site-test-mode-inline-link" data-open-public-ai>AI ასისტენტის</button> მეშვეობით.
+            </span>
+          </div>
+          <button type="button" class="site-test-mode-ai-btn" data-open-public-ai>
+            <span>AI ასისტენტის გახსნა</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+
         <div class="statement-tabs" role="tablist" aria-label="განაცხადის ტიპი">
           <button type="button" class="statement-tab is-active" id="statementTabExam" role="tab" aria-selected="true" aria-controls="examApplicationForm" data-statement-tab="exam">
             გამოცდაზე დაშვების განაცხადი

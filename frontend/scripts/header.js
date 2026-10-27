@@ -1496,8 +1496,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-uploads4';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_uploads4';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-testmode1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_testmode1';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -3291,6 +3291,27 @@
 
     loadHistory();
     void fetchPublicStatus();
+
+    window.PublicAiAssistant = {
+      open: () => togglePanel(true),
+      close: () => togglePanel(false),
+      toggle: togglePanel,
+    };
+
+    document.addEventListener('click', (e) => {
+      const trigger = closest(e.target, '[data-open-public-ai]');
+      if (!trigger) return;
+      e.preventDefault();
+      const statementsOverlay = document.getElementById('userStatementsOverlay');
+      if (statementsOverlay && statementsOverlay.classList.contains('open')) {
+        document.getElementById('userStatementsClose')?.click();
+      }
+      const siteInfoModal = document.getElementById('siteInfoModal');
+      if (siteInfoModal && siteInfoModal.classList.contains('open')) {
+        siteInfoModal.querySelector('.modal-close')?.click();
+      }
+      togglePanel(true);
+    });
 
     // Watch for exam modal activation so AI is hidden during exams
     const observer = new MutationObserver(() => {
