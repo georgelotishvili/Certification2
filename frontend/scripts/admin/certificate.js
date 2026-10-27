@@ -475,17 +475,44 @@
         const trimmed = value.trim();
         if (!trimmed) return null;
         const normalized = trimmed.replace(/\s+/g, ' ');
+        // 1) Explicit DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY (must check BEFORE new Date(str) which assumes US MM/DD/YYYY)
+        const dmyMatch = normalized.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+        if (dmyMatch) {
+          const day = parseInt(dmyMatch[1], 10);
+          const month = parseInt(dmyMatch[2], 10);
+          const year = parseInt(dmyMatch[3], 10);
+          if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2200) {
+            const candidate = new Date(year, month - 1, day);
+            if (
+              candidate.getFullYear() === year &&
+              candidate.getMonth() === month - 1 &&
+              candidate.getDate() === day
+            ) {
+              return candidate;
+            }
+          }
+          return null;
+        }
+        // 2) Explicit YYYY-MM-DD (with optional time suffix) parsed as local calendar date
+        const ymdMatch = normalized.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})(?:[T\s].*)?$/);
+        if (ymdMatch) {
+          const year = parseInt(ymdMatch[1], 10);
+          const month = parseInt(ymdMatch[2], 10);
+          const day = parseInt(ymdMatch[3], 10);
+          if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2200) {
+            const candidate = new Date(year, month - 1, day);
+            if (
+              candidate.getFullYear() === year &&
+              candidate.getMonth() === month - 1 &&
+              candidate.getDate() === day
+            ) {
+              return candidate;
+            }
+          }
+          return null;
+        }
         const fromString = new Date(normalized);
         if (!Number.isNaN(fromString.getTime())) return fromString;
-        const parts = normalized.split(/[./-]/).map((part) => part.trim());
-        if (parts.length === 3) {
-          const [a, b, c] = parts;
-          if (c.length === 4) {
-            const iso = `${c.padStart(4, '0')}-${b.padStart(2, '0')}-${a.padStart(2, '0')}`;
-            const fromReversed = new Date(iso);
-            if (!Number.isNaN(fromReversed.getTime())) return fromReversed;
-          }
-        }
       }
       return null;
     }
@@ -1396,6 +1423,17 @@
             activeUserRef.certificate_info.status = nextStatusObj.key;
             activeUserRef.certificate_info.transitional_deadline = globalTransitionalDeadlineIso;
           }
+          if (activeUser?.certificate) {
+            activeUser.certificate.status = nextStatusObj.key;
+            activeUser.certificate.transitional_deadline = globalTransitionalDeadlineIso;
+          }
+          if (activeUser?.certificate_info) {
+            activeUser.certificate_info.status = nextStatusObj.key;
+            activeUser.certificate_info.transitional_deadline = globalTransitionalDeadlineIso;
+          }
+          if (activeUser) {
+            activeUser.certificate_status = nextStatusObj.key;
+          }
           applyCardStyling(activeData);
           renderStatus(activeData);
           updateView();
@@ -1618,6 +1656,13 @@
       if (!formOpen && !options.force) return;
       formOpen = false;
       resetForm();
+      if (!options.preserveActiveData && activeUser) {
+        const previousLevelKey = activeData?.level?.key || null;
+        activeData = buildCertificateData(activeUser);
+        if (activeData && activeData.level?.key !== previousLevelKey) {
+          void populateView(activeData);
+        }
+      }
       updateView();
     }
 
@@ -1856,11 +1901,29 @@
           activeUserRef.candidate_category = null;
         }
         if (activeUser) {
+          activeUser.certificate = {
+            ...certificateData,
+            level: levelValue,
+            is_transitional: savedIsTransitional,
+            transitional_deadline: globalTransitionalDeadlineIso,
+          };
+          activeUser.certificate_info = {
+            unique_code: certificateData.unique_code,
+            level: levelValue,
+            status: certificateData.status,
+            issue_date: certificateData.issue_date,
+            validity_term: certificateData.validity_term,
+            valid_until: certificateData.valid_until,
+            is_transitional: savedIsTransitional,
+            transitional_deadline: globalTransitionalDeadlineIso,
+          };
+          activeUser.certificate_status = certificateData.status;
+          activeUser.certificate_valid_until = certificateData.valid_until;
           activeUser.candidate_status = null;
           activeUser.candidate_category = null;
         }
 
-        closeForm({ force: true });
+        closeForm({ force: true, preserveActiveData: true });
         await populateView(activeData);
         if (requestRevision !== openRevision || activeUser?.id !== requestUserId) return;
         updateView();
@@ -2344,6 +2407,7 @@
       if (!certificateData) {
         void loadTransitionalDeadline();
       }
+      activeUser = userWithCert ? { ...userWithCert } : null;
       
       activeData = buildCertificateData(userWithCert || {});
       formOpen = false;
@@ -2374,9 +2438,15 @@
         updateAutoValidity();
         syncStatusWithDualDeadlines();
       });
+      formFields.issueDate?.addEventListener('input', () => {
+        updateAutoValidity();
+        syncStatusWithDualDeadlines();
+      });
       formFields.validityTerm?.addEventListener('change', () => handleValidityTermChange());
-      formFields.validityTerm?.addEventListener('input', () => updateAutoValidity());
+      formFields.validityTerm?.addEventListener('input', () => handleValidityTermChange());
       formFields.status?.addEventListener('change', () => renderNotifyFields({ force: false }));
+      transitionalDeadlineInput?.addEventListener('change', () => syncStatusWithDualDeadlines());
+      transitionalDeadlineInput?.addEventListener('input', () => syncStatusWithDualDeadlines());
       transitionalDeadlineSaveBtn?.addEventListener('click', () => { void handleSaveTransitionalDeadline(); });
       downloadBtn?.addEventListener('click', handleDownload);
       attachIssueDatePicker();
@@ -2386,6 +2456,8 @@
         if (exportBusy) return;
         const level = event.target.value;
         syncValidityTermOptionsForLevel(level);
+        updateAutoValidity();
+        syncStatusWithDualDeadlines();
         // Update activeData level and re-render; populateView will load correct template
         if (activeData) {
           const normalized = normalizeLevel(level);

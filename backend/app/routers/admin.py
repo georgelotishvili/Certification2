@@ -74,6 +74,7 @@ from ..services.candidate_status import (
     is_transitional_eligible_level,
     set_transitional_deadline_date,
     sync_transitional_certificates,
+    today_in_tbilisi,
 )
 from ..services.bounded_upload import (
     DEFAULT_UPLOAD_MAX_BYTES,
@@ -1552,13 +1553,13 @@ def admin_users(
         "municipal": ("municipal",),
         "certified": ("architect", "architect_expert", "expert", "municipal"),
     }
-    now_utc = datetime.utcnow()
+    today_tb_str = today_in_tbilisi().isoformat()
     if qualification:
         if qualification == "suspended_expired":
             cert_subq = select(Certificate.user_id).where(
                 or_(
                     Certificate.status.in_(("suspended", "expired")),
-                    (Certificate.valid_until.is_not(None)) & (Certificate.valid_until < now_utc),
+                    (Certificate.valid_until.is_not(None)) & (func.date(Certificate.valid_until) < today_tb_str),
                 )
             )
             if filter_date is not None and f_day_start is not None and f_day_end is not None:
@@ -1584,7 +1585,7 @@ def admin_users(
                 ),
                 or_(
                     Certificate.valid_until.is_(None),
-                    Certificate.valid_until >= now_utc,
+                    func.date(Certificate.valid_until) >= today_tb_str,
                 ),
             )
             if filter_date is not None and f_day_start is not None and f_day_end is not None:
@@ -2490,6 +2491,19 @@ def admin_update_user(
     exam_state = exam_state_with_permissions(
         db, user, is_admin_user=is_admin_user
     )
+    cert_data = None
+    if user.certificate:
+        transitional_deadline = get_transitional_deadline_date(db)
+        cert_data = {
+            "unique_code": user.certificate.unique_code,
+            "level": user.certificate.level,
+            "status": compute_effective_certificate_status(user.certificate, transitional_deadline),
+            "issue_date": user.certificate.issue_date,
+            "validity_term": user.certificate.validity_term,
+            "valid_until": user.certificate.valid_until,
+            "is_transitional": bool(user.certificate.is_transitional) and is_transitional_eligible_level(user.certificate.level),
+            "transitional_deadline": transitional_deadline.isoformat(),
+        }
 
     return UserOut(
         id=user.id,
@@ -2509,6 +2523,9 @@ def admin_update_user(
         exam_stage_remaining_seconds=exam_state["exam_stage_remaining_seconds"],
         exam_stage_permissions=exam_state["exam_stage_permissions"],
         created_at=user.created_at,
+        photo_filename=user.photo_filename,
+        certificate=cert_data,
+        certificate_info=cert_data,
         has_unseen_statements=unseen_count > 0,
         unseen_statement_count=unseen_count,
         has_pending_statements=pending_count > 0,
