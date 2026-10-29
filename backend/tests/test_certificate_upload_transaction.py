@@ -201,6 +201,25 @@ class CertificateUploadTransactionTests(unittest.TestCase):
         self.assertEqual(db.commit_calls, 0)
         self.assertEqual(db.rollback_calls, 1)
 
+    def test_empty_upload_is_rejected_and_keeps_old_file(self) -> None:
+        from fastapi import HTTPException
+        db = _CertificateDb(self.user, self.certificate)
+        with patch.object(users, "_require_admin"):
+            with self.assertRaises(HTTPException) as ctx:
+                users.upload_certificate_file(
+                    user_id=self.user.id,
+                    file=_upload(b""),
+                    authorization=None,
+                    db=db,
+                )
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertEqual(self.previous.read_bytes(), b"%PDF-old")
+        self.assertEqual(self.certificate.file_path, "certificates/41/certificate.pdf")
+        self.assertEqual(self.certificate.size_bytes, 8)
+        self.assertEqual(list(self.certificate_dir.iterdir()), [self.previous])
+        self.assertEqual(db.commit_calls, 0)
+        self.assertEqual(db.rollback_calls, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

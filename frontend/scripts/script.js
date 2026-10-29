@@ -1010,6 +1010,17 @@ document.addEventListener('DOMContentLoaded', () => {
       try { localStorage.removeItem('auth_token'); } catch {}
       try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
       removeGeorgianNameOverlay();
+      updateAuthUI();
+      updateBanner();
+      updateAdminLinkVisibility();
+      try { document.dispatchEvent(new CustomEvent('auth:logout')); } catch {}
+    }
+
+    function _legacyClearLocalSessionNoop() {
+      try { setLoggedIn(false); } catch {}
+      try { localStorage.removeItem('auth_token'); } catch {}
+      try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+      removeGeorgianNameOverlay();
     }
 
     function performLogout() {

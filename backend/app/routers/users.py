@@ -1181,6 +1181,11 @@ def upload_certificate_file(
             max_bytes=CERTIFICATE_UPLOAD_MAX_BYTES,
         )
         new_file_saved = True
+        if int(size or 0) <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ფაილი ცარიელია",
+            )
 
         # Update DB meta. The filename remains stable so downloads keep the
         # existing public filename even though storage uses a unique name.
