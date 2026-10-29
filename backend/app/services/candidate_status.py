@@ -25,23 +25,65 @@ CATEGORY_DISPLAY_LABELS = {
 }
 
 
-def parse_statement_category(message: str | None) -> str | None:
-    """Extract requested certificate category code from an exam admission statement."""
+def _extract_exam_statement_header(message: str | None) -> str:
+    """Return only the structured header part of an exam statement before free-text sections."""
     if not message:
-        return None
-    text = str(message)
-    # Check composite categories first because their descriptions also mention "(კატეგორია A)"
-    if "2) კატეგორია C ან A" in text or "კატეგორია C ან A" in text:
+        return ""
+    text = str(message).replace("\r\n", "\n").replace("\r", "\n")
+    for marker in (
+        "\n2. თანდართული დოკუმენტები",
+        "\n3. დამატებითი ინფორმაცია",
+        "\nდამატებითი ინფორმაცია",
+        "\n4. განმცხადებლის დადასტურება",
+    ):
+        idx = text.find(marker)
+        if idx != -1:
+            text = text[:idx]
+    return text
+
+
+def _match_category_in_line(line: str) -> str | None:
+    if "2) კატეგორია C ან A" in line or "კატეგორია C ან A" in line:
         return "C_A"
-    if "3) კატეგორია B ან A" in text or "კატეგორია B ან A" in text:
+    if "3) კატეგორია B ან A" in line or "კატეგორია B ან A" in line:
         return "B_A"
-    if "4) კატეგორია B" in text or "კატეგორია B —" in text or "კატეგორია B -" in text:
+    if "4) კატეგორია B" in line or "კატეგორია B —" in line or "კატეგორია B -" in line:
         return "B"
-    if "5) კატეგორია C" in text or "კატეგორია C —" in text or "კატეგორია C -" in text:
+    if "5) კატეგორია C" in line or "კატეგორია C —" in line or "კატეგორია C -" in line:
         return "C"
-    if "1) კატეგორია A" in text or "კატეგორია A —" in text or "კატეგორია A -" in text:
+    if "1) კატეგორია A" in line or "კატეგორია A —" in line or "კატეგორია A -" in line:
         return "A"
     return None
+
+
+def parse_statement_category(message: str | None) -> str | None:
+    """Extract requested certificate category code from an exam admission statement."""
+    header = _extract_exam_statement_header(message)
+    if not header:
+        return None
+    lines = [ln.strip() for ln in header.splitlines() if ln.strip()]
+    # 1. Prefer explicitly checked (☑) option lines first
+    for ln in lines:
+        if "☑" in ln:
+            matched = _match_category_in_line(ln)
+            if matched:
+                return matched
+    # 2. Otherwise check structured option lines (numbered 1)..5) or em-dash/hyphen title)
+    is_structured_app = (
+        "სერტიფიცირების განაცხადი" in header
+        or "ვითხოვ სასერტიფიკაციო გამოცდაზე დაშვებას" in header
+        or any(
+            any(prefix in ln for prefix in ("1) კატეგორია", "2) კატეგორია", "3) კატეგორია", "4) კატეგორია", "5) კატეგორია", "კატეგორია A —", "კატეგორია B —", "კატეგორია C —", "კატეგორია A -", "კატეგორია B -", "კატეგორია C -"))
+            for ln in lines
+        )
+    )
+    if not is_structured_app:
+        return None
+    for ln in lines:
+        matched = _match_category_in_line(ln)
+        if matched:
+            return matched
+    return _match_category_in_line(header)
 
 
 def resolve_passed_category(requested_category: str | None, outcome: str | None) -> str | None:
@@ -110,41 +152,48 @@ def get_user_latest_requested_category(db: Session, user_id: int) -> str | None:
 
 def parse_statement_regime(message: str | None) -> str | None:
     """Extract admission regime ('standard' or 'transitional') from an exam admission statement."""
-    if not message:
+    header = _extract_exam_statement_header(message)
+    if not header:
         return None
-    text = str(message)
-    cat = parse_statement_category(text)
+    cat = parse_statement_category(header)
     if cat == "C":
         return "standard"
-    for line in text.splitlines():
+    for line in header.splitlines():
         s = line.strip()
         if "☑" in s or "დაშვების რეჟიმი" in s:
             if "გარდამავალი" in s or "საგამონაკლისო" in s or "უდიპლომოდ" in s:
                 return "transitional"
             if "სტანდარტული" in s:
                 return "standard"
-    if "გარდამავალი / საგამონაკლისო რეჟიმი" in text or "საგამონაკლისო რეჟიმი" in text:
-        return "transitional"
-    if "სტანდარტული რეჟიმი" in text:
-        return "standard"
+    if cat or "დაშვების რეჟიმი" in header or "სერტიფიცირების განაცხადი" in header:
+        if "გარდამავალი / საგამონაკლისო რეჟიმი" in header or "საგამონაკლისო რეჟიმი" in header:
+            return "transitional"
+        if "სტანდარტული რეჟიმი" in header:
+            return "standard"
     if cat:
         return "standard"
     return None
 
 
-def get_latest_admission_regimes(db: Session) -> dict[int, str]:
+def get_latest_admission_regimes(db: Session, user_ids: list[int] | None = None) -> dict[int, str]:
     """Return mapping of user_id -> latest parsed exam statement admission regime ('standard' or 'transitional')."""
+    q = select(Statement.user_id, Statement.message)
+    if user_ids is not None:
+        if not user_ids:
+            return {}
+        q = q.where(Statement.user_id.in_(user_ids))
     stmt_rows = db.execute(
-        select(Statement.user_id, Statement.message)
-        .order_by(Statement.created_at.desc(), Statement.id.desc())
+        q.order_by(Statement.created_at.desc(), Statement.id.desc())
     ).all()
     result: dict[int, str] = {}
     for uid, msg in stmt_rows:
         if uid in result:
             continue
-        parsed = parse_statement_regime(msg)
-        if parsed:
-            result[uid] = parsed
+        cat = parse_statement_category(msg)
+        if not cat:
+            continue
+        parsed = parse_statement_regime(msg) or "standard"
+        result[uid] = parsed
     return result
 
 
@@ -156,9 +205,10 @@ def get_user_latest_admission_regime(db: Session, user_id: int) -> str | None:
         .order_by(Statement.created_at.desc(), Statement.id.desc())
     ).all()
     for msg in stmt_messages:
-        parsed = parse_statement_regime(msg)
-        if parsed:
-            return parsed
+        cat = parse_statement_category(msg)
+        if not cat:
+            continue
+        return parse_statement_regime(msg) or "standard"
     return None
 
 
@@ -242,7 +292,7 @@ def sync_all_user_candidates(
         .where(
             PlanningLetter.user_id.in_(candidate_user_ids),
             PlanningLetter.kind == "certificate",
-            PlanningLetter.status != "failed",
+            PlanningLetter.status.in_(("sent", "simulated")),
         )
         .order_by(PlanningLetter.created_at.desc(), PlanningLetter.id.desc())
     ).all()
@@ -368,7 +418,7 @@ NON_PASS_CERT_PERIODS = (
 
 def reconcile_user_candidate_status_after_delete(
     db: Session,
-    user: User | None,
+    user: User | int | None,
     deleted_kind: str = "any",
 ) -> bool:
     """
@@ -376,6 +426,8 @@ def reconcile_user_candidate_status_after_delete(
     a statement, exam schedule, or planning letter.
     Returns True if user candidate fields were modified.
     """
+    if isinstance(user, int):
+        user = db.get(User, user)
     if user is None:
         return False
 
@@ -383,8 +435,14 @@ def reconcile_user_candidate_status_after_delete(
     if user.candidate_status is None:
         return False
 
-    stmt_count = int(
-        db.scalar(select(func.count(Statement.id)).where(Statement.user_id == user.id)) or 0
+    user_statements = db.execute(
+        select(Statement.message, Statement.attachment2_path, Statement.attachment3_path)
+        .where(Statement.user_id == user.id)
+    ).all()
+    exam_stmt_count = sum(
+        1
+        for msg, att2, att3 in user_statements
+        if parse_statement_category(msg) is not None or bool(att2) or bool(att3)
     )
     sched_count = int(
         db.scalar(select(func.count(ExamSchedule.id)).where(ExamSchedule.user_id == user.id)) or 0
@@ -427,10 +485,21 @@ def reconcile_user_candidate_status_after_delete(
 
     has_any_exam_activity = (sched_count > 0) or (exam_letter_count > 0)
 
-    # Rule 1: Deleting the last statement OR having no remaining candidate records at all clears status
-    if (deleted_kind == "statement" and stmt_count == 0) or (
-        stmt_count == 0 and not has_any_exam_activity and cert_letter_count == 0
-    ):
+    # Rule 1: Deleting the last exam statement clears status only if no active schedule / cert letter remains
+    if deleted_kind == "statement" and exam_stmt_count == 0:
+        if user.candidate_status == "exam_candidate" and upcoming_sched_count == 0:
+            user.candidate_status = None
+            user.candidate_category = None
+            user.candidate_updated_at = now
+            db.add(user)
+            return True
+        if user.candidate_status == "cert_candidate" and cert_letter_count == 0:
+            user.candidate_status = None
+            user.candidate_category = None
+            user.candidate_updated_at = now
+            db.add(user)
+            return True
+    elif exam_stmt_count == 0 and not has_any_exam_activity and cert_letter_count == 0:
         user.candidate_status = None
         user.candidate_category = None
         user.candidate_updated_at = now
@@ -440,7 +509,7 @@ def reconcile_user_candidate_status_after_delete(
     # Rule 2: Deleting the last certificate handover letter
     if deleted_kind == "certificate_letter" and cert_letter_count == 0:
         if user.candidate_status == "cert_candidate":
-            if upcoming_sched_count > 0 and stmt_count > 0:
+            if upcoming_sched_count > 0 or exam_stmt_count > 0:
                 req_cat = get_user_latest_requested_category(db, user.id)
                 user.candidate_status = "exam_candidate"
                 user.candidate_category = req_cat or user.candidate_category or "A"
@@ -462,8 +531,8 @@ def reconcile_user_candidate_status_after_delete(
             db.add(user)
             return True
 
-    # Rule 4: If a statement was deleted but other statements remain, keep category in sync
-    if deleted_kind == "statement" and stmt_count > 0 and user.candidate_status == "exam_candidate":
+    # Rule 4: If a statement was deleted but other exam statements remain, keep category in sync
+    if deleted_kind == "statement" and exam_stmt_count > 0 and user.candidate_status == "exam_candidate":
         req_cat = get_user_latest_requested_category(db, user.id)
         if req_cat and user.candidate_category != req_cat:
             user.candidate_category = req_cat
@@ -476,7 +545,7 @@ def reconcile_user_candidate_status_after_delete(
 
 # ================= Transitional (Exception Term) Certificate Helpers =================
 
-DEFAULT_TRANSITIONAL_DEADLINE = date(2029, 1, 1)
+DEFAULT_TRANSITIONAL_DEADLINE = date(2029, 12, 20)
 
 
 def today_in_tbilisi() -> date:
@@ -510,6 +579,8 @@ def get_transitional_deadline_date(db: Session | None = None) -> date:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 raw = str(data.get("deadline_date") or "").strip()
+                if raw == "2029-01-01" and data.get("schema_version") != 2:
+                    return DEFAULT_TRANSITIONAL_DEADLINE
                 if raw:
                     return date.fromisoformat(raw[:10])
     except Exception:
@@ -609,6 +680,7 @@ def set_transitional_deadline_date(
         "deadline_date": new_deadline.isoformat(),
         "updated_at": now_utc.isoformat(),
         "updated_by": actor_email or "admin",
+        "schema_version": 2,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 

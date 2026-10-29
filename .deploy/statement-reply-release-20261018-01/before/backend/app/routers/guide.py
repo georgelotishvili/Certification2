@@ -92,6 +92,16 @@ def _safe_guide_filename(filename: str | None) -> str:
     return candidate or "guide.docx"
 
 
+def _guide_file_exists(file_path: str | None) -> bool:
+    if not file_path:
+        return False
+    try:
+        fp = _resolve_guide_path(file_path)
+        return fp.exists() and fp.is_file()
+    except ValueError:
+        return False
+
+
 def _ensure_default_guide_docs(db: Session) -> None:
     """Keep the 8 default GuideDocument pages synchronized with bundled 28_... .md."""
     if not BUNDLED_DOC28_MD.is_file():
@@ -111,6 +121,7 @@ def _ensure_default_guide_docs(db: Session) -> None:
             and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in (cert_doc.content or "")
             and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in (forms_doc.content or "")
             and "GIPC-CON-" not in (forms_doc.content or "")
+            and all(_guide_file_exists(d.file_path) for d in docs)
         ):
             return
 
@@ -135,7 +146,11 @@ def _ensure_default_guide_docs(db: Session) -> None:
 
             existing = by_title.get(title)
             if existing is not None:
-                if existing.content == html_content and existing.file_size_bytes == len(docx_bytes):
+                if (
+                    existing.content == html_content
+                    and existing.file_size_bytes == len(docx_bytes)
+                    and _guide_file_exists(existing.file_path)
+                ):
                     continue
                 unique_name = f"guide_{uuid.uuid4().hex[:12]}.docx"
                 file_path = _resolve_guide_path(_guide_root() / unique_name)

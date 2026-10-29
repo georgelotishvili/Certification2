@@ -518,3 +518,167 @@ def exam_state_with_permissions(
         "exam_stage_permissions": permissions,
     }
 
+
+def batch_exam_states_with_permissions(
+    db: DbSession,
+    users: list[User],
+    *,
+    founder_email: str = "",
+) -> tuple[dict[int, dict[str, Any]], bool]:
+    """Compute exam_state_with_permissions for a list of users using a single batch query."""
+    founder_norm = (founder_email or "").lower()
+    result: dict[int, dict[str, Any]] = {}
+    non_admin_users: list[User] = []
+    admin_permissions = {
+        stage: {
+            "granted": True,
+            "status": "available",
+            "grant_id": None,
+            "granted_at": None,
+            "expires_at": None,
+            "started_at": None,
+            "remaining_seconds": None,
+        }
+        for stage in STAGE_SEQUENCE
+    }
+    admin_state = {
+        "exam_permission": True,
+        "exam_stage": STAGE_ALL,
+        "exam_stage_expires_at": None,
+        "exam_stage_started_at": None,
+        "exam_stage_status": "available",
+        "exam_stage_remaining_seconds": None,
+        "exam_stage_permissions": admin_permissions,
+    }
+
+    for u in users:
+        if u.id is None:
+            continue
+        is_adm = bool(u.is_admin) or ((u.email or "").lower() == founder_norm) or is_admin_like(u)
+        if is_adm:
+            result[u.id] = admin_state
+        else:
+            non_admin_users.append(u)
+
+    if not non_admin_users:
+        return result, False
+
+    now = utcnow()
+    non_admin_ids = [u.id for u in non_admin_users if u.id is not None]
+    all_grants = db.scalars(
+        select(UserExamStageGrant)
+        .where(UserExamStageGrant.user_id.in_(non_admin_ids))
+        .order_by(UserExamStageGrant.id.desc())
+    ).all()
+
+    grants_by_user: dict[int, list[UserExamStageGrant]] = {uid: [] for uid in non_admin_ids}
+    for g in all_grants:
+        if g.user_id in grants_by_user:
+            grants_by_user[g.user_id].append(g)
+
+    any_changed = False
+    for u in non_admin_users:
+        u_grants = grants_by_user.get(u.id, [])
+        has_due_open = any(
+            g.consumed_at is None
+            and g.revoked_at is None
+            and g.expired_at is None
+            and g.started_at is None
+            and _naive_utc(g.expires_at) is not None
+            and _naive_utc(g.expires_at) <= now
+            for g in u_grants
+        )
+        if has_due_open:
+            if _expire_due_grants(db, u, now=now):
+                any_changed = True
+            u_grants = db.scalars(
+                select(UserExamStageGrant)
+                .where(UserExamStageGrant.user_id == u.id)
+                .order_by(UserExamStageGrant.id.desc())
+            ).all()
+
+        latest: dict[str, UserExamStageGrant] = {}
+        open_by_stage: dict[str, UserExamStageGrant] = {}
+        for row in u_grants:
+            if row.stage in STAGE_SEQUENCE:
+                if row.stage not in latest:
+                    latest[row.stage] = row
+                if (
+                    row.stage not in open_by_stage
+                    and row.consumed_at is None
+                    and row.revoked_at is None
+                    and row.expired_at is None
+                ):
+                    open_by_stage[row.stage] = row
+
+        selected: UserExamStageGrant | None = None
+        for stg in STAGE_SEQUENCE:
+            cand = open_by_stage.get(stg)
+            if cand is not None and cand.started_at is not None:
+                selected = cand
+                break
+        if selected is None:
+            for stg in STAGE_SEQUENCE:
+                cand = open_by_stage.get(stg)
+                if cand is not None:
+                    selected = cand
+                    break
+
+        old_tuple = (
+            bool(u.exam_permission),
+            u.exam_stage,
+            _naive_utc(u.exam_stage_expires_at),
+            _naive_utc(u.exam_stage_started_at),
+        )
+        if selected is not None:
+            u.exam_permission = True
+            u.exam_stage = selected.stage
+            u.exam_stage_expires_at = _naive_utc(selected.expires_at)
+            u.exam_stage_started_at = _naive_utc(selected.started_at)
+        else:
+            all_completed = all(
+                latest.get(stg) is not None and latest[stg].consumed_at is not None
+                for stg in STAGE_SEQUENCE
+            )
+            u.exam_permission = False
+            u.exam_stage = STAGE_COMPLETED if all_completed else STAGE_NONE
+            u.exam_stage_expires_at = None
+            u.exam_stage_started_at = None
+
+        new_tuple = (
+            bool(u.exam_permission),
+            u.exam_stage,
+            _naive_utc(u.exam_stage_expires_at),
+            _naive_utc(u.exam_stage_started_at),
+        )
+        if new_tuple != old_tuple:
+            db.add(u)
+            any_changed = True
+
+        permissions = {
+            stg: _permission_item(latest.get(stg), now=now)
+            for stg in STAGE_SEQUENCE
+        }
+        legacy_stage = u.exam_stage or STAGE_NONE
+        sel_perm = permissions.get(legacy_stage)
+        if sel_perm and (sel_perm["granted"] or sel_perm["status"] == "started"):
+            legacy_status = sel_perm["status"]
+            remaining = sel_perm["remaining_seconds"]
+            expires_at = sel_perm["expires_at"]
+            started_at = sel_perm["started_at"]
+        else:
+            legacy_status = "completed" if legacy_stage == STAGE_COMPLETED else "none"
+            remaining = expires_at = started_at = None
+
+        result[u.id] = {
+            "exam_permission": any(item["granted"] for item in permissions.values()),
+            "exam_stage": legacy_stage,
+            "exam_stage_expires_at": expires_at,
+            "exam_stage_started_at": started_at,
+            "exam_stage_status": legacy_status,
+            "exam_stage_remaining_seconds": remaining,
+            "exam_stage_permissions": permissions,
+        }
+
+    return result, any_changed
+

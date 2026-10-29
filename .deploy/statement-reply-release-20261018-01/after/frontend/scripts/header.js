@@ -1993,23 +1993,26 @@
       if (!incoming.length) return;
       const slotList = examSlotFiles[slotKey];
       let currentTotal = getAllExamSelectedFilesTotalSize();
+      const validAdditions = [];
       for (const file of incoming) {
         if (!/\.(zip|rar|pdf|jpg|jpeg|png|doc|docx)$/i.test(file.name || '')) {
           alert(`ფაილის ტიპი არ არის დაშვებული (${file.name}). დასაშვებია: PDF, JPG, JPEG, PNG, DOC, DOCX, ZIP, RAR`);
           slotDOM.input.value = '';
           return;
         }
-        if ((file.size || 0) + currentTotal > 100 * 1024 * 1024) {
-          alert('ფაილების ჯამური ზომა აღემატება 100MB-ს');
-          slotDOM.input.value = '';
-          return;
-        }
-        const exists = slotList.some((f) => f.name === file.name && f.size === file.size);
+        const exists = slotList.some((f) => f.name === file.name && f.size === file.size)
+          || validAdditions.some((f) => f.name === file.name && f.size === file.size);
         if (!exists) {
-          slotList.push(file);
+          if ((file.size || 0) + currentTotal > 100 * 1024 * 1024) {
+            alert('ფაილების ჯამური ზომა აღემატება 100MB-ს');
+            slotDOM.input.value = '';
+            return;
+          }
+          validAdditions.push(file);
           currentTotal += (file.size || 0);
         }
       }
+      slotList.push(...validAdditions);
       slotDOM.input.value = '';
       renderExamSlotFilesList(slotKey);
     }

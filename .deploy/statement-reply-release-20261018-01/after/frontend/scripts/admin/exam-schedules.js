@@ -2269,7 +2269,12 @@
               formData.append('keep_existing_attachment', 'true');
               formData.append('use_template_attachment', 'false');
             } else {
-              formData.append('use_template_attachment', (hasTemplate && useTemplateFile) ? 'true' : 'false');
+              const useTmplAttach = Boolean(hasTemplate && useTemplateFile);
+              formData.append('use_template_attachment', useTmplAttach ? 'true' : 'false');
+              const activeTmpl = getActiveTemplate();
+              if (useTmplAttach && activeTmpl?.updated_at) {
+                formData.append('template_updated_at', String(activeTmpl.updated_at));
+              }
             }
 
             const response = await fetch(lettersEndpoint, {

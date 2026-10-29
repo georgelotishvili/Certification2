@@ -1934,9 +1934,13 @@
         }
 
         const snapshotData = { ...activeData };
-        await autoUploadCertificatePdf(requestUserId, snapshotData);
+        const pdfUploaded = await autoUploadCertificatePdf(requestUserId, snapshotData);
 
         if (shouldSendNotification) {
+          if (!pdfUploaded) {
+            showToast('სერტიფიკატის მონაცემები შეინახა, მაგრამ PDF ფაილი ვერ აიტვირთა — შეტყობინება არ გაიგზავნა', 'error');
+            return;
+          }
           try {
             const notifyRes = await fetch(`${API_BASE}/users/${requestUserId}/certificate/notify`, {
               method: 'POST',

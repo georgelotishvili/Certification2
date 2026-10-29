@@ -555,19 +555,12 @@ def update_profile(
     email_changed = email is not None and email != (user.email or "").lower()
     personal_id_changed = personal_id is not None and personal_id != user.personal_id
 
-    # If email is changing, require verification code for the NEW email
-    if email_changed:
-        verification_code = (payload.email_verification_code or "").strip()
-        if not verification_code:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="ახალი ელფოსტის ვერიფიკაციის კოდი საჭიროა"
-            )
-        if not email_verification.verify_code(email, verification_code, "update"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="ვერიფიკაციის კოდი არასწორია ან ვადაგასულია"
-            )
+    # მიმდინარე პაროლი ყოველთვის საჭიროა ნებისმიერი ცვლილებისთვის
+    current = (payload.current_password or "").strip()
+    if not current:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="გთხოვთ შეიყვანოთ მიმდინარე პაროლი")
+    if not verify_code(current, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="მიმდინარე პაროლი არასწორია")
 
     # Uniqueness checks (required by spec)
     conflicts: list[str] = []
@@ -582,12 +575,19 @@ def update_profile(
     if conflicts:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="; ".join(conflicts))
 
-    # მიმდინარე პაროლი ყოველთვის საჭიროა ნებისმიერი ცვლილებისთვის
-    current = (payload.current_password or "").strip()
-    if not current:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="გთხოვთ შეიყვანოთ მიმდინარე პაროლი")
-    if not verify_code(current, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="მიმდინარე პაროლი არასწორია")
+    # If email is changing, require verification code for the NEW email (checked after password & uniqueness so typos don't burn OTP)
+    if email_changed:
+        verification_code = (payload.email_verification_code or "").strip()
+        if not verification_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ახალი ელფოსტის ვერიფიკაციის კოდი საჭიროა"
+            )
+        if not email_verification.verify_code(email, verification_code, "update"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ვერიფიკაციის კოდი არასწორია ან ვადაგასულია"
+            )
 
     if personal_id_changed:
         try:
@@ -1026,6 +1026,18 @@ def notify_certificate_activation(
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
+    has_pdf = False
+    if cert.file_path:
+        try:
+            src_path = resolve_storage_path(cert.file_path)
+            has_pdf = src_path.is_file() and src_path.stat().st_size > 0
+        except Exception:
+            has_pdf = False
+    if not has_pdf:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="სერტიფიკატის PDF ფაილი ჯერ არ არის ატვირთული. შეტყობინების გაგზავნა შეუძლებელია.",
+        )
     notif_status, notif_error = _send_certificate_activation_notification(
         db,
         user,
@@ -1235,12 +1247,24 @@ def download_certificate_file(
 @router.get("/{user_id}/photo/file")
 def get_user_photo(
     user_id: int,
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    """Get user photo file (public endpoint)."""
+    """Get user photo file (public for certified users; owner/admin only otherwise)."""
     user = db.get(User, user_id)
     if not user or not user.photo_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
+
+    has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user_id)) is not None
+    if not has_cert:
+        actor = _get_user_from_token(db, authorization)
+        settings = get_settings()
+        founder_email = (settings.founder_admin_email or "").lower()
+        is_allowed = actor is not None and (
+            actor.id == user_id or actor.is_admin or (actor.email or "").lower() == founder_email
+        )
+        if not is_allowed:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
 
     try:
         path = resolve_storage_path(user.photo_path)

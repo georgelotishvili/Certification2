@@ -2145,11 +2145,11 @@
       if (fields.admission_regime === 'standard' || fields.admission_regime === 'transitional') {
         const isStd = fields.admission_regime === 'standard';
         out = out.replace(
-          /[☐☑]\s*(<strong>\s*სტანდარტული\s+რეჟიმი)/g,
+          /[☐☑]\s*(<strong>\s*სტანდარტული(?:\s+რეჟიმი)?\s*<\/strong>)/g,
           `${isStd ? '☑' : '☐'} $1`
         );
         out = out.replace(
-          /[☐☑]\s*(<strong>\s*გარდამავალი\s*\/\s*საგამონაკლისო\s+რეჟიმი)/g,
+          /[☐☑]\s*(<strong>\s*გარდამავალი\s*\/\s*საგამონაკლისო(?:\s+რეჟიმი)?\s*<\/strong>)/g,
           `${!isStd ? '☑' : '☐'} $1`
         );
       }

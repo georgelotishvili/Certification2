@@ -21,7 +21,6 @@ from ..services.candidate_status import (
     NON_EXAM_LETTER_PERIODS,
     NON_PASS_CERT_PERIODS,
     VALID_CANDIDATE_CATEGORIES,
-    _cancel_active_bookings_for_user,
     get_user_latest_requested_category,
     normalize_cert_category,
     reconcile_user_candidate_status_after_delete,
@@ -704,7 +703,6 @@ def send_letter(
             user.candidate_category = None
             user.candidate_updated_at = now
             db.add(user)
-            _cancel_active_bookings_for_user(db, user_id, now)
         elif kind == "exam" and not custom_kind:
             req_cat = get_user_latest_requested_category(db, user_id)
             user.candidate_status = "exam_candidate"

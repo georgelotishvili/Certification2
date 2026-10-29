@@ -886,9 +886,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!response.ok) {
           if (response.status === 401) {
-            setLoggedIn(false);
-            try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
-            removeGeorgianNameOverlay();
+            clearLocalSession();
             updateAuthUI();
             updateBanner();
             updateAdminLinkVisibility();
@@ -951,6 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openModal() {
       if (!DOM.loginModal) return;
       DOM.loginModal.classList.add('show');
+      DOM.loginModal.setAttribute('aria-hidden', 'false');
       DOM.body.style.overflow = 'hidden';
       const savedEmail = localStorage.getItem(KEYS.SAVED_EMAIL);
       if (DOM.loginForm) {
@@ -962,6 +961,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeModal() {
       if (!DOM.loginModal) return;
       DOM.loginModal.classList.remove('show');
+      DOM.loginModal.setAttribute('aria-hidden', 'true');
       DOM.body.style.overflow = '';
       DOM.loginForm?.reset?.();
       DOM.registerForm?.reset?.();

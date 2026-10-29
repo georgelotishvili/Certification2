@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter, CertBooking
+from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter
 from ..services.candidate_status import (
     NON_PASS_CERT_PERIODS,
     compute_effective_certificate_status,
@@ -876,19 +876,6 @@ def get_certificate(
     return _certificate_out_with_notification(cert, deadline_date=dl)
 
 
-def _complete_active_bookings_for_user(db: Session, user_id: int, now: datetime) -> None:
-    active_bookings = db.scalars(
-        select(CertBooking).where(
-            CertBooking.user_id == user_id,
-            CertBooking.status == "active",
-        )
-    ).all()
-    for b in active_bookings:
-        b.status = "completed"
-        b.updated_at = now
-        db.add(b)
-
-
 @router.post("/{user_id}/certificate", response_model=CertificateOut, status_code=status.HTTP_201_CREATED)
 def create_certificate(
     user_id: int,
@@ -937,7 +924,6 @@ def create_certificate(
     user.candidate_status = None
     user.candidate_category = None
     user.candidate_updated_at = now
-    _complete_active_bookings_for_user(db, user_id, now)
     db.add(user)
     db.add(cert)
     db.commit()
@@ -1010,7 +996,6 @@ def update_certificate(
     user.candidate_status = None
     user.candidate_category = None
     user.candidate_updated_at = now
-    _complete_active_bookings_for_user(db, user_id, now)
     db.add(user)
     cert.updated_at = now
     db.commit()
@@ -1126,33 +1111,6 @@ def delete_certificate(
             user.candidate_category = restored_cat
             user.candidate_updated_at = now
             db.add(user)
-
-            # If a booking was marked completed when the certificate was issued, restore or cancel it cleanly
-            now_tb_str = (now + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M")
-            completed_bookings = db.scalars(
-                select(CertBooking).where(
-                    CertBooking.user_id == user_id,
-                    CertBooking.status == "completed",
-                )
-            ).all()
-            for cb in completed_bookings:
-                if f"{cb.booking_date} {cb.slot_time}" > now_tb_str:
-                    other_active = db.scalar(
-                        select(CertBooking.id).where(
-                            CertBooking.booking_date == cb.booking_date,
-                            CertBooking.slot_time == cb.slot_time,
-                            CertBooking.status == "active",
-                            CertBooking.id != cb.id,
-                        )
-                    )
-                    if other_active is None:
-                        cb.status = "active"
-                    else:
-                        cb.status = "cancelled"
-                        cb.cancelled_at = now
-                        cb.cancelled_by = actor.email
-                    cb.updated_at = now
-                    db.add(cb)
 
     db.delete(cert)
     db.commit()

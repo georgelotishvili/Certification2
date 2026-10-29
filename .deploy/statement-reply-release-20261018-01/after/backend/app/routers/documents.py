@@ -49,6 +49,7 @@ from ..services.contract_assembler import (
     LEGACY_CONTRACT_SLOT_KEYS,
     PUBLIC_DOCUMENTS,
     docx_bytes_to_html,
+    html_or_md_to_docx_bytes,
     sanitize_document_html,
     extract_user_fields,
     markdown_to_docx_bytes,
@@ -303,21 +304,20 @@ def _ensure_default_contracts(db: Session) -> None:
 
             bundled_docx = BUNDLED_CONTRACTS_DIR / source_docx
             md_path = BUNDLED_CONTRACTS_DIR / item["source_md"]
-            expected_size = bundled_docx.stat().st_size if bundled_docx.is_file() else None
             expected_html = _get_bundled_html(md_path, strip_annex=bool(item.get("strip_annex_1")))
 
+            matched_content = (matched.content or "").strip() if matched is not None else ""
             needs_refresh = (
                 matched is None
+                or not matched_content
                 or not _stored_file_exists(matched.file_path)
-                or "<p>– " in (matched.content or "")
-                or "იოსებიძ" in (matched.content or "")
-                or (expected_size is not None and matched.file_size_bytes != expected_size)
-                or (expected_html is not None and matched.content != expected_html)
+                or "<p>– " in matched_content
+                or "იოსებიძ" in matched_content
                 or (
                     item.get("strip_annex_1")
                     and (
-                        "IMP-2026-001" in (matched.content or "")
-                        or "შიდა მოხმარების" in (matched.content or "")
+                        "IMP-2026-001" in matched_content
+                        or "შიდა მოხმარების" in matched_content
                     )
                 )
             )
@@ -404,17 +404,17 @@ def _ensure_default_contracts(db: Session) -> None:
             existing_slot_doc = by_type.get(key)
             bundled_docx = BUNDLED_CONTRACTS_DIR / slot["source_docx"]
             md_path = BUNDLED_CONTRACTS_DIR / slot["source_md"]
-            expected_size = bundled_docx.stat().st_size if bundled_docx.is_file() else None
             expected_html = _get_bundled_html(md_path, strip_annex=False)
             target_order = int(slot.get("order_index") or 6)
 
+            slot_content = (existing_slot_doc.content or "").strip() if existing_slot_doc is not None else ""
             slot_needs_refresh = (
                 existing_slot_doc is None
+                or not slot_content
                 or not _stored_file_exists(existing_slot_doc.file_path)
-                or "<p>– " in (existing_slot_doc.content or "")
-                or "იოსებიძ" in (existing_slot_doc.content or "")
-                or (expected_size is not None and existing_slot_doc.file_size_bytes != expected_size)
-                or (expected_html is not None and existing_slot_doc.content != expected_html)
+                or "<p>– " in slot_content
+                or "იოსებიძ" in slot_content
+                or any(leg in slot_content for leg in ("GIPC-CON-002", "GIPC-CON-003", "GIPC-CON-004", "GIPC-CON-005", "GIPC-CON-006", "საგამოცდო მომსახურების ხელშეკრულება"))
             )
             if not slot_needs_refresh and existing_slot_doc is not None:
                 if (existing_slot_doc.order_index or 0) != target_order:
@@ -666,6 +666,15 @@ async def admin_upload_contract_slot(
             provided_content=resolved_content,
             contract_type=slot_key,
         )
+    elif resolved_content:
+        cleaned_content = sanitize_document_html(strip_internal_annexes(resolved_content))
+        tpl_docx = _find_template_docx_for_slot(slot_key, filename or slot_info["source_docx"])
+        docx_bytes = html_or_md_to_docx_bytes(cleaned_content, template_docx=tpl_docx)
+        new_file_path, resolved_file_path = _new_document_storage_path(".docx")
+        resolved_file_path.write_bytes(docx_bytes)
+        filename = filename or slot_info["source_docx"]
+        file_size_bytes = len(docx_bytes)
+        resolved_content = cleaned_content
 
     resolved_title = (title or "").strip() or (doc.title if doc and doc.title else slot_info["default_title"])
 
@@ -803,7 +812,18 @@ async def admin_update_document(
             raise
 
     if resolved_content is not None:
-        doc.content = sanitize_document_html(resolved_content)
+        doc.content = sanitize_document_html(strip_internal_annexes(resolved_content))
+        if not (file and file.filename) and doc.content:
+            is_pdf = str(doc.filename or doc.file_path or "").lower().endswith(".pdf")
+            if not is_pdf:
+                tpl_docx = _find_template_docx_for_slot(doc.contract_type, doc.filename)
+                docx_bytes = html_or_md_to_docx_bytes(doc.content, template_docx=tpl_docx)
+                new_file_path, resolved_file_path = _new_document_storage_path(".docx")
+                resolved_file_path.write_bytes(docx_bytes)
+                doc.file_path = new_file_path
+                if not doc.filename or not doc.filename.lower().endswith(".docx"):
+                    doc.filename = _safe_document_display_filename(f"{doc.title or 'document'}.docx")
+                doc.file_size_bytes = len(docx_bytes)
 
     try:
         db.add(doc)

@@ -422,6 +422,7 @@ class PlanningLetter(Base):
     attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     doc_number: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    statement_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="planning_letters")
 

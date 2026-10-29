@@ -264,7 +264,12 @@ async def _apply_guide_doc_fields(
     content: Optional[str],
     file: Optional[UploadFile],
     remove_file: bool = False,
-) -> None:
+) -> tuple[Optional[str], Optional[str]]:
+    """
+    Mutate `doc` fields and return `(old_file_path_to_delete, new_file_path_created)`.
+    Caller must delete `old_file_path_to_delete` AFTER `db.commit()`, or delete
+    `new_file_path_created` if `db.commit()` fails.
+    """
     if title is not None:
         cleaned_title = title.strip()
         if cleaned_title:
@@ -272,8 +277,11 @@ async def _apply_guide_doc_fields(
         elif not doc.title:
             doc.title = "ინფორმაცია"
 
+    old_file_to_delete: Optional[str] = None
+    new_file_created: Optional[str] = None
+
     if remove_file and not (file and file.filename):
-        _delete_guide_file_from_disk(doc.file_path)
+        old_file_to_delete = doc.file_path
         doc.file_path = None
         doc.filename = None
         doc.file_size_bytes = None
@@ -288,8 +296,6 @@ async def _apply_guide_doc_fields(
                 detail="დაშვებულია მხოლოდ .docx, .md, .txt ან .pdf ფაილები",
             )
 
-        _delete_guide_file_from_disk(doc.file_path)
-
         unique_name = f"guide_{uuid.uuid4().hex[:12]}{ext}"
         file_path = _resolve_guide_path(_guide_root() / unique_name)
         try:
@@ -302,7 +308,9 @@ async def _apply_guide_doc_fields(
                 detail="ფაილის ზომა აჭარბებს დასაშვებ ლიმიტს",
             ) from exc
 
-        doc.file_path = str(file_path)
+        old_file_to_delete = doc.file_path
+        new_file_created = str(file_path)
+        doc.file_path = new_file_created
         doc.filename = _safe_guide_filename(file.filename)
         doc.file_size_bytes = file_size
 
@@ -324,6 +332,7 @@ async def _apply_guide_doc_fields(
         doc.content = ""
 
     doc.updated_at = datetime.utcnow()
+    return old_file_to_delete, new_file_created
 
 
 def _serve_guide_doc_file(doc: Optional[GuideDocument]) -> FileResponse:
@@ -447,9 +456,17 @@ async def admin_create_guide_document(
         content="",
         order_index=int(max_order) + 1,
     )
-    await _apply_guide_doc_fields(doc, cleaned_title, content, file, remove_file=False)
-    db.add(doc)
-    db.commit()
+    old_file, new_file = await _apply_guide_doc_fields(doc, cleaned_title, content, file, remove_file=False)
+    try:
+        db.add(doc)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        if new_file:
+            _delete_guide_file_from_disk(new_file)
+        raise
+    if old_file and old_file != new_file:
+        _delete_guide_file_from_disk(old_file)
     db.refresh(doc)
     return _guide_doc_out(doc)
 
@@ -470,9 +487,17 @@ async def admin_update_guide_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="დოკუმენტი არ მოიძებნა")
 
     should_remove_file = str(remove_file or "").strip().lower() in {"1", "true", "yes"}
-    await _apply_guide_doc_fields(doc, title, content, file, remove_file=should_remove_file)
-    db.add(doc)
-    db.commit()
+    old_file, new_file = await _apply_guide_doc_fields(doc, title, content, file, remove_file=should_remove_file)
+    try:
+        db.add(doc)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        if new_file:
+            _delete_guide_file_from_disk(new_file)
+        raise
+    if old_file and old_file != new_file:
+        _delete_guide_file_from_disk(old_file)
     db.refresh(doc)
     return _guide_doc_out(doc)
 
@@ -487,9 +512,11 @@ def admin_delete_guide_document_by_id(
     doc = db.get(GuideDocument, doc_id)
     if not doc:
         return
-    _delete_guide_file_from_disk(doc.file_path)
+    old_file = doc.file_path
     db.delete(doc)
     db.commit()
+    if old_file:
+        _delete_guide_file_from_disk(old_file)
     return
 
 
@@ -546,9 +573,17 @@ async def _upsert_guide_document(
         max_order = db.scalar(select(func.max(GuideDocument.order_index))) or 0
         doc = GuideDocument(title="გზამკვლევი", content="", order_index=int(max_order) + 1)
 
-    await _apply_guide_doc_fields(doc, title, content, file, remove_file=False)
-    db.add(doc)
-    db.commit()
+    old_file, new_file = await _apply_guide_doc_fields(doc, title, content, file, remove_file=False)
+    try:
+        db.add(doc)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        if new_file:
+            _delete_guide_file_from_disk(new_file)
+        raise
+    if old_file and old_file != new_file:
+        _delete_guide_file_from_disk(old_file)
     db.refresh(doc)
     return _guide_doc_out(doc)
 

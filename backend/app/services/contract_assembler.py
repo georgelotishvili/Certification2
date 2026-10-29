@@ -5,12 +5,15 @@ import io
 import re
 import zipfile
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-TBILISI_TZ = ZoneInfo("Asia/Tbilisi")
+try:
+    TBILISI_TZ = ZoneInfo("Asia/Tbilisi")
+except Exception:
+    TBILISI_TZ = timezone(timedelta(hours=4))
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 ET.register_namespace("w", W_NS)
@@ -1094,6 +1097,100 @@ def markdown_to_docx_bytes(md_text: str, template_docx: Path | bytes | None = No
         except Exception:
             pass
     return _minimal_docx_From_elements(elements)
+
+
+def _inline_html_to_md(fragment: str) -> str:
+    if not fragment:
+        return ""
+    s = re.sub(r"<br\s*/?>", " ", fragment, flags=re.IGNORECASE)
+    s = re.sub(r"<(?:strong|b)\b[^>]*>(.*?)</(?:strong|b)>", r"**\1**", s, flags=re.IGNORECASE | re.DOTALL)
+    s = re.sub(r"<(?:em|i)\b[^>]*>(.*?)</(?:em|i)>", r"*\1*", s, flags=re.IGNORECASE | re.DOTALL)
+    s = re.sub(r"<[^>]+>", "", s)
+    return html.unescape(s).strip()
+
+
+def html_to_markdown(html_str: str) -> str:
+    """Convert semantic document HTML back into clean Markdown for OpenXML (.docx) generation."""
+    if not html_str or not html_str.strip():
+        return ""
+    trimmed = html_str.strip()
+    if not re.search(r"<(?:h[1-6]|p|ul|ol|li|table|tr|td|th|div)\b", trimmed, re.IGNORECASE):
+        return trimmed
+
+    block_re = re.compile(
+        r"<(h1|h2|h3|h4|p|ul|ol|table)\b[^>]*>(.*?)</\1>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    lines: list[str] = []
+    pos = 0
+    for m in block_re.finditer(trimmed):
+        if m.start() > pos:
+            gap = _inline_html_to_md(trimmed[pos : m.start()])
+            if gap:
+                lines.append(gap)
+        pos = m.end()
+        tag = m.group(1).lower()
+        inner = m.group(2)
+        if tag == "h1":
+            lines.append(f"# {_inline_html_to_md(inner)}")
+        elif tag == "h2":
+            lines.append(f"## {_inline_html_to_md(inner)}")
+        elif tag == "h3":
+            lines.append(f"### {_inline_html_to_md(inner)}")
+        elif tag == "h4":
+            lines.append(f"#### {_inline_html_to_md(inner)}")
+        elif tag == "p":
+            txt = _inline_html_to_md(inner)
+            if txt:
+                lines.append(txt)
+        elif tag == "ul":
+            for li_m in re.finditer(r"<li\b[^>]*>(.*?)</li>", inner, re.IGNORECASE | re.DOTALL):
+                li_txt = _inline_html_to_md(li_m.group(1))
+                if li_txt:
+                    lines.append(f"- {li_txt}")
+        elif tag == "ol":
+            for idx, li_m in enumerate(re.finditer(r"<li\b[^>]*>(.*?)</li>", inner, re.IGNORECASE | re.DOTALL), start=1):
+                li_txt = _inline_html_to_md(li_m.group(1))
+                if li_txt:
+                    lines.append(f"{idx}. {li_txt}")
+        elif tag == "table":
+            rows: list[list[str]] = []
+            is_meta = True
+            for tr_m in re.finditer(r"<tr\b[^>]*>(.*?)</tr>", inner, re.IGNORECASE | re.DOTALL):
+                tr_inner = tr_m.group(1)
+                cells = [
+                    _inline_html_to_md(c_m.group(2)).replace("|", "/")
+                    for c_m in re.finditer(r"<(th|td)\b[^>]*>(.*?)</\1>", tr_inner, re.IGNORECASE | re.DOTALL)
+                ]
+                if cells:
+                    rows.append(cells)
+                    if len(cells) != 2 or not _META_LINE_RE.match(f"**{cells[0].rstrip(':')}:** {cells[1]}"):
+                        is_meta = False
+            if rows:
+                if is_meta:
+                    for r in rows:
+                        lines.append(f"**{r[0].rstrip(':')}:** {r[1]}")
+                else:
+                    num_cols = max(len(r) for r in rows)
+                    for r_idx, r in enumerate(rows):
+                        padded = r + [""] * (num_cols - len(r))
+                        lines.append("| " + " | ".join(padded) + " |")
+                        if r_idx == 0:
+                            lines.append("| " + " | ".join(["---"] * num_cols) + " |")
+        lines.append("")
+
+    if pos < len(trimmed):
+        tail = _inline_html_to_md(trimmed[pos:])
+        if tail:
+            lines.append(tail)
+
+    return "\n".join(lines).strip()
+
+
+def html_or_md_to_docx_bytes(content_str: str, template_docx: Path | bytes | None = None) -> bytes:
+    """Convert either HTML or Markdown content into a styled .docx binary."""
+    md_text = html_to_markdown(content_str)
+    return markdown_to_docx_bytes(md_text, template_docx=template_docx)
 
 
 _SECTION_H2_RE = re.compile(

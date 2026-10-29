@@ -152,11 +152,13 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         db.add(session)
         db.commit()
     except Exception as e:
-        # If session creation fails, still return token (backward compatibility)
-        # Log error but don't fail login
         import logging
         logging.error(f"Failed to create UserSession: {e}")
         db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="?????? ?????? ??? ????????. ?????? ?????? ???????.",
+        ) from e
     
     # Get user info with proper permissions
     settings = get_settings()

@@ -60,6 +60,7 @@ from ..services.exam_lifecycle import auto_close_expired_sessions, auto_close_se
 from ..services.offline_grading import guard_pending_session_delete, lock_exam_content
 from ..services.exam_stage import STAGE_THEORY
 from ..services.exam_stage_grants import (
+    batch_exam_states_with_permissions,
     current_open_grant,
     exam_state_with_permissions,
     expire_unused_stage_permissions,
@@ -67,6 +68,8 @@ from ..services.exam_stage_grants import (
     reset_all_stage_permissions,
     revoke_stage_permission,
 )
+
+_default_expire_unused_stage_permissions = expire_unused_stage_permissions
 from ..services.media_storage import resolve_storage_path, ensure_media_root, delete_storage_file
 from ..services.expert_certificate_cleanup import delete_expert_certificate_files
 from ..services.user_codes import UserCodeConflict, move_user_code, remember_user_code
@@ -1527,7 +1530,6 @@ def admin_users(
 
     exam_histories = _compute_all_exam_histories(db)
     requested_categories = sync_all_user_candidates(db, exam_histories)
-    admission_regimes = get_latest_admission_regimes(db)
     transitional_deadline = sync_transitional_certificates(db)
 
     f_day_start: datetime | None = None
@@ -1994,6 +1996,16 @@ def admin_users(
     founder_email = (settings.founder_admin_email or "").lower()
 
     user_ids = [u.id for u in users]
+    admission_regimes = get_latest_admission_regimes(db, user_ids) if user_ids else {}
+    batch_exam_states, stage_expired_changed = batch_exam_states_with_permissions(
+        db, users, founder_email=founder_email
+    )
+    if expire_unused_stage_permissions is not _default_expire_unused_stage_permissions:
+        for u in users:
+            is_founder_user = (u.email.lower() == founder_email)
+            is_admin_user = is_founder_user or bool(u.is_admin)
+            if not is_admin_user and expire_unused_stage_permissions(db, u):
+                stage_expired_changed = True
     unseen_counts: dict[int, int] = {}
     pending_counts: dict[int, int] = {}
     if user_ids:
@@ -2022,7 +2034,6 @@ def admin_users(
         for u in users
     }
     items = []
-    stage_expired_changed = False
     for u in users:
         unseen_count = unseen_counts.get(u.id, 0)
         pending_count = pending_counts.get(u.id, 0)
@@ -2040,19 +2051,8 @@ def admin_users(
             }
         is_founder_user = (u.email.lower() == founder_email)
         is_admin_user = is_founder_user or bool(u.is_admin)
-        # მთავარ ადმინს ყოველთვის exam_permission = true
-        # სხვა ადმინებს exam_permission = true (როცა is_admin = true, exam_permission-იც ავტომატურად true ხდება)
-        # არა-ადმინებს exam_permission = u.exam_permission (რაც ბაზაშია)
-        if is_founder_user:
-            exam_perm = True
-        elif is_admin_user:
-            exam_perm = True  # ადმინებს exam_permission ყოველთვის true
-        else:
-            if expire_unused_stage_permissions(db, u):
-                stage_expired_changed = True
-            exam_perm = bool(u.exam_permission)  # არა-ადმინებს რაც ბაზაშია
-
-        exam_state = exam_state_with_permissions(db, u, is_admin_user=is_admin_user)
+        exam_perm = True if is_admin_user else bool(u.exam_permission)
+        exam_state = batch_exam_states.get(u.id) or exam_state_with_permissions(db, u, is_admin_user=is_admin_user)
         user_dict = {
             'id': u.id,
             'personal_id': u.personal_id,

@@ -224,7 +224,7 @@ def _letter_out(letter: PlanningLetter):
         for key in (
             "id", "user_id", "kind", "event_date", "event_time", "period", "exam_schedule_id",
             "request_id", "to_email", "subject", "body", "status", "error", "created_at", "sent_at",
-            "attachment_filename", "attachment_size_bytes", "attempts",
+            "attachment_filename", "attachment_size_bytes", "attempts", "statement_id",
         )
     }
     out["doc_number"] = format_letter_doc_number(letter)
@@ -243,7 +243,7 @@ def _text(subject: str, body: str, *, final: bool):
     if not body.strip() or len(body) > 10000 or "\x00" in body:
         raise HTTPException(422, "წერილის ტექსტი აუცილებელია (მაქსიმუმ 10000 სიმბოლო).")
     if final and re.search(
-        r"\{(?:name|date|time|code|personal_id|period)\}|\[(?:სახელი და გვარი|სახელი,\s*გვარი|გამოცდის თარიღი|საათი|უნიკალური კოდი|პირადი ნომერი|შეავსეთ[^\]]*|IBAN|IBAN ანგარიში|მისამართი)\]",
+        r"\{(?:name|date|time|code|personal_id|period|category|exam_results)\}|\[(?:სახელი და გვარი|სახელი,\s*გვარი|გამოცდის თარიღი|თარიღი(?:,\s*საათი)?|საათი|უნიკალური კოდი|პირადი ნომერი|კატეგორია|შეავსეთ[^\]]*|მიეთითება[^\]]*|უარის კონკრეტული საფუძველი[^\]]*|IBAN|IBAN ანგარიში|მისამართი)\]",
         subject + "\n" + body,
         re.IGNORECASE,
     ):
@@ -459,11 +459,12 @@ def _deliver(db: Session, letter: PlanningLetter, *, actor_email: str | None = N
         now = datetime.utcnow()
         letter.sent_at = now
         target_stmt = None
-        if statement_id is not None:
+        effective_statement_id = statement_id if statement_id is not None else getattr(letter, "statement_id", None)
+        if effective_statement_id is not None:
             target_stmt = db.scalar(
-                select(Statement).where(Statement.id == statement_id, Statement.user_id == letter.user_id)
+                select(Statement).where(Statement.id == effective_statement_id, Statement.user_id == letter.user_id)
             )
-        if target_stmt is None:
+        else:
             stmt_query = select(Statement).where(
                 Statement.user_id == letter.user_id,
                 Statement.answered_at.is_(None),
@@ -473,6 +474,8 @@ def _deliver(db: Session, letter: PlanningLetter, *, actor_email: str | None = N
             target_stmt = db.scalar(
                 stmt_query.order_by(Statement.created_at.desc(), Statement.id.desc())
             )
+            if target_stmt is not None and getattr(letter, "statement_id", None) is None:
+                letter.statement_id = target_stmt.id
         if target_stmt is not None:
             by_email = actor_email or letter.created_by
             if target_stmt.seen_at is None:
@@ -681,6 +684,7 @@ def send_letter(
             letter.attachment_path, letter.attachment_filename, letter.attachment_size_bytes = new_path, name, size
 
         # If editing an existing record in save_only or save_and_send mode, remove superseded draft/letter
+        old_letter_path_to_delete = None
         if prior_edit_letter is not None and (
             prior_edit_letter.exam_schedule_id is None
             or prior_edit_letter.exam_schedule_id == letter.exam_schedule_id
@@ -688,11 +692,13 @@ def send_letter(
         ):
             if prior_edit_letter.doc_number:
                 letter.doc_number = prior_edit_letter.doc_number
+            if statement_id is None and getattr(prior_edit_letter, "statement_id", None) is not None:
+                statement_id = prior_edit_letter.statement_id
             old_letter_path = prior_edit_letter.attachment_path
             db.delete(prior_edit_letter)
             db.flush()
             if old_letter_path and old_letter_path != new_path:
-                _remove_file(old_letter_path, namespace)
+                old_letter_path_to_delete = old_letter_path
 
         # Update candidate status based on letter kind
         now = datetime.utcnow()
@@ -724,22 +730,28 @@ def send_letter(
             target_stmt = db.scalar(
                 select(Statement).where(Statement.id == statement_id, Statement.user_id == user_id)
             )
-        if target_stmt is None and not is_save_only:
+        elif not is_save_only:
             target_stmt = db.scalar(
                 select(Statement)
                 .where(Statement.user_id == user_id, Statement.answered_at.is_(None))
                 .order_by(Statement.created_at.desc(), Statement.id.desc())
             )
-        if target_stmt is not None and target_stmt.seen_at is None:
-            target_stmt.seen_at = now
-            target_stmt.seen_by = actor.email
-            db.add(target_stmt)
+        if target_stmt is not None:
+            letter.statement_id = target_stmt.id
+            if target_stmt.seen_at is None:
+                target_stmt.seen_at = now
+                target_stmt.seen_by = actor.email
+                db.add(target_stmt)
+        elif statement_id is not None:
+            letter.statement_id = statement_id
 
         db.add(letter)
         db.flush()
         if not letter.doc_number:
             letter.doc_number = format_letter_doc_number(letter)
         db.commit()
+        if old_letter_path_to_delete:
+            _remove_file(old_letter_path_to_delete, namespace)
     except IntegrityError as exc:
         db.rollback()
         _remove_file(new_path, namespace)
@@ -756,7 +768,7 @@ def send_letter(
     db.refresh(letter)
     if is_save_only:
         return _letter_out(letter)
-    return _deliver(db, letter, actor_email=actor.email, statement_id=statement_id)
+    return _deliver(db, letter, actor_email=actor.email, statement_id=letter.statement_id)
 
 
 def _user_letter(db, user_id, letter_id):
@@ -823,4 +835,4 @@ def retry_letter(user_id: int, letter_id: int, authorization: str | None = Heade
     db.refresh(letter)
     if not claimed.rowcount:
         return _letter_out(letter)
-    return _deliver(db, letter, actor_email=actor.email)
+    return _deliver(db, letter, actor_email=actor.email, statement_id=letter.statement_id)

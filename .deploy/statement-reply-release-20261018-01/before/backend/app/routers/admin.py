@@ -16,7 +16,6 @@ from ..config import get_settings
 from ..database import get_db
 from ..models import Block, ExamMedia, Question, Session as ExamSession, Answer, Option, Question as Q, TaxonomyChapter, TaxonomySubchapter, User, Exam, Statement, Certificate, ExpertUpload, UserSession, _generate_gate_password
 from ..models import (
-    CertBooking,
     ExamSchedule,
     PlanningLetter,
     MultiApartmentEvaluation,
@@ -73,7 +72,6 @@ from ..services.expert_certificate_cleanup import delete_expert_certificate_file
 from ..services.user_codes import UserCodeConflict, move_user_code, remember_user_code
 from ..services.candidate_status import (
     NON_PASS_CERT_PERIODS,
-    _cancel_active_bookings_for_user,
     get_latest_admission_regimes,
     get_user_latest_requested_category,
     normalize_cert_category,
@@ -1503,7 +1501,6 @@ def admin_users(
     exam_date: date | None = None,
     exam_morning: bool = False,
     exam_evening: bool = False,
-    certificate_handover: bool = False,
     paginated: bool = False,
     live: bool = False,
     new_statements: bool = False,
@@ -1666,12 +1663,6 @@ def admin_users(
             ]
             cert_cand_conds = [
                 User.id.in_(
-                    select(CertBooking.user_id).where(
-                        CertBooking.status == "active",
-                        CertBooking.booking_date == f_date_str,
-                    )
-                ),
-                User.id.in_(
                     select(PlanningLetter.user_id).where(
                         PlanningLetter.kind == "certificate",
                         or_(
@@ -1723,43 +1714,20 @@ def admin_users(
             stmt_action_cond = or_(*colors)
 
     effective_exam_date = exam_date
-    if effective_exam_date is None and filter_date is not None and (exam_morning or exam_evening or certificate_handover):
+    if effective_exam_date is None and filter_date is not None and (exam_morning or exam_evening):
         effective_exam_date = filter_date
 
-    if effective_exam_date is not None or exam_morning or exam_evening or certificate_handover:
+    if effective_exam_date is not None or exam_morning or exam_evening:
         target_schedule_date = effective_exam_date if effective_exam_date is not None else _today_in_tbilisi()
-        target_date_str = target_schedule_date.isoformat()
-        schedule_conditions = []
-        if exam_morning or exam_evening or not certificate_handover:
-            schedule_query = select(ExamSchedule.user_id).where(
-                ExamSchedule.exam_date == target_schedule_date
-            )
-            # Both selected, or a date alone, includes both groups without duplicates.
-            if exam_morning and not exam_evening:
-                schedule_query = schedule_query.where(ExamSchedule.period == "morning")
-            elif exam_evening and not exam_morning:
-                schedule_query = schedule_query.where(ExamSchedule.period == "evening")
-            schedule_conditions.append(User.id.in_(schedule_query))
-        if certificate_handover:
-            if effective_exam_date is not None:
-                booking_query = select(CertBooking.user_id).where(
-                    CertBooking.status == "active",
-                    CertBooking.booking_date == target_date_str,
-                )
-                cert_handover_query = select(PlanningLetter.user_id).where(
-                    PlanningLetter.kind == "certificate",
-                    PlanningLetter.event_date == target_schedule_date,
-                    PlanningLetter.period.in_(("morning", "evening", "cert_am_send", "cert_pm_send")),
-                )
-                schedule_conditions.append(User.id.in_(booking_query))
-                schedule_conditions.append(User.id.in_(cert_handover_query))
-            else:
-                booking_query = select(CertBooking.user_id).where(
-                    CertBooking.status == "active",
-                    CertBooking.booking_date >= target_date_str,
-                )
-                schedule_conditions.append(User.id.in_(booking_query))
-        stmt = stmt.where(or_(*schedule_conditions))
+        schedule_query = select(ExamSchedule.user_id).where(
+            ExamSchedule.exam_date == target_schedule_date
+        )
+        # Both selected, or a date alone, includes both groups without duplicates.
+        if exam_morning and not exam_evening:
+            schedule_query = schedule_query.where(ExamSchedule.period == "morning")
+        elif exam_evening and not exam_morning:
+            schedule_query = schedule_query.where(ExamSchedule.period == "evening")
+        stmt = stmt.where(User.id.in_(schedule_query))
 
     if statement_date is not None:
         # Statements are stored in naive UTC; the selected day is in Georgia.
@@ -1932,7 +1900,6 @@ def admin_users(
         or all_statements
         or exam_morning
         or exam_evening
-        or certificate_handover
         or exam_passed
         or exam_failed
         or pending_pass_letter
@@ -1960,12 +1927,6 @@ def admin_users(
                         PlanningLetter.event_date == filter_date,
                         (letter_ts_expr >= f_day_start) & (letter_ts_expr < f_day_end),
                     )
-                )
-            ),
-            User.id.in_(
-                select(CertBooking.user_id).where(
-                    CertBooking.status == "active",
-                    CertBooking.booking_date == f_date_str,
                 )
             ),
             User.id.in_(
@@ -2327,9 +2288,6 @@ def admin_update_candidate_status(
             chosen_cat = normalize_cert_category(chosen_cat)
         user.candidate_category = chosen_cat
         user.candidate_updated_at = now
-
-    if payload.candidate_status != "cert_candidate":
-        _cancel_active_bookings_for_user(db, user.id, now)
 
     db.add(user)
     db.commit()

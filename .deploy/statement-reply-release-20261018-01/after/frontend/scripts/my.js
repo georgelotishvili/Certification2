@@ -288,7 +288,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!savedEmail) return;
     try {
       const res = await fetch(`${API_BASE}/users/profile?email=${encodeURIComponent(savedEmail)}`, { headers: { 'Cache-Control': 'no-cache', ...getActorHeaders() } });
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          try {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('loggedIn');
+            localStorage.removeItem('currentUser');
+          } catch {}
+          window.location.href = 'index.html';
+        }
+        return;
+      }
       const data = await res.json();
       selfProfileData = data;
       if (DOM.pfFirstName) DOM.pfFirstName.textContent = data.first_name || '—';
@@ -961,7 +971,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function submitRating(criteria) {
-      if (!state.canRate || !state.targetUserId) return;
+      if (!state.canRate || !state.targetUserId) return false;
       try {
         const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/rating`, {
           method: 'POST',
@@ -970,7 +980,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         if (!res.ok) {
           let detail = ''; try { const j = await res.clone().json(); detail = j?.detail || ''; } catch {}
-          alert(detail || 'შეფასების შენახვა ვერ მოხერხდა'); return;
+          alert(detail || 'შეფასების შენახვა ვერ მოხერხდა'); return false;
         }
         const data = await res.json();
         state.average = Number(data.average || 0);
@@ -978,7 +988,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (DOM.reviewsAverage) DOM.reviewsAverage.textContent = state.average.toFixed(2);
         const myAvg = state.actorCriteria ? (Object.values(state.actorCriteria).reduce((a,b)=>a+Number(b||0),0)/5) : state.average;
         renderStars(myAvg);
-      } catch { alert('ქულა ვერ შეინახა'); }
+        return true;
+      } catch { alert('ქულა ვერ შეინახა'); return false; }
     }
 
     function bindEvents() {
@@ -997,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         board.form.addEventListener('submit', (e) => {
           e.preventDefault();
           const c = {}; Object.keys(board.inputs).forEach((k) => { c[k] = Number(board.inputs[k].value || 0).toFixed(2); });
-          submitRating(c).then(closeBoard);
+          submitRating(c).then((ok) => { if (ok) closeBoard(); });
         });
       }
 
@@ -1419,9 +1430,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateSubmitEnabled() {
       const draft = state.currentDraft;
       const submitted = !!(draft && draft.status === 'submitted');
-      const hasServer = !!(draft && draft.expertise_filename && draft.project_filename);
-      const hasLocal = !!(DOM.expertFileExpertise?.files?.length && DOM.expertFileProject?.files?.length);
-      if (DOM.expertSubmitBtn) DOM.expertSubmitBtn.disabled = submitted || !(hasServer || hasLocal);
+      const hasExpertise = Boolean(draft?.expertise_filename) || Boolean(DOM.expertFileExpertise?.files?.length);
+      const hasProject = Boolean(draft?.project_filename) || Boolean(DOM.expertFileProject?.files?.length);
+      if (DOM.expertSubmitBtn) DOM.expertSubmitBtn.disabled = submitted || !(hasExpertise && hasProject);
     }
 
     function updateDraftUI(draft) {

@@ -538,6 +538,25 @@ def _is_contract_document(doc: SiteDocument) -> bool:
     )
 
 
+def _resolve_existing_document_file(doc: SiteDocument) -> Path | None:
+    if doc.file_path:
+        try:
+            candidate = _resolve_document_path(doc.file_path)
+            if candidate.is_file():
+                return candidate
+        except ValueError:
+            pass
+    if doc.filename:
+        bundled = BUNDLED_CONTRACTS_DIR / _safe_document_display_filename(doc.filename)
+        if bundled.is_file():
+            return bundled
+    if doc.contract_type and doc.contract_type in CONTRACT_SLOTS:
+        bundled = BUNDLED_CONTRACTS_DIR / CONTRACT_SLOTS[doc.contract_type]["source_docx"]
+        if bundled.is_file():
+            return bundled
+    return None
+
+
 def _document_out(
     doc: SiteDocument,
     user: User | None = None,
@@ -546,15 +565,16 @@ def _document_out(
     regime: str | None = None,
 ) -> SiteDocumentOut:
     is_contract = _is_contract_document(doc)
+    existing_file = _resolve_existing_document_file(doc)
     download_url = None
-    if doc.file_path and doc.filename:
+    if existing_file is not None and doc.filename:
         download_url = f"/documents/{doc.id}/download"
         if for_user_id is not None and is_contract:
             download_url = f"{download_url}?user_id={for_user_id}"
 
     display_filename = (
         _safe_document_display_filename(doc.filename)
-        if doc.filename is not None
+        if (existing_file is not None and doc.filename is not None)
         else None
     )
 
@@ -894,15 +914,8 @@ def download_document_file(
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    if not doc.file_path:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
-
-    try:
-        document_path = _resolve_document_path(doc.file_path)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
-
-    if not document_path.is_file():
+    document_path = _resolve_existing_document_file(doc)
+    if document_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     safe_filename = _safe_document_display_filename(doc.filename)
