@@ -2874,6 +2874,11 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
     manifest_file = _kb_manifest_path()
     seed_zip = _seed_zip_path()
     expected_seed_zip_size = seed_zip.stat().st_size if seed_zip.is_file() else 0
+    expected_seed_zip_sha = (
+        hashlib.sha256(seed_zip.read_bytes()).hexdigest()[:16]
+        if seed_zip.is_file()
+        else ""
+    )
 
     if manifest_file.is_file() and not force:
         try:
@@ -2884,6 +2889,7 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
                     seed_entries
                     and expected_seed_zip_size > 0
                     and seed_entries[0].get("seed_zip_size") == expected_seed_zip_size
+                    and seed_entries[0].get("seed_zip_sha") == expected_seed_zip_sha
                 ):
                     return raw
         except Exception:
@@ -2965,6 +2971,7 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
                             "uploaded_at": now_iso,
                             "is_seed": True,
                             "seed_zip_size": expected_seed_zip_size,
+                            "seed_zip_sha": expected_seed_zip_sha,
                         }
                     )
         except Exception:

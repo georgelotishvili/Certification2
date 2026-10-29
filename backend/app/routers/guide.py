@@ -119,6 +119,7 @@ def _ensure_default_guide_docs(db: Session) -> None:
             cert_doc is not None
             and forms_doc is not None
             and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in (cert_doc.content or "")
+            and "საგადახდო ქვითრის დართვით" in (cert_doc.content or "")
             and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in (forms_doc.content or "")
             and "GIPC-CON-" not in (forms_doc.content or "")
             and all(_guide_file_exists(d.file_path) for d in docs)
