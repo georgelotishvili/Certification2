@@ -2014,13 +2014,46 @@
       },
     ];
 
+    const DEFAULT_DIRECTOR_NAME = 'ლაშა ფოფხაძე';
+    const DEFAULT_DIRECTOR_PERSONAL_ID = '01031003115';
+
     const CONTRACT_CATEGORY_OPTIONS = [
-      { value: 'A', label: '1) კატეგორია A (არქიტექტორი)', prefix: '1)' },
-      { value: 'C_A', label: '2) კატეგორია C ან A (ექსპერტი / არქიტექტორი)', prefix: '2)' },
-      { value: 'B_A', label: '3) კატეგორია B ან A (სპეციალისტი / არქიტექტორი)', prefix: '3)' },
-      { value: 'B', label: '4) კატეგორია B (მხოლოდ სპეციალისტი)', prefix: '4)' },
-      { value: 'C', label: '5) კატეგორია C (მხოლოდ ექსპერტი)', prefix: '5)' },
+      {
+        value: 'A',
+        label: '1) კატეგორია A (არქიტექტორი)',
+        contractText: 'კატეგორია A — შენობა-ნაგებობის არქიტექტორი',
+        prefix: '1)',
+      },
+      {
+        value: 'C_A',
+        label: '2) კატეგორია C ან A (ექსპერტი / არქიტექტორი)',
+        contractText: 'კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად)',
+        prefix: '2)',
+      },
+      {
+        value: 'B_A',
+        label: '3) კატეგორია B ან A (სპეციალისტი / არქიტექტორი)',
+        contractText: 'კატეგორია B ან A (ქულების შესაბამისად)',
+        prefix: '3)',
+      },
+      {
+        value: 'B',
+        label: '4) კატეგორია B (მხოლოდ სპეციალისტი)',
+        contractText: 'კატეგორია B — მხოლოდ არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (A კატეგორიაზე ჩამონაცვლების გარეშე)',
+        prefix: '4)',
+      },
+      {
+        value: 'C',
+        label: '5) კატეგორია C (მხოლოდ ექსპერტი)',
+        contractText: 'კატეგორია C — მხოლოდ არქიტექტურული პროექტის ექსპერტი (A კატეგორიაზე ჩამონაცვლების გარეშე)',
+        prefix: '5)',
+      },
     ];
+
+    const CONTRACT_REGIME_LABELS = {
+      standard: 'სტანდარტული (უმაღლესი არქიტექტურული განათლების დიპლომით)',
+      transitional: 'გარდამავალი / საგამონაკლისო (უდიპლომოდ — №134 დადგენილების მე-12 მუხლით)',
+    };
 
     let cachedContractDocs = null;
     let contractDocsPromise = null;
@@ -2083,6 +2116,7 @@
         : (overrideRegime !== null && overrideRegime !== undefined
           ? String(overrideRegime).toLowerCase().trim()
           : resolveUserApplicationRegime(user, reqCat));
+      const catOpt = CONTRACT_CATEGORY_OPTIONS.find((o) => o.value === reqCat);
       return {
         full_name: fullName,
         personal_id: String(user?.personal_id || user?.personalId || '').trim(),
@@ -2091,7 +2125,11 @@
         code: String(user?.code || '').trim(),
         date: formatTodayGeorgianDate(),
         requested_category: reqCat,
+        requested_category_label: catOpt ? catOpt.contractText : '',
         admission_regime: admReg,
+        admission_regime_label: CONTRACT_REGIME_LABELS[admReg] || CONTRACT_REGIME_LABELS.standard,
+        director_name: DEFAULT_DIRECTOR_NAME,
+        director_personal_id: DEFAULT_DIRECTOR_PERSONAL_ID,
       };
     }
 
@@ -2099,6 +2137,24 @@
       if (!rawHtml || !user) return rawHtml || '';
       const fields = extractUserContractFields(user, overrideCategory, overrideRegime);
       let out = String(rawHtml);
+
+      const safeDirName = escapeHtml(fields.director_name);
+      const safeDirPid = escapeHtml(fields.director_personal_id);
+      out = out.replace(
+        /(წარმომადგენელი\s*\([^)]*\)\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}(\s*\(\s*პ\s*\/\s*ნ\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}(\s*\))/gi,
+        (_, p1, p2, p3) =>
+          `${p1}<strong class="contract-filled-value">${safeDirName}</strong>${p2}<strong class="contract-filled-value">${safeDirPid}</strong>${p3}`
+      );
+      out = out.replace(
+        /(დირექტორი\s*\([^)]*\)\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}((?:\s*<\/p>\s*<p[^>]*>|\s*<br\s*\/?>\s*|\s+)(?:<\/?(?:strong|b|span|em|i|u)[^>]*>)*პირადი\s+ნომერი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+        (_, p1, p2) =>
+          `${p1}<strong class="contract-filled-value">${safeDirName}</strong>${p2}<strong class="contract-filled-value">${safeDirPid}</strong>`
+      );
+      out = out.replace(
+        /(დირექტორი\s*\([^)]*\)\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+        (_, prefix) => `${prefix}<strong class="contract-filled-value">${safeDirName}</strong>`
+      );
+
       const rules = [
         [
           /(სახელი(?:\s*,|\s+და)\s*გვარი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
@@ -2119,6 +2175,14 @@
         [
           /(უნიკალური\s+კოდი[^:]*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
           fields.code,
+        ],
+        [
+          /(მოთხოვნილი\s+კატეგორია\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+          fields.requested_category_label,
+        ],
+        [
+          /(დაშვების\s+რეჟიმი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+          fields.admission_regime_label,
         ],
         [
           /(თარიღი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
