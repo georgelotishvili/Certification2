@@ -1366,9 +1366,14 @@ body > footer {
 
 .profile-actions {
   margin-top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Buttons */
+.profile-bookings-btn,
 .profile-edit-btn,
 .cert-download,
 .comment-submit,
@@ -1386,6 +1391,7 @@ body > footer {
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.18) inset,
     0 2px 5px rgba(15, 23, 42, 0.12);
@@ -1393,6 +1399,13 @@ body > footer {
   transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+.profile-bookings-btn.has-active-booking {
+  background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+  border-color: #14532d;
+}
+
+.profile-bookings-btn:hover,
+.profile-bookings-btn:focus-visible,
 .profile-edit-btn:hover,
 .profile-edit-btn:focus-visible,
 .cert-download:hover:not(:disabled),
@@ -1411,6 +1424,13 @@ body > footer {
   transform: translateY(-1px);
 }
 
+.profile-bookings-btn.has-active-booking:hover,
+.profile-bookings-btn.has-active-booking:focus-visible {
+  background: linear-gradient(180deg, #15803d 0%, #166534 100%);
+  border-color: #14532d;
+}
+
+.profile-bookings-btn:active,
 .profile-edit-btn:active,
 .cert-download:active:not(:disabled),
 .comment-submit:active,

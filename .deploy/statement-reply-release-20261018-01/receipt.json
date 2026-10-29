@@ -1,6 +1,6 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "deployed_at": "2026-10-29T15:17:10.503770+00:00",
+  "deployed_at": "2026-10-29T15:58:29.344407+00:00",
   "remote": {
     "ok": true,
     "service": "active",
@@ -8,115 +8,65 @@
     "has_admin_users_route": true,
     "has_planning_templates_route": true,
     "verified_files": {
-      "backend/app/main.py": true,
+      "backend/app/models.py": true,
       "backend/app/routers/admin.py": true,
       "backend/app/routers/ai_assistant.py": true,
       "backend/app/routers/documents.py": true,
       "backend/app/routers/guide.py": true,
       "backend/app/routers/planning_letters.py": true,
-      "backend/app/schemas.py": true,
+      "backend/app/routers/users.py": true,
       "backend/app/services/candidate_status.py": true,
-      "backend/app/services/contract_assembler.py": true,
-      "backend/app/data/ai_knowledge_seed.zip": true,
-      "backend/app/data/contracts/01_\u10e1\u10d4\u10e0\u10e2\u10d8\u10e4\u10d8\u10d9\u10d0\u10ea\u10d8\u10d8\u10e1_\u10e1\u10e5\u10d4\u10db\u10d0.md": true,
-      "backend/app/data/contracts/01_\u10e1\u10d4\u10e0\u10e2\u10d8\u10e4\u10d8\u10d9\u10d0\u10ea\u10d8\u10d8\u10e1_\u10e1\u10e5\u10d4\u10db\u10d0.docx": true,
-      "backend/app/data/contracts/03_\u10db\u10d8\u10e3\u10d9\u10d4\u10e0\u10eb\u10dd\u10d4\u10d1\u10da\u10dd\u10d1\u10d8\u10e1_\u10de\u10dd\u10da\u10d8\u10e2\u10d8\u10d9\u10d0.md": true,
-      "backend/app/data/contracts/03_\u10db\u10d8\u10e3\u10d9\u10d4\u10e0\u10eb\u10dd\u10d4\u10d1\u10da\u10dd\u10d1\u10d8\u10e1_\u10de\u10dd\u10da\u10d8\u10e2\u10d8\u10d9\u10d0.docx": true,
-      "backend/app/data/contracts/04_\u10d9\u10dd\u10dc\u10e4\u10d8\u10d3\u10d4\u10dc\u10ea\u10d8\u10d0\u10da\u10e3\u10e0\u10dd\u10d1\u10d8\u10e1_\u10de\u10dd\u10da\u10d8\u10e2\u10d8\u10d9\u10d0.md": true,
-      "backend/app/data/contracts/04_\u10d9\u10dd\u10dc\u10e4\u10d8\u10d3\u10d4\u10dc\u10ea\u10d8\u10d0\u10da\u10e3\u10e0\u10dd\u10d1\u10d8\u10e1_\u10de\u10dd\u10da\u10d8\u10e2\u10d8\u10d9\u10d0.docx": true,
-      "backend/app/data/contracts/07_\u10e1\u10d0\u10e9\u10d8\u10d5\u10e0\u10d4\u10d1\u10d8\u10e1\u10d0_\u10d3\u10d0_\u10d0\u10de\u10d4\u10da\u10d0\u10ea\u10d8\u10d4\u10d1\u10d8\u10e1_\u10de\u10e0\u10dd\u10ea\u10d4\u10d3\u10e3\u10e0\u10d0.md": true,
-      "backend/app/data/contracts/07_\u10e1\u10d0\u10e9\u10d8\u10d5\u10e0\u10d4\u10d1\u10d8\u10e1\u10d0_\u10d3\u10d0_\u10d0\u10de\u10d4\u10da\u10d0\u10ea\u10d8\u10d4\u10d1\u10d8\u10e1_\u10de\u10e0\u10dd\u10ea\u10d4\u10d3\u10e3\u10e0\u10d0.docx": true,
-      "backend/app/data/contracts/08_\u10e1\u10d0\u10d2\u10d0\u10db\u10dd\u10ea\u10d3\u10dd_\u10d3\u10d0_\u10e1\u10d0\u10e1\u10d4\u10e0\u10e2\u10d8\u10e4\u10d8\u10d9\u10d0\u10ea\u10d8\u10dd_\u10ee\u10d4\u10da\u10e8\u10d4\u10d9\u10e0\u10e3\u10da\u10d4\u10d1\u10d0.md": true,
-      "backend/app/data/contracts/08_\u10e1\u10d0\u10d2\u10d0\u10db\u10dd\u10ea\u10d3\u10dd_\u10d3\u10d0_\u10e1\u10d0\u10e1\u10d4\u10e0\u10e2\u10d8\u10e4\u10d8\u10d9\u10d0\u10ea\u10d8\u10dd_\u10ee\u10d4\u10da\u10e8\u10d4\u10d9\u10e0\u10e3\u10da\u10d4\u10d1\u10d0.docx": true,
-      "backend/app/data/contracts/12_\u10e4\u10dd\u10e0\u10db\u10d0_\u10d2\u10d0\u10dc\u10d0\u10ea\u10ee\u10d0\u10d3\u10d8.md": true,
-      "backend/app/data/contracts/12_\u10e4\u10dd\u10e0\u10db\u10d0_\u10d2\u10d0\u10dc\u10d0\u10ea\u10ee\u10d0\u10d3\u10d8.docx": true,
-      "backend/app/data/contracts/28_\u10d5\u10d4\u10d1\u10d2\u10d5\u10d4\u10e0\u10d3\u10d6\u10d4_\u10d2\u10d0\u10dc\u10e1\u10d0\u10d7\u10d0\u10d5\u10e1\u10d4\u10d1\u10d4\u10da\u10d8_\u10e1\u10d0\u10d5\u10d0\u10da\u10d3\u10d4\u10d1\u10e3\u10da\u10dd_\u10d8\u10dc\u10e4\u10dd\u10e0\u10db\u10d0\u10ea\u10d8\u10d0.md": true,
+      "backend/scripts/migrate_candidate_status.py": true,
       "frontend/pages/admin.html": true,
       "frontend/pages/documents.html": true,
       "frontend/pages/index.html": true,
       "frontend/pages/my.html": true,
       "frontend/pages/registry.html": true,
-      "frontend/partials/header.html": true,
-      "frontend/scripts/admin.js": true,
-      "frontend/scripts/admin/ai-assistant.js": true,
-      "frontend/scripts/admin/documents.js": true,
-      "frontend/scripts/admin/exam-schedules.js": true,
-      "frontend/scripts/admin/users.js": true,
-      "frontend/scripts/header.js": true,
-      "frontend/scripts/my.js": true,
-      "frontend/styles/header.css": true
+      "frontend/styles/admin.css": true,
+      "frontend/styles/header.css": true,
+      "frontend/styles/my.css": true
     }
   },
   "public_checks": {
     "https://gipc.org.ge/pages/admin.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "4f753302f97e156198739b7330dac60c440809c9c76c74ca1d7afb4c84fd5beb"
+      "sha256": "2b73ebcebe7201745b5cf9c986cfe8ae62305b4bb656a6567e4251f3e30fc5fe"
     },
     "https://gipc.org.ge/pages/documents.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "28f6844105aba735a4042071fb6723e0aaa88d69c7438d514a9fbb4993aa9693"
+      "sha256": "f4dc656117d94932b9ae0e647fe23a26dcb66dc3fefef2007f4b6321f4f8874c"
     },
     "https://gipc.org.ge/pages/index.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "efa8c9d2474d4a09028e9afc42efe0995a80c6fb6749da9d447c2e6c022c6187"
+      "sha256": "4b43df52f0da81e8ed36fe905f19c702261f2d5c444c210d131935e25a94add5"
     },
     "https://gipc.org.ge/pages/my.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "903b8bd6fc95c407da8b897de78f37a168f764496ee384de3eb9ea4918bb65d2"
+      "sha256": "ae4466f5c9ea634a79f3f73abadfd9ed2ea6c2317e9b7f3af4aa83eb50cc1bfb"
     },
     "https://gipc.org.ge/pages/registry.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "a7a04b524bfcac12db138ab5c8140a76d816e7895f06e093b637bb3f388fcf09"
+      "sha256": "cb04e8dfa7e848b334ca82e75f3221be4403dad8d371a3e7d5385426eff60ab1"
     },
-    "https://gipc.org.ge/partials/header.html": {
+    "https://gipc.org.ge/styles/admin.css": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "ed82ae0b4510a37a67d6449d4831cccb6090bc9a48d197765b8471466a20ba03"
-    },
-    "https://gipc.org.ge/scripts/admin.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "fc43c22542e93160cd9f5ef4d7eee421a95f77599e13bddf6297ea5107b270b9"
-    },
-    "https://gipc.org.ge/scripts/admin/ai-assistant.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "7bbdcf3e511e656966782d38a11f61409f5854c3a3b0de385f8b03913550b013"
-    },
-    "https://gipc.org.ge/scripts/admin/documents.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "c3a10c896ddf2f71345c302a4dcd759ab9a9d0edf1d0f594e16b47a41a21c15d"
-    },
-    "https://gipc.org.ge/scripts/admin/exam-schedules.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "f09cb8fe2d948d6ddcee7803cf33da7bc4caf985396cbbad37f512b86fd28113"
-    },
-    "https://gipc.org.ge/scripts/admin/users.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "3cda8fadb608b345b43579c65006db0d0d542723f0bed5c4c917f0e04a0f1b65"
-    },
-    "https://gipc.org.ge/scripts/header.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "7e1c9f77e4e4bdb1353d40ab4dec9978cc2cedc261aadc5b75577ea0ee6ce262"
-    },
-    "https://gipc.org.ge/scripts/my.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "46e71023e5deaef205919a2c6c672e84797cf7f26d42eb0104a99b03577a5e31"
+      "sha256": "a6d1284cd1476e782d422009f665bc85a9829dfe338fa208fd5f9fc5c44984e3"
     },
     "https://gipc.org.ge/styles/header.css": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "da195b18988e7fce9592dd4e8e6658b068081eed33f1fb523107cc8533deb4c0"
+      "sha256": "6a50798cbf80c7fbd4eabf9b9397b64b380a714d5a65e2f1599333774b440f1e"
+    },
+    "https://gipc.org.ge/styles/my.css": {
+      "status": 200,
+      "sha256_match": true,
+      "sha256": "ab064bfbe9763442eac1db78ef8d6690b0e1e9af7a0e32a9c604deb172737a81"
     }
   }
 }

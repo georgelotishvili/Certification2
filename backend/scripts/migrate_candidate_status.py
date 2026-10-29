@@ -32,13 +32,6 @@ def run() -> None:
         if cert_cols and "is_transitional" not in cert_cols:
             conn.execute("ALTER TABLE certificates ADD COLUMN is_transitional BOOLEAN NOT NULL DEFAULT 0")
 
-        booking_cols = {row[1] for row in conn.execute("PRAGMA table_info(cert_bookings)")}
-        if booking_cols:
-            conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_cert_bookings_active_slot "
-                "ON cert_bookings (booking_date, slot_time) WHERE status = 'active'"
-            )
-
 
 if __name__ == "__main__":
     run()

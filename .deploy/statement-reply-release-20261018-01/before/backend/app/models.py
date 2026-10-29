@@ -437,14 +437,58 @@ class Statement(Base):
     seen_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     answered_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # Attachment metadata (optional)
+    # Attachment metadata (slot 1 / general attachment + slots 2 & 3 for exam application)
     attachment_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     attachment_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attachment2_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    attachment2_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment2_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    attachment2_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attachment3_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    attachment3_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment3_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    attachment3_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     doc_number: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="statements")
+
+
+def build_statement_attachments_list(statement: Statement | None) -> list[dict]:
+    if statement is None:
+        return []
+    items: list[dict] = []
+    if getattr(statement, "attachment_filename", None) or getattr(statement, "attachment_path", None):
+        items.append({
+            "slot": 1,
+            "filename": statement.attachment_filename or "file_1",
+            "size_bytes": statement.attachment_size_bytes,
+        })
+    if getattr(statement, "attachment2_filename", None) or getattr(statement, "attachment2_path", None):
+        items.append({
+            "slot": 2,
+            "filename": statement.attachment2_filename or "file_2",
+            "size_bytes": statement.attachment2_size_bytes,
+        })
+    if getattr(statement, "attachment3_filename", None) or getattr(statement, "attachment3_path", None):
+        items.append({
+            "slot": 3,
+            "filename": statement.attachment3_filename or "file_3",
+            "size_bytes": statement.attachment3_size_bytes,
+        })
+    return items
+
+
+def iter_statement_attachment_paths(statement: Statement | None) -> list[str]:
+    if statement is None:
+        return []
+    paths: list[str] = []
+    for attr in ("attachment_path", "attachment2_path", "attachment3_path"):
+        val = getattr(statement, attr, None)
+        if val:
+            paths.append(val)
+    return paths
 
 
 def format_statement_doc_number(statement: Statement | None) -> str | None:

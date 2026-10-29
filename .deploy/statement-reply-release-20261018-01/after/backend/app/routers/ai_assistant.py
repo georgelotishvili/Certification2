@@ -498,6 +498,7 @@ def _load_ai_settings() -> dict[str, Any]:
         and "იოსებიძის ქ. №69, ბინა №28" not in stored_sys_prompt
         and "GIPC-CON-004" not in stored_sys_prompt
         and "10_საგამოცდო_ხელშეკრულება" not in stored_sys_prompt
+        and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in stored_sys_prompt
     ):
         system_prompt = stored_sys_prompt
         system_prompt_customized = True
@@ -534,6 +535,7 @@ def _load_ai_settings() -> dict[str, Any]:
         and "GIPC-CON-001 (გარდამავალი)" not in stored_pub_prompt
         and "არასოდეს გადმოიტანო ჩატში მთელი დოკუმენტები" in stored_pub_prompt
         and "შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“ (GIPC)" in stored_pub_prompt
+        and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in stored_pub_prompt
     ):
         public_system_prompt = stored_pub_prompt
         public_system_prompt_customized = True

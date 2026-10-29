@@ -921,35 +921,3 @@ class GuideDocument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-
-class CertBookingDay(Base):
-    """დირექტორის მიერ მონიშნული სერტიფიკატის გადაცემის დღეები და 20-წუთიანი სლოტები (11:00–16:00)"""
-    __tablename__ = "cert_booking_days"
-
-    date_str: Mapped[str] = mapped_column(String(10), primary_key=True)  # YYYY-MM-DD
-    slots_json: Mapped[str] = mapped_column(Text, default="[]")  # JSON array of enabled HH:MM slots
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-
-class CertBooking(Base):
-    """სერტიფიკატის კანდიდატის მიერ დაჯავშნილი შეხვედრა"""
-    __tablename__ = "cert_bookings"
-    __table_args__ = (
-        Index("ix_cert_bookings_date_slot_status", "booking_date", "slot_time", "status"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    letter_id: Mapped[int | None] = mapped_column(ForeignKey("planning_letters.id", ondelete="SET NULL"), nullable=True, index=True)
-    booking_date: Mapped[str] = mapped_column(String(10), index=True)  # YYYY-MM-DD
-    slot_time: Mapped[str] = mapped_column(String(5), index=True)  # HH:MM (11:00 .. 15:40)
-    status: Mapped[str] = mapped_column(String(16), default="active", index=True)  # active, cancelled
-    category: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    cancelled_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    user: Mapped["User"] = relationship("User")
-

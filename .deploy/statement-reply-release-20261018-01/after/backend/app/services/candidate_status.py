@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from ..models import CertBooking, Certificate, ExamSchedule, PlanningLetter, Statement, User
+from ..models import Certificate, ExamSchedule, PlanningLetter, Statement, User
 from .media_storage import ensure_media_root
 
 VALID_CANDIDATE_STATUSES = ("exam_candidate", "cert_candidate")
@@ -336,7 +336,6 @@ def sync_all_user_candidates(
                         u.candidate_status = None
                         u.candidate_category = None
                         u.candidate_updated_at = now
-                        _cancel_active_bookings_for_user(db, u.id, now)
                         dirty = True
 
     if dirty:
@@ -367,20 +366,6 @@ NON_PASS_CERT_PERIODS = (
 )
 
 
-def _cancel_active_bookings_for_user(db: Session, user_id: int, now: datetime) -> None:
-    active_bookings = db.scalars(
-        select(CertBooking).where(
-            CertBooking.user_id == user_id,
-            CertBooking.status == "active",
-        )
-    ).all()
-    for b in active_bookings:
-        b.status = "cancelled"
-        b.cancelled_at = now
-        b.cancelled_by = "system"
-        db.add(b)
-
-
 def reconcile_user_candidate_status_after_delete(
     db: Session,
     user: User | None,
@@ -396,7 +381,6 @@ def reconcile_user_candidate_status_after_delete(
 
     now = datetime.utcnow()
     if user.candidate_status is None:
-        _cancel_active_bookings_for_user(db, user.id, now)
         return False
 
     stmt_count = int(
@@ -451,7 +435,6 @@ def reconcile_user_candidate_status_after_delete(
         user.candidate_category = None
         user.candidate_updated_at = now
         db.add(user)
-        _cancel_active_bookings_for_user(db, user.id, now)
         return True
 
     # Rule 2: Deleting the last certificate handover letter
@@ -466,7 +449,6 @@ def reconcile_user_candidate_status_after_delete(
                 user.candidate_category = None
             user.candidate_updated_at = now
             db.add(user)
-            _cancel_active_bookings_for_user(db, user.id, now)
             return True
 
     # Rule 3: Deleting the last exam schedule or exam admission letter
@@ -478,7 +460,6 @@ def reconcile_user_candidate_status_after_delete(
             user.candidate_category = None
             user.candidate_updated_at = now
             db.add(user)
-            _cancel_active_bookings_for_user(db, user.id, now)
             return True
 
     # Rule 4: If a statement was deleted but other statements remain, keep category in sync
