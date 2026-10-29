@@ -752,6 +752,24 @@ def _build_certificate_activation_email(
     return _render_cert_tokens(raw_subject, tokens), _render_cert_tokens(raw_body, tokens)
 
 
+def _certificate_has_uploaded_pdf(cert: Certificate | None) -> bool:
+    if not cert or not cert.file_path:
+        return False
+    try:
+        src_path = resolve_storage_path(cert.file_path)
+        return src_path.is_file() and src_path.stat().st_size > 0
+    except Exception:
+        return False
+
+
+def _require_certificate_uploaded_pdf(cert: Certificate | None) -> None:
+    if not _certificate_has_uploaded_pdf(cert):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="სერტიფიკატის PDF ფაილი ჯერ არ არის ატვირთული. შეტყობინების გაგზავნა შეუძლებელია.",
+        )
+
+
 def _send_certificate_activation_notification(
     db: Session,
     user: User,
@@ -760,6 +778,7 @@ def _send_certificate_activation_notification(
     custom_subject: str | None = None,
     custom_body: str | None = None,
 ) -> tuple[str, str | None]:
+    _require_certificate_uploaded_pdf(cert)
     subject, body = _build_certificate_activation_email(user, cert, custom_subject, custom_body)
     now = datetime.utcnow()
     req_id = str(uuid4())
@@ -893,6 +912,11 @@ def create_certificate(
     existing = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Certificate already exists")
+    if payload.send_notification:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="სერტიფიკატის PDF ფაილი ჯერ არ არის ატვირთული. შეტყობინების გაგზავნა შეუძლებელია.",
+        )
     
     now = datetime.utcnow()
     level_val = payload.level or "architect"
@@ -956,6 +980,8 @@ def update_certificate(
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
+    if payload.send_notification:
+        _require_certificate_uploaded_pdf(cert)
     
     was_transitional = bool(cert.is_transitional)
     if payload.unique_code is not None:
@@ -1026,18 +1052,7 @@ def notify_certificate_activation(
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
-    has_pdf = False
-    if cert.file_path:
-        try:
-            src_path = resolve_storage_path(cert.file_path)
-            has_pdf = src_path.is_file() and src_path.stat().st_size > 0
-        except Exception:
-            has_pdf = False
-    if not has_pdf:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="სერტიფიკატის PDF ფაილი ჯერ არ არის ატვირთული. შეტყობინების გაგზავნა შეუძლებელია.",
-        )
+    _require_certificate_uploaded_pdf(cert)
     notif_status, notif_error = _send_certificate_activation_notification(
         db,
         user,
@@ -1247,6 +1262,7 @@ def download_certificate_file(
 @router.get("/{user_id}/photo/file")
 def get_user_photo(
     user_id: int,
+    token: str | None = Query(None),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
@@ -1257,7 +1273,8 @@ def get_user_photo(
 
     has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user_id)) is not None
     if not has_cert:
-        actor = _get_user_from_token(db, authorization)
+        effective_auth = authorization or (f"Bearer {token.strip()}" if token and token.strip() else None)
+        actor = _get_user_from_token(db, effective_auth)
         settings = get_settings()
         founder_email = (settings.founder_admin_email or "").lower()
         is_allowed = actor is not None and (

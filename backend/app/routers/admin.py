@@ -2796,6 +2796,11 @@ def admin_delete_statement(
     # Remove stored attachments if present
     for att_path in iter_statement_attachment_paths(statement):
         delete_storage_file(att_path)
+    db.execute(
+        PlanningLetter.__table__.update()
+        .where(PlanningLetter.statement_id == statement_id)
+        .values(statement_id=-1)
+    )
     db.delete(statement)
     db.flush()
     reconcile_user_candidate_status_after_delete(db, user, deleted_kind="statement")

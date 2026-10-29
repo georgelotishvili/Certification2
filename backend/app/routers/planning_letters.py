@@ -461,9 +461,13 @@ def _deliver(db: Session, letter: PlanningLetter, *, actor_email: str | None = N
         target_stmt = None
         effective_statement_id = statement_id if statement_id is not None else getattr(letter, "statement_id", None)
         if effective_statement_id is not None:
-            target_stmt = db.scalar(
-                select(Statement).where(Statement.id == effective_statement_id, Statement.user_id == letter.user_id)
+            stmt_by_id_query = select(Statement).where(
+                Statement.id == effective_statement_id,
+                Statement.user_id == letter.user_id,
             )
+            if letter.created_at is not None:
+                stmt_by_id_query = stmt_by_id_query.where(Statement.created_at <= letter.created_at)
+            target_stmt = db.scalar(stmt_by_id_query)
         else:
             stmt_query = select(Statement).where(
                 Statement.user_id == letter.user_id,

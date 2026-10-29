@@ -37,6 +37,10 @@ def run() -> None:
             conn.execute("ALTER TABLE planning_letters ADD COLUMN statement_id INTEGER")
             conn.execute("CREATE INDEX IF NOT EXISTS ix_planning_letters_statement_id ON planning_letters (statement_id)")
 
+        expert_cols = {row[1] for row in conn.execute("PRAGMA table_info(expert_uploads)")}
+        if expert_cols:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_expert_uploads_unique_code ON expert_uploads (unique_code)")
+
 
 if __name__ == "__main__":
     run()

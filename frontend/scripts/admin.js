@@ -381,7 +381,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return true;
       }
-      if (response.status === 401) return redirectToHome();
+      if (response.status === 401) {
+        try {
+          window.Auth?.clearSession?.();
+          localStorage.setItem(KEYS.AUTH, 'false');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem(KEYS.CURRENT_USER);
+        } catch {}
+        return redirectToHome();
+      }
     } catch {}
 
     showToast('ადმინის ავტორიზაცია ვერ დადასტურდა', 'error');

@@ -466,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Optional modal controls for independent header module
   window.Auth.openModal = () => authModule.openModal?.();
   window.Auth.closeModal = () => authModule.closeModal?.();
+  window.Auth.clearSession = () => authModule.clearLocalSession?.();
   window.Auth.checkGeorgianName = (user) => authModule.checkAndEnforceGeorgianName?.(user);
 
   // contact scroll: no contact links in header
@@ -1506,6 +1507,7 @@ document.addEventListener('DOMContentLoaded', () => {
       generateUniqueCode,
       getUsedCodes,
       saveUsedCodes,
+      clearLocalSession,
       checkAndEnforceGeorgianName,
     };
   }

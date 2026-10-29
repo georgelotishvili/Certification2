@@ -221,7 +221,7 @@ DEFAULT_SYSTEM_PROMPT = """შენ ხარ შპს „საქართ�
 - **სერტიფიცირების გადაწყვეტილება და შედეგის შეტყობინება:** გამოცდის დასრულებიდან არაუგვიანეს **10 სამუშაო დღისა** (`GIPC-PRO-001` §§5.6–5.8, `GIPC-PRO-002` §12.2).
 - **სერტიფიკატის გაცემის საფასური და ვადა:** **3 000 ლარი** (ჯამური ღირებულება გამოცდიანად: 3 350 ლარი). დადებითი შეტყობინების (`GIPC-FRM-023` §3.4) მიღებიდან **1 თვის (30 კალენდარული დღის)** ვადაში კანდიდატმა უნდა გადაიხადოს სერტიფიკატის გაცემის საფასური (3 000 ლარი); დამატებითი მეორე ხელშეკრულების გაფორმება საჭირო აღარ არის, რადგან გამოცდის დღეს გაფორმებული ერთიანი საგამოცდო და სასერტიფიკაციო ხელშეკრულების (`GIPC-CON-001`) სასერტიფიკაციო ნაწილი ძალაში შედის საფასურის გადახდისა და სერტიფიკატის გაცემის მომენტიდან. ვადის დარღვევის შემთხვევაში საგამოცდო შედეგი ძალას კარგავს!
 - **სერტიფიკატის გაცემა და საჯარო რეესტრში ასახვა:** სერტიფიკატის გაცემის საფასურის გადახდიდან არაუმეტეს **10 სამუშაო დღისა** (`GIPC-PRO-001` §§5.7.2, 5.9, 5.10).
-- **სერტიფიკატის მოქმედების ვადა:** **5 წელი** გაცემის თარიღიდან (გარდამავალი წესით — **2029 წლის 1 იანვრამდე**). პირი ერთდროულად ფლობს მხოლოდ ერთი კატეგორიის მოქმედ სერტიფიკატს.
+- **სერტიფიკატის მოქმედების ვადა:** **5 წელი** გაცემის თარიღიდან (გარდამავალი წესით — **2029 წლის 20 დეკემბრამდე**). პირი ერთდროულად ფლობს მხოლოდ ერთი კატეგორიის მოქმედ სერტიფიკატს.
 - **შეჩერება / გაუქმება:** გადაწყვეტილება ეგზავნება პირს და აისახება საჯარო რეესტრში არაუგვიანეს **5 სამუშაო დღისა**; გაუქმებისას ქაღალდის დედანი (თუ გაცემული იყო) ბრუნდება **15 კალენდარული დღის** ვადაში (`GIPC-CON-001` §11.4).
 - **საჩივარი და აპელაცია (`GIPC-PRO-003`):** აპელაციის წარდგენის ვადა — გადაწყვეტილების ოფიციალური შეტყობინებიდან **20 სამუშაო დღე**; რეგისტრაციის დადასტურება — არაუგვიანეს **5 სამუშაო დღისა**; განხილვა და საბოლოო გადაწყვეტილება — არაუმეტეს **20 სამუშაო დღისა** (კომპლექსურ საქმეზე შეიძლება გაგრძელდეს **40 სამუშაო დღემდე**).
 
@@ -494,9 +494,10 @@ def _load_ai_settings() -> dict[str, Any]:
     )
     if (
         stored_sys_prompt
-        and "იოსებიძის ქ. №69, ბინა №28" not in stored_sys_prompt
-        and "GIPC-CON-004" not in stored_sys_prompt
-        and "10_საგამოცდო_ხელშეკრულება" not in stored_sys_prompt
+        and not (
+            stored_sys_prompt.startswith("შენ ხარ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის")
+            and "იოსებიძის ქ. №69, ბინა №28" in stored_sys_prompt
+        )
     ):
         system_prompt = stored_sys_prompt
         system_prompt_customized = True
@@ -528,10 +529,13 @@ def _load_ai_settings() -> dict[str, Any]:
         "public_system_prompt" in data
         and data.get("public_system_prompt") is not None
         and stored_pub_prompt
-        and "ნუ ღელავთ, პროცესი ძალიან მარტივია" not in stored_pub_prompt
-        and "იოსებიძის ქ. №69, ბინა №28" not in stored_pub_prompt
-        and "GIPC-CON-001 (გარდამავალი)" not in stored_pub_prompt
-        and "GIPC-CON-004" not in stored_pub_prompt
+        and not (
+            stored_pub_prompt.startswith("შენ ხარ საქართველოს პროფესიული სერტიფიცირების ინსტიტუტის")
+            and (
+                "ნუ ღელავთ, პროცესი ძალიან მარტივია" in stored_pub_prompt
+                or "იოსებიძის ქ. №69, ბინა №28" in stored_pub_prompt
+            )
+        )
     ):
         public_system_prompt = stored_pub_prompt
         public_system_prompt_customized = True
@@ -2397,6 +2401,17 @@ def _is_safe_public_url(url: str) -> bool:
         return False
 
 
+_ORIG_URLOPEN = urllib.request.urlopen
+
+
+class _SafePublicRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        resolved_url = urllib.parse.urljoin(getattr(req, "full_url", ""), str(newurl or ""))
+        if not _is_safe_public_url(resolved_url):
+            raise urllib.error.URLError("Disallowed redirect target")
+        return super().redirect_request(req, fp, code, msg, headers, resolved_url)
+
+
 def _fetch_public_web_pages_for_context(
     texts: list[str],
 ) -> tuple[list[dict[str, Any]], list[str]]:
@@ -2428,7 +2443,19 @@ def _fetch_public_web_pages_for_context(
                 },
                 method="GET",
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            if urllib.request.urlopen is _ORIG_URLOPEN:
+                opener = urllib.request.build_opener(_SafePublicRedirectHandler())
+                resp_ctx = opener.open(req, timeout=10)
+            else:
+                resp_ctx = urllib.request.urlopen(req, timeout=10)
+            with resp_ctx as resp:
+                final_url = (
+                    resp.geturl()
+                    if hasattr(resp, "geturl")
+                    else getattr(resp, "url", url)
+                )
+                if final_url and not _is_safe_public_url(str(final_url)):
+                    continue
                 ctype = (resp.headers.get("Content-Type") or "").lower()
                 raw_bytes = resp.read(512 * 1024)
             if "application/pdf" in ctype or url.lower().endswith(".pdf"):

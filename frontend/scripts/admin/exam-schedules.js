@@ -445,13 +445,30 @@
     }
 
     function parseStatementCategory(message) {
-      const text = String(message || '').trim();
-      if (!text) return null;
-      if (text.includes('2) კატეგორია C ან A') || text.includes('კატეგორია C ან A')) return 'C_A';
-      if (text.includes('3) კატეგორია B ან A') || text.includes('კატეგორია B ან A')) return 'B_A';
-      if (text.includes('1) კატეგორია A') || text.includes('კატეგორია A —')) return 'A';
-      if (text.includes('4) კატეგორია B') || text.includes('კატეგორია B —')) return 'B';
-      if (text.includes('5) კატეგორია C') || text.includes('კატეგორია C —')) return 'C';
+      const raw = String(message || '').trim();
+      if (!raw) return null;
+      const head = raw.split(/\n\s*3\.\s*დამატებითი ინფორმაცია/)[0] || raw;
+      const lines = head.split(/\r?\n/);
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line.startsWith('☑') && !/^[1-5]\)/.test(line)) continue;
+        if (line.includes('2) კატეგორია C ან A') || line.includes('კატეგორია C ან A')) return 'C_A';
+        if (line.includes('3) კატეგორია B ან A') || line.includes('კატეგორია B ან A')) return 'B_A';
+        if (line.includes('1) კატეგორია A') || line.includes('კატეგორია A —')) return 'A';
+        if (line.includes('4) კატეგორია B') || line.includes('კატეგორია B —')) return 'B';
+        if (line.includes('5) კატეგორია C') || line.includes('კატეგორია C —')) return 'C';
+      }
+      if (
+        raw.includes('განაცხადი სასერტიფიკაციო გამოცდაზე') ||
+        raw.includes('სერტიფიცირების განაცხადი') ||
+        raw.includes('1. სასურველი სერტიფიცირების კატეგორია')
+      ) {
+        if (head.includes('2) კატეგორია C ან A')) return 'C_A';
+        if (head.includes('3) კატეგორია B ან A')) return 'B_A';
+        if (head.includes('1) კატეგორია A')) return 'A';
+        if (head.includes('4) კატეგორია B')) return 'B';
+        if (head.includes('5) კატეგორია C')) return 'C';
+      }
       return null;
     }
 
