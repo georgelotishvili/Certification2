@@ -2366,24 +2366,34 @@
         const fontName = 'DejaVuSansUnicode';
         if (!pdf.getFontList?.()?.[fontName]) {
           if (!contractPdfFontPromise) {
-            const fontUrl = new URL('../assets/fonts/dejavu-sans.ttf', global.location.href).toString();
-            contractPdfFontPromise = fetch(fontUrl)
-              .then((r) => {
-                if (!r.ok) throw new Error('Font download failed');
+            const regularUrl = new URL('../assets/fonts/dejavu-sans.ttf', global.location.href).toString();
+            const boldUrl = new URL('../assets/fonts/dejavu-sans-bold.ttf', global.location.href).toString();
+            contractPdfFontPromise = Promise.all([
+              fetch(regularUrl).then((r) => {
+                if (!r.ok) throw new Error('Regular font download failed');
                 return r.arrayBuffer();
-              })
-              .then((buf) => arrayBufferToBase64(buf))
+              }),
+              fetch(boldUrl).then((r) => {
+                if (!r.ok) throw new Error('Bold font download failed');
+                return r.arrayBuffer();
+              }),
+            ])
+              .then(([regBuf, boldBuf]) => ({
+                regularBase64: arrayBufferToBase64(regBuf),
+                boldBase64: arrayBufferToBase64(boldBuf),
+              }))
               .catch((err) => {
                 contractPdfFontPromise = null;
                 throw err;
               });
           }
-          const base64 = await contractPdfFontPromise;
-          pdf.addFileToVFS('DejaVuSans.ttf', base64);
+          const { regularBase64, boldBase64 } = await contractPdfFontPromise;
+          pdf.addFileToVFS('DejaVuSans.ttf', regularBase64);
+          pdf.addFileToVFS('DejaVuSans-Bold.ttf', boldBase64);
           pdf.addFont('DejaVuSans.ttf', fontName, 'normal');
-          pdf.addFont('DejaVuSans.ttf', fontName, 'bold');
+          pdf.addFont('DejaVuSans-Bold.ttf', fontName, 'bold');
           pdf.addFont('DejaVuSans.ttf', fontName, 'italic');
-          pdf.addFont('DejaVuSans.ttf', fontName, 'bolditalic');
+          pdf.addFont('DejaVuSans-Bold.ttf', fontName, 'bolditalic');
         }
         pdf.setFont(fontName, 'normal');
 

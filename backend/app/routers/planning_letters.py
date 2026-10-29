@@ -373,6 +373,27 @@ KNOWN_LEGACY_FACTORY_BODIES = frozenset(
 )
 
 
+KNOWN_LEGACY_FACTORY_SUBJECTS = frozenset(
+    _normalize_template_body(s)
+    for s in (
+        "გამოცდის დაგეგმვა — {date}, {time}",
+        "სერტიფიცირების გამოცდის დაგეგმვა — {date}, {time}",
+        "გამოცდაზე დაშვება და საგამოცდო დეტალები",
+        "სერტიფიკატის გადაცემა — {date}, {time}",
+        "სერტიფიკატის აღების დაჯავშნა — {date}, {time}",
+        "სერტიფიცირების გამოცდის წარმატებით ჩაბარება და სერტიფიკატის გაცემის პირობები",
+        "სერტიფიცირების განაცხადის უარყოფა",
+    )
+)
+
+
+def _is_legacy_subject(subject: str | None) -> bool:
+    """Return True only when subject is empty or matches an unmodified historical
+    factory subject. Never return True for subjects modified by an admin."""
+    raw = _normalize_template_body(subject)
+    return not raw or raw in KNOWN_LEGACY_FACTORY_SUBJECTS
+
+
 def _is_legacy_body(body: str | None) -> bool:
     """Return True only when body is empty or matches an unmodified historical
     factory template. Never return True for templates modified by an admin."""
@@ -381,11 +402,12 @@ def _is_legacy_body(body: str | None) -> bool:
 
 
 def _template_out(kind: str, template: PlanningTemplate | None):
-    use_default = template is None or _is_legacy_body(template.body)
+    use_default_subject = template is None or _is_legacy_subject(template.subject)
+    use_default_body = template is None or _is_legacy_body(template.body)
     return {
         "kind": kind,
-        "subject": DEFAULT_TEMPLATES[kind]["subject"] if use_default else template.subject,
-        "body": DEFAULT_TEMPLATES[kind]["body"] if use_default else template.body,
+        "subject": DEFAULT_TEMPLATES[kind]["subject"] if use_default_subject else template.subject,
+        "body": DEFAULT_TEMPLATES[kind]["body"] if use_default_body else template.body,
         "updated_at": _iso(template.updated_at) if template else None,
         "attachment_filename": template.attachment_filename if template else None,
         "attachment_size_bytes": template.attachment_size_bytes if template else None,
@@ -411,11 +433,12 @@ def _load_custom_template_meta(kind: str) -> dict:
 def _custom_template_out(kind: str, meta: dict | None = None) -> dict:
     meta = meta if meta is not None else _load_custom_template_meta(kind)
     defaults = CUSTOM_FILE_TEMPLATES[kind]
-    use_default = _is_legacy_body(meta.get("body"))
+    use_default_subject = _is_legacy_subject(meta.get("subject"))
+    use_default_body = _is_legacy_body(meta.get("body"))
     return {
         "kind": kind,
-        "subject": defaults["subject"] if use_default else (meta.get("subject") or defaults["subject"]),
-        "body": defaults["body"] if use_default else (meta.get("body") or defaults["body"]),
+        "subject": defaults["subject"] if use_default_subject else (meta.get("subject") or defaults["subject"]),
+        "body": defaults["body"] if use_default_body else (meta.get("body") or defaults["body"]),
         "updated_at": meta.get("updated_at"),
         "attachment_filename": meta.get("attachment_filename"),
         "attachment_size_bytes": meta.get("attachment_size_bytes"),

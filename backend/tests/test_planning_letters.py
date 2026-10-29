@@ -774,6 +774,103 @@ class PlanningLetterTests(unittest.TestCase):
         r_fail_still = self.client.get("/admin/users?paginated=true&exam_failed=true&exam_result_date=2026-10-10", headers=self.auth).json()
         self.assertEqual(r_fail_still["total"], 1)
 
+    def test_template_preserves_subject_only_and_body_admin_edits(self):
+        DEFAULT_TEMPLATES = planning_letters.DEFAULT_TEMPLATES
+        CUSTOM_FILE_TEMPLATES = planning_letters.CUSTOM_FILE_TEMPLATES
+
+        old_factory_cert_body = (
+            "ადრესატი: {name}\n\n"
+            "მოგესალმებით,\n\n"
+            "გაცნობებთ, რომ თქვენ წარმატებით ჩააბარეთ სერტიფიცირების გამოცდა და მიღებულია გადაწყვეტილება თქვენთვის [კატეგორია] სერტიფიკატის მინიჭების შესახებ.\n\n"
+            "სერტიფიკატის მისაღებად აუცილებელია წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის ვადაში:\n"
+            "- სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ სერტიფიკატის გაცემის საფასური (3 000 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: სერტიფიკატის გაცემის საფასური, {name});\n"
+            "- გააფორმოთ სასერტიფიკაციო ხელშეკრულება ინსტიტუტის ოფისში (მისამართი: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6) ან კვალიფიციური ელექტრონული ხელმოწერით.\n\n"
+            "საფასურის გადახდისა და სასერტიფიკაციო ხელშეკრულების ხელმოწერიდან არაუმეტეს 10 სამუშაო დღის ვადაში გაიცემა სერტიფიკატი და გააქტიურდება საიტზე gipc.org.ge-ზე არსებულ საჯარო რეესტრში.\n\n"
+            "გთხოვთ გაითვალისწინოთ, რომ დადგენილი წესის შესაბამისად, გამოცდის დადებითი შედეგი სერტიფიკატის მისაღებად მოქმედებს წინამდებარე შეტყობინების მიღებიდან 30 კალენდარული დღის განმავლობაში, ხოლო აღნიშნული ვადის გასვლის შემთხვევაში საგამოცდო შედეგი ძალას კარგავს.\n\n"
+            "გთხოვთ წინასწარ გაეცნოთ შესაბამის სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
+            "პატივისცემით,\n"
+            "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
+        )
+
+        # Case 1: Admin modified ONLY subject, while body is an unmodified old factory body, plus attachment metadata
+        put_subject_only = self.client.put(
+            "/admin/planning-templates/certificate",
+            headers=self.auth,
+            data={
+                "subject": "ადმინის შეცვლილი სათაური — სერტიფიკატის გაცემა",
+                "body": old_factory_cert_body,
+            },
+            files={"attachment": ("guide_rules.pdf", b"%PDF-1.4 rules", "application/pdf")},
+        )
+        self.assertEqual(put_subject_only.status_code, 200, put_subject_only.text)
+        res1 = self.client.get("/admin/planning-templates", headers=self.auth)
+        self.assertEqual(res1.status_code, 200, res1.text)
+        cert_item1 = next(it for it in res1.json()["items"] if it["kind"] == "certificate")
+        self.assertEqual(cert_item1["subject"], "ადმინის შეცვლილი სათაური — სერტიფიკატის გაცემა")
+        self.assertEqual(cert_item1["body"], DEFAULT_TEMPLATES["certificate"]["body"])
+        self.assertEqual(cert_item1["attachment_filename"], "guide_rules.pdf")
+        self.assertEqual(cert_item1["attachment_size_bytes"], len(b"%PDF-1.4 rules"))
+
+        # Same for file-backed custom template (rejection): subject modified, body is old factory body
+        old_factory_rej_body = (
+            "ადრესატი: {name}\n\n"
+            "მოგესალმებით,\n\n"
+            "გაცნობებთ, რომ თქვენი განაცხადი არ დაკმაყოფილდა, ვინაიდან ვერ აკმაყოფილებთ საქართველოს მთავრობის №134 დადგენილებითა და სერტიფიკაციის სქემით განსაზღვრულ სასერტიფიკაციო მოთხოვნებს.\n\n"
+            "გადაწყვეტილების გასაჩივრების წესი და ვადები იხილეთ საიტზე gipc.org.ge-ზე გამოქვეყნებულ შესაბამის ოფიციალურ დოკუმენტებში.\n\n"
+            "პატივისცემით,\n"
+            "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
+        )
+        put_rej_subj_only = self.client.put(
+            "/admin/planning-templates/rejection",
+            headers=self.auth,
+            data={
+                "subject": "ადმინის სათაური — უარის გადაწყვეტილება",
+                "body": old_factory_rej_body,
+            },
+            files={"attachment": ("rejection_note.pdf", b"%PDF-1.4 rej", "application/pdf")},
+        )
+        self.assertEqual(put_rej_subj_only.status_code, 200, put_rej_subj_only.text)
+        rej_out1 = self.client.get("/admin/planning-templates", headers=self.auth).json()["rejection_template"]
+        self.assertEqual(rej_out1["subject"], "ადმინის სათაური — უარის გადაწყვეტილება")
+        self.assertEqual(rej_out1["body"], CUSTOM_FILE_TEMPLATES["rejection"]["body"])
+        self.assertEqual(rej_out1["attachment_filename"], "rejection_note.pdf")
+
+        # Case 2: Admin modified old factory body by adding custom note + custom subject
+        admin_modified_body = old_factory_cert_body + "\n\nდამატებითი მითითება ადმინისგან: გთხოვთ იქონიოთ პირადობის მოწმობა."
+        put_both = self.client.put(
+            "/admin/planning-templates/certificate",
+            headers=self.auth,
+            data={
+                "subject": "ადმინის სათაური №2",
+                "body": admin_modified_body,
+            },
+        )
+        self.assertEqual(put_both.status_code, 200, put_both.text)
+        cert_item2 = next(
+            it for it in self.client.get("/admin/planning-templates", headers=self.auth).json()["items"]
+            if it["kind"] == "certificate"
+        )
+        self.assertEqual(cert_item2["subject"], "ადმინის სათაური №2")
+        self.assertEqual(cert_item2["body"], admin_modified_body)
+        self.assertEqual(cert_item2["attachment_filename"], "guide_rules.pdf")
+
+        # Case 3: Unmodified old factory subject AND unmodified old factory body -> both upgrade to current factory defaults
+        put_legacy_both = self.client.put(
+            "/admin/planning-templates/certificate",
+            headers=self.auth,
+            data={
+                "subject": "სერტიფიკატის აღების დაჯავშნა — {date}, {time}",
+                "body": old_factory_cert_body,
+            },
+        )
+        self.assertEqual(put_legacy_both.status_code, 200, put_legacy_both.text)
+        cert_item3 = next(
+            it for it in self.client.get("/admin/planning-templates", headers=self.auth).json()["items"]
+            if it["kind"] == "certificate"
+        )
+        self.assertEqual(cert_item3["subject"], DEFAULT_TEMPLATES["certificate"]["subject"])
+        self.assertEqual(cert_item3["body"], DEFAULT_TEMPLATES["certificate"]["body"])
+
 
 if __name__ == "__main__":
     unittest.main()
