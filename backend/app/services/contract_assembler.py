@@ -71,66 +71,33 @@ PUBLIC_DOCUMENTS: list[dict[str, Any]] = [
 ]
 
 CONTRACT_SLOTS: dict[str, dict[str, Any]] = {
-    "exam": {
-        "key": "exam",
-        "code": "GIPC-CON-004",
-        "short_title": "საგამოცდო ხელშეკრულება",
-        "default_title": "საგამოცდო ხელშეკრულება",
-        "category": "EXAM",
-        "order_index": 6,
-        "source_md": "10_საგამოცდო_ხელშეკრულება.md",
-        "source_docx": "10_საგამოცდო_ხელშეკრულება.docx",
-    },
-    "cert_a": {
-        "key": "cert_a",
+    "universal": {
+        "key": "universal",
         "code": "GIPC-CON-001",
-        "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია A (არქიტექტორი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი",
-        "category": "A",
-        "order_index": 7,
-        "source_md": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.md",
-        "source_docx": "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.docx",
+        "short_title": "საგამოცდო და სასერტიფიკაციო ხელშეკრულება",
+        "default_title": "საგამოცდო და სასერტიფიკაციო ხელშეკრულება",
+        "category": "ALL",
+        "order_index": 6,
+        "source_md": "08_საგამოცდო_და_სასერტიფიკაციო_ხელშეკრულება.md",
+        "source_docx": "08_საგამოცდო_და_სასერტიფიკაციო_ხელშეკრულება.docx",
     },
-    "cert_a_transitional": {
-        "key": "cert_a_transitional",
-        "code": "GIPC-CON-001 (გარდამავალი)",
-        "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია A (საგამონაკლისო/გარდამავალი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია A: შენობა-ნაგებობის არქიტექტორი (საგამონაკლისო/გარდამავალი წესით)",
-        "category": "A",
-        "order_index": 8,
-        "source_md": "08a_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი_საგამონაკლისო.md",
-        "source_docx": "08a_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი_საგამონაკლისო.docx",
-    },
-    "cert_b": {
-        "key": "cert_b",
-        "code": "GIPC-CON-002",
-        "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია B (სპეციალისტი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი",
-        "category": "B",
-        "order_index": 9,
-        "source_md": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.md",
-        "source_docx": "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.docx",
-    },
-    "cert_b_transitional": {
-        "key": "cert_b_transitional",
-        "code": "GIPC-CON-002 (გარდამავალი)",
-        "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია B (საგამონაკლისო/გარდამავალი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია B: არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (საგამონაკლისო/გარდამავალი წესით)",
-        "category": "B",
-        "order_index": 10,
-        "source_md": "09b_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი_საგამონაკლისო.md",
-        "source_docx": "09b_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი_საგამონაკლისო.docx",
-    },
-    "cert_c": {
-        "key": "cert_c",
-        "code": "GIPC-CON-003",
-        "short_title": "სასერტიფიკაციო ხელშეკრულება — კატეგორია C (ექსპერტი)",
-        "default_title": "სერტიფიცირების ხელშეკრულება — კატეგორია C: არქიტექტურული პროექტის ექსპერტი",
-        "category": "C",
-        "order_index": 11,
-        "source_md": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.md",
-        "source_docx": "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.docx",
-    },
+}
+
+LEGACY_CONTRACT_SLOT_KEYS: tuple[str, ...] = (
+    "exam",
+    "cert_a",
+    "cert_a_transitional",
+    "cert_b",
+    "cert_b_transitional",
+    "cert_c",
+)
+LEGACY_CONTRACT_FILENAMES: set[str] = {
+    "10_საგამოცდო_ხელშეკრულება.docx",
+    "08_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი.docx",
+    "08a_სასერტიფიკაციო_ხელშეკრულება_არქიტექტორი_საგამონაკლისო.docx",
+    "09a_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი.docx",
+    "09b_სასერტიფიკაციო_ხელშეკრულება_სპეციალისტი_საგამონაკლისო.docx",
+    "09_სასერტიფიკაციო_ხელშეკრულება_ექსპერტი.docx",
 }
 
 _INTERNAL_ANNEX_RE = re.compile(
@@ -160,7 +127,34 @@ def current_tbilisi_date_str() -> str:
     return datetime.now(TBILISI_TZ).strftime("%d.%m.%Y")
 
 
-def extract_user_fields(user: Any, date_str: str | None = None) -> dict[str, str]:
+_VALID_CONTRACT_CATEGORIES = {"A", "C_A", "B_A", "B", "C"}
+_VALID_ADMISSION_REGIMES = {"standard", "transitional"}
+
+
+def _normalize_contract_category(raw: str | None) -> str:
+    val = (raw or "").strip().upper()
+    if val in _VALID_CONTRACT_CATEGORIES:
+        return val
+    return ""
+
+
+def _normalize_admission_regime(raw: str | None, category: str = "") -> str:
+    if category == "C":
+        return "standard"
+    val = (raw or "").strip().lower()
+    if val in ("transitional", "გარდამავალი", "საგამონაკლისო"):
+        return "transitional"
+    if val in ("standard", "სტანდარტული"):
+        return "standard"
+    return ""
+
+
+def extract_user_fields(
+    user: Any,
+    date_str: str | None = None,
+    category: str | None = None,
+    regime: str | None = None,
+) -> dict[str, str]:
     if user is None:
         return {}
     if isinstance(user, dict):
@@ -170,6 +164,19 @@ def extract_user_fields(user: Any, date_str: str | None = None) -> dict[str, str
         phone = str(user.get("phone") or "").strip()
         email = str(user.get("email") or "").strip()
         code = str(user.get("code") or "").strip()
+        raw_cat = (
+            category
+            or user.get("requested_category")
+            or user.get("candidate_category")
+            or user.get("_requested_category")
+            or ""
+        )
+        raw_regime = (
+            regime
+            or user.get("admission_regime")
+            or user.get("_admission_regime")
+            or ""
+        )
     else:
         first = str(getattr(user, "first_name", "") or "").strip()
         last = str(getattr(user, "last_name", "") or "").strip()
@@ -177,6 +184,24 @@ def extract_user_fields(user: Any, date_str: str | None = None) -> dict[str, str
         phone = str(getattr(user, "phone", "") or "").strip()
         email = str(getattr(user, "email", "") or "").strip()
         code = str(getattr(user, "code", "") or "").strip()
+        raw_cat = (
+            category
+            or getattr(user, "_requested_category", None)
+            or getattr(user, "requested_category", None)
+            or getattr(user, "candidate_category", None)
+            or ""
+        )
+        raw_regime = (
+            regime
+            or getattr(user, "_admission_regime", None)
+            or getattr(user, "admission_regime", None)
+            or ""
+        )
+
+    norm_cat = _normalize_contract_category(str(raw_cat or ""))
+    norm_regime = _normalize_admission_regime(str(raw_regime or ""), category=norm_cat)
+    if norm_cat and not norm_regime:
+        norm_regime = "standard"
 
     full_name = f"{first} {last}".strip()
     return {
@@ -186,6 +211,8 @@ def extract_user_fields(user: Any, date_str: str | None = None) -> dict[str, str
         "email": email,
         "code": code,
         "date": (date_str or current_tbilisi_date_str()).strip(),
+        "requested_category": norm_cat,
+        "admission_regime": norm_regime,
     }
 
 
@@ -227,13 +254,32 @@ _HTML_FIELD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ),
 ]
 
+_HTML_CATEGORY_CHECKBOX_PATTERNS: dict[str, re.Pattern[str]] = {
+    "A": re.compile(r"[☐☑](?=(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*1\)\s*კატეგორია\s+A\b)"),
+    "C_A": re.compile(r"[☐☑](?=(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*2\)\s*კატეგორია\s+C\s+ან\s+A\b)"),
+    "B_A": re.compile(r"[☐☑](?=(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*3\)\s*კატეგორია\s+B\s+ან\s+A\b)"),
+    "B": re.compile(r"[☐☑](?=(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*4\)\s*კატეგორია\s+B\b)"),
+    "C": re.compile(r"[☐☑](?=(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*5\)\s*კატეგორია\s+C\b)"),
+}
 
-def populate_contract_html(content: str, user: Any, date_str: str | None = None) -> str:
-    """Replace blank underscore lines or bracket placeholders in contract/form HTML with the user's data and date."""
+_HTML_REGIME_CHECKBOX_PATTERNS: dict[str, re.Pattern[str]] = {
+    "standard": re.compile(r"[☐☑](?=(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*სტანდარტული\b)"),
+    "transitional": re.compile(r"[☐☑](?=(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*გარდამავალი\b)"),
+}
+
+
+def populate_contract_html(
+    content: str,
+    user: Any,
+    date_str: str | None = None,
+    category: str | None = None,
+    regime: str | None = None,
+) -> str:
+    """Replace blank underscore lines, bracket placeholders, and application checkboxes in contract/form HTML."""
     if not content or not user:
         return content or ""
 
-    fields = extract_user_fields(user, date_str=date_str)
+    fields = extract_user_fields(user, date_str=date_str, category=category, regime=regime)
     if not fields.get("full_name") and not fields.get("personal_id") and not fields.get("email"):
         return content
 
@@ -261,6 +307,16 @@ def populate_contract_html(content: str, user: Any, date_str: str | None = None)
             safe_val = html.escape(val)
             result = re.sub(pat_str, f"<strong>{safe_val}</strong>", result)
 
+    req_cat = fields.get("requested_category", "")
+    if req_cat and req_cat in _HTML_CATEGORY_CHECKBOX_PATTERNS:
+        for k, pat in _HTML_CATEGORY_CHECKBOX_PATTERNS.items():
+            result = pat.sub("☑" if k == req_cat else "☐", result)
+
+    adm_regime = fields.get("admission_regime", "")
+    if adm_regime and adm_regime in _HTML_REGIME_CHECKBOX_PATTERNS:
+        for k, pat in _HTML_REGIME_CHECKBOX_PATTERNS.items():
+            result = pat.sub("☑" if k == adm_regime else "☐", result)
+
     return result
 
 
@@ -272,20 +328,50 @@ _DOCX_FIELD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("date", re.compile(r"(თარიღი\s*:[\s\u00a0]*)_{3,}")),
 ]
 
+_DOCX_CATEGORY_CHECKBOX_PATTERNS: dict[str, re.Pattern[str]] = {
+    "A": re.compile(r"[☐☑](?=[\s\u00a0]*1\)\s*კატეგორია\s+A\b)"),
+    "C_A": re.compile(r"[☐☑](?=[\s\u00a0]*2\)\s*კატეგორია\s+C\s+ან\s+A\b)"),
+    "B_A": re.compile(r"[☐☑](?=[\s\u00a0]*3\)\s*კატეგორია\s+B\s+ან\s+A\b)"),
+    "B": re.compile(r"[☐☑](?=[\s\u00a0]*4\)\s*კატეგორია\s+B\b)"),
+    "C": re.compile(r"[☐☑](?=[\s\u00a0]*5\)\s*კატეგორია\s+C\b)"),
+}
+
+_DOCX_REGIME_CHECKBOX_PATTERNS: dict[str, re.Pattern[str]] = {
+    "standard": re.compile(r"[☐☑](?=[\s\u00a0]*სტანდარტული\b)"),
+    "transitional": re.compile(r"[☐☑](?=[\s\u00a0]*გარდამავალი\b)"),
+}
+
+
+def _set_char_in_t_nodes(t_nodes: list[ET.Element], char_index: int, new_char: str) -> None:
+    offset = 0
+    for t in t_nodes:
+        txt = t.text or ""
+        t_len = len(txt)
+        if offset <= char_index < offset + t_len:
+            local_idx = char_index - offset
+            t.text = txt[:local_idx] + new_char + txt[local_idx + 1 :]
+            return
+        offset += t_len
+
 
 def populate_contract_docx_bytes(
     docx_source: Path | bytes,
     user: Any,
     date_str: str | None = None,
+    category: str | None = None,
+    regime: str | None = None,
 ) -> bytes:
-    """Return a copy of the .docx file with user's personal fields and date populated."""
+    """Return a copy of the .docx file with user's personal fields, date, and application checkboxes populated."""
     raw_bytes = docx_source.read_bytes() if isinstance(docx_source, Path) else docx_source
     if not user:
         return raw_bytes
 
-    fields = extract_user_fields(user, date_str=date_str)
+    fields = extract_user_fields(user, date_str=date_str, category=category, regime=regime)
     if not fields.get("full_name") and not fields.get("personal_id") and not fields.get("email"):
         return raw_bytes
+
+    req_cat = fields.get("requested_category", "")
+    adm_regime = fields.get("admission_regime", "")
 
     try:
         in_mem = io.BytesIO(raw_bytes)
@@ -304,6 +390,19 @@ def populate_contract_docx_bytes(
                 if not t_nodes:
                     continue
                 full_text = "".join(t.text or "" for t in t_nodes)
+
+                if ("☐" in full_text or "☑" in full_text) and (req_cat or adm_regime):
+                    if req_cat and req_cat in _DOCX_CATEGORY_CHECKBOX_PATTERNS:
+                        for k, pat in _DOCX_CATEGORY_CHECKBOX_PATTERNS.items():
+                            for m in pat.finditer(full_text):
+                                _set_char_in_t_nodes(t_nodes, m.start(), "☑" if k == req_cat else "☐")
+                        full_text = "".join(t.text or "" for t in t_nodes)
+                    if adm_regime and adm_regime in _DOCX_REGIME_CHECKBOX_PATTERNS:
+                        for k, pat in _DOCX_REGIME_CHECKBOX_PATTERNS.items():
+                            for m in pat.finditer(full_text):
+                                _set_char_in_t_nodes(t_nodes, m.start(), "☑" if k == adm_regime else "☐")
+                        full_text = "".join(t.text or "" for t in t_nodes)
+
                 if "___" not in full_text:
                     continue
 
@@ -406,10 +505,13 @@ def markdown_to_html(md_text: str) -> str:
 
         # Headings
         if stripped.startswith("# "):
-            seen_h1 = True
-            out.append(
-                f'<h1 style="text-align:center;">{_inline_md_to_html(stripped[2:].strip())}</h1>'
-            )
+            if not seen_h1:
+                seen_h1 = True
+                out.append(
+                    f'<h1 style="text-align:center;">{_inline_md_to_html(stripped[2:].strip())}</h1>'
+                )
+            else:
+                out.append(f"<h2>{_inline_md_to_html(stripped[2:].strip())}</h2>")
             i += 1
             continue
 
@@ -732,19 +834,34 @@ def build_docx_elements_from_md(md_text: str) -> list[ET.Element]:
             continue
 
         if stripped.startswith("# "):
-            seen_h1 = True
-            elements.append(
-                _make_paragraph(
-                    stripped[2:].strip(),
-                    jc="center",
-                    sz="28",
-                    bold=True,
-                    before="0",
-                    after="60",
-                    line=None,
-                    keep_next=True,
+            if not seen_h1:
+                seen_h1 = True
+                elements.append(
+                    _make_paragraph(
+                        stripped[2:].strip(),
+                        jc="center",
+                        sz="28",
+                        bold=True,
+                        before="0",
+                        after="60",
+                        line=None,
+                        keep_next=True,
+                    )
                 )
-            )
+            else:
+                elements.append(
+                    _make_paragraph(
+                        stripped[2:].strip(),
+                        jc="left",
+                        sz="25",
+                        bold=True,
+                        before="260",
+                        after="90",
+                        line=None,
+                        keep_next=True,
+                        bottom_border=True,
+                    )
+                )
             i += 1
             continue
 

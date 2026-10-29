@@ -108,8 +108,9 @@ def _ensure_default_guide_docs(db: Session) -> None:
         if (
             cert_doc is not None
             and forms_doc is not None
-            and "GIPC-CON-001 (გარდამავალი)" in (cert_doc.content or "")
-            and "GIPC-CON-001 (გარდამავალი)" in (forms_doc.content or "")
+            and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in (cert_doc.content or "")
+            and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in (forms_doc.content or "")
+            and "GIPC-CON-" not in (forms_doc.content or "")
         ):
             return
 

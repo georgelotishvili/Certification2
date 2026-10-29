@@ -1031,15 +1031,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (!state.isCertified) return;
           const msg = (DOM.reviewCommentMessage?.value || '').trim();
           if (!msg) return;
-          submitComment(msg).then(() => {
-            if (DOM.reviewCommentMessage) DOM.reviewCommentMessage.value = '';
+          submitComment(msg).then((ok) => {
+            if (ok && DOM.reviewCommentMessage) DOM.reviewCommentMessage.value = '';
           });
         });
       }
     }
 
     async function submitComment(message) {
-      if (!state.isCertified || !state.targetUserId) return;
+      if (!state.isCertified || !state.targetUserId) return false;
       try {
         const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(state.targetUserId)}/comments`, {
           method: 'POST',
@@ -1048,10 +1048,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         if (!res.ok) {
           let detail = ''; try { const j = await res.clone().json(); detail = j?.detail || ''; } catch {}
-          alert(detail || 'კომენტარი ვერ დაემატა'); return;
+          alert(detail || 'კომენტარი ვერ დაემატა'); return false;
         }
         await loadSummary(); scrollCommentsToBottom();
-      } catch { alert('კომენტარი ვერ დაემატა'); }
+        return true;
+      } catch { alert('კომენტარი ვერ დაემატა'); return false; }
     }
 
     function init() {
@@ -1247,11 +1248,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       const filesCol = document.createElement('div');
       filesCol.className = 'detail-col files';
       const buildDownloadUrl = (fileType) => {
-        if (state.publicMode) {
+        if (state.publicMode || item.status === 'submitted') {
           return `${API_BASE}/expert-uploads/public/${encodeURIComponent(item.id)}/download?file_type=${fileType}`;
         }
+        let tokenPart = '';
+        try {
+          const tok = localStorage.getItem('auth_token') || '';
+          if (tok) tokenPart = `&token=${encodeURIComponent(tok)}`;
+        } catch {}
         const actorPart = state.actorEmail ? `&actor=${encodeURIComponent(state.actorEmail)}` : '';
-        return `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=${fileType}${actorPart}`;
+        return `${API_BASE}/expert-uploads/${encodeURIComponent(item.id)}/download?file_type=${fileType}${tokenPart}${actorPart}`;
       };
       const addFileRow = (labelText, filename, fileType) => {
         const block = document.createElement('div');
@@ -1353,14 +1359,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       const prjDel = DOM.expertProjectDelete;
       const submitted = draft && draft.status === 'submitted';
       if (draft && draft.expertise_filename) {
-        if (expDl) { expDl.style.display = ''; expDl.href = `${API_BASE}/expert-uploads/${draft.id}/download?file_type=expertise`; }
+        if (expDl) { expDl.style.display = ''; expDl.href = `${API_BASE}/expert-uploads/${draft.id}/download?file_type=expertise${(() => { try { const t = localStorage.getItem('auth_token') || ''; return t ? '&token=' + encodeURIComponent(t) : ''; } catch { return ''; } })()}`; }
         if (expDel) { expDel.style.display = submitted ? 'none' : ''; expDel.disabled = submitted; }
       } else {
         if (expDl) expDl.style.display = 'none';
         if (expDel) expDel.style.display = 'none';
       }
       if (draft && draft.project_filename) {
-        if (prjDl) { prjDl.style.display = ''; prjDl.href = `${API_BASE}/expert-uploads/${draft.id}/download?file_type=project`; }
+        if (prjDl) { prjDl.style.display = ''; prjDl.href = `${API_BASE}/expert-uploads/${draft.id}/download?file_type=project${(() => { try { const t = localStorage.getItem('auth_token') || ''; return t ? '&token=' + encodeURIComponent(t) : ''; } catch { return ''; } })()}`; }
         if (prjDel) { prjDel.style.display = submitted ? 'none' : ''; prjDel.disabled = submitted; }
       } else {
         if (prjDl) prjDl.style.display = 'none';
@@ -1378,7 +1384,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const latestSubmitted = state.list.find((x) => x.status === 'submitted' && x.project_filename);
         if (latestSubmitted) {
           prjDl.style.display = '';
-          prjDl.href = `${API_BASE}/expert-uploads/${latestSubmitted.id}/download?file_type=project`;
+          prjDl.href = `${API_BASE}/expert-uploads/public/${latestSubmitted.id}/download?file_type=project`;
           if (state.actorEmail) prjDl.href += `&actor=${encodeURIComponent(state.actorEmail)}`;
           if (prjDel) prjDel.style.display = 'none';
         }
@@ -1444,6 +1450,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateDraftUI(draft) {
       const submitted = !!(draft && draft.status === 'submitted');
       if (DOM.expertFunction) DOM.expertFunction.value = draft?.building_function || '';
+      if (DOM.expertAddress) DOM.expertAddress.value = draft?.project_address || '';
       if (DOM.expertCadastral) DOM.expertCadastral.value = draft?.cadastral_code || '';
       setFileControls(draft);
       updateSubmitEnabled();

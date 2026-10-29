@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import quote
+import re
 import unicodedata
 import uuid
 
@@ -41,6 +42,8 @@ from ..services.bounded_upload import (
 )
 from ..services.contract_assembler import (
     docx_bytes_to_html,
+    markdown_to_docx_bytes,
+    markdown_to_html,
     strip_internal_annexes,
     structured_text_to_html,
 )
@@ -52,6 +55,12 @@ GUIDE_UPLOAD_DIR = Path("uploads/guide_documents")
 GUIDE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 GUIDE_UPLOAD_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
 _STRIP_FILENAME_TAG = "_\u10d0\u10e0\u10d2\u10dd\u10dc"
+BUNDLED_DOC28_MD = (
+    Path(__file__).resolve().parent.parent
+    / "data"
+    / "contracts"
+    / "28_ვებგვერდზე_განსათავსებელი_სავალდებულო_ინფორმაცია.md"
+)
 
 
 def _guide_root() -> Path:
@@ -83,13 +92,97 @@ def _safe_guide_filename(filename: str | None) -> str:
     return candidate or "guide.docx"
 
 
+def _ensure_default_guide_docs(db: Session) -> None:
+    """Keep the 8 default GuideDocument pages synchronized with bundled 28_... .md."""
+    if not BUNDLED_DOC28_MD.is_file():
+        return
+    try:
+        docs = list(
+            db.scalars(
+                select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
+            ).all()
+        )
+        by_title = {(d.title or "").strip(): d for d in docs}
+        cert_doc = by_title.get("სერტიფიცირება")
+        forms_doc = by_title.get("ფორმები და საჯარო დოკუმენტაცია")
+        if (
+            cert_doc is not None
+            and forms_doc is not None
+            and "GIPC-CON-001 (გარდამავალი)" in (cert_doc.content or "")
+            and "GIPC-CON-001 (გარდამავალი)" in (forms_doc.content or "")
+        ):
+            return
+
+        raw_md = BUNDLED_DOC28_MD.read_text(encoding="utf-8-sig")
+        parts = re.split(r"(?m)^## გვერდი:\s*", raw_md)
+        if len(parts) <= 1:
+            return
+
+        changed = False
+        for idx, part in enumerate(parts[1:], 1):
+            part_clean = re.split(r"(?m)^## საჯარო ინფორმაციის გამოქვეყნებისა", part)[0].strip()
+            lines = part_clean.splitlines()
+            if not lines:
+                continue
+            title = lines[0].strip()
+            body = "\n".join(lines[1:]).strip()
+            body_promoted = re.sub(r"(?m)^####\s+", "### ", body)
+            body_promoted = re.sub(r"(?m)^###\s+", "## ", body_promoted)
+            html_content = markdown_to_html(body_promoted)
+            docx_bytes = markdown_to_docx_bytes(f"# {title}\n\n{body_promoted}\n")
+            display_filename = f"{idx}. {title}.docx"
+
+            existing = by_title.get(title)
+            if existing is not None:
+                if existing.content == html_content and existing.file_size_bytes == len(docx_bytes):
+                    continue
+                unique_name = f"guide_{uuid.uuid4().hex[:12]}.docx"
+                file_path = _resolve_guide_path(_guide_root() / unique_name)
+                file_path.write_bytes(docx_bytes)
+                old_fp = existing.file_path
+                existing.content = html_content
+                existing.file_path = str(file_path)
+                existing.filename = display_filename
+                existing.file_size_bytes = len(docx_bytes)
+                existing.order_index = idx
+                existing.updated_at = datetime.utcnow()
+                db.add(existing)
+                if old_fp and old_fp != str(file_path):
+                    _delete_guide_file_from_disk(old_fp)
+                changed = True
+            else:
+                unique_name = f"guide_{uuid.uuid4().hex[:12]}.docx"
+                file_path = _resolve_guide_path(_guide_root() / unique_name)
+                file_path.write_bytes(docx_bytes)
+                new_doc = GuideDocument(
+                    title=title,
+                    content=html_content,
+                    order_index=idx,
+                    file_path=str(file_path),
+                    filename=display_filename,
+                    file_size_bytes=len(docx_bytes),
+                )
+                db.add(new_doc)
+                changed = True
+
+        if changed:
+            db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 def _get_guide_doc_record(db: Session) -> Optional[GuideDocument]:
+    _ensure_default_guide_docs(db)
     return db.scalars(
         select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
     ).first()
 
 
 def _get_all_guide_docs(db: Session) -> List[GuideDocument]:
+    _ensure_default_guide_docs(db)
     return list(
         db.scalars(
             select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())

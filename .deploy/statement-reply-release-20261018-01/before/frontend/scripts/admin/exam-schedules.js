@@ -2184,11 +2184,14 @@
           overlay.querySelector('.exam-schedule-confirm-preview-text').textContent = finalBody;
 
           setModalStatus('');
+          currentRequestId = generateUuid();
           stepForm.hidden = true;
           stepConfirm.hidden = false;
           footerStep1.hidden = true;
           footerStep2.hidden = false;
         });
+
+        let currentRequestId = generateUuid();
 
         // Step 2 -> Step 1 ("უკან / რედაქტირება")
         backBtn.addEventListener('click', () => {
@@ -2232,7 +2235,7 @@
             formData.append('period', period);
             formData.append('subject', finalSubject);
             formData.append('body', finalBody);
-            formData.append('request_id', generateUuid());
+            formData.append('request_id', currentRequestId);
             formData.append('confirmed', 'true');
             formData.append('expected_to_email', String(user.email || '').trim());
             if (hasCategorySelect) {

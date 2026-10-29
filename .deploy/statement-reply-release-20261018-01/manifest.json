@@ -1,36 +1,228 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "created_at": "2026-10-27T20:18:56.903069+00:00",
+  "created_at": "2026-10-29T15:16:42.664741+00:00",
   "host": "gipcadmin@148.251.167.229",
   "files": [
     {
+      "path": "backend/app/main.py",
+      "before_sha256": "83765f3786772305dc7766a8447fca132b5a5bc8bd5c563a8d04257d79f1c77c",
+      "after_sha256": "e3a34864a657c03b9b636f0a632bcfdf93436d164a9723a1bec5a9cb7d5867d1",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/routers/admin.py",
+      "before_sha256": "91f10aac8205ead07272aa75e0a6b5747d732f8d32fadde7d76273176cf77aa4",
+      "after_sha256": "830719ab90d95b1762647c311381cebd36c8b57678b0753f9f7cc8eacdb5cd7a",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/routers/ai_assistant.py",
+      "before_sha256": "210b96995fc6fb70d3ac3192c5f6bc63b3497141d55816e1c97283897481967e",
+      "after_sha256": "29785f07f7d238acf5235b6d31c95b2ac1bf9100299563c6a37574d4be30c2c4",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/routers/documents.py",
+      "before_sha256": "49060727359ad273dcdbbfec5b0d94c3ea410395cca5de24ce4104b538311f8e",
+      "after_sha256": "430cb81d15e125193e4922315a777a08133c819e7a55a8e2c5bb3d8327d4d07c",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/routers/guide.py",
+      "before_sha256": "71e2b46440adca302faf2dd0b36e679535ae1bfcc0f991a454ae0ca57d31c4b6",
+      "after_sha256": "0baf43c99eaceaaa273ba498516e521a2448d435c69ac170b14a8bddb45653d4",
+      "existed_before": true
+    },
+    {
       "path": "backend/app/routers/planning_letters.py",
-      "before_sha256": "61e03f0b9674313d799ef8b67194fdceaaeecefb4d53b59290c67715b0d60606",
-      "after_sha256": "24931cff53ee6facaf76a6afc902a7669f9f62cdad19cd35dac28c75678aad43",
+      "before_sha256": "24931cff53ee6facaf76a6afc902a7669f9f62cdad19cd35dac28c75678aad43",
+      "after_sha256": "b7e0608f54b3b7396ad88f0b4bc1802fd196752fca544529b4d11f2c6b4d11e8",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/schemas.py",
+      "before_sha256": "fb840e33ce62c5f02b8dc84faf068f3789310d4f2583b845bb716e1b28dcfbdb",
+      "after_sha256": "d49049b40dad4b9caf0fbf1b44e092f170c9ef0682b0e3827fd91ffc20a2847f",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/services/candidate_status.py",
+      "before_sha256": "31ad888c1a0e09c282677225dfd6c00e0b9dd308d2d70ce00b5498460afcb549",
+      "after_sha256": "2ae78b2a63b698a3d41db0b6c6000931829089a4635d59335faf17d321b7cc28",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/services/contract_assembler.py",
+      "before_sha256": "2add36b773f0f87b0fb49c8d2fc29ce3d2323e4c13b9af8a4bf8bce1df0710b3",
+      "after_sha256": "77df326d12e24252007da4a8c2fade6d34e33b6da2f55fb159f212b26001f8e1",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/ai_knowledge_seed.zip",
+      "before_sha256": "e08d9a241ececcd4c614ce8cd1aaa2d074a3083a92d1a54d1ef275c065cbd532",
+      "after_sha256": "28c4fcefc4d78c361155f24dacdb01a589a36a57820251b68d8f12b118853442",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/01_\u10e1\u10d4\u10e0\u10e2\u10d8\u10e4\u10d8\u10d9\u10d0\u10ea\u10d8\u10d8\u10e1_\u10e1\u10e5\u10d4\u10db\u10d0.md",
+      "before_sha256": "c2bd55a4159d663dad3aad5cb672aa7b98f01b58aa6f098aac101ea86cc78943",
+      "after_sha256": "c81717a3df5356cff5412b410b3863d2d46f4a4d264e3582b1262da775aed76b",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/01_\u10e1\u10d4\u10e0\u10e2\u10d8\u10e4\u10d8\u10d9\u10d0\u10ea\u10d8\u10d8\u10e1_\u10e1\u10e5\u10d4\u10db\u10d0.docx",
+      "before_sha256": "11bf32fa2483aefc991d08395c799014b2f2ac9a0632cebc9560826a68149932",
+      "after_sha256": "2ab6a168f8e5e4135f913096317d3fb4d4fe07bc5151819ccf6eb28da4511f0a",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/03_\u10db\u10d8\u10e3\u10d9\u10d4\u10e0\u10eb\u10dd\u10d4\u10d1\u10da\u10dd\u10d1\u10d8\u10e1_\u10de\u10dd\u10da\u10d8\u10e2\u10d8\u10d9\u10d0.md",
+      "before_sha256": "58274814e25b3084f6c5047f219350b0909a56dc7664480e71dc7e7d85483e71",
+      "after_sha256": "b91bb560a8c48348d8bc804c8ff2b557813d36735ee0b7b57565411d90b8dbb9",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/03_\u10db\u10d8\u10e3\u10d9\u10d4\u10e0\u10eb\u10dd\u10d4\u10d1\u10da\u10dd\u10d1\u10d8\u10e1_\u10de\u10dd\u10da\u10d8\u10e2\u10d8\u10d9\u10d0.docx",
+      "before_sha256": "c6ae733657e4a9e8b87eaeaf7d453bc804ed72bf1eb45dd5b0b564939070ec76",
+      "after_sha256": "fc8381c481dbaefbb8809fbc1eb5ccbfdad0b019620d027b106d46b573c840d3",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/04_\u10d9\u10dd\u10dc\u10e4\u10d8\u10d3\u10d4\u10dc\u10ea\u10d8\u10d0\u10da\u10e3\u10e0\u10dd\u10d1\u10d8\u10e1_\u10de\u10dd\u10da\u10d8\u10e2\u10d8\u10d9\u10d0.md",
+      "before_sha256": "94ac10482afb5b8c74b2553f48994710ea2a524d503e5519520b96450b8ecc83",
+      "after_sha256": "9a9e3ae6b0cee3428ed90f74a7b70fa79fde6403d643f27fa9d5c59f21cf2a5d",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/04_\u10d9\u10dd\u10dc\u10e4\u10d8\u10d3\u10d4\u10dc\u10ea\u10d8\u10d0\u10da\u10e3\u10e0\u10dd\u10d1\u10d8\u10e1_\u10de\u10dd\u10da\u10d8\u10e2\u10d8\u10d9\u10d0.docx",
+      "before_sha256": "122751ae7cce924bcde9ec5ec28b9835b4bb8a81ded1834b63b8655949d7aa75",
+      "after_sha256": "d02468f5486f8d13680bb2c2e44c514c710db87b6f3c7f0b3c1d7ffed8cffc3b",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/07_\u10e1\u10d0\u10e9\u10d8\u10d5\u10e0\u10d4\u10d1\u10d8\u10e1\u10d0_\u10d3\u10d0_\u10d0\u10de\u10d4\u10da\u10d0\u10ea\u10d8\u10d4\u10d1\u10d8\u10e1_\u10de\u10e0\u10dd\u10ea\u10d4\u10d3\u10e3\u10e0\u10d0.md",
+      "before_sha256": "a63ac68dccfc408d062337362df5a84238d5976c39fbed44d72d8e670e9c7b38",
+      "after_sha256": "669f32987934d03def162036fdbf6faf4e009209e6bbbdb0db29786abf7ef18b",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/07_\u10e1\u10d0\u10e9\u10d8\u10d5\u10e0\u10d4\u10d1\u10d8\u10e1\u10d0_\u10d3\u10d0_\u10d0\u10de\u10d4\u10da\u10d0\u10ea\u10d8\u10d4\u10d1\u10d8\u10e1_\u10de\u10e0\u10dd\u10ea\u10d4\u10d3\u10e3\u10e0\u10d0.docx",
+      "before_sha256": "44bd999888c2ee24ae591bfc657e2f409f3ada89315ccbf177db90743cce4686",
+      "after_sha256": "e724fa230b43e54f87f7c67d6f7a911214b266e4be23d1c0f779d70f6061a868",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/08_\u10e1\u10d0\u10d2\u10d0\u10db\u10dd\u10ea\u10d3\u10dd_\u10d3\u10d0_\u10e1\u10d0\u10e1\u10d4\u10e0\u10e2\u10d8\u10e4\u10d8\u10d9\u10d0\u10ea\u10d8\u10dd_\u10ee\u10d4\u10da\u10e8\u10d4\u10d9\u10e0\u10e3\u10da\u10d4\u10d1\u10d0.md",
+      "before_sha256": null,
+      "after_sha256": "e2c8a40a2377e21ab7ec8d0bda2951e823da902a9fc08a719ba67cd17f0c5010",
+      "existed_before": false
+    },
+    {
+      "path": "backend/app/data/contracts/08_\u10e1\u10d0\u10d2\u10d0\u10db\u10dd\u10ea\u10d3\u10dd_\u10d3\u10d0_\u10e1\u10d0\u10e1\u10d4\u10e0\u10e2\u10d8\u10e4\u10d8\u10d9\u10d0\u10ea\u10d8\u10dd_\u10ee\u10d4\u10da\u10e8\u10d4\u10d9\u10e0\u10e3\u10da\u10d4\u10d1\u10d0.docx",
+      "before_sha256": null,
+      "after_sha256": "63304d64f11216a555a6ada702d8ef6282d9eb237c2ab2aac06c31919b517409",
+      "existed_before": false
+    },
+    {
+      "path": "backend/app/data/contracts/12_\u10e4\u10dd\u10e0\u10db\u10d0_\u10d2\u10d0\u10dc\u10d0\u10ea\u10ee\u10d0\u10d3\u10d8.md",
+      "before_sha256": "084f658bc33bc17e9bcec1afc01032b61e13022c6b3ee60d2f7711e4f48c5fe1",
+      "after_sha256": "7c4f0fc1c8c810797c88b5ffcc749f155f7f5cc5602759a7f9cf8a3f486aa25f",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/12_\u10e4\u10dd\u10e0\u10db\u10d0_\u10d2\u10d0\u10dc\u10d0\u10ea\u10ee\u10d0\u10d3\u10d8.docx",
+      "before_sha256": "62cf841a92c7b32de7d33b714cda4a30c68da8308a5da6eba6788d1e5b3139b6",
+      "after_sha256": "07069abf2397361213b504b4655695078fc0cdb6b263ddb6571c8bbe0d1f5f04",
+      "existed_before": true
+    },
+    {
+      "path": "backend/app/data/contracts/28_\u10d5\u10d4\u10d1\u10d2\u10d5\u10d4\u10e0\u10d3\u10d6\u10d4_\u10d2\u10d0\u10dc\u10e1\u10d0\u10d7\u10d0\u10d5\u10e1\u10d4\u10d1\u10d4\u10da\u10d8_\u10e1\u10d0\u10d5\u10d0\u10da\u10d3\u10d4\u10d1\u10e3\u10da\u10dd_\u10d8\u10dc\u10e4\u10dd\u10e0\u10db\u10d0\u10ea\u10d8\u10d0.md",
+      "before_sha256": "b71373a84b5429fdde2c0b06001b002809fd0b9d666ca4585c359d3c760d8078",
+      "after_sha256": "8a6c418864b0efc3268cac3eb205027c9c49bad51ef100e442faa95cd3d340a6",
       "existed_before": true
     },
     {
       "path": "frontend/pages/admin.html",
-      "before_sha256": "589c0afff2731793a90bd0a6c287eeaa25b9bee840f35d2b44b0527a7027ff92",
-      "after_sha256": "da2b05bf8a9d9897c66a4d5782dc4b834be45f3fc613f71a89640a89c8c6c40d",
+      "before_sha256": "da2b05bf8a9d9897c66a4d5782dc4b834be45f3fc613f71a89640a89c8c6c40d",
+      "after_sha256": "4f753302f97e156198739b7330dac60c440809c9c76c74ca1d7afb4c84fd5beb",
       "existed_before": true
     },
     {
       "path": "frontend/pages/documents.html",
-      "before_sha256": "fdc89898e2d94a2458be205649556c3bbe13e542fa2c7cd7112106e9208dffd1",
-      "after_sha256": "dbb79ba9bac84572286a8c3ced94137cdb9a101449f7e64b85d6186c4d5d4b88",
+      "before_sha256": "dbb79ba9bac84572286a8c3ced94137cdb9a101449f7e64b85d6186c4d5d4b88",
+      "after_sha256": "28f6844105aba735a4042071fb6723e0aaa88d69c7438d514a9fbb4993aa9693",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/pages/index.html",
+      "before_sha256": "1963fc6827ac345ebcd99df9114139ca4222e1f9fbb896a7688624f7061f0238",
+      "after_sha256": "efa8c9d2474d4a09028e9afc42efe0995a80c6fb6749da9d447c2e6c022c6187",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/pages/my.html",
+      "before_sha256": "53cf4da52ffe51c6d37a574ba1a93b4bc9b048d90bb94d52b73f435402c0e4e5",
+      "after_sha256": "903b8bd6fc95c407da8b897de78f37a168f764496ee384de3eb9ea4918bb65d2",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/pages/registry.html",
+      "before_sha256": "e126a75e8dea014b3ebb2ddafea0ff9cca34cb5d56d36c9ba5140c2d96b1c35f",
+      "after_sha256": "a7a04b524bfcac12db138ab5c8140a76d816e7895f06e093b637bb3f388fcf09",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/partials/header.html",
+      "before_sha256": "40fc7d70427bdaeba488ab79ca72873b2a5b0169c7648d77c5964bc9dadb227f",
+      "after_sha256": "ed82ae0b4510a37a67d6449d4831cccb6090bc9a48d197765b8471466a20ba03",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin.js",
+      "before_sha256": "2265acca998796f8090db2bede3553ff1d8e1b0c1a745b2cabab7f523573077c",
+      "after_sha256": "fc43c22542e93160cd9f5ef4d7eee421a95f77599e13bddf6297ea5107b270b9",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin/ai-assistant.js",
+      "before_sha256": "81241e087ff1b8a8eadc715f9d4a7fbc9cb3c01c3cf071ba915800bbdc2a5dab",
+      "after_sha256": "7bbdcf3e511e656966782d38a11f61409f5854c3a3b0de385f8b03913550b013",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/admin/documents.js",
+      "before_sha256": "a42817dd792f1ad02794427b559e19e4dc13f492635c2cf4da8561b4a904d75d",
+      "after_sha256": "c3a10c896ddf2f71345c302a4dcd759ab9a9d0edf1d0f594e16b47a41a21c15d",
       "existed_before": true
     },
     {
       "path": "frontend/scripts/admin/exam-schedules.js",
-      "before_sha256": "eac140ae9b2a2859375b694195d50f2830690bf467a0e93f6766e32fd440ef89",
-      "after_sha256": "0e8b558f76e23a8f0ee201d9a860f05e65a211cd1ca1248a19bfb15bea2c96e1",
+      "before_sha256": "0e8b558f76e23a8f0ee201d9a860f05e65a211cd1ca1248a19bfb15bea2c96e1",
+      "after_sha256": "f09cb8fe2d948d6ddcee7803cf33da7bc4caf985396cbbad37f512b86fd28113",
       "existed_before": true
     },
     {
-      "path": "frontend/scripts/documents.js",
-      "before_sha256": "8b202f70c90349bd889d95ad490e518acf0d121326599f739f72627a405cf2be",
-      "after_sha256": "9249030fb7ef8c57e04dd27ab6b360d929a99897a82c8f848acebc3c319f7819",
+      "path": "frontend/scripts/admin/users.js",
+      "before_sha256": "6be4c3f501b16c317e04cd1d1817867ad06a9d30527906c3833e0f26c25b1993",
+      "after_sha256": "3cda8fadb608b345b43579c65006db0d0d542723f0bed5c4c917f0e04a0f1b65",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/header.js",
+      "before_sha256": "253e17da8afc4b2c939f57fc0f081795859fe8929054cd135f0453aca1db1d08",
+      "after_sha256": "7e1c9f77e4e4bdb1353d40ab4dec9978cc2cedc261aadc5b75577ea0ee6ce262",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/scripts/my.js",
+      "before_sha256": "5d0aa53e34490a29821459ae01c1dd8edf51409fadf0d2f59d4b347bd76814e1",
+      "after_sha256": "46e71023e5deaef205919a2c6c672e84797cf7f26d42eb0104a99b03577a5e31",
+      "existed_before": true
+    },
+    {
+      "path": "frontend/styles/header.css",
+      "before_sha256": "e7c3f933abc03160f2dda40b80fd2d649766cb8eddb81c07b11430e692d9adb7",
+      "after_sha256": "da195b18988e7fce9592dd4e8e6658b068081eed33f1fb523107cc8533deb4c0",
       "existed_before": true
     }
   ]

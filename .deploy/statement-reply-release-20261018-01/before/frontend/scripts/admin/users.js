@@ -2025,11 +2025,27 @@
         category: 'A',
       },
       {
+        key: 'cert_a_transitional',
+        code: 'GIPC-CON-001 (გარდამავალი)',
+        badge: 'კატეგორია A (გარდამავალი)',
+        badgeClass: 'is-cert-a',
+        shortTitle: 'სასერტიფიკაციო — არქიტექტორი (საგამონაკლისო წესით)',
+        category: 'A',
+      },
+      {
         key: 'cert_b',
         code: 'GIPC-CON-002',
         badge: 'კატეგორია B',
         badgeClass: 'is-cert-b',
         shortTitle: 'სასერტიფიკაციო — პროექტის შემსწავლელი სპეციალისტი',
+        category: 'B',
+      },
+      {
+        key: 'cert_b_transitional',
+        code: 'GIPC-CON-002 (გარდამავალი)',
+        badge: 'კატეგორია B (გარდამავალი)',
+        badgeClass: 'is-cert-b',
+        shortTitle: 'სასერტიფიკაციო — სპეციალისტი (საგამონაკლისო წესით)',
         category: 'B',
       },
       {

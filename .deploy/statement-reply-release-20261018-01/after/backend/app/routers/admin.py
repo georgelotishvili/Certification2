@@ -74,6 +74,7 @@ from ..services.user_codes import UserCodeConflict, move_user_code, remember_use
 from ..services.candidate_status import (
     NON_PASS_CERT_PERIODS,
     _cancel_active_bookings_for_user,
+    get_latest_admission_regimes,
     get_user_latest_requested_category,
     normalize_cert_category,
     reconcile_user_candidate_status_after_delete,
@@ -1529,6 +1530,7 @@ def admin_users(
 
     exam_histories = _compute_all_exam_histories(db)
     requested_categories = sync_all_user_candidates(db, exam_histories)
+    admission_regimes = get_latest_admission_regimes(db)
     transitional_deadline = sync_transitional_certificates(db)
 
     f_day_start: datetime | None = None
@@ -2117,6 +2119,7 @@ def admin_users(
             'candidate_status': u.candidate_status,
             'candidate_category': u.candidate_category,
             'requested_category': requested_categories.get(u.id),
+            'admission_regime': admission_regimes.get(u.id),
         }
         if cert_data:
             user_dict['certificate'] = cert_data
@@ -2160,7 +2163,7 @@ def admin_users(
                 "personal_id", "first_name", "last_name", "phone", "email",
                 "code", "is_admin", "is_founder", "created_at", "certificate",
                 "photo_filename", "exam_outcome",
-                "candidate_status", "candidate_category", "requested_category",
+                "candidate_status", "candidate_category", "requested_category", "admission_regime",
             )}
             revision = sha256(_json.dumps(display, sort_keys=True).encode()).hexdigest()[:20]
             if live:
@@ -2170,7 +2173,7 @@ def admin_users(
                     "exam_stage_remaining_seconds", "exam_stage_permissions",
                     "has_unseen_statements", "unseen_statement_count",
                     "has_pending_statements", "pending_statement_count",
-                    "candidate_status", "candidate_category", "requested_category",
+                    "candidate_status", "candidate_category", "requested_category", "admission_regime",
                 )}
             payload["display_revision"] = revision
             page_items.append(payload)

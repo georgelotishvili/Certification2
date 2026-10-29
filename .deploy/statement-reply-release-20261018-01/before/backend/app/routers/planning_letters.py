@@ -462,10 +462,14 @@ def _deliver(db: Session, letter: PlanningLetter, *, actor_email: str | None = N
                 select(Statement).where(Statement.id == statement_id, Statement.user_id == letter.user_id)
             )
         if target_stmt is None:
+            stmt_query = select(Statement).where(
+                Statement.user_id == letter.user_id,
+                Statement.answered_at.is_(None),
+            )
+            if letter.created_at is not None:
+                stmt_query = stmt_query.where(Statement.created_at <= letter.created_at)
             target_stmt = db.scalar(
-                select(Statement)
-                .where(Statement.user_id == letter.user_id, Statement.answered_at.is_(None))
-                .order_by(Statement.created_at.desc(), Statement.id.desc())
+                stmt_query.order_by(Statement.created_at.desc(), Statement.id.desc())
             )
         if target_stmt is not None:
             by_email = actor_email or letter.created_by

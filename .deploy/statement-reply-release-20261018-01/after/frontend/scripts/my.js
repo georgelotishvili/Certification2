@@ -638,29 +638,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     utils.on(profileEditDOM.close, 'click', closeProfileEdit);
     utils.on(profileEditDOM.form, 'submit', submitProfileEdit);
 
-    // Certificate bookings & history button on personal page
-    const myBookingsBtn = document.getElementById('myCertBookingsBtn');
-    if (myBookingsBtn) {
-      myBookingsBtn.style.display = '';
-      utils.on(myBookingsBtn, 'click', () => {
-        if (window.CertBooking?.openModal) {
-          window.CertBooking.openModal();
-        }
-      });
-      const syncMyBookingsBtn = (state) => {
-        if (!state) return;
-        const hasActive = Boolean(state.active_booking);
-        myBookingsBtn.classList.toggle('has-active-booking', hasActive);
-        myBookingsBtn.textContent = hasActive
-          ? `ჯავშნები (${state.active_booking.booking_date_ka})`
-          : 'ჯავშნები';
-      };
-      document.addEventListener('certBooking:updated', (ev) => syncMyBookingsBtn(ev?.detail));
-      if (window.CertBooking?.getState?.()) {
-        syncMyBookingsBtn(window.CertBooking.getState());
-      }
-    }
-    
     // Email change detection - show/hide verification section
     utils.on(profileEditDOM.email, 'input', updateVerificationVisibility);
     utils.on(profileEditDOM.sendCodeBtn, 'click', sendEmailVerificationCode);

@@ -237,11 +237,37 @@ def _stored_file_exists(file_path: str | None) -> bool:
         return False
 
 
+_BUNDLED_HTML_CACHE: dict[str, tuple[float, str]] = {}
+
+
+def _get_bundled_html(md_path: Path, strip_annex: bool = False) -> str | None:
+    if not md_path.is_file():
+        return None
+    try:
+        mtime = md_path.stat().st_mtime
+        cache_key = f"{md_path}:{int(strip_annex)}"
+        cached = _BUNDLED_HTML_CACHE.get(cache_key)
+        if cached and cached[0] == mtime:
+            return cached[1]
+        md_text = strip_internal_annexes(
+            md_path.read_text(encoding="utf-8-sig"),
+            force=strip_annex,
+        )
+        html_content = markdown_to_html(md_text)
+        _BUNDLED_HTML_CACHE[cache_key] = (mtime, html_content)
+        return html_content
+    except Exception:
+        return None
+
+
 def _doc_matches_item(doc: SiteDocument, code: str, source_docx: str, default_title: str = "") -> bool:
     if source_docx and (doc.filename or "") == source_docx:
         return True
     if default_title and (doc.title or "").strip() == default_title.strip():
         return True
+    doc_head = f"{doc.title or ''} {(doc.content or '')[:350]}"
+    if "გარდამავალი" not in code and ("გარდამავალი" in doc_head or "საგამონაკლისო" in (doc.title or "")):
+        return False
     if code and code in (doc.title or ""):
         return True
     head = (doc.content or "")[:350]
@@ -249,17 +275,17 @@ def _doc_matches_item(doc: SiteDocument, code: str, source_docx: str, default_ti
 
 
 def _ensure_default_contracts(db: Session) -> None:
-    """Ensure the 4 public official documents and the 4 standard contracts are seeded in site_documents."""
+    """Ensure the 5 public official documents and the 6 standard/transitional contracts are seeded in site_documents."""
     try:
         existing_docs = db.scalars(select(SiteDocument)).all()
         changed = False
-        seeded_public_any = False
 
-        # 1. Ensure the 4 public documents (GIPC-SCH-001, GIPC-POL-001, GIPC-POL-002, GIPC-PRO-003)
+        # 1. Ensure the 5 public documents (GIPC-SCH-001, GIPC-POL-001, GIPC-POL-002, GIPC-PRO-003, GIPC-FRM-001)
         for item in PUBLIC_DOCUMENTS:
             code = item["code"]
             source_docx = item["source_docx"]
             default_title = item["default_title"]
+            target_order = int(item.get("order_index") or 1)
             matched = next(
                 (
                     d
@@ -270,13 +296,17 @@ def _ensure_default_contracts(db: Session) -> None:
             )
 
             bundled_docx = BUNDLED_CONTRACTS_DIR / source_docx
+            md_path = BUNDLED_CONTRACTS_DIR / item["source_md"]
             expected_size = bundled_docx.stat().st_size if bundled_docx.is_file() else None
+            expected_html = _get_bundled_html(md_path, strip_annex=bool(item.get("strip_annex_1")))
+
             needs_refresh = (
                 matched is None
                 or not _stored_file_exists(matched.file_path)
                 or "<p>– " in (matched.content or "")
                 or "იოსებიძ" in (matched.content or "")
                 or (expected_size is not None and matched.file_size_bytes != expected_size)
+                or (expected_html is not None and matched.content != expected_html)
                 or (
                     item.get("strip_annex_1")
                     and (
@@ -286,13 +316,17 @@ def _ensure_default_contracts(db: Session) -> None:
                 )
             )
             if not needs_refresh:
-                if matched is not None and matched.title != default_title and code in (matched.title or ""):
-                    matched.title = default_title
-                    db.add(matched)
-                    changed = True
+                if matched is not None:
+                    if (matched.order_index or 0) != target_order:
+                        matched.order_index = target_order
+                        db.add(matched)
+                        changed = True
+                    if matched.title != default_title and code in (matched.title or ""):
+                        matched.title = default_title
+                        db.add(matched)
+                        changed = True
                 continue
 
-            md_path = BUNDLED_CONTRACTS_DIR / item["source_md"]
             if not md_path.is_file():
                 continue
 
@@ -300,7 +334,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 md_path.read_text(encoding="utf-8-sig"),
                 force=bool(item.get("strip_annex_1")),
             )
-            html_content = markdown_to_html(md_text)
+            html_content = expected_html or markdown_to_html(md_text)
 
             if bundled_docx.is_file():
                 docx_bytes = bundled_docx.read_bytes()
@@ -316,6 +350,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 old_file = matched.file_path
                 matched.title = default_title
                 matched.content = html_content
+                matched.order_index = target_order
                 matched.file_path = file_path
                 matched.filename = filename
                 matched.file_size_bytes = file_size_bytes
@@ -326,7 +361,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 doc = SiteDocument(
                     title=default_title,
                     content=html_content,
-                    order_index=int(item.get("order_index") or 1),
+                    order_index=target_order,
                     contract_type=None,
                     file_path=file_path,
                     filename=filename,
@@ -334,27 +369,28 @@ def _ensure_default_contracts(db: Session) -> None:
                 )
                 db.add(doc)
                 existing_docs.append(doc)
-                seeded_public_any = True
             changed = True
 
-        # 2. Ensure the 4 contracts (exam, cert_a, cert_b, cert_c)
+        # 2. Ensure the 6 contracts (exam, cert_a, cert_a_transitional, cert_b, cert_b_transitional, cert_c)
         by_type = {d.contract_type: d for d in existing_docs if d.contract_type}
         for key, slot in CONTRACT_SLOTS.items():
             existing_slot_doc = by_type.get(key)
             bundled_docx = BUNDLED_CONTRACTS_DIR / slot["source_docx"]
+            md_path = BUNDLED_CONTRACTS_DIR / slot["source_md"]
             expected_size = bundled_docx.stat().st_size if bundled_docx.is_file() else None
+            expected_html = _get_bundled_html(md_path, strip_annex=False)
+            target_order = int(slot.get("order_index") or 6)
+
             slot_needs_refresh = (
                 existing_slot_doc is None
                 or not _stored_file_exists(existing_slot_doc.file_path)
                 or "<p>– " in (existing_slot_doc.content or "")
                 or "იოსებიძ" in (existing_slot_doc.content or "")
                 or (expected_size is not None and existing_slot_doc.file_size_bytes != expected_size)
+                or (expected_html is not None and existing_slot_doc.content != expected_html)
             )
             if not slot_needs_refresh and existing_slot_doc is not None:
-                target_order = int(slot.get("order_index") or 6)
-                if (seeded_public_any or (existing_slot_doc.order_index or 0) == target_order - 1) and (
-                    existing_slot_doc.order_index or 0
-                ) < target_order:
+                if (existing_slot_doc.order_index or 0) != target_order:
                     existing_slot_doc.order_index = target_order
                     db.add(existing_slot_doc)
                     changed = True
@@ -375,13 +411,11 @@ def _ensure_default_contracts(db: Session) -> None:
                 None,
             )
 
-            md_path = BUNDLED_CONTRACTS_DIR / slot["source_md"]
             if not md_path.is_file():
                 continue
 
             md_text = md_path.read_text(encoding="utf-8-sig")
-            html_content = markdown_to_html(md_text)
-            bundled_docx = BUNDLED_CONTRACTS_DIR / slot["source_docx"]
+            html_content = expected_html or markdown_to_html(md_text)
             if bundled_docx.is_file():
                 docx_bytes = bundled_docx.read_bytes()
             else:
@@ -397,7 +431,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 matched.contract_type = key
                 matched.title = slot["default_title"]
                 matched.content = html_content
-                matched.order_index = int(slot.get("order_index") or 5)
+                matched.order_index = target_order
                 matched.file_path = file_path
                 matched.filename = filename
                 matched.file_size_bytes = file_size_bytes
@@ -408,7 +442,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 doc = SiteDocument(
                     title=slot["default_title"],
                     content=html_content,
-                    order_index=int(slot.get("order_index") or 5),
+                    order_index=target_order,
                     contract_type=key,
                     file_path=file_path,
                     filename=filename,
@@ -534,13 +568,13 @@ async def admin_upload_contract_slot(
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    """ოთხიდან ერთ-ერთი ხელშეკრულების (exam, cert_a, cert_b, cert_c) ატვირთვა ან განახლება."""
+    """ხელშეკრულების სლოტის (exam, cert_a, cert_a_transitional, cert_b, cert_b_transitional, cert_c) ატვირთვა ან განახლება."""
     _require_admin(db, authorization)
     slot_key = (contract_type or "").strip().lower()
     if slot_key not in CONTRACT_SLOTS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="არასწორი ხელშეკრულების ტიპი (დაშვებულია: exam, cert_a, cert_b, cert_c)",
+            detail="არასწორი ხელშეკრულების ტიპი (დაშვებულია: exam, cert_a, cert_a_transitional, cert_b, cert_b_transitional, cert_c)",
         )
 
     slot_info = CONTRACT_SLOTS[slot_key]

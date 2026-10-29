@@ -1496,8 +1496,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-testmode1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_testmode1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-testmode2';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_testmode2';
 
   function syncHeaderInitialAuthUI() {
     try {

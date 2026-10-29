@@ -231,7 +231,7 @@
   let cachedDocuments = null;
   let cachedDocumentsKey = null;
   let currentModalDoc = null;
-  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v5_';
+  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v6_';
 
   function getSiteDocsCacheKey() {
     const user = getCurrentUserForContract();
@@ -1496,8 +1496,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261027-testmode2';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261027_testmode2';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261029-unified1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261029_unified1';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1553,9 +1553,6 @@
 
     // Initialize statements module after header is loaded
     initStatementsModule();
-
-    // Initialize certificate appointment booking module
-    initCertBookingModule();
   }
 
   async function loadHeader() {
@@ -2031,6 +2028,45 @@
         const optionLabel = inp.closest?.('.exam-category-option');
         optionLabel?.classList?.toggle?.('is-selected', !!inp.checked);
       });
+
+      const regimeInputs = Array.from(
+        statementsDOM.examForm.querySelectorAll?.('input[name="exam_regime"]') || []
+      );
+      if (regimeInputs.length) {
+        if (changedInput && changedInput.name === 'exam_regime') {
+          if (changedInput.checked) {
+            regimeInputs.forEach((inp) => {
+              if (inp !== changedInput) inp.checked = false;
+            });
+          } else if (!regimeInputs.some((inp) => inp.checked)) {
+            changedInput.checked = true;
+          }
+        }
+        const checkedCategory = categoryInputs.find((inp) => inp.checked);
+        const isOnlyCategoryC = Boolean(
+          checkedCategory && String(checkedCategory.value || '').trim().startsWith('5)')
+        );
+        const standardInput = regimeInputs[0] || null;
+        const transitionalInput = regimeInputs[1] || null;
+        if (transitionalInput) {
+          if (isOnlyCategoryC) {
+            transitionalInput.checked = false;
+            transitionalInput.disabled = true;
+            if (standardInput) standardInput.checked = true;
+          } else {
+            transitionalInput.disabled = false;
+          }
+        }
+        if (!regimeInputs.some((inp) => inp.checked) && standardInput) {
+          standardInput.checked = true;
+        }
+        regimeInputs.forEach((inp) => {
+          const optionLabel = inp.closest?.('.exam-category-option');
+          optionLabel?.classList?.toggle?.('is-selected', !!inp.checked);
+          optionLabel?.classList?.toggle?.('is-disabled', !!inp.disabled);
+        });
+      }
+
       if (statementsDOM.examConfirmCheckbox) {
         const confirmLabel = statementsDOM.examConfirmCheckbox.closest?.('.exam-confirm-option')
           || document.getElementById('examConfirmLabel');
@@ -2055,6 +2091,13 @@
       const selectedCategory = (checkedCategoryInput?.value || '').toString().trim();
       if (!selectedCategory) {
         alert('გთხოვთ მონიშნოთ მოთხოვნილი სერტიფიკატის კატეგორია (პუნქტი 1)');
+        return;
+      }
+
+      const checkedRegimeInput = statementsDOM.examForm.querySelector?.('input[name="exam_regime"]:checked');
+      const selectedRegime = (checkedRegimeInput?.value || '').toString().trim();
+      if (!selectedRegime) {
+        alert('გთხოვთ მონიშნოთ დაშვების რეჟიმი (პუნქტი 1)');
         return;
       }
 
@@ -2088,9 +2131,12 @@
       const message = [
         'სერტიფიცირების განაცხადი',
         '',
-        '1. მოთხოვნილი სერტიფიკატის კატეგორია',
+        '1. მოთხოვნილი სერტიფიკატის კატეგორია და დაშვების რეჟიმი',
         'ვითხოვ სასერტიფიკაციო გამოცდაზე დაშვებას და ქვემოთ მონიშნული კატეგორიის სერტიფიკატის გაცემას:',
         `☑ ${selectedCategory}`,
+        '',
+        'დაშვების რეჟიმი:',
+        `☑ ${selectedRegime}`,
         '',
         '2. თანდართული დოკუმენტები',
         `• 2.1. პირადობის დამადასტურებელი დოკუმენტის ასლი: ${idFilesLine}`,
@@ -2101,7 +2147,7 @@
         extraInfo,
         '',
         '4. განმცხადებლის დადასტურება',
-        '☑ ვადასტურებ, რომ გავეცანი საიტზე gipc.org.ge გამოქვეყნებულ სერტიფიცირების პირობებს, წარმოდგენილი დოკუმენტები უტყუარია, ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები, წარვადგინო შეფასებისთვის საჭირო ნებისმიერი ინფორმაცია და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.',
+        '☑ ვადასტურებ, რომ გავეცანი ვებგვერდზე (gipc.org.ge) გამოქვეყნებულ სერტიფიცირების სქემას, გამოცდის წესებსა და „საგამოცდო და სასერტიფიკაციო ხელშეკრულების“ სტანდარტულ პირობებს; წარმოდგენილი დოკუმენტები და მონაცემები უტყუარია; ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.',
         '',
         `განმცხადებელი: ${fullName || '—'} (დადასტურებულია ელექტრონულად).`,
       ].join('\n');
@@ -2315,620 +2361,13 @@
       document.addEventListener('auth:logout', reset);
       document.addEventListener('auth:login', setMetaFromUser);
       setMetaFromUser();
+      syncExamSelectionState();
     }
 
     init();
     window.addEventListener('openStatements', () => {
       try { handleOpenRequest(); } catch {}
     });
-  }
-
-  function initCertBookingModule() {
-    const API_BASE = getApiBase();
-    const MONTHS_KA = [
-      'იანვარი', 'თებერვალი', 'მარტი', 'აპრილი', 'მაისი', 'ივნისი',
-      'ივლისი', 'აგვისტო', 'სექტემბერი', 'ოქტომბერი', 'ნოემბერი', 'დეკემბერი',
-    ];
-
-    const dom = {
-      headerWrap: document.getElementById('certBookingHeaderWrap'),
-      headerBtn: document.getElementById('certBookingHeaderBtn'),
-      headerText: document.getElementById('certBookingHeaderText'),
-      overlay: document.getElementById('certBookingOverlay'),
-      closeBtn: document.getElementById('certBookingModalClose'),
-      meta: document.getElementById('certBookingModalMeta'),
-      windowPill: document.getElementById('certBookingWindowPill'),
-      activeBanner: document.getElementById('certBookingActiveBanner'),
-      activeDateTime: document.getElementById('certBookingActiveDateTime'),
-      changeTrigger: document.getElementById('certBookingChangeTrigger'),
-      cancelTrigger: document.getElementById('certBookingCancelTrigger'),
-      notice: document.getElementById('certBookingNotice'),
-      pickerWrap: document.getElementById('certBookingPickerWrap'),
-      calPrev: document.getElementById('certCalPrevMonth'),
-      calNext: document.getElementById('certCalNextMonth'),
-      calMonthLabel: document.getElementById('certCalMonthLabel'),
-      calGrid: document.getElementById('certCalGrid'),
-      slotSelectedDateLabel: document.getElementById('certSlotSelectedDateLabel'),
-      slotsGrid: document.getElementById('certSlotsGrid'),
-      selectionPreview: document.getElementById('certBookingSelectionPreview'),
-      submitBtn: document.getElementById('certBookingSubmitBtn'),
-      historyCount: document.getElementById('certBookingHistoryCount'),
-      historyList: document.getElementById('certBookingHistoryList'),
-    };
-
-    let bookingState = null;
-    let isModalOpen = false;
-    let isSubmitting = false;
-    let currentYear = new Date().getFullYear();
-    let currentMonth = new Date().getMonth(); // 0..11
-    let selectedDateStr = null;
-    let selectedSlotTime = null;
-    let expiryTimerId = null;
-
-    function getAuthHeaders() {
-      try {
-        if (typeof window.Auth?.getAuthHeaders === 'function') {
-          return window.Auth.getAuthHeaders() || {};
-        }
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token');
-        return token ? { Authorization: `Bearer ${token}` } : {};
-      } catch {
-        return {};
-      }
-    }
-
-    function getCurrentUserObj() {
-      try {
-        if (typeof window.Auth?.getCurrentUser === 'function') {
-          return window.Auth.getCurrentUser() || null;
-        }
-        const raw = localStorage.getItem('currentUser');
-        return raw ? JSON.parse(raw) : null;
-      } catch {
-        return null;
-      }
-    }
-
-    function formatIsoToKa(dateStr) {
-      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || '—';
-      const [y, m, d] = dateStr.split('-');
-      return `${d}.${m}.${y}`;
-    }
-
-    function syncHeaderButton() {
-      if (!dom.headerWrap || !dom.headerBtn || !dom.headerText) return;
-      if (!isLoggedIn() || !bookingState || !bookingState.show_header_button) {
-        dom.headerWrap.hidden = true;
-        return;
-      }
-
-      if (bookingState.header_state === 'booked' && bookingState.active_booking) {
-        const ab = bookingState.active_booking;
-        dom.headerWrap.hidden = false;
-        dom.headerBtn.classList.remove('is-pulsing');
-        dom.headerBtn.classList.add('is-booked');
-        dom.headerText.textContent = `დაჯავშნილია: ${ab.booking_date_ka} — ${ab.slot_time}`;
-      } else if (bookingState.header_state === 'unbooked') {
-        dom.headerWrap.hidden = false;
-        dom.headerBtn.classList.add('is-pulsing');
-        dom.headerBtn.classList.remove('is-booked');
-        dom.headerText.textContent = 'სერტიფიკატის აღების დაჯავშნა';
-      } else {
-        dom.headerWrap.hidden = true;
-      }
-    }
-
-    function renderHistory() {
-      if (!dom.historyList || !dom.historyCount) return;
-      const items = Array.isArray(bookingState?.history) ? bookingState.history : [];
-      dom.historyCount.textContent = String(items.length);
-      dom.historyList.innerHTML = '';
-
-      if (!items.length) {
-        const empty = document.createElement('div');
-        empty.className = 'statements-placeholder statements-empty';
-        empty.textContent = 'ჯავშნების ისტორია ცარიელია.';
-        dom.historyList.appendChild(empty);
-        return;
-      }
-
-      const frag = document.createDocumentFragment();
-      items.forEach((item) => {
-        const row = document.createElement('div');
-        row.className = `cert-booking-history-item is-${item.status || 'completed'}`;
-        row.setAttribute('role', 'listitem');
-
-        const main = document.createElement('div');
-        main.className = 'cert-booking-history-main';
-
-        const dtSpan = document.createElement('span');
-        dtSpan.className = 'cert-booking-history-dt';
-        dtSpan.textContent = `${item.booking_date_ka} · ${item.time_range || item.slot_time}`;
-        main.appendChild(dtSpan);
-
-        if (item.created_at) {
-          const metaSpan = document.createElement('span');
-          metaSpan.className = 'cert-booking-history-meta';
-          metaSpan.textContent = `შექმნილია: ${item.created_at}`;
-          main.appendChild(metaSpan);
-        }
-
-        const rightWrap = document.createElement('div');
-        rightWrap.className = 'cert-booking-history-right';
-
-        const badge = document.createElement('span');
-        badge.className = `cert-booking-status-badge is-${item.status || 'completed'}`;
-        badge.textContent = item.status_label || 'დასრულებული';
-
-        const delBtn = document.createElement('button');
-        delBtn.type = 'button';
-        delBtn.className = 'cert-booking-history-delete';
-        delBtn.title = 'ისტორიიდან წაშლა';
-        delBtn.setAttribute('aria-label', 'ისტორიიდან წაშლა');
-        delBtn.textContent = '×';
-        delBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          void handleDismissHistoryItem(item);
-        });
-
-        rightWrap.appendChild(badge);
-        rightWrap.appendChild(delBtn);
-
-        row.appendChild(main);
-        row.appendChild(rightWrap);
-        frag.appendChild(row);
-      });
-      dom.historyList.appendChild(frag);
-    }
-
-    function renderSlotsForSelectedDate() {
-      if (!dom.slotsGrid || !dom.slotSelectedDateLabel || !dom.selectionPreview || !dom.submitBtn) return;
-      dom.slotsGrid.innerHTML = '';
-
-      if (!selectedDateStr || !bookingState?.available_days?.[selectedDateStr]) {
-        dom.slotSelectedDateLabel.textContent = 'აირჩიეთ ხელმისაწვდომი დღე კალენდარში';
-        const empty = document.createElement('div');
-        empty.className = 'cert-slot-empty';
-        empty.textContent = 'გთხოვთ აირჩიოთ მწვანედ მონიშნული დღე მარცხენა კალენდარში.';
-        dom.slotsGrid.appendChild(empty);
-        dom.selectionPreview.textContent = 'დღე და საათი არ არის არჩეული';
-        dom.submitBtn.disabled = true;
-        return;
-      }
-
-      const dayInfo = bookingState.available_days[selectedDateStr];
-      dom.slotSelectedDateLabel.textContent = `არჩეული დღე: ${dayInfo.date_ka}`;
-
-      const slots = Array.isArray(dayInfo.slots) ? dayInfo.slots : [];
-      if (!slots.length) {
-        const empty = document.createElement('div');
-        empty.className = 'cert-slot-empty';
-        empty.textContent = 'ამ დღეს თავისუფალი საათები არ არის.';
-        dom.slotsGrid.appendChild(empty);
-        dom.selectionPreview.textContent = 'თავისუფალი საათი არ არის';
-        dom.submitBtn.disabled = true;
-        return;
-      }
-
-      const frag = document.createDocumentFragment();
-      slots.forEach((s) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'cert-slot-btn';
-        if (s.is_mine) btn.classList.add('is-mine');
-        if (selectedSlotTime === s.slot_time) btn.classList.add('is-selected');
-        if (s.is_taken) {
-          btn.disabled = true;
-          btn.title = 'ეს დრო უკვე დაჯავშნილია';
-        }
-        btn.textContent = `${s.slot_time}–${s.end_time}`;
-        btn.addEventListener('click', () => {
-          if (s.is_taken) return;
-          selectedSlotTime = s.slot_time;
-          renderSlotsForSelectedDate();
-        });
-        frag.appendChild(btn);
-      });
-      dom.slotsGrid.appendChild(frag);
-
-      const isAlreadyMyExactSlot = Boolean(
-        bookingState?.active_booking &&
-        bookingState.active_booking.booking_date === selectedDateStr &&
-        bookingState.active_booking.slot_time === selectedSlotTime
-      );
-
-      if (selectedSlotTime) {
-        const slotObj = slots.find((x) => x.slot_time === selectedSlotTime);
-        const rangeLabel = slotObj ? `${slotObj.slot_time}–${slotObj.end_time}` : selectedSlotTime;
-        dom.selectionPreview.textContent = `არჩეულია: ${dayInfo.date_ka} · ${rangeLabel}`;
-        dom.submitBtn.disabled = isSubmitting || isAlreadyMyExactSlot;
-      } else {
-        dom.selectionPreview.textContent = `დღე: ${dayInfo.date_ka} — აირჩიეთ საათი`;
-        dom.submitBtn.disabled = true;
-      }
-
-      dom.submitBtn.textContent = bookingState?.active_booking
-        ? 'ჯავშნის შეცვლა'
-        : 'ჯავშნის დადასტურება';
-    }
-
-    function renderCalendar() {
-      if (!dom.calGrid || !dom.calMonthLabel) return;
-      dom.calMonthLabel.textContent = `${MONTHS_KA[currentMonth]} ${currentYear}`;
-      dom.calGrid.innerHTML = '';
-
-      const firstDay = new Date(currentYear, currentMonth, 1);
-      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-      const startOffset = (firstDay.getDay() + 6) % 7; // Monday = 0 .. Sunday = 6
-
-      const availMap = bookingState?.available_days || {};
-      const activeBook = bookingState?.active_booking || null;
-
-      // Bound month navigation to the 30-day window if present
-      if (dom.calPrev && dom.calNext && bookingState?.window_start && bookingState?.window_end) {
-        const [wsY, wsM] = bookingState.window_start.split('-').map(Number);
-        const [weY, weM] = bookingState.window_end.split('-').map(Number);
-        const curYM = currentYear * 12 + (currentMonth + 1);
-        const minYM = wsY * 12 + wsM;
-        const maxYM = weY * 12 + weM;
-        dom.calPrev.disabled = curYM <= minYM;
-        dom.calNext.disabled = curYM >= maxYM;
-      }
-
-      const frag = document.createDocumentFragment();
-      for (let i = 0; i < startOffset; i += 1) {
-        const emptyCell = document.createElement('div');
-        emptyCell.className = 'cert-cal-cell is-empty';
-        frag.appendChild(emptyCell);
-      }
-
-      for (let day = 1; day <= daysInMonth; day += 1) {
-        const mm = String(currentMonth + 1).padStart(2, '0');
-        const dd = String(day).padStart(2, '0');
-        const dateStr = `${currentYear}-${mm}-${dd}`;
-        const dayObj = new Date(currentYear, currentMonth, day);
-        const isWeekend = dayObj.getDay() === 0 || dayObj.getDay() === 6;
-
-        const dayData = !isWeekend ? availMap[dateStr] : null;
-        const hasFree = Boolean(dayData && dayData.free_count > 0);
-        const isMyBookedDay = Boolean(activeBook && activeBook.booking_date === dateStr);
-
-        const cell = document.createElement('div');
-        cell.className = 'cert-cal-cell';
-        if (hasFree) cell.classList.add('is-available');
-        if (selectedDateStr === dateStr) cell.classList.add('is-selected');
-        if (isMyBookedDay) cell.classList.add('is-my-booked');
-
-        const numSpan = document.createElement('span');
-        numSpan.textContent = String(day);
-        cell.appendChild(numSpan);
-
-        if (hasFree) {
-          const sub = document.createElement('span');
-          sub.className = 'cert-cal-cell-sub';
-          sub.textContent = `${dayData.free_count} თავის.`;
-          cell.appendChild(sub);
-
-          cell.addEventListener('click', () => {
-            selectedDateStr = dateStr;
-            // Preselect user's own booked slot on this date if any, else first free slot
-            if (isMyBookedDay && activeBook) {
-              selectedSlotTime = activeBook.slot_time;
-            } else {
-              selectedSlotTime = dayData.free_slots?.[0] || null;
-            }
-            renderCalendar();
-            renderSlotsForSelectedDate();
-          });
-        }
-
-        frag.appendChild(cell);
-      }
-
-      dom.calGrid.appendChild(frag);
-    }
-
-    function renderModalContent() {
-      const user = getCurrentUserObj();
-      const fullName = user
-        ? `${user.firstName || user.first_name || ''} ${user.lastName || user.last_name || ''}`.trim()
-        : '';
-      if (dom.meta) {
-        const parts = [];
-        if (fullName) parts.push(fullName);
-        if (user?.code) parts.push(user.code);
-        if (bookingState?.category_label) parts.push(bookingState.category_label);
-        dom.meta.textContent = parts.join(' · ');
-      }
-
-      if (dom.windowPill) {
-        if (bookingState?.eligible_to_book && bookingState?.window_end_ka) {
-          dom.windowPill.hidden = false;
-          dom.windowPill.textContent = `30-დღიანი ვადა: ${bookingState.window_start_ka} – ${bookingState.window_end_ka} (დარჩა ${bookingState.days_remaining} დღე)`;
-        } else {
-          dom.windowPill.hidden = true;
-        }
-      }
-
-      const active = bookingState?.active_booking || null;
-      if (dom.activeBanner && dom.activeDateTime) {
-        if (active) {
-          dom.activeBanner.hidden = false;
-          dom.activeDateTime.textContent = `${active.booking_date_ka} · ${active.time_range || active.slot_time}`;
-        } else {
-          dom.activeBanner.hidden = true;
-        }
-      }
-
-      if (bookingState?.eligible_to_book) {
-        const availDates = Object.keys(bookingState.available_days || {}).sort();
-        if (dom.pickerWrap) dom.pickerWrap.hidden = false;
-        if (dom.notice) {
-          if (!availDates.length) {
-            dom.notice.hidden = false;
-            dom.notice.textContent = 'ამჟამად თქვენს 30-დღიან პერიოდში თავისუფალი საათები ჯერ არ არის მონიშნული. გთხოვთ გადაამოწმოთ მოგვიანებით ან დაუკავშირდეთ ადმინისტრაციას.';
-          } else {
-            dom.notice.hidden = true;
-          }
-        }
-
-        if (!selectedDateStr || !bookingState.available_days?.[selectedDateStr]) {
-          if (active && bookingState.available_days?.[active.booking_date]) {
-            selectedDateStr = active.booking_date;
-            selectedSlotTime = active.slot_time;
-          } else if (availDates.length) {
-            selectedDateStr = availDates[0];
-            selectedSlotTime = bookingState.available_days[selectedDateStr]?.free_slots?.[0] || null;
-          } else {
-            selectedDateStr = null;
-            selectedSlotTime = null;
-          }
-        }
-
-        const refDate = selectedDateStr || bookingState.window_start || bookingState.today;
-        if (refDate && /^\d{4}-\d{2}-\d{2}$/.test(refDate)) {
-          const [ry, rm] = refDate.split('-').map(Number);
-          currentYear = ry;
-          currentMonth = rm - 1;
-        }
-
-        renderCalendar();
-        renderSlotsForSelectedDate();
-      } else {
-        if (dom.pickerWrap) dom.pickerWrap.hidden = true;
-        if (dom.notice) {
-          dom.notice.hidden = false;
-          if (bookingState?.has_certificate) {
-            dom.notice.textContent = 'თქვენზე სერტიფიკატი უკვე გაცემულია და ასახულია სერტიფიცირებულ პირთა საჯარო რეესტრში.';
-          } else if (bookingState?.has_pass_letter && !bookingState?.within_30_days) {
-            dom.notice.textContent = `სერტიფიკატის აღების დაჯავშნის 30-კალენდარულდღიანი ვადა (${bookingState.window_end_ka || '—'}) ამოიწურა.`;
-          } else {
-            dom.notice.textContent = 'სერტიფიკატის აღების შეხვედრის დაჯავშნა ხელმისაწვდომია გამოცდის წარმატებით ჩაბარების შეტყობინების მიღებიდან 30 კალენდარული დღის განმავლობაში.';
-          }
-        }
-      }
-
-      renderHistory();
-    }
-
-    async function fetchBookingState() {
-      if (!isLoggedIn()) {
-        bookingState = null;
-        syncHeaderButton();
-        return null;
-      }
-      const headers = getAuthHeaders();
-      if (!headers.Authorization) {
-        bookingState = null;
-        syncHeaderButton();
-        return null;
-      }
-      try {
-        const res = await fetch(`${API_BASE}/users/me/cert-booking`, {
-          headers: { ...headers, 'Cache-Control': 'no-cache' },
-        });
-        if (!res.ok) {
-          bookingState = null;
-          syncHeaderButton();
-          return null;
-        }
-        bookingState = await res.json();
-        syncHeaderButton();
-        if (isModalOpen) {
-          renderModalContent();
-        }
-        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
-        return bookingState;
-      } catch {
-        return null;
-      }
-    }
-
-    function openModal() {
-      if (!isLoggedIn()) {
-        alert('გთხოვთ გაიაროთ ავტორიზაცია');
-        openAuthModal();
-        return;
-      }
-      if (!dom.overlay) return;
-      isModalOpen = true;
-      dom.overlay.classList.add('open');
-      dom.overlay.setAttribute('aria-hidden', 'false');
-      document.body.classList.add('modal-open');
-      renderModalContent();
-      void fetchBookingState();
-    }
-
-    function closeModal() {
-      if (!dom.overlay) return;
-      isModalOpen = false;
-      dom.overlay.classList.remove('open');
-      dom.overlay.setAttribute('aria-hidden', 'true');
-      document.body.classList.remove('modal-open');
-    }
-
-    async function handleConfirmBooking() {
-      if (!selectedDateStr || !selectedSlotTime || isSubmitting) return;
-      isSubmitting = true;
-      if (dom.submitBtn) dom.submitBtn.disabled = true;
-      try {
-        const res = await fetch(`${API_BASE}/users/me/cert-booking`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify({
-            booking_date: selectedDateStr,
-            slot_time: selectedSlotTime,
-          }),
-        });
-        if (!res.ok) {
-          let detail = 'ჯავშნის შენახვა ვერ მოხერხდა';
-          try {
-            const err = await res.json();
-            if (err?.detail) detail = String(err.detail);
-          } catch {}
-          alert(detail);
-          await fetchBookingState();
-          return;
-        }
-        bookingState = await res.json();
-        syncHeaderButton();
-        renderModalContent();
-        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
-      } catch {
-        alert('ქსელური შეცდომა — სცადეთ თავიდან');
-      } finally {
-        isSubmitting = false;
-        renderSlotsForSelectedDate();
-      }
-    }
-
-    async function handleCancelBooking() {
-      const active = bookingState?.active_booking;
-      if (!active || isSubmitting) return;
-      if (!confirm(`ნამდვილად გსურთ ჯავშნის გაუქმება (${active.booking_date_ka}, ${active.slot_time})?`)) {
-        return;
-      }
-      isSubmitting = true;
-      try {
-        const res = await fetch(`${API_BASE}/users/me/cert-booking/${encodeURIComponent(active.id)}`, {
-          method: 'DELETE',
-          headers: { ...getAuthHeaders() },
-        });
-        if (!res.ok) {
-          alert('ჯავშნის გაუქმება ვერ მოხერხდა');
-          return;
-        }
-        bookingState = await res.json();
-        syncHeaderButton();
-        renderModalContent();
-        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
-      } catch {
-        alert('ქსელური შეცდომა — სცადეთ თავიდან');
-      } finally {
-        isSubmitting = false;
-      }
-    }
-
-    async function handleDismissHistoryItem(item) {
-      if (!item?.id || isSubmitting) return;
-      if (item.status === 'active') {
-        if (!confirm(`ნამდვილად გსურთ აქტიური ჯავშნის (${item.booking_date_ka}, ${item.slot_time}) გაუქმება და ისტორიიდან წაშლა?`)) {
-          return;
-        }
-      }
-      isSubmitting = true;
-      try {
-        const res = await fetch(`${API_BASE}/users/me/cert-booking/${encodeURIComponent(item.id)}?dismiss=true`, {
-          method: 'DELETE',
-          headers: { ...getAuthHeaders() },
-        });
-        if (!res.ok) {
-          alert('ჯავშნის წაშლა ვერ მოხერხდა');
-          return;
-        }
-        bookingState = await res.json();
-        syncHeaderButton();
-        renderModalContent();
-        document.dispatchEvent(new CustomEvent('certBooking:updated', { detail: bookingState }));
-      } catch {
-        alert('ქსელური შეცდომა — სცადეთ თავიდან');
-      } finally {
-        isSubmitting = false;
-      }
-    }
-
-    on(dom.headerBtn, 'click', openModal);
-    on(dom.closeBtn, 'click', closeModal);
-    on(dom.overlay, 'click', (e) => {
-      if (e.target === dom.overlay) closeModal();
-    });
-    on(dom.changeTrigger, 'click', () => {
-      dom.pickerWrap?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-    });
-    on(dom.cancelTrigger, 'click', handleCancelBooking);
-    on(dom.submitBtn, 'click', handleConfirmBooking);
-    on(dom.calPrev, 'click', () => {
-      currentMonth -= 1;
-      if (currentMonth < 0) {
-        currentMonth = 11;
-        currentYear -= 1;
-      }
-      renderCalendar();
-    });
-    on(dom.calNext, 'click', () => {
-      currentMonth += 1;
-      if (currentMonth > 11) {
-        currentMonth = 0;
-        currentYear += 1;
-      }
-      renderCalendar();
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isModalOpen) closeModal();
-    });
-
-    document.addEventListener('auth:login', () => {
-      void fetchBookingState();
-    });
-    document.addEventListener('auth:logout', () => {
-      bookingState = null;
-      selectedDateStr = null;
-      selectedSlotTime = null;
-      if (isModalOpen) closeModal();
-      syncHeaderButton();
-    });
-    document.addEventListener('certificate:loaded', () => {
-      void fetchBookingState();
-    });
-    window.addEventListener('focus', () => {
-      if (isLoggedIn()) void fetchBookingState();
-    });
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && isLoggedIn()) {
-        void fetchBookingState();
-      }
-    });
-
-    // Periodic check so the central header button appears/disappears automatically
-    if (expiryTimerId) clearInterval(expiryTimerId);
-    expiryTimerId = setInterval(() => {
-      if (isLoggedIn()) {
-        void fetchBookingState();
-      }
-    }, 30000);
-
-    window.CertBooking = {
-      openModal,
-      closeModal,
-      refresh: fetchBookingState,
-      getState: () => bookingState,
-    };
-
-    void fetchBookingState();
   }
 
   function initPublicAiAssistant() {

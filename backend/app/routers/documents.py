@@ -39,8 +39,14 @@ from ..services.bounded_upload import (
     UploadTooLarge,
     save_upload_stream,
 )
+from ..services.candidate_status import (
+    get_user_latest_admission_regime,
+    get_user_latest_requested_category,
+)
 from ..services.contract_assembler import (
     CONTRACT_SLOTS,
+    LEGACY_CONTRACT_FILENAMES,
+    LEGACY_CONTRACT_SLOT_KEYS,
     PUBLIC_DOCUMENTS,
     docx_bytes_to_html,
     sanitize_document_html,
@@ -371,8 +377,29 @@ def _ensure_default_contracts(db: Session) -> None:
                 existing_docs.append(doc)
             changed = True
 
-        # 2. Ensure the 6 contracts (exam, cert_a, cert_a_transitional, cert_b, cert_b_transitional, cert_c)
+        # 2. Ensure the single universal contract (and clean up obsolete legacy 6-contract rows)
+        legacy_docs = [
+            d
+            for d in existing_docs
+            if (d.contract_type in LEGACY_CONTRACT_SLOT_KEYS)
+            or ((d.filename or "") in LEGACY_CONTRACT_FILENAMES)
+        ]
         by_type = {d.contract_type: d for d in existing_docs if d.contract_type}
+        if "universal" not in by_type and legacy_docs:
+            reused = legacy_docs.pop(0)
+            reused.contract_type = "universal"
+            by_type["universal"] = reused
+            changed = True
+
+        for obsolete_doc in legacy_docs:
+            old_fp = obsolete_doc.file_path
+            db.delete(obsolete_doc)
+            if obsolete_doc in existing_docs:
+                existing_docs.remove(obsolete_doc)
+            if old_fp:
+                _delete_document_file(old_fp)
+            changed = True
+
         for key, slot in CONTRACT_SLOTS.items():
             existing_slot_doc = by_type.get(key)
             bundled_docx = BUNDLED_CONTRACTS_DIR / slot["source_docx"]
@@ -470,6 +497,19 @@ def _is_admin_user(user: User | None) -> bool:
     return bool(founder_email and (user.email or "").lower() == founder_email)
 
 
+def _attach_user_application_context(db: Session, user: User | None) -> User | None:
+    if not user:
+        return None
+    try:
+        req_cat = get_user_latest_requested_category(db, user.id) or (user.candidate_category or "")
+        adm_reg = get_user_latest_admission_regime(db, user.id) or ("standard" if req_cat else "")
+        setattr(user, "_requested_category", req_cat)
+        setattr(user, "_admission_regime", adm_reg)
+    except Exception:
+        pass
+    return user
+
+
 def _resolve_target_user(
     db: Session,
     authorization: str | None = None,
@@ -482,11 +522,13 @@ def _resolve_target_user(
         auth_header = clean_tok if clean_tok.lower().startswith("bearer ") else f"Bearer {clean_tok}"
 
     caller = _get_user_from_token(db, auth_header)
+    target: User | None = None
     if user_id is not None:
         if caller and (_is_admin_user(caller) or caller.id == user_id):
-            return db.get(User, user_id)
-        return None
-    return caller
+            target = db.get(User, user_id)
+    else:
+        target = caller
+    return _attach_user_application_context(db, target)
 
 
 def _is_contract_document(doc: SiteDocument) -> bool:
@@ -500,6 +542,8 @@ def _document_out(
     doc: SiteDocument,
     user: User | None = None,
     for_user_id: int | None = None,
+    category: str | None = None,
+    regime: str | None = None,
 ) -> SiteDocumentOut:
     is_contract = _is_contract_document(doc)
     download_url = None
@@ -516,7 +560,7 @@ def _document_out(
 
     raw_content = doc.content or ""
     final_content = (
-        populate_contract_html(raw_content, user)
+        populate_contract_html(raw_content, user, category=category, regime=regime)
         if (user and is_contract)
         else raw_content
     )
@@ -541,19 +585,27 @@ def _document_out(
 @router.get("/admin/documents", response_model=SiteDocumentsListResponse)
 def admin_list_documents(
     user_id: Optional[int] = Query(None, ge=1),
+    category: Optional[str] = Query(None),
+    regime: Optional[str] = Query(None),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     """ყველა დოკუმენტის წამოღება (ადმინისთვის). თუ user_id გადაეცა, ხელშეკრულებები ივსება ამ პირის მონაცემებით."""
     _require_admin(db, authorization)
     _ensure_default_contracts(db)
-    target_user = db.get(User, user_id) if user_id else None
+    target_user = _attach_user_application_context(db, db.get(User, user_id)) if user_id else None
     docs = db.scalars(
         select(SiteDocument).order_by(SiteDocument.order_index.asc(), SiteDocument.id.asc())
     ).all()
     return SiteDocumentsListResponse(
         items=[
-            _document_out(d, user=target_user, for_user_id=target_user.id if target_user else None)
+            _document_out(
+                d,
+                user=target_user,
+                for_user_id=target_user.id if target_user else None,
+                category=category,
+                regime=regime,
+            )
             for d in docs
         ]
     )
@@ -568,13 +620,15 @@ async def admin_upload_contract_slot(
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    """ხელშეკრულების სლოტის (exam, cert_a, cert_a_transitional, cert_b, cert_b_transitional, cert_c) ატვირთვა ან განახლება."""
+    """ერთიანი საგამოცდო და სასერტიფიკაციო ხელშეკრულების სლოტის (universal) ატვირთვა ან განახლება."""
     _require_admin(db, authorization)
     slot_key = (contract_type or "").strip().lower()
+    if slot_key in LEGACY_CONTRACT_SLOT_KEYS or slot_key == "contract":
+        slot_key = "universal"
     if slot_key not in CONTRACT_SLOTS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="არასწორი ხელშეკრულების ტიპი (დაშვებულია: exam, cert_a, cert_a_transitional, cert_b, cert_b_transitional, cert_c)",
+            detail="არასწორი ხელშეკრულების ტიპი (დაშვებულია: universal)",
         )
 
     slot_info = CONTRACT_SLOTS[slot_key]
@@ -828,6 +882,8 @@ def admin_delete_document(
 def download_document_file(
     doc_id: int = FPath(..., ge=1),
     user_id: Optional[int] = Query(None, ge=1),
+    category: Optional[str] = Query(None),
+    regime: Optional[str] = Query(None),
     token: Optional[str] = Query(None),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
@@ -859,8 +915,13 @@ def download_document_file(
 
     target_user = _resolve_target_user(db, authorization=authorization, token=token, user_id=user_id)
     if target_user and not is_pdf and _is_contract_document(doc):
-        populated_bytes = populate_contract_docx_bytes(document_path, target_user)
-        fields = extract_user_fields(target_user)
+        populated_bytes = populate_contract_docx_bytes(
+            document_path,
+            target_user,
+            category=category,
+            regime=regime,
+        )
+        fields = extract_user_fields(target_user, category=category, regime=regime)
         person_slug = (fields.get("full_name") or "").replace(" ", "_").strip("_")
         if person_slug:
             stem = Path(safe_filename).stem
@@ -886,6 +947,8 @@ def download_document_file(
 @router.get("/documents", response_model=SiteDocumentsListResponse)
 def public_list_documents(
     user_id: Optional[int] = Query(None, ge=1),
+    category: Optional[str] = Query(None),
+    regime: Optional[str] = Query(None),
     token: Optional[str] = Query(None),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
@@ -898,7 +961,10 @@ def public_list_documents(
         select(SiteDocument).order_by(SiteDocument.order_index.asc(), SiteDocument.id.asc())
     ).all()
     return SiteDocumentsListResponse(
-        items=[_document_out(d, user=target_user, for_user_id=for_uid) for d in docs]
+        items=[
+            _document_out(d, user=target_user, for_user_id=for_uid, category=category, regime=regime)
+            for d in docs
+        ]
     )
 
 
@@ -906,6 +972,8 @@ def public_list_documents(
 def public_get_document(
     doc_id: int = FPath(..., ge=1),
     user_id: Optional[int] = Query(None, ge=1),
+    category: Optional[str] = Query(None),
+    regime: Optional[str] = Query(None),
     token: Optional[str] = Query(None),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
@@ -917,4 +985,4 @@ def public_get_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     target_user = _resolve_target_user(db, authorization=authorization, token=token, user_id=user_id)
     for_uid = user_id if (user_id and target_user) else None
-    return _document_out(doc, user=target_user, for_user_id=for_uid)
+    return _document_out(doc, user=target_user, for_user_id=for_uid, category=category, regime=regime)

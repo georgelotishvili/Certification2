@@ -260,7 +260,6 @@
         DOM.examScheduleDate?.value
         || DOM.filterExamMorning?.checked
         || DOM.filterExamEvening?.checked
-        || DOM.filterCertificateHandover?.checked
       );
     }
 
@@ -338,7 +337,6 @@
       if (DOM.sentLettersDate) DOM.sentLettersDate.value = '';
       if (DOM.filterExamMorning) DOM.filterExamMorning.checked = false;
       if (DOM.filterExamEvening) DOM.filterExamEvening.checked = false;
-      if (DOM.filterCertificateHandover) DOM.filterCertificateHandover.checked = false;
       if (DOM.examScheduleDate) DOM.examScheduleDate.value = '';
       if (DOM.filterExamPassed) DOM.filterExamPassed.checked = false;
       if (DOM.filterExamFailed) DOM.filterExamFailed.checked = false;
@@ -484,7 +482,6 @@
       if (statementDate) params.set('statement_date', statementDate);
       if (DOM.filterExamMorning?.checked) params.set('exam_morning', 'true');
       if (DOM.filterExamEvening?.checked) params.set('exam_evening', 'true');
-      if (DOM.filterCertificateHandover?.checked) params.set('certificate_handover', 'true');
       if (DOM.examScheduleDate?.value) params.set('filter_date', DOM.examScheduleDate.value);
       if (DOM.filterExamPassed?.checked) params.set('exam_passed', 'true');
       if (DOM.filterExamFailed?.checked) params.set('exam_failed', 'true');
@@ -1668,7 +1665,6 @@
       syncStatementFilterControls();
       on(DOM.filterExamMorning, 'change', render);
       on(DOM.filterExamEvening, 'change', render);
-      on(DOM.filterCertificateHandover, 'change', render);
       on(DOM.examScheduleDate, 'change', () => {
         syncExamScheduleFilterControls();
         return render();
@@ -2009,53 +2005,21 @@
     // ----------------- Assembled Contracts per User Card -----------------
     const USER_CONTRACT_SLOTS = [
       {
-        key: 'exam',
-        code: 'GIPC-CON-004',
-        badge: 'საგამოცდო',
+        key: 'universal',
+        code: '',
+        badge: 'ერთიანი ხელშეკრულება',
         badgeClass: 'is-exam',
-        shortTitle: 'საგამოცდო ხელშეკრულება',
+        shortTitle: 'საგამოცდო და სასერტიფიკაციო ხელშეკრულება',
         category: null,
       },
-      {
-        key: 'cert_a',
-        code: 'GIPC-CON-001',
-        badge: 'კატეგორია A',
-        badgeClass: 'is-cert-a',
-        shortTitle: 'სასერტიფიკაციო — შენობა-ნაგებობის არქიტექტორი',
-        category: 'A',
-      },
-      {
-        key: 'cert_a_transitional',
-        code: 'GIPC-CON-001 (გარდამავალი)',
-        badge: 'კატეგორია A (გარდამავალი)',
-        badgeClass: 'is-cert-a',
-        shortTitle: 'სასერტიფიკაციო — არქიტექტორი (საგამონაკლისო წესით)',
-        category: 'A',
-      },
-      {
-        key: 'cert_b',
-        code: 'GIPC-CON-002',
-        badge: 'კატეგორია B',
-        badgeClass: 'is-cert-b',
-        shortTitle: 'სასერტიფიკაციო — პროექტის შემსწავლელი სპეციალისტი',
-        category: 'B',
-      },
-      {
-        key: 'cert_b_transitional',
-        code: 'GIPC-CON-002 (გარდამავალი)',
-        badge: 'კატეგორია B (გარდამავალი)',
-        badgeClass: 'is-cert-b',
-        shortTitle: 'სასერტიფიკაციო — სპეციალისტი (საგამონაკლისო წესით)',
-        category: 'B',
-      },
-      {
-        key: 'cert_c',
-        code: 'GIPC-CON-003',
-        badge: 'კატეგორია C',
-        badgeClass: 'is-cert-c',
-        shortTitle: 'სასერტიფიკაციო — არქიტექტურული პროექტის ექსპერტი',
-        category: 'C',
-      },
+    ];
+
+    const CONTRACT_CATEGORY_OPTIONS = [
+      { value: 'A', label: '1) კატეგორია A (არქიტექტორი)', prefix: '1)' },
+      { value: 'C_A', label: '2) კატეგორია C ან A (ექსპერტი / არქიტექტორი)', prefix: '2)' },
+      { value: 'B_A', label: '3) კატეგორია B ან A (სპეციალისტი / არქიტექტორი)', prefix: '3)' },
+      { value: 'B', label: '4) კატეგორია B (მხოლოდ სპეციალისტი)', prefix: '4)' },
+      { value: 'C', label: '5) კატეგორია C (მხოლოდ ექსპერტი)', prefix: '5)' },
     ];
 
     let cachedContractDocs = null;
@@ -2084,22 +2048,56 @@
       }
     }
 
-    function extractUserContractFields(user) {
+    function resolveUserApplicationCategory(user) {
+      const reqCat = String(user?.requested_category || '').toUpperCase().trim();
+      if (['A', 'B', 'C', 'B_A', 'C_A'].includes(reqCat)) return reqCat;
+      const candCat = String(user?.candidate_category || '').toUpperCase().trim();
+      if (['A', 'B', 'C', 'B_A', 'C_A'].includes(candCat)) return candCat;
+      const certLevel = (user?.certificate?.level || user?.certificate_info?.level || '').toLowerCase();
+      if (certLevel === 'architect' || certLevel === 'architect_expert') return 'A';
+      if (certLevel === 'municipal') return 'B';
+      if (certLevel === 'expert') return 'C';
+      return 'A';
+    }
+
+    function resolveUserApplicationRegime(user, resolvedCat = null) {
+      const cat = resolvedCat || resolveUserApplicationCategory(user);
+      if (cat === 'C') return 'standard';
+      const admReg = String(user?.admission_regime || '').toLowerCase().trim();
+      if (admReg === 'transitional' || admReg === 'standard') return admReg;
+      if (user?.certificate?.is_transitional || user?.certificate_info?.is_transitional) {
+        return 'transitional';
+      }
+      return 'standard';
+    }
+
+    function extractUserContractFields(user, overrideCategory = null, overrideRegime = null) {
       const first = String(user?.first_name || user?.firstName || '').trim();
       const last = String(user?.last_name || user?.lastName || '').trim();
       const fullName = `${first} ${last}`.trim();
+      const reqCat = overrideCategory !== null && overrideCategory !== undefined
+        ? String(overrideCategory).toUpperCase().trim()
+        : resolveUserApplicationCategory(user);
+      const admReg = reqCat === 'C'
+        ? 'standard'
+        : (overrideRegime !== null && overrideRegime !== undefined
+          ? String(overrideRegime).toLowerCase().trim()
+          : resolveUserApplicationRegime(user, reqCat));
       return {
         full_name: fullName,
         personal_id: String(user?.personal_id || user?.personalId || '').trim(),
         phone: String(user?.phone || '').trim(),
         email: String(user?.email || '').trim(),
+        code: String(user?.code || '').trim(),
         date: formatTodayGeorgianDate(),
+        requested_category: reqCat,
+        admission_regime: admReg,
       };
     }
 
-    function populateContractHtmlForUser(rawHtml, user) {
+    function populateContractHtmlForUser(rawHtml, user, overrideCategory = null, overrideRegime = null) {
       if (!rawHtml || !user) return rawHtml || '';
-      const fields = extractUserContractFields(user);
+      const fields = extractUserContractFields(user, overrideCategory, overrideRegime);
       let out = String(rawHtml);
       const rules = [
         [
@@ -2119,6 +2117,10 @@
           fields.email,
         ],
         [
+          /(უნიკალური\s+კოდი[^:]*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
+          fields.code,
+        ],
+        [
           /(თარიღი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}/gi,
           fields.date,
         ],
@@ -2128,6 +2130,30 @@
         const safeVal = escapeHtml(val);
         out = out.replace(regex, (_, prefix) => `${prefix}<strong class="contract-filled-value">${safeVal}</strong>`);
       });
+
+      if (fields.requested_category) {
+        const targetOpt = CONTRACT_CATEGORY_OPTIONS.find((o) => o.value === fields.requested_category);
+        CONTRACT_CATEGORY_OPTIONS.forEach((opt) => {
+          const isTarget = Boolean(targetOpt && opt.value === targetOpt.value);
+          const sym = isTarget ? '☑' : '☐';
+          const escapedPrefix = opt.prefix.replace(')', '\\)');
+          const rx = new RegExp(`[☐☑]\\s*(<strong>\\s*${escapedPrefix}\\s+კატეგორია)`, 'g');
+          out = out.replace(rx, `${sym} $1`);
+        });
+      }
+
+      if (fields.admission_regime === 'standard' || fields.admission_regime === 'transitional') {
+        const isStd = fields.admission_regime === 'standard';
+        out = out.replace(
+          /[☐☑]\s*(<strong>\s*სტანდარტული\s+რეჟიმი)/g,
+          `${isStd ? '☑' : '☐'} $1`
+        );
+        out = out.replace(
+          /[☐☑]\s*(<strong>\s*გარდამავალი\s*\/\s*საგამონაკლისო\s+რეჟიმი)/g,
+          `${!isStd ? '☑' : '☐'} $1`
+        );
+      }
+
       return out;
     }
 
@@ -2158,43 +2184,37 @@
       if (byType) return byType;
       return (
         docs.find(
-          (d) => !d.contract_type && d.title && d.title.includes(slotDef.code)
+          (d) => d.contract_type || (d.title && d.title.includes('საგამოცდო და სასერტიფიკაციო ხელშეკრულება'))
         ) || null
       );
-    }
-
-    function resolveUserPreferredCategory(user) {
-      const certLevel = (user?.certificate?.level || user?.certificate_info?.level || '').toLowerCase();
-      if (certLevel === 'architect' || certLevel === 'architect_expert') return 'A';
-      if (certLevel === 'municipal') return 'B';
-      if (certLevel === 'expert') return 'C';
-      const candCat = String(user?.candidate_category || user?.requested_category || '').toUpperCase().trim();
-      if (candCat === 'A' || candCat === 'B' || candCat === 'C') return candCat;
-      return null;
     }
 
     async function renderUserContractsSection(card, user) {
       const container = card?.querySelector('.user-contracts-section');
       if (!container || !user) return;
       if (!container.innerHTML) {
-        container.innerHTML = '<div class="user-contracts-loading">ხელშეკრულებები იტვირთება...</div>';
+        container.innerHTML = '<div class="user-contracts-loading">ხელშეკრულება იტვირთება...</div>';
       }
       const docs = await fetchContractTemplates(false);
       const fields = extractUserContractFields(user);
-      const prefCategory = resolveUserPreferredCategory(user);
+
+      const categoryOptionsHtml = CONTRACT_CATEGORY_OPTIONS.map((opt) => {
+        const selected = fields.requested_category === opt.value ? ' selected' : '';
+        return `<option value="${escapeHtml(opt.value)}"${selected}>${escapeHtml(opt.label)}</option>`;
+      }).join('');
+
+      const isOnlyC = fields.requested_category === 'C';
+      const stdSelected = fields.admission_regime !== 'transitional' ? ' selected' : '';
+      const transSelected = !isOnlyC && fields.admission_regime === 'transitional' ? ' selected' : '';
+      const transDisabled = isOnlyC ? ' disabled' : '';
 
       const cardsHtml = USER_CONTRACT_SLOTS.map((slot) => {
         const doc = findTemplateDocForSlot(docs, slot);
-        const isRecommended = Boolean(slot.category && prefCategory === slot.category);
-        const recBadge = isRecommended
-          ? '<span class="user-contract-rec-badge" title="პირის არჩეული / მინიჭებული კატეგორია">★ შესაბამისი კატეგორია</span>'
-          : '';
         if (!doc) {
           return `
             <div class="user-contract-card is-missing" data-contract-slot="${escapeHtml(slot.key)}">
               <div class="user-contract-card-top">
                 <span class="contract-slot-badge ${escapeHtml(slot.badgeClass)}">${escapeHtml(slot.badge)}</span>
-                <span class="user-contract-code">${escapeHtml(slot.code)}</span>
               </div>
               <div class="user-contract-title">${escapeHtml(slot.shortTitle)}</div>
               <div class="user-contract-empty">შაბლონი არ არის ატვირთული</div>
@@ -2202,14 +2222,28 @@
           `;
         }
         return `
-          <div class="user-contract-card${isRecommended ? ' is-recommended' : ''}" data-contract-slot="${escapeHtml(slot.key)}" data-doc-id="${escapeHtml(String(doc.id))}">
+          <div class="user-contract-card is-recommended" data-contract-slot="${escapeHtml(slot.key)}" data-doc-id="${escapeHtml(String(doc.id))}" style="grid-column: 1 / -1;">
             <div class="user-contract-card-top">
               <span class="contract-slot-badge ${escapeHtml(slot.badgeClass)}">${escapeHtml(slot.badge)}</span>
-              ${recBadge}
-              <span class="user-contract-code">${escapeHtml(slot.code)}</span>
+              <span class="user-contract-rec-badge">✓ უნივერსალური შაბლონი (A, B, C)</span>
             </div>
             <div class="user-contract-title" data-contract-action="preview" role="button" tabindex="0">${escapeHtml(slot.shortTitle)}</div>
             <div class="user-contract-ready-meta">✓ აწყობილია: <strong>${escapeHtml(fields.full_name || '—')}</strong> · ${escapeHtml(fields.date)}</div>
+            <div class="user-contract-params-row" style="display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 10px;">
+              <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 240px;font-size:12px;color:#334155;font-weight:600;">
+                <span>მოთხოვნილი კატეგორია (პუნქტი 1.2):</span>
+                <select class="user-contract-category-select" style="padding:6px 8px;border:1px solid #cbd5e1;background:#fff;font-size:12.5px;color:#0f172a;">
+                  ${categoryOptionsHtml}
+                </select>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 220px;font-size:12px;color:#334155;font-weight:600;">
+                <span>დაშვების რეჟიმი (პუნქტი 1.3):</span>
+                <select class="user-contract-regime-select" style="padding:6px 8px;border:1px solid #cbd5e1;background:#fff;font-size:12.5px;color:#0f172a;">
+                  <option value="standard"${stdSelected}>სტანდარტული რეჟიმი</option>
+                  <option value="transitional"${transSelected}${transDisabled}>გარდამავალი / საგამონაკლისო რეჟიმი</option>
+                </select>
+              </label>
+            </div>
             <div class="user-contract-actions">
               <button type="button" class="user-contract-btn is-preview" data-contract-action="preview">ნახვა</button>
               <button type="button" class="user-contract-btn is-docx" data-contract-action="docx" title="აწყობილი Word (.docx) ფაილის ჩამოტვირთვა">⬇ Word</button>
@@ -2221,7 +2255,7 @@
 
       container.innerHTML = `
         <div class="user-contracts-header">
-          <div class="user-section-title">ხელშეკრულებები (აწყობილი პირის მონაცემებითა და თარიღით)</div>
+          <div class="user-section-title">საგამოცდო და სასერტიფიკაციო ხელშეკრულება (აწყობილი პირისა და განაცხადის მონაცემებით)</div>
           <div class="user-contracts-prefill-bar">
             <span><strong>სახელი, გვარი:</strong> ${escapeHtml(fields.full_name || '—')}</span>
             <span><strong>პ/ნ:</strong> ${escapeHtml(fields.personal_id || '—')}</span>
@@ -2234,13 +2268,16 @@
       `;
     }
 
-    function downloadUserContractDocx(doc, user) {
+    function downloadUserContractDocx(doc, user, category = null, regime = null) {
       if (!doc?.id || !user?.id) return;
       let token = '';
       try {
         token = localStorage.getItem('auth_token') || '';
       } catch {}
+      const fields = extractUserContractFields(user, category, regime);
       const params = new URLSearchParams({ user_id: String(user.id) });
+      if (fields.requested_category) params.set('category', fields.requested_category);
+      if (fields.admission_regime) params.set('regime', fields.admission_regime);
       if (token) params.set('token', token);
       const url = `${API_BASE}/documents/${doc.id}/download?${params.toString()}`;
       const a = document.createElement('a');
@@ -2251,7 +2288,7 @@
       document.body.removeChild(a);
     }
 
-    async function downloadUserContractPdf(doc, user, triggerBtn = null) {
+    async function downloadUserContractPdf(doc, user, triggerBtn = null, category = null, regime = null) {
       if (!doc || !user) return;
       if (triggerBtn) triggerBtn.disabled = true;
       try {
@@ -2328,7 +2365,7 @@
           pdf.text(clean, x, y);
         };
 
-        const assembledHtml = populateContractHtmlForUser(doc.content || '', user);
+        const assembledHtml = populateContractHtmlForUser(doc.content || '', user, category, regime);
         const tempContainer = document.createElement('div');
         tempContainer.innerHTML = assembledHtml;
 
@@ -2554,7 +2591,7 @@
           pdf.text(pageLabel, pageWidth - marginX - pageLabelWidth, footerY);
         }
 
-        const fields = extractUserContractFields(user);
+        const fields = extractUserContractFields(user, category, regime);
         const safeName = `${docTitle}_${fields.full_name || user.id}`
           .replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ')
           .replace(/\s+/g, '_')
@@ -2584,17 +2621,28 @@
       });
       docxBtn?.addEventListener('click', () => {
         if (activeContractModalState) {
-          downloadUserContractDocx(activeContractModalState.doc, activeContractModalState.user);
+          downloadUserContractDocx(
+            activeContractModalState.doc,
+            activeContractModalState.user,
+            activeContractModalState.category,
+            activeContractModalState.regime
+          );
         }
       });
       pdfBtn?.addEventListener('click', () => {
         if (activeContractModalState) {
-          void downloadUserContractPdf(activeContractModalState.doc, activeContractModalState.user, pdfBtn);
+          void downloadUserContractPdf(
+            activeContractModalState.doc,
+            activeContractModalState.user,
+            pdfBtn,
+            activeContractModalState.category,
+            activeContractModalState.regime
+          );
         }
       });
     }
 
-    function openUserContractPreviewModal(slotDef, doc, user) {
+    function openUserContractPreviewModal(slotDef, doc, user, category = null, regime = null) {
       ensureContractPreviewModalBound();
       const overlay = document.getElementById('userContractPreviewOverlay');
       const titleEl = document.getElementById('userContractPreviewTitle');
@@ -2603,8 +2651,14 @@
       const bodyEl = document.getElementById('userContractPreviewBody');
       if (!overlay || !bodyEl) return;
 
-      const fields = extractUserContractFields(user);
-      activeContractModalState = { slotDef, doc, user };
+      const fields = extractUserContractFields(user, category, regime);
+      activeContractModalState = {
+        slotDef,
+        doc,
+        user,
+        category: fields.requested_category,
+        regime: fields.admission_regime,
+      };
 
       if (titleEl) titleEl.textContent = doc.title || slotDef?.shortTitle || 'ხელშეკრულება';
       if (userMetaEl) {
@@ -2614,13 +2668,33 @@
         dateMetaEl.textContent = `თარიღი: ${fields.date}`;
       }
 
-      bodyEl.innerHTML = populateContractHtmlForUser(doc.content || '', user);
+      bodyEl.innerHTML = populateContractHtmlForUser(
+        doc.content || '',
+        user,
+        fields.requested_category,
+        fields.admission_regime
+      );
       openOverlay(overlay);
     }
 
     function mountUserContractsEvents(card, user) {
       const container = card.querySelector('.user-contracts-section');
       if (!container) return;
+
+      container.addEventListener('change', (event) => {
+        const catSelect = event.target.closest('.user-contract-category-select');
+        if (!catSelect) return;
+        const contractCard = catSelect.closest('.user-contract-card');
+        const regSelect = contractCard?.querySelector('.user-contract-regime-select');
+        if (!regSelect) return;
+        const transOpt = regSelect.querySelector('option[value="transitional"]');
+        if (catSelect.value === 'C') {
+          regSelect.value = 'standard';
+          if (transOpt) transOpt.disabled = true;
+        } else if (transOpt) {
+          transOpt.disabled = false;
+        }
+      });
 
       container.addEventListener('click', async (event) => {
         const actionEl = event.target.closest('[data-contract-action]');
@@ -2638,14 +2712,16 @@
         }
 
         const currentUser = cachedUsersById.get(String(card.dataset.id)) || user;
+        const selectedCategory = contractCard.querySelector('.user-contract-category-select')?.value || null;
+        const selectedRegime = contractCard.querySelector('.user-contract-regime-select')?.value || null;
         const action = actionEl.getAttribute('data-contract-action');
 
         if (action === 'preview') {
-          openUserContractPreviewModal(slotDef, doc, currentUser);
+          openUserContractPreviewModal(slotDef, doc, currentUser, selectedCategory, selectedRegime);
         } else if (action === 'docx') {
-          downloadUserContractDocx(doc, currentUser);
+          downloadUserContractDocx(doc, currentUser, selectedCategory, selectedRegime);
         } else if (action === 'pdf') {
-          await downloadUserContractPdf(doc, currentUser, actionEl);
+          await downloadUserContractPdf(doc, currentUser, actionEl, selectedCategory, selectedRegime);
         }
       });
     }

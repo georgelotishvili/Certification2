@@ -2124,6 +2124,16 @@ body.modal-open {
   box-shadow: 0 0 0 1px #1C468C;
 }
 
+#userStatementsOverlay .exam-category-option.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+#userStatementsOverlay .exam-category-option.is-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
 #userStatementsOverlay .exam-category-option input[type="checkbox"],
 #userStatementsOverlay .exam-confirm-option input[type="checkbox"] {
   position: static;

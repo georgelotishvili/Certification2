@@ -157,19 +157,17 @@ def create_app() -> FastAPI:
         return response
 
     from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents, taxonomy
-    from .routers import exam_schedules, planning_letters, ai_assistant, cert_bookings
+    from .routers import exam_schedules, planning_letters, ai_assistant
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
     app.include_router(exam_schedules.router, prefix="/admin", tags=["admin"])
     app.include_router(planning_letters.router, prefix="/admin", tags=["admin"])
-    app.include_router(cert_bookings.admin_router, prefix="/admin", tags=["admin-cert-bookings"])
     app.include_router(ai_assistant.router, prefix="/admin", tags=["admin-ai"])
     app.include_router(ai_assistant.public_router, tags=["public-ai"])
     app.include_router(taxonomy.router, prefix="/taxonomy", tags=["taxonomy"])
     app.include_router(users.router, prefix="/users", tags=["users"])
-    app.include_router(cert_bookings.user_router, prefix="/users", tags=["user-cert-bookings"])
     app.include_router(statements.router, prefix="/statements", tags=["statements"])
     app.include_router(registry.router, prefix="/certified-persons", tags=["registry"])
     app.include_router(reviews.router, prefix="/reviews", tags=["reviews"])

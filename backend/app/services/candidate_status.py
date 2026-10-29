@@ -108,6 +108,60 @@ def get_user_latest_requested_category(db: Session, user_id: int) -> str | None:
     return None
 
 
+def parse_statement_regime(message: str | None) -> str | None:
+    """Extract admission regime ('standard' or 'transitional') from an exam admission statement."""
+    if not message:
+        return None
+    text = str(message)
+    cat = parse_statement_category(text)
+    if cat == "C":
+        return "standard"
+    for line in text.splitlines():
+        s = line.strip()
+        if "☑" in s or "დაშვების რეჟიმი" in s:
+            if "გარდამავალი" in s or "საგამონაკლისო" in s or "უდიპლომოდ" in s:
+                return "transitional"
+            if "სტანდარტული" in s:
+                return "standard"
+    if "გარდამავალი / საგამონაკლისო რეჟიმი" in text or "საგამონაკლისო რეჟიმი" in text:
+        return "transitional"
+    if "სტანდარტული რეჟიმი" in text:
+        return "standard"
+    if cat:
+        return "standard"
+    return None
+
+
+def get_latest_admission_regimes(db: Session) -> dict[int, str]:
+    """Return mapping of user_id -> latest parsed exam statement admission regime ('standard' or 'transitional')."""
+    stmt_rows = db.execute(
+        select(Statement.user_id, Statement.message)
+        .order_by(Statement.created_at.desc(), Statement.id.desc())
+    ).all()
+    result: dict[int, str] = {}
+    for uid, msg in stmt_rows:
+        if uid in result:
+            continue
+        parsed = parse_statement_regime(msg)
+        if parsed:
+            result[uid] = parsed
+    return result
+
+
+def get_user_latest_admission_regime(db: Session, user_id: int) -> str | None:
+    """Return the latest parsed exam statement admission regime for a single user."""
+    stmt_messages = db.scalars(
+        select(Statement.message)
+        .where(Statement.user_id == user_id)
+        .order_by(Statement.created_at.desc(), Statement.id.desc())
+    ).all()
+    for msg in stmt_messages:
+        parsed = parse_statement_regime(msg)
+        if parsed:
+            return parsed
+    return None
+
+
 def sync_all_user_candidates(
     db: Session,
     exam_histories: dict[int, dict[str, Any]],

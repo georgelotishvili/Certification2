@@ -444,6 +444,7 @@ class UserOut(BaseModel):
     candidate_status: str | None = None
     candidate_category: str | None = None
     requested_category: str | None = None
+    token: str | None = None
 
 
 class PublicUserOut(BaseModel):

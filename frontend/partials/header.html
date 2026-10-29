@@ -163,14 +163,6 @@
     </button>
   </div>
 
-  <!-- Central Certificate Appointment Booking Button (Hanging ~1/4 below Header) -->
-  <div class="cert-booking-header-wrap" id="certBookingHeaderWrap" hidden>
-    <button type="button" class="cert-booking-header-btn is-pulsing" id="certBookingHeaderBtn">
-      <span class="cert-booking-header-dot" aria-hidden="true"></span>
-      <span class="cert-booking-header-text" id="certBookingHeaderText">სერტიფიკატის აღების დაჯავშნა</span>
-    </button>
-  </div>
-
   <!-- Statements Modal -->
   <div class="results-overlay" id="userStatementsOverlay" aria-hidden="true">
     <div class="results-modal" role="dialog" aria-modal="true" aria-labelledby="userStatementsTitle">
@@ -215,20 +207,34 @@
                 <span class="exam-category-text"><strong>1) კატეგორია A</strong> — შენობა-ნაგებობის არქიტექტორი</span>
               </label>
               <label class="exam-category-option">
-                <input type="checkbox" name="exam_category" value="2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
-                <span class="exam-category-text"><strong>2) კატეგორია C ან A</strong> (ქულების ან გამოცდილების/განათლების შესაბამისად) — არქიტექტურული პროექტის ექსპერტი, ხოლო თუ ვერ დაკმაყოფილდა C კატეგორიის მოთხოვნები, მაგრამ დაკმაყოფილდა A კატეგორიის მოთხოვნები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
+                <input type="checkbox" name="exam_category" value="2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად) — პრიორიტეტულად ვითხოვ C კატეგორიას, ხოლო თუ ვერიფიკაციის ან გამოცდის შედეგად დავაკმაყოფილებ მხოლოდ A კატეგორიის მოთხოვნებს (≥70% თითოეულ თავში/ქვეთავში და თითოეულ პროექტზე, მაქსიმუმ 2 არასწორი მონიშვნით), თანახმა ვარ მომენიჭოს A კატეგორია (ვადასტურებ, რომ ამჟამად არ ვფლობ მოქმედ A კატეგორიის სერტიფიკატს)" />
+                <span class="exam-category-text"><strong>2) კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად)</strong> — პრიორიტეტულად ვითხოვ C კატეგორიას, ხოლო თუ ვერიფიკაციის ან გამოცდის შედეგად დავაკმაყოფილებ მხოლოდ A კატეგორიის მოთხოვნებს (≥70% თითოეულ თავში/ქვეთავში და თითოეულ პროექტზე, მაქსიმუმ 2 არასწორი მონიშვნით), თანახმა ვარ მომენიჭოს A კატეგორია <em>(ვადასტურებ, რომ ამჟამად არ ვფლობ მოქმედ A კატეგორიის სერტიფიკატს)</em></span>
               </label>
               <label class="exam-category-option">
-                <input type="checkbox" name="exam_category" value="3) კატეგორია B ან A (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)" />
-                <span class="exam-category-text"><strong>3) კატეგორია B ან A</strong> (ქულების შესაბამისად) — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი, ხოლო თუ ვერ დაკმაყოფილდა B კატეგორიის ქულები, მაგრამ დაკმაყოფილდა A კატეგორიის ქულები — შენობა-ნაგებობის არქიტექტორი (კატეგორია A)</span>
+                <input type="checkbox" name="exam_category" value="3) კატეგორია B ან A (ქულების შესაბამისად) — პრიორიტეტულად ვითხოვ B კატეგორიას, ხოლო თუ გამოცდაზე ვერ გადავლახავ 75%-იან ზღვარს, მაგრამ დავაკმაყოფილებ A კატეგორიის ზღვარს (≥70% თითოეულ თავში/ქვეთავში და თითოეულ პროექტზე, მაქსიმუმ 2 არასწორი მონიშვნით), თანახმა ვარ მომენიჭოს A კატეგორია (ვადასტურებ, რომ ამჟამად არ ვფლობ მოქმედ A კატეგორიის სერტიფიკატს)" />
+                <span class="exam-category-text"><strong>3) კატეგორია B ან A (ქულების შესაბამისად)</strong> — პრიორიტეტულად ვითხოვ B კატეგორიას, ხოლო თუ გამოცდაზე ვერ გადავლახავ 75%-იან ზღვარს, მაგრამ დავაკმაყოფილებ A კატეგორიის ზღვარს (≥70% თითოეულ თავში/ქვეთავში და თითოეულ პროექტზე, მაქსიმუმ 2 არასწორი მონიშვნით), თანახმა ვარ მომენიჭოს A კატეგორია <em>(ვადასტურებ, რომ ამჟამად არ ვფლობ მოქმედ A კატეგორიის სერტიფიკატს)</em></span>
               </label>
               <label class="exam-category-option">
-                <input type="checkbox" name="exam_category" value="4) კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი" />
-                <span class="exam-category-text"><strong>4) კატეგორია B</strong> — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი</span>
+                <input type="checkbox" name="exam_category" value="4) კატეგორია B — მხოლოდ არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (A კატეგორიაზე ჩამონაცვლების გარეშე)" />
+                <span class="exam-category-text"><strong>4) კატეგორია B</strong> — მხოლოდ არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (A კატეგორიაზე ჩამონაცვლების გარეშე)</span>
               </label>
               <label class="exam-category-option">
-                <input type="checkbox" name="exam_category" value="5) კატეგორია C — არქიტექტურული პროექტის ექსპერტი" />
-                <span class="exam-category-text"><strong>5) კატეგორია C</strong> — არქიტექტურული პროექტის ექსპერტი</span>
+                <input type="checkbox" name="exam_category" value="5) კატეგორია C — მხოლოდ არქიტექტურული პროექტის ექსპერტი (A კატეგორიაზე ჩამონაცვლების გარეშე)" />
+                <span class="exam-category-text"><strong>5) კატეგორია C</strong> — მხოლოდ არქიტექტურული პროექტის ექსპერტი (A კატეგორიაზე ჩამონაცვლების გარეშე)</span>
+              </label>
+            </div>
+            <div class="statement-field-heading" style="margin-top: 14px;">
+              <span class="statement-field-label">დაშვების რეჟიმი (A და B კატეგორიებისთვის)</span>
+              <span class="statement-required-badge">სავალდებულო</span>
+            </div>
+            <div class="exam-category-list" role="group" aria-label="დაშვების რეჟიმი">
+              <label class="exam-category-option is-selected">
+                <input type="checkbox" name="exam_regime" value="სტანდარტული რეჟიმი (უმაღლესი არქიტექტურული განათლების დიპლომით)" checked />
+                <span class="exam-category-text"><strong>სტანდარტული რეჟიმი</strong> (უმაღლესი არქიტექტურული განათლების დიპლომით)</span>
+              </label>
+              <label class="exam-category-option" id="examRegimeTransitionalOption">
+                <input type="checkbox" name="exam_regime" value="გარდამავალი / საგამონაკლისო რეჟიმი (უდიპლომოდ — №134 დადგენილების მე-12 მუხლით, მხოლოდ A ან B კატეგორიისთვის)" />
+                <span class="exam-category-text"><strong>გარდამავალი / საგამონაკლისო რეჟიმი</strong> (უდიპლომოდ — №134 დადგენილების მე-12 მუხლით, მხოლოდ A ან B კატეგორიისთვის; C კატეგორიაზე გარდამავალი რეჟიმი არ ვრცელდება)</span>
               </label>
             </div>
             <div class="exam-app-warning" role="note">
@@ -339,7 +345,7 @@
             </div>
             <label class="exam-confirm-option" id="examConfirmLabel">
               <input type="checkbox" id="examConfirmCheckbox" name="exam_confirm" />
-              <span class="exam-category-text">ვადასტურებ, რომ გავეცანი საიტზე gipc.org.ge გამოქვეყნებულ სერტიფიცირების პირობებს, წარმოდგენილი დოკუმენტები უტყუარია, ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები, წარვადგინო შეფასებისთვის საჭირო ნებისმიერი ინფორმაცია და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.</span>
+              <span class="exam-category-text">ვადასტურებ, რომ გავეცანი და ვეთანხმები ვებგვერდზე (gipc.org.ge) გამოქვეყნებულ სერტიფიკაციის სქემას, სერტიფიკაციისა და გამოცდის ჩატარების პროცედურებს, კონფიდენციალურობის პოლიტიკასა და საგამოცდო და სასერტიფიკაციო ხელშეკრულების პირობებს, წარმოდგენილი დოკუმენტები უტყუარია, ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები, წარვადგინო შეფასებისთვის საჭირო ნებისმიერი ინფორმაცია და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.</span>
             </label>
             <div class="exam-app-warning exam-app-deadline-warning" role="note">
               <strong>განაცხადის განხილვის ვადა:</strong> განაცხადი განიხილება წარდგენიდან არაუმეტეს 10 სამუშაო დღის ვადაში, რის შესახებაც გეცნობებათ ელექტრონულად.
@@ -401,86 +407,6 @@
             <span class="statement-history-count" id="userStatementsCount" aria-live="polite">0</span>
           </div>
           <div id="userStatementsList" class="statements-list" role="list"></div>
-        </section>
-      </div>
-    </div>
-  </div>
-
-  <!-- Certificate Appointment Booking Modal -->
-  <div class="results-overlay cert-booking-overlay" id="certBookingOverlay" aria-hidden="true">
-    <div class="results-modal cert-booking-modal" role="dialog" aria-modal="true" aria-labelledby="certBookingModalTitle">
-      <div class="results-modal-head">
-        <div class="results-modal-titles">
-          <h2 id="certBookingModalTitle">სერტიფიკატის აღების დაჯავშნა</h2>
-          <div class="results-modal-meta">
-            <span class="meta-item" id="certBookingModalMeta"></span>
-            <span class="meta-item cert-booking-window-pill" id="certBookingWindowPill" hidden></span>
-          </div>
-        </div>
-        <div class="results-modal-actions">
-          <button type="button" class="modal-close" id="certBookingModalClose" aria-label="დახურვა">×</button>
-        </div>
-      </div>
-      <div class="results-modal-body cert-booking-modal-body">
-        <!-- Active Booking Banner -->
-        <div class="cert-booking-active-banner" id="certBookingActiveBanner" hidden>
-          <div class="cert-booking-active-info">
-            <div class="cert-booking-active-badge">აქტიური ჯავშანი</div>
-            <div class="cert-booking-active-datetime" id="certBookingActiveDateTime">—</div>
-            <div class="cert-booking-active-address">მისამართი: ქ. თბილისი, მირიან მეფის ქ. №98, მე-2 სართული, საოფისე ფართი №6</div>
-          </div>
-          <div class="cert-booking-active-actions">
-            <button type="button" class="cert-booking-btn-secondary" id="certBookingChangeTrigger">დროის შეცვლა</button>
-            <button type="button" class="cert-booking-btn-danger" id="certBookingCancelTrigger">ჯავშნის გაუქმება</button>
-          </div>
-        </div>
-
-        <!-- Ineligible / Info Notice -->
-        <div class="cert-booking-notice" id="certBookingNotice" hidden></div>
-
-        <!-- Calendar & Slot Picker Section -->
-        <div class="cert-booking-picker-wrap" id="certBookingPickerWrap" hidden>
-          <div class="cert-booking-step-box">
-            <div class="cert-booking-step-head">
-              <div class="cert-booking-step-title">1. აირჩიეთ შეხვედრის დღე</div>
-              <div class="cert-booking-month-nav">
-                <button type="button" class="cert-cal-nav-btn" id="certCalPrevMonth" aria-label="წინა თვე">‹</button>
-                <span class="cert-cal-month-label" id="certCalMonthLabel">—</span>
-                <button type="button" class="cert-cal-nav-btn" id="certCalNextMonth" aria-label="შემდეგი თვე">›</button>
-              </div>
-            </div>
-            <div class="cert-cal-weekdays">
-              <span>ორშ</span><span>სამ</span><span>ოთხ</span><span>ხუთ</span><span>პარ</span><span class="is-weekend">შაბ</span><span class="is-weekend">კვი</span>
-            </div>
-            <div class="cert-cal-grid" id="certCalGrid"></div>
-            <div class="cert-cal-legend">
-              <span class="legend-item"><i class="dot is-available"></i> ხელმისაწვდომი დღე</span>
-              <span class="legend-item"><i class="dot is-selected"></i> არჩეული დღე</span>
-              <span class="legend-item"><i class="dot is-booked"></i> თქვენი ჯავშანი</span>
-              <span class="legend-item"><i class="dot is-disabled"></i> მიუწვდომელი / შაბათ-კვირა</span>
-            </div>
-          </div>
-
-          <div class="cert-booking-step-box" id="certSlotStepBox">
-            <div class="cert-booking-step-head">
-              <div class="cert-booking-step-title" id="certSlotStepTitle">2. აირჩიეთ საათი (11:00 – 16:00, 20-წუთიანი შუალედით)</div>
-              <span class="cert-slot-selected-date" id="certSlotSelectedDateLabel">აირჩიეთ დღე კალენდარში</span>
-            </div>
-            <div class="cert-slots-grid" id="certSlotsGrid"></div>
-            <div class="cert-booking-submit-row">
-              <div class="cert-booking-selection-preview" id="certBookingSelectionPreview">დღე და საათი არ არის არჩეული</div>
-              <button type="button" class="cert-booking-btn-primary" id="certBookingSubmitBtn" disabled>ჯავშნის დადასტურება</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Booking History Section -->
-        <section class="cert-booking-history" id="certBookingHistorySection" aria-labelledby="certBookingHistoryTitle">
-          <div class="statement-history-head">
-            <h3 id="certBookingHistoryTitle">ჯავშნების ისტორია</h3>
-            <span class="statement-history-count" id="certBookingHistoryCount">0</span>
-          </div>
-          <div class="cert-booking-history-list" id="certBookingHistoryList" role="list"></div>
         </section>
       </div>
     </div>

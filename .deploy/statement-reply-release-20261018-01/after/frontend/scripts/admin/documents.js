@@ -1,52 +1,12 @@
 (function (global) {
   const CONTRACT_SLOT_DEFS = [
     {
-      key: 'exam',
-      code: 'GIPC-CON-004',
-      badge: 'საგამოცდო',
+      key: 'universal',
+      code: '',
+      badge: 'ერთიანი ხელშეკრულება',
       badgeClass: 'is-exam',
-      title: 'საგამოცდო ხელშეკრულება',
-      subtitle: 'კანდიდატის საგამოცდო მომსახურების ხელშეკრულება (GIPC-CON-004)',
-    },
-    {
-      key: 'cert_a',
-      code: 'GIPC-CON-001',
-      badge: 'კატეგორია A',
-      badgeClass: 'is-cert-a',
-      title: 'სასერტიფიკაციო ხელშეკრულება — კატეგორია A',
-      subtitle: 'შენობა-ნაგებობის არქიტექტორი (GIPC-CON-001)',
-    },
-    {
-      key: 'cert_a_transitional',
-      code: 'GIPC-CON-001 (გარდამავალი)',
-      badge: 'კატეგორია A (გარდამავალი)',
-      badgeClass: 'is-cert-a',
-      title: 'სასერტიფიკაციო ხელშეკრულება — კატეგორია A (საგამონაკლისო)',
-      subtitle: 'შენობა-ნაგებობის არქიტექტორი — გარდამავალი წესით (GIPC-CON-001)',
-    },
-    {
-      key: 'cert_b',
-      code: 'GIPC-CON-002',
-      badge: 'კატეგორია B',
-      badgeClass: 'is-cert-b',
-      title: 'სასერტიფიკაციო ხელშეკრულება — კატეგორია B',
-      subtitle: 'არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (GIPC-CON-002)',
-    },
-    {
-      key: 'cert_b_transitional',
-      code: 'GIPC-CON-002 (გარდამავალი)',
-      badge: 'კატეგორია B (გარდამავალი)',
-      badgeClass: 'is-cert-b',
-      title: 'სასერტიფიკაციო ხელშეკრულება — კატეგორია B (საგამონაკლისო)',
-      subtitle: 'შემსწავლელი სპეციალისტი — გარდამავალი წესით (GIPC-CON-002)',
-    },
-    {
-      key: 'cert_c',
-      code: 'GIPC-CON-003',
-      badge: 'კატეგორია C',
-      badgeClass: 'is-cert-c',
-      title: 'სასერტიფიკაციო ხელშეკრულება — კატეგორია C',
-      subtitle: 'არქიტექტურული პროექტის ექსპერტი (GIPC-CON-003)',
+      title: 'საგამოცდო და სასერტიფიკაციო ხელშეკრულება',
+      subtitle: 'კანდიდატის ერთიანი საგამოცდო და სასერტიფიკაციო მომსახურების ხელშეკრულება (A, B, C კატეგორიები)',
     },
   ];
 
@@ -220,7 +180,7 @@
       if (byType) return byType;
       return (
         state.documents.find(
-          (d) => !d.contract_type && d.title && d.title.includes(slotDef.code)
+          (d) => !d.contract_type && d.title && d.title.includes('საგამოცდო და სასერტიფიკაციო ხელშეკრულება')
         ) || null
       );
     }
@@ -245,7 +205,6 @@
           <div class="contract-slot-card" data-contract-slot="${escapeHtml(slot.key)}">
             <div class="contract-slot-head">
               <span class="contract-slot-badge ${escapeHtml(slot.badgeClass)}">${escapeHtml(slot.badge)}</span>
-              <span class="contract-slot-code">${escapeHtml(slot.code)}</span>
             </div>
             <div class="contract-slot-title">${escapeHtml(slot.title)}</div>
             <div class="contract-slot-subtitle">${escapeHtml(slot.subtitle)}</div>
