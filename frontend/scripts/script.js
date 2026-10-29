@@ -1032,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAuthUI();
       updateBanner();
       updateAdminLinkVisibility();
-      document.dispatchEvent(new CustomEvent('auth:logout'));
+
       notify('გასვლა შესრულებულია', 'success');
       closeModal();
       void revokeServerSession(token);
