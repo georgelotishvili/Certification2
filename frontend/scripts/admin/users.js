@@ -2402,85 +2402,230 @@
           }
         };
 
-        const drawFormattedLine = (lineText, x, y, targetWidth, isLastLine, align = 'justify') => {
-          const clean = String(lineText || '').trim();
-          if (!clean) return;
-          if (align === 'center') {
-            const w = pdf.getTextWidth(clean);
-            pdf.text(clean, x + Math.max(0, (targetWidth - w) / 2), y);
-            return;
+        const normalizePdfInlineText = (str) =>
+          String(str || '')
+            .replace(/([ა-ჰa-zA-Z0-9])\/([ა-ჰa-zA-Z0-9])/g, '$1 / $2')
+            .replace(/\s+/g, ' ');
+
+        let nextInlineSegId = 1;
+        const extractInlineSegments = (domNode, inheritedBold = false, activeSegId = 0) => {
+          if (!domNode) return [];
+          if (domNode.nodeType === 3) {
+            const txt = normalizePdfInlineText(domNode.nodeValue || '');
+            return txt ? [{ text: txt, bold: Boolean(inheritedBold), segId: activeSegId }] : [];
           }
-          if (align === 'justify' && !isLastLine && !clean.includes('___')) {
-            const words = clean.split(/\s+/).filter(Boolean);
-            if (words.length > 1) {
-              const wordsWidth = words.reduce((sum, w) => sum + pdf.getTextWidth(w), 0);
-              const extra = targetWidth - wordsWidth;
-              if (extra > 0) {
-                const gap = extra / (words.length - 1);
-                let curX = x;
-                words.forEach((word) => {
-                  pdf.text(word, curX, y);
-                  curX += pdf.getTextWidth(word) + gap;
-                });
-                return;
-              }
-            }
+          if (domNode.nodeType !== 1) return [];
+          const tag = (domNode.tagName || '').toUpperCase();
+          if (tag === 'BR') {
+            return [{ text: ' ', bold: Boolean(inheritedBold), segId: activeSegId }];
           }
-          pdf.text(clean, x, y);
+          const isBoldTag = tag === 'STRONG' || tag === 'B';
+          const isBold = Boolean(inheritedBold || isBoldTag);
+          const segId = isBoldTag && !inheritedBold ? nextInlineSegId++ : activeSegId;
+          const out = [];
+          Array.from(domNode.childNodes || []).forEach((child) => {
+            out.push(...extractInlineSegments(child, isBold, segId));
+          });
+          return out;
         };
 
-        const assembledHtml = populateContractHtmlForUser(doc.content || '', user, category, regime);
-        const tempContainer = document.createElement('div');
-        tempContainer.innerHTML = assembledHtml;
-
-        const docTitle = String(doc.title || 'ხელშეკრულება').replace(/\s+/g, ' ').trim();
-        const hasOwnH1 = Boolean(tempContainer.querySelector('h1'));
-
-        if (!hasOwnH1) {
-          pdf.setFont(fontName, 'bold');
-          pdf.setFontSize(13.5);
-          pdf.setTextColor(0, 0, 0);
-          const titleLines = pdf.splitTextToSize(docTitle, usableWidth);
-          titleLines.forEach((line, idx) => {
-            ensureSpace(19);
-            drawFormattedLine(line, marginX, cursorY, usableWidth, idx === titleLines.length - 1, 'center');
-            cursorY += 19;
+        const mergeWordParts = (parts) => {
+          const merged = [];
+          parts.forEach((p) => {
+            if (!p || !p.text) return;
+            const prev = merged[merged.length - 1];
+            if (prev && prev.bold === Boolean(p.bold) && prev.segId === p.segId) {
+              prev.text += p.text;
+            } else {
+              merged.push({ text: p.text, bold: Boolean(p.bold), segId: p.segId || 0 });
+            }
           });
-          cursorY += 10;
-        }
+          return {
+            parts: merged,
+            plainText: merged.map((m) => m.text).join(''),
+          };
+        };
 
-        const writeWrappedBlock = (text, opts = {}) => {
-          const normalized = String(text || '')
-            .replace(/([ა-ჰa-zA-Z0-9])\/([ა-ჰa-zA-Z0-9])/g, '$1 / $2')
-            .replace(/\s+/g, ' ')
-            .trim();
-          if (!normalized) return;
+        const tokenizeSegmentsToWords = (segments) => {
+          const words = [];
+          let currentParts = [];
+          (segments || []).forEach((seg) => {
+            if (!seg || !seg.text) return;
+            const pieces = String(seg.text).match(/\S+|\s+/g) || [];
+            pieces.forEach((piece) => {
+              if (/^\s+$/.test(piece)) {
+                if (currentParts.length > 0) {
+                  words.push(mergeWordParts(currentParts));
+                  currentParts = [];
+                }
+              } else {
+                currentParts.push({
+                  text: piece,
+                  bold: Boolean(seg.bold),
+                  segId: seg.segId || 0,
+                });
+              }
+            });
+          });
+          if (currentParts.length > 0) {
+            words.push(mergeWordParts(currentParts));
+          }
+          return words;
+        };
+
+        const measureWordWidth = (word) => {
+          let w = 0;
+          word.parts.forEach((part) => {
+            pdf.setFont(fontName, part.bold ? 'bold' : 'normal');
+            w += pdf.getTextWidth(part.text);
+          });
+          return w;
+        };
+
+        const coalesceLineRuns = (lineItems) => {
+          const runs = [];
+          lineItems.forEach((item, wordIdx) => {
+            if (wordIdx > 0) {
+              const prevRun = runs[runs.length - 1];
+              const nextPart = item.word.parts[0];
+              const sameBoldSeg = Boolean(
+                prevRun &&
+                  nextPart &&
+                  prevRun.bold &&
+                  nextPart.bold &&
+                  prevRun.segId === nextPart.segId
+              );
+              if (sameBoldSeg) {
+                prevRun.text += ' ';
+              } else if (prevRun && !prevRun.bold) {
+                prevRun.text += ' ';
+              } else {
+                runs.push({ text: ' ', bold: false, segId: 0 });
+              }
+            }
+            item.word.parts.forEach((part) => {
+              const prev = runs[runs.length - 1];
+              if (prev && prev.bold === Boolean(part.bold) && prev.segId === (part.segId || 0)) {
+                prev.text += part.text;
+              } else {
+                runs.push({
+                  text: part.text,
+                  bold: Boolean(part.bold),
+                  segId: part.segId || 0,
+                });
+              }
+            });
+          });
+          return runs;
+        };
+
+        const drawSegmentedLine = (lineItems, x, y, targetWidth, isLastLine, align = 'justify') => {
+          if (!lineItems || !lineItems.length) return;
+          const linePlain = lineItems.map((it) => it.word.plainText).join(' ');
+          if (!linePlain.trim()) return;
+
+          if (align === 'justify' && !isLastLine && lineItems.length > 1 && !linePlain.includes('___')) {
+            const wordsWidth = lineItems.reduce((sum, it) => sum + it.width, 0);
+            const extra = targetWidth - wordsWidth;
+            if (extra > 0) {
+              const gap = extra / (lineItems.length - 1);
+              let curX = x;
+              lineItems.forEach((it) => {
+                it.word.parts.forEach((part) => {
+                  pdf.setFont(fontName, part.bold ? 'bold' : 'normal');
+                  pdf.text(part.text, curX, y);
+                  curX += pdf.getTextWidth(part.text);
+                });
+                curX += gap;
+              });
+              return;
+            }
+          }
+
+          const runs = coalesceLineRuns(lineItems);
+          let startX = x;
+          if (align === 'center') {
+            const totalW = runs.reduce((sum, r) => {
+              pdf.setFont(fontName, r.bold ? 'bold' : 'normal');
+              return sum + pdf.getTextWidth(r.text);
+            }, 0);
+            startX = x + Math.max(0, (targetWidth - totalW) / 2);
+          }
+          let curX = startX;
+          runs.forEach((run) => {
+            pdf.setFont(fontName, run.bold ? 'bold' : 'normal');
+            pdf.text(run.text, curX, y);
+            curX += pdf.getTextWidth(run.text);
+          });
+        };
+
+        const writeWrappedSegments = (segments, opts = {}) => {
           const {
             x = marginX,
             width = usableWidth,
-            fontStyle = 'normal',
             fontSize = 10.5,
             lineHeight = 16,
             spaceBefore = 0,
             spaceAfter = 7,
             align = 'justify',
             bottomBorder = false,
+            keepWithNext = false,
           } = opts;
 
-          if (spaceBefore > 0 && cursorY > marginTop + 10) cursorY += spaceBefore;
-          pdf.setFont(fontName, fontStyle);
           pdf.setFontSize(fontSize);
           pdf.setTextColor(0, 0, 0);
+          pdf.setFont(fontName, 'normal');
+          const spaceW = pdf.getTextWidth(' ');
 
-          const lines = pdf.splitTextToSize(normalized, width);
+          const rawWords = tokenizeSegmentsToWords(segments);
+          if (!rawWords.length) return;
+
+          const words = [];
+          rawWords.forEach((w) => {
+            const ww = measureWordWidth(w);
+            if (ww > width && w.parts.length === 1) {
+              const onlyBold = Boolean(w.parts[0].bold);
+              pdf.setFont(fontName, onlyBold ? 'bold' : 'normal');
+              const pieces = pdf.splitTextToSize(w.plainText, width);
+              pieces.forEach((pc) => {
+                const sub = { parts: [{ text: pc, bold: onlyBold }], plainText: pc };
+                words.push({ word: sub, width: measureWordWidth(sub) });
+              });
+            } else {
+              words.push({ word: w, width: ww });
+            }
+          });
+          if (!words.length) return;
+
+          const lines = [];
+          let currentLine = [];
+          let currentLineWidth = 0;
+          words.forEach((item) => {
+            if (!currentLine.length) {
+              currentLine.push(item);
+              currentLineWidth = item.width;
+            } else if (currentLineWidth + spaceW + item.width <= width) {
+              currentLine.push(item);
+              currentLineWidth += spaceW + item.width;
+            } else {
+              lines.push(currentLine);
+              currentLine = [item];
+              currentLineWidth = item.width;
+            }
+          });
+          if (currentLine.length) {
+            lines.push(currentLine);
+          }
           if (!lines.length) return;
-          if (fontStyle === 'bold' && spaceBefore >= 8) {
+
+          if (spaceBefore > 0 && cursorY > marginTop + 10) cursorY += spaceBefore;
+          if (keepWithNext && spaceBefore >= 8) {
             ensureSpace(Math.min(lines.length * lineHeight + 24, 90));
           }
-          lines.forEach((line, idx) => {
+          lines.forEach((lineItems, idx) => {
             ensureSpace(lineHeight);
             const isLast = idx === lines.length - 1;
-            drawFormattedLine(line, x, cursorY, width, isLast, align);
+            drawSegmentedLine(lineItems, x, cursorY, width, isLast, align);
             cursorY += lineHeight;
           });
           if (bottomBorder) {
@@ -2491,6 +2636,34 @@
           }
           cursorY += spaceAfter;
         };
+
+        const writeWrappedBlock = (text, opts = {}) => {
+          const normalized = normalizePdfInlineText(text || '').trim();
+          if (!normalized) return;
+          const isBoldBlock = opts.fontStyle === 'bold';
+          writeWrappedSegments([{ text: normalized, bold: isBoldBlock }], {
+            ...opts,
+            keepWithNext: isBoldBlock,
+          });
+        };
+
+        const assembledHtml = populateContractHtmlForUser(doc.content || '', user, category, regime);
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = assembledHtml;
+
+        const docTitle = String(doc.title || 'ხელშეკრულება').replace(/\s+/g, ' ').trim();
+        const hasOwnH1 = Boolean(tempContainer.querySelector('h1'));
+
+        if (!hasOwnH1) {
+          writeWrappedBlock(docTitle, {
+            fontStyle: 'bold',
+            fontSize: 13.5,
+            lineHeight: 19,
+            spaceBefore: 0,
+            spaceAfter: 10,
+            align: 'center',
+          });
+        }
 
         const renderTableNode = (tableEl) => {
           const rows = Array.from(tableEl.querySelectorAll('tr'));
@@ -2620,18 +2793,26 @@
                 const liText = (li.textContent || '').replace(/\s+/g, ' ').trim();
                 if (!liText) return;
                 const prefix = tag === 'OL' ? `${idx + 1}. ` : '– ';
-                writeWrappedBlock(`${prefix}${liText}`, {
+                const isFieldLi =
+                  liText.includes('___') ||
+                  /^(?:მოთხოვნილი\s+კატეგორია|დაშვების\s+რეჟიმი|სახელი|პირადი|ტელეფონი|ელ\.?\s*ფოსტა|უნიკალური|თარიღი)\s*:/.test(liText);
+                const liSegments = [{ text: prefix, bold: false, segId: 0 }, ...extractInlineSegments(li, false)];
+                writeWrappedSegments(liSegments, {
                   x: marginX,
                   width: usableWidth,
                   spaceAfter: 5,
-                  align: 'justify',
+                  align: isFieldLi ? 'left' : 'justify',
                 });
               });
               cursorY += 2;
               return;
             }
-            const isLeftField = text.includes('___') || /^(სახელი|პირადი|ტელეფონი|ელ\.?\s*ფოსტა|თარიღი|ხელმოწერა|საიდენტიფიკაციო|იურიდიული|წარმომადგენელი)/.test(text);
-            writeWrappedBlock(text, {
+            const inlineStyle = (node.getAttribute('style') || '').toLowerCase();
+            const isLeftField =
+              inlineStyle.includes('left') ||
+              text.includes('___') ||
+              /^(სახელი|პირადი|ტელეფონი|ელ\.?\s*ფოსტა|უნიკალური|მოთხოვნილი\s+კატეგორია|დაშვების\s+რეჟიმი|თარიღი|ხელმოწერა|საიდენტიფიკაციო|მისამართი|ვებგვერდი|იურიდიული|წარმომადგენელი|დირექტორი)/.test(text);
+            writeWrappedSegments(extractInlineSegments(node, false), {
               align: isLeftField ? 'left' : 'justify',
             });
           });

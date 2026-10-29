@@ -1016,22 +1016,12 @@ document.addEventListener('DOMContentLoaded', () => {
       try { document.dispatchEvent(new CustomEvent('auth:logout')); } catch {}
     }
 
-    function _legacyClearLocalSessionNoop() {
-      try { setLoggedIn(false); } catch {}
-      try { localStorage.removeItem('auth_token'); } catch {}
-      try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
-      removeGeorgianNameOverlay();
-    }
-
     function performLogout() {
       if (!isLoggedIn()) return;
       if (!confirm('ნამდვილად გსურთ გასვლა?')) return;
       let token = '';
       try { token = localStorage.getItem('auth_token') || ''; } catch {}
       clearLocalSession();
-      updateAuthUI();
-      updateBanner();
-      updateAdminLinkVisibility();
 
       notify('გასვლა შესრულებულია', 'success');
       closeModal();
