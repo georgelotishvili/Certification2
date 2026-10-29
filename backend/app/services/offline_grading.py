@@ -6,7 +6,7 @@ import json
 from fastapi import HTTPException
 from sqlalchemy import select, update
 
-from ..models import Exam, OfflineExamAttempt, OfflineExamContent, Session as ExamSession
+from ..models import Exam, OfflineExamAttempt, OfflineExamContent, PreparedExamMaterial, Session as ExamSession
 
 
 def lock_exam_content(db, exam_id):
@@ -19,10 +19,111 @@ def lock_project_content(db, model, project_id):
                .execution_options(synchronize_session=False))
 
 
-def capture_theory_content(db, attempt, session):
+def get_prepared_theory_material(db, session_id: int) -> PreparedExamMaterial | None:
+    return db.scalar(
+        select(PreparedExamMaterial).where(PreparedExamMaterial.session_id == session_id)
+    )
+
+
+def prepare_theory_content(db, session) -> dict:
+    existing = get_prepared_theory_material(db, session.id)
+    if existing is not None:
+        return json.loads(existing.snapshot)
     from .exam_lifecycle import build_exam_snapshot
     lock_exam_content(db, session.exam_id)
-    snapshot, _ = build_exam_snapshot(db, session, finished_at=attempt.started_at)
+    snapshot, _ = build_exam_snapshot(db, session, finished_at=session.started_at)
+    selected = {qid for ids in json.loads(session.selected_map or "{}").values() for qid in ids}
+    captured = {question["id"] for block in theory_blocks(snapshot) for question in block["questions"]}
+    if not selected or selected != captured:
+        raise HTTPException(409, "Prepared exam content changed; download the materials again")
+    row = PreparedExamMaterial(
+        user_id=session.user_id,
+        stage="theory",
+        session_id=session.id,
+        stage_grant_id=None,
+        snapshot=json.dumps(snapshot, ensure_ascii=False),
+    )
+    db.add(row)
+    db.flush()
+    return snapshot
+
+
+def get_prepared_project_material(db, user_id: int, stage: str, stage_grant_id: int | None) -> PreparedExamMaterial | None:
+    if stage_grant_id is not None:
+        return db.scalar(
+            select(PreparedExamMaterial).where(PreparedExamMaterial.stage_grant_id == stage_grant_id)
+        )
+    return db.scalar(
+        select(PreparedExamMaterial).where(
+            PreparedExamMaterial.user_id == user_id,
+            PreparedExamMaterial.stage == stage,
+            PreparedExamMaterial.stage_grant_id.is_(None),
+        )
+    )
+
+
+def prepare_project_content(db, user_id: int, stage: str, stage_grant_id: int | None, project) -> dict:
+    if stage_grant_id is not None:
+        existing = get_prepared_project_material(db, user_id, stage, stage_grant_id)
+        if existing is not None:
+            return json.loads(existing.snapshot)
+    snapshot = {
+        "version": 1,
+        "stage": stage,
+        "project_id": project.id,
+        "code": project.code,
+        "number": project.number,
+        "answers": [
+            {"id": answer.id, "text": answer.text, "is_correct": bool(answer.is_correct)}
+            for answer in sorted(project.answers, key=lambda item: (item.order_index, item.id))
+        ],
+    }
+    raw = json.dumps(snapshot, ensure_ascii=False)
+    if stage_grant_id is None:
+        existing = get_prepared_project_material(db, user_id, stage, None)
+        if existing is not None:
+            existing.project_id = project.id
+            existing.project_code = project.code
+            existing.snapshot = raw
+            db.add(existing)
+            db.flush()
+            return snapshot
+    row = PreparedExamMaterial(
+        user_id=user_id,
+        stage=stage,
+        session_id=None,
+        stage_grant_id=stage_grant_id,
+        project_id=project.id,
+        project_code=project.code,
+        snapshot=raw,
+    )
+    db.add(row)
+    db.flush()
+    return snapshot
+
+
+def grade_project_snapshot_data(snapshot: dict, selected_ids) -> tuple[float, int, int, int]:
+    allowed = {answer["id"] for answer in snapshot["answers"]}
+    selected = set(selected_ids)
+    if len(selected) != len(selected_ids) or not selected <= allowed:
+        raise HTTPException(400, "Unknown or duplicate answer in offline final")
+    correct = {answer["id"] for answer in snapshot["answers"] if answer["is_correct"]}
+    count = len(selected & correct)
+    return (round(count / len(correct) * 100, 2) if correct else 0,
+            count, len(selected - correct), len(correct))
+
+
+def capture_theory_content(db, attempt, session):
+    from .exam_lifecycle import _iso, build_exam_snapshot
+    lock_exam_content(db, session.exam_id)
+    prepared = get_prepared_theory_material(db, session.id)
+    if prepared is not None:
+        snapshot = json.loads(prepared.snapshot)
+        if isinstance(snapshot.get("session"), dict):
+            snapshot["session"]["started_at"] = _iso(attempt.started_at)
+            snapshot["session"]["ends_at"] = _iso(attempt.ends_at)
+    else:
+        snapshot, _ = build_exam_snapshot(db, session, finished_at=attempt.started_at)
     selected = {qid for ids in json.loads(session.selected_map or "{}").values() for qid in ids}
     captured = {question["id"] for block in theory_blocks(snapshot) for question in block["questions"]}
     if not selected or selected != captured:
@@ -30,7 +131,10 @@ def capture_theory_content(db, attempt, session):
     db.add(OfflineExamContent(attempt_id=attempt.id, snapshot=json.dumps(snapshot, ensure_ascii=False)))
 
 
-def capture_project_content(db, attempt, project):
+def capture_project_content(db, attempt, project, prepared_snapshot: str | None = None):
+    if prepared_snapshot is not None:
+        db.add(OfflineExamContent(attempt_id=attempt.id, snapshot=prepared_snapshot))
+        return
     snapshot = {"version": 1, "stage": attempt.stage, "project_id": project.id,
                 "code": project.code, "number": project.number,
                 "answers": [{"id": answer.id, "text": answer.text, "is_correct": bool(answer.is_correct)}

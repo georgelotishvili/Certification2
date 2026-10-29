@@ -160,15 +160,16 @@ def delete_exam_schedule(
         PlanningLetter.exam_schedule_id == schedule_id,
         PlanningLetter.user_id == user_id,
     )).all()
+    attachment_paths = [letter.attachment_path for letter in linked_letters if letter.attachment_path]
     for letter in linked_letters:
-        if letter.attachment_path:
-            try:
-                delete_storage_file(letter.attachment_path)
-            except Exception:
-                pass
         db.delete(letter)
     db.delete(entry)
     db.flush()
     reconcile_user_candidate_status_after_delete(db, user, deleted_kind="exam_schedule")
     db.commit()
+    for path in attachment_paths:
+        try:
+            delete_storage_file(path)
+        except Exception:
+            pass
     return Response(status_code=status.HTTP_204_NO_CONTENT)

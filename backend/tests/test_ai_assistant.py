@@ -413,6 +413,34 @@ class AiAssistantTests(unittest.TestCase):
         self.assertEqual(resp["download_files"][0]["filename"], "sia.csv")
         self.assertTrue(resp["download_files"][0]["data_base64"])
 
+    def test_ensure_kb_seeded_is_atomic_and_self_healing(self):
+        import zipfile
+        seed_zip = self.media_root / "test_seed.zip"
+        with zipfile.ZipFile(seed_zip, "w") as zf:
+            zf.writestr("კანონმდებლობა/doc1.txt", "დოკუმენტი 1 ტექსტი".encode("utf-8"))
+            zf.writestr("კანონმდებლობა/doc2.txt", "დოკუმენტი 2 ტექსტი".encode("utf-8"))
+
+        with patch.object(ai_assistant, "_seed_zip_path", return_value=seed_zip):
+            items1 = ai_assistant._ensure_kb_seeded(force=True)
+            self.assertEqual(len(items1), 2)
+            kb_dir = ai_assistant._kb_root_dir()
+            first_id = items1[0]["id"]
+            first_txt = kb_dir / "texts" / f"{first_id}.txt"
+            self.assertTrue(first_txt.is_file())
+
+            # 1. Self-healing: delete one extracted text file without changing manifest or zip
+            first_txt.unlink()
+            self.assertFalse(first_txt.is_file())
+            items2 = ai_assistant._ensure_kb_seeded(force=False)
+            self.assertEqual(len(items2), 2)
+            self.assertTrue(first_txt.is_file(), "Missing seed text file should be self-healed")
+
+            # 2. Atomic failure safety: corrupt seed zip and force re-seed -> old files and manifest remain intact
+            seed_zip.write_bytes(b"corrupt-not-a-zip")
+            items3 = ai_assistant._ensure_kb_seeded(force=True)
+            self.assertEqual(len(items3), 2)
+            self.assertTrue(first_txt.is_file(), "Existing seed files must not be wiped when seed zip is unreadable")
+
 
 if __name__ == "__main__":
     unittest.main()

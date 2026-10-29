@@ -2958,6 +2958,12 @@ def _extract_text_from_uploaded_bytes(
 def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
     manifest_file = _kb_manifest_path()
     seed_zip = _seed_zip_path()
+    kb_dir = _kb_root_dir()
+    files_dir = kb_dir / "files"
+    texts_dir = kb_dir / "texts"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    texts_dir.mkdir(parents=True, exist_ok=True)
+
     expected_seed_zip_size = seed_zip.stat().st_size if seed_zip.is_file() else 0
     expected_seed_zip_sha = (
         hashlib.sha256(seed_zip.read_bytes()).hexdigest()[:16]
@@ -2970,45 +2976,57 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
             raw = json.loads(manifest_file.read_text(encoding="utf-8"))
             if isinstance(raw, list):
                 seed_entries = [it for it in raw if isinstance(it, dict) and it.get("is_seed")]
+                expected_entry_count = 0
+                if seed_zip.is_file():
+                    with zipfile.ZipFile(seed_zip, "r") as zf_check:
+                        expected_entry_count = sum(
+                            1
+                            for arc in zf_check.namelist()
+                            if not arc.endswith("/") and arc != "_companion_texts.json"
+                        )
+                all_files_present = bool(seed_entries) and all(
+                    it.get("seed_zip_size") == expected_seed_zip_size
+                    and it.get("seed_zip_sha") == expected_seed_zip_sha
+                    and bool(it.get("storage_name"))
+                    and bool(it.get("id"))
+                    and (files_dir / str(it.get("storage_name"))).is_file()
+                    and (texts_dir / f"{it.get('id')}.txt").is_file()
+                    for it in seed_entries
+                )
                 if (
                     seed_entries
                     and expected_seed_zip_size > 0
-                    and seed_entries[0].get("seed_zip_size") == expected_seed_zip_size
-                    and seed_entries[0].get("seed_zip_sha") == expected_seed_zip_sha
+                    and len(seed_entries) == expected_entry_count
+                    and all_files_present
                 ):
                     return raw
         except Exception:
             pass
 
-    kb_dir = _kb_root_dir()
-    files_dir = kb_dir / "files"
-    texts_dir = kb_dir / "texts"
-
+    existing_raw_list: list[dict[str, Any]] = []
     existing_items: list[dict[str, Any]] = []
+    old_seed_files: set[str] = set()
+    old_seed_texts: set[str] = set()
     if manifest_file.is_file():
         try:
             parsed = json.loads(manifest_file.read_text(encoding="utf-8"))
             if isinstance(parsed, list):
-                for it in parsed:
-                    if isinstance(it, dict) and it.get("is_seed"):
+                existing_raw_list = [it for it in parsed if isinstance(it, dict)]
+                for it in existing_raw_list:
+                    if it.get("is_seed"):
                         st_name = str(it.get("storage_name") or "")
                         did = str(it.get("id") or "")
                         if st_name:
-                            try:
-                                (files_dir / st_name).unlink(missing_ok=True)
-                            except Exception:
-                                pass
+                            old_seed_files.add(st_name)
                         if did:
-                            try:
-                                (texts_dir / f"{did}.txt").unlink(missing_ok=True)
-                            except Exception:
-                                pass
-                    elif isinstance(it, dict):
+                            old_seed_texts.add(f"{did}.txt")
+                    else:
                         existing_items.append(it)
         except Exception:
             existing_items = []
 
     seeded_items: list[dict[str, Any]] = []
+    staged_pairs: list[tuple[Path, Path]] = []
     now_iso = datetime.now(timezone.utc).isoformat()
 
     if seed_zip.is_file():
@@ -3033,14 +3051,21 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
                     ext = Path(fname).suffix.lower() or ".txt"
                     storage_name = f"{doc_id}{ext}"
 
-                    (files_dir / storage_name).write_bytes(raw_bytes)
+                    file_target = files_dir / storage_name
+                    file_tmp = files_dir / f"{storage_name}.tmp"
+                    file_tmp.write_bytes(raw_bytes)
+                    staged_pairs.append((file_tmp, file_target))
+
                     extracted_text = _extract_text_from_uploaded_bytes(
                         fname,
                         raw_bytes,
                         companion_texts=companion_texts,
                         rel_path=norm_rel,
                     )
-                    (texts_dir / f"{doc_id}.txt").write_text(extracted_text, encoding="utf-8")
+                    text_target = texts_dir / f"{doc_id}.txt"
+                    text_tmp = texts_dir / f"{doc_id}.txt.tmp"
+                    text_tmp.write_text(extracted_text, encoding="utf-8")
+                    staged_pairs.append((text_tmp, text_target))
 
                     mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
                     seeded_items.append(
@@ -3060,7 +3085,20 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
                         }
                     )
         except Exception:
-            pass
+            for tmp_path, _ in staged_pairs:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            if existing_raw_list:
+                return existing_raw_list
+            return existing_items
+
+    for tmp_path, target_path in staged_pairs:
+        tmp_path.replace(target_path)
+
+    new_seed_files = {str(it["storage_name"]) for it in seeded_items}
+    new_seed_texts = {f"{it['id']}.txt" for it in seeded_items}
 
     by_id = {it["id"]: it for it in seeded_items}
     for custom_it in existing_items:
@@ -3069,7 +3107,21 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
             by_id[cid] = custom_it
 
     final_list = list(by_id.values())
-    manifest_file.write_text(json.dumps(final_list, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_tmp = manifest_file.with_suffix(".json.tmp")
+    manifest_tmp.write_text(json.dumps(final_list, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_tmp.replace(manifest_file)
+
+    for obsolete_file in old_seed_files - new_seed_files:
+        try:
+            (files_dir / obsolete_file).unlink(missing_ok=True)
+        except Exception:
+            pass
+    for obsolete_text in old_seed_texts - new_seed_texts:
+        try:
+            (texts_dir / obsolete_text).unlink(missing_ok=True)
+        except Exception:
+            pass
+
     _KB_MEMORY_CACHE["mtime"] = 0.0
     return final_list
 

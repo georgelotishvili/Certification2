@@ -943,6 +943,96 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(cert_item3["subject"], DEFAULT_TEMPLATES["certificate"]["subject"])
         self.assertEqual(cert_item3["body"], DEFAULT_TEMPLATES["certificate"]["body"])
 
+    def test_certificate_notification_copy_failure_and_idempotency(self):
+        self.delivery.return_value = ("sent", None)
+        create_res = self.client.post(
+            "/users/1/certificate",
+            headers=self.auth,
+            json={
+                "unique_code": "1000000001",
+                "level": "architect",
+                "status": "active",
+                "issue_date": "2026-10-16",
+                "validity_term": 5,
+                "valid_until": "2031-10-16",
+                "send_notification": False,
+            },
+        )
+        self.assertEqual(create_res.status_code, 201, create_res.text)
+
+        pdf_bytes = self.certificate_pdf_bytes()
+        upload_res = self.client.post(
+            "/users/1/certificate/file",
+            headers=self.auth,
+            files={"file": ("certificate.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(upload_res.status_code, 204, upload_res.text)
+
+        # 1. If PDF copy fails, must raise 409 and never send email without PDF
+        with patch("shutil.copyfile", side_effect=OSError("disk full")):
+            fail_res = self.client.post(
+                "/users/1/certificate/notify",
+                headers=self.auth,
+                json={"request_id": "req-copy-fail"},
+            )
+        self.assertEqual(fail_res.status_code, 409, fail_res.text)
+        self.delivery.assert_not_called()
+        self.assertEqual(self.db.scalars(select(PlanningLetter)).all(), [])
+        att_dir = self.media / "planning_letters" / "attachments"
+        if att_dir.exists():
+            self.assertEqual(list(att_dir.iterdir()), [])
+
+        # 2. First valid notify succeeds and attaches PDF
+        ok1 = self.client.post(
+            "/users/1/certificate/notify",
+            headers=self.auth,
+            json={"request_id": "req-cert-idem-1"},
+        )
+        self.assertEqual(ok1.status_code, 200, ok1.text)
+        self.assertEqual(self.delivery.call_count, 1)
+        self.assertEqual(len(self.db.scalars(select(PlanningLetter)).all()), 1)
+
+        # 3. Duplicate notify with same request_id or within 60s window is suppressed (idempotent)
+        ok2 = self.client.post(
+            "/users/1/certificate/notify",
+            headers=self.auth,
+            json={"request_id": "req-cert-idem-1"},
+        )
+        self.assertEqual(ok2.status_code, 200, ok2.text)
+        self.assertEqual(self.delivery.call_count, 1)
+
+        ok3 = self.client.post(
+            "/users/1/certificate/notify",
+            headers=self.auth,
+            json={"request_id": "req-cert-idem-2"},
+        )
+        self.assertEqual(ok3.status_code, 200, ok3.text)
+        self.assertEqual(self.delivery.call_count, 1)
+        self.assertEqual(len(self.db.scalars(select(PlanningLetter)).all()), 1)
+
+    def test_delete_exam_schedule_deletes_attachment_only_after_commit(self):
+        doc_bytes = b"%PDF-1.4\nSchedule linked attachment"
+        letter = self.saved(
+            self.send(
+                self.form(action_mode="save_only", event_date="2027-04-20", event_time="10:00", period="morning"),
+                files={"attachment": ("schedule.pdf", doc_bytes, "application/pdf")},
+            )
+        )
+        schedule_id = letter["exam_schedule_id"]
+        letter_row = self.db.get(PlanningLetter, letter["id"])
+        att_file = media_storage.resolve_storage_path(letter_row.attachment_path)
+        self.assertTrue(att_file.is_file())
+
+        with patch.object(self.db, "commit", side_effect=RuntimeError("db commit failed")):
+            with self.assertRaises(RuntimeError):
+                self.client.delete(f"/admin/users/1/exam-schedules/{schedule_id}", headers=self.auth)
+        self.db.rollback()
+        self.assertTrue(att_file.is_file(), "Attachment file must not be deleted before db.commit() succeeds")
+
+        del_ok = self.client.delete(f"/admin/users/1/exam-schedules/{schedule_id}", headers=self.auth)
+        self.assertEqual(del_ok.status_code, 204, del_ok.text)
+        self.assertFalse(att_file.is_file(), "Attachment file must be deleted after db.commit() succeeds")
+
 
 if __name__ == "__main__":
     unittest.main()

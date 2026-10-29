@@ -393,6 +393,55 @@ class IndependentStageHTTPTests(unittest.TestCase):
             self.assertEqual(response.status_code, 204, response.text)
         self.assertFalse(any(p["granted"] for p in self.me()["exam_stage_permissions"].values()))
 
+    def test_legacy_auth_code_requires_bearer_token_and_theory_grant(self):
+        try:
+            from backend.app.models import ExamCode
+            from backend.app.security import hash_code
+        except ModuleNotFoundError:
+            from app.models import ExamCode
+            from app.security import hash_code
+
+        code_row = ExamCode(exam_id=1, code_hash=hash_code("LEGACY-CODE-1"), used=False, disabled=False)
+        self.db.add(code_row)
+        self.db.commit()
+
+        # 1. Unauthenticated request is rejected
+        unauth = self.client.post("/auth/code", json={"exam_id": 1, "code": "LEGACY-CODE-1"})
+        self.assertEqual(unauth.status_code, 401, unauth.text)
+
+        # 2. Authenticated candidate without theory grant is rejected and code remains unused
+        no_perm = self.client.post(
+            "/auth/code",
+            headers=self.headers(1),
+            json={"exam_id": 1, "code": "LEGACY-CODE-1"},
+        )
+        self.assertEqual(no_perm.status_code, 403, no_perm.text)
+        self.db.refresh(code_row)
+        self.assertFalse(code_row.used)
+
+        # 3. With theory grant, succeeds, binds user_id and stage_grant_id, and consumes the code
+        grant_info = self.grant("theory")
+        ok = self.client.post(
+            "/auth/code",
+            headers=self.headers(1),
+            json={"exam_id": 1, "code": "LEGACY-CODE-1"},
+        )
+        self.assertEqual(ok.status_code, 200, ok.text)
+        session_id = ok.json()["session_id"]
+        sess = self.db.get(ExamSession, session_id)
+        self.assertEqual(sess.user_id, 1)
+        self.assertEqual(sess.stage_grant_id, grant_info["grant_id"])
+        self.db.refresh(code_row)
+        self.assertTrue(code_row.used)
+
+        # 4. Reusing the same code fails
+        reuse = self.client.post(
+            "/auth/code",
+            headers=self.headers(2),
+            json={"exam_id": 1, "code": "LEGACY-CODE-1"},
+        )
+        self.assertIn(reuse.status_code, (401, 409), reuse.text)
+
 
 if __name__ == "__main__":
     unittest.main()

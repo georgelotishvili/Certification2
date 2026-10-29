@@ -21,7 +21,10 @@ from .exam_stage import is_admin_like
 from .exam_stage_grants import (
     lock_user_stage_transitions, require_stage_permission, sync_legacy_stage_fields,
 )
-from .offline_grading import capture_project_content, capture_theory_content, lock_project_content
+from .offline_grading import (
+    capture_project_content, capture_theory_content,
+    get_prepared_project_material, lock_project_content,
+)
 
 
 def naive_utc(value: datetime) -> datetime:
@@ -103,14 +106,29 @@ def start_project_attempt(db: Session, user: User, stage: str, payload, project_
             raise HTTPException(409, "Offline start is already bound to another attempt or project")
         require_uncancelled_attempt(attempt)
         return attempt
-    project = db.scalar(select(project_model).where(project_model.code == payload.projectCode.strip()))
-    if project is None:
-        raise HTTPException(404, "Project not found")
-    lock_project_content(db, project_model, project.id)
-    db.refresh(project)
-    db.expire(project, ["answers"])
-    if project.code != payload.projectCode.strip():
-        raise HTTPException(409, "Prepared project changed; download the materials again")
+    prepared = get_prepared_project_material(db, user.id, stage, payload.stageGrantId)
+    if prepared is not None:
+        if (prepared.user_id != user.id or prepared.stage != stage
+                or prepared.project_code != payload.projectCode.strip()):
+            raise HTTPException(409, "Project code does not match the prepared project")
+        project = db.get(project_model, prepared.project_id)
+        if project is not None:
+            lock_project_content(db, project_model, project.id)
+        project_id = prepared.project_id
+        project_code = prepared.project_code
+        prepared_snapshot = prepared.snapshot
+    else:
+        project = db.scalar(select(project_model).where(project_model.code == payload.projectCode.strip()))
+        if project is None:
+            raise HTTPException(404, "Project not found")
+        lock_project_content(db, project_model, project.id)
+        db.refresh(project)
+        db.expire(project, ["answers"])
+        if project.code != payload.projectCode.strip():
+            raise HTTPException(409, "Prepared project changed; download the materials again")
+        project_id = project.id
+        project_code = project.code
+        prepared_snapshot = None
     grant = require_stage_permission(db, user, stage, mark_started=True,
                                      grant_id=payload.stageGrantId)
     started_at = naive_utc(grant.started_at) if grant else datetime.utcnow()
@@ -120,12 +138,12 @@ def start_project_attempt(db: Session, user: User, stage: str, payload, project_
     attempt = OfflineExamAttempt(
         token=secrets.token_urlsafe(48), start_request_id=request_id,
         user_id=user.id, stage=stage, stage_grant_id=grant.id if grant else None,
-        project_id=project.id, project_code=project.code,
+        project_id=project_id, project_code=project_code,
         started_at=started_at, ends_at=ends_at,
     )
     db.add(attempt)
     db.flush()
-    capture_project_content(db, attempt, project)
+    capture_project_content(db, attempt, project, prepared_snapshot=prepared_snapshot)
     return attempt
 
 

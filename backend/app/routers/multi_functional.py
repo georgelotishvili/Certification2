@@ -58,8 +58,10 @@ from ..services.offline_attempts import (
     require_legacy_project_submission, start_project_attempt, utc_response,
 )
 from ..services.offline_grading import (
-    bind_evaluation_snapshot, grade_project_snapshot, guard_pending_project_delete,
-    project_report_answers, detach_evaluation_snapshot,
+    bind_evaluation_snapshot, detach_evaluation_snapshot,
+    get_prepared_project_material, grade_project_snapshot,
+    grade_project_snapshot_data, guard_pending_project_delete,
+    prepare_project_content, project_report_answers,
 )
 
 
@@ -594,6 +596,26 @@ def get_random_project(
             grant_id=stage_grant.id,
         )
 
+    if stage_grant is not None:
+        existing_prepared = get_prepared_project_material(db, user.id, STAGE_PROJECT_2, stage_grant.id)
+        if existing_prepared is not None:
+            import json as _json
+            snap = _json.loads(existing_prepared.snapshot)
+            proj_obj = db.get(MultiFunctionalProject, existing_prepared.project_id)
+            pdf_url = _safe_public_pdf_url(proj_obj) if proj_obj else f"/public/multi-functional/projects/{snap['code']}/pdf"
+            db.commit()
+            return PublicMultiFunctionalProjectResponse(
+                id=snap["project_id"],
+                number=snap["number"],
+                code=snap["code"],
+                pdfUrl=pdf_url,
+                answers=[
+                    MultiFunctionalAnswerPayload(id=str(a["id"]), text=a["text"])
+                    for a in snap["answers"]
+                ],
+                stageGrantId=stage_grant.id,
+            )
+
     # Load all projects (with answers eagerly loaded)
     all_projects = db.scalars(
         select(MultiFunctionalProject).options(selectinload(MultiFunctionalProject.answers))
@@ -677,18 +699,24 @@ def get_random_project(
 
     project = random.SystemRandom().choice(candidates)
 
-    answers = sorted(project.answers, key=lambda a: (a.order_index, a.id))
+    snap = prepare_project_content(
+        db,
+        user.id,
+        STAGE_PROJECT_2,
+        stage_grant.id if stage_grant else None,
+        project,
+    )
     pdf_url = _safe_public_pdf_url(project)
     db.commit()
 
     return PublicMultiFunctionalProjectResponse(
-        id=project.id,
-        number=project.number,
-        code=project.code,
+        id=snap["project_id"],
+        number=snap["number"],
+        code=snap["code"],
         pdfUrl=pdf_url,
         answers=[
-            MultiFunctionalAnswerPayload(id=str(a.id), text=a.text)
-            for a in answers
+            MultiFunctionalAnswerPayload(id=str(a["id"]), text=a["text"])
+            for a in snap["answers"]
         ],
         stageGrantId=stage_grant.id if stage_grant else None,
     )
@@ -715,6 +743,13 @@ def start_multi_functional_stage(
             offlineSubmissionToken=attempt.token, endsAt=utc_response(attempt.ends_at),
             serverNow=utc_response(datetime.utcnow()),
         )
+    if payload.projectCode:
+        prepared = get_prepared_project_material(db, user.id, STAGE_PROJECT_2, payload.stageGrantId)
+        if prepared is not None and prepared.project_code != payload.projectCode.strip():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Project code does not match the prepared project",
+            )
     grant = require_stage_permission(
         db,
         user,
@@ -806,6 +841,14 @@ def submit_simple_evaluation(
     user = _require_auth(db, authorization)
     stage_grant = completion_grant(db, user, STAGE_PROJECT_2, None)
     require_legacy_project_submission(db, stage_grant.id if stage_grant else None)
+    prepared_material = get_prepared_project_material(
+        db, user.id, STAGE_PROJECT_2, stage_grant.id if stage_grant else None
+    )
+    if prepared_material is not None and prepared_material.project_code != payload.projectCode.strip():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Project does not match assigned project",
+        )
     
     # Get project
     project = db.scalar(
@@ -919,11 +962,25 @@ def submit_full_evaluation(
     stage_grant = completion_grant(
         db, user, STAGE_PROJECT_2, payload.stageGrantId
     )
+    prepared_material = None
     if offline_attempt is None:
         require_legacy_project_submission(db, stage_grant.id if stage_grant else None)
+        prepared_material = get_prepared_project_material(
+            db, user.id, STAGE_PROJECT_2, stage_grant.id if stage_grant else None
+        )
+        if prepared_material is not None and prepared_material.project_code != payload.projectCode.strip():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Project does not match assigned project",
+            )
     
     # Get project with answers
-    project = (db.get(MultiFunctionalProject, offline_attempt.project_id) if offline_attempt else db.scalar(
+    target_project_id = (
+        offline_attempt.project_id
+        if offline_attempt
+        else (prepared_material.project_id if prepared_material is not None else None)
+    )
+    project = (db.get(MultiFunctionalProject, target_project_id) if target_project_id is not None else db.scalar(
         select(MultiFunctionalProject)
         .where(MultiFunctionalProject.code == payload.projectCode.strip())
         .options(selectinload(MultiFunctionalProject.answers))
@@ -945,6 +1002,9 @@ def submit_full_evaluation(
     if offline_attempt is not None:
         percentage, correct_count, wrong_count, total_correct = grade_project_snapshot(
             db, offline_attempt, payload.selectedAnswerIds)
+    elif prepared_material is not None:
+        percentage, correct_count, wrong_count, total_correct = grade_project_snapshot_data(
+            json.loads(prepared_material.snapshot), payload.selectedAnswerIds)
     
     # Create evaluation record
     evaluation = MultiFunctionalEvaluation(

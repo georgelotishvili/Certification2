@@ -55,7 +55,12 @@ from ..services.offline_attempts import (
     register_theory_attempt, require_legacy_theory_submission, utc_response,
     theory_attempt, cancel_interrupted_attempt, require_uncancelled_attempt,
 )
-from ..services.offline_grading import grade_theory_snapshot
+from ..services.offline_grading import (
+    get_prepared_theory_material,
+    grade_theory_snapshot,
+    prepare_theory_content,
+    theory_blocks,
+)
 from ..services.media_storage import (
     relative_storage_path,
     resolve_storage_path,
@@ -462,6 +467,33 @@ def get_all_questions(
     if session.finished_at or session.ends_at <= now:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
 
+    existing_prepared = get_prepared_theory_material(db, session.id)
+    if existing_prepared is not None:
+        snapshot = json.loads(existing_prepared.snapshot)
+        result_blocks: List[AllQuestionsBlockOut] = []
+        for b in sorted(theory_blocks(snapshot), key=lambda item: (item.get("order_index") or 0, item["id"])):
+            out_questions = [
+                QuestionOut(
+                    id=q["id"],
+                    code=q.get("code") or "",
+                    text=q.get("text") or "",
+                    order_index=q.get("order_index") or 0,
+                    options=[OptionOut(id=o["id"], text=o["text"]) for o in q.get("options", [])],
+                )
+                for q in b.get("questions", [])
+            ]
+            result_blocks.append(AllQuestionsBlockOut(
+                block_id=b["id"],
+                block_title=b.get("title") or "",
+                chapter_id=b.get("chapter_id"),
+                subchapter_id=b.get("subchapter_id"),
+                chapter_name=b.get("chapter_name"),
+                subchapter_name=b.get("subchapter_name"),
+                qty=b.get("qty") if b.get("qty") is not None else len(out_questions),
+                questions=out_questions,
+            ))
+        return AllQuestionsResponse(blocks=result_blocks)
+
     blocks_stmt = select(Block).where(
         Block.exam_id == session.exam_id, Block.enabled == True  # noqa: E712
     ).options(
@@ -531,10 +563,12 @@ def get_all_questions(
             questions=out_questions,
         ))
 
-    if map_changed:
+    if map_changed or not session.selected_map:
         session.selected_map = json.dumps(selected_map)
         db.add(session)
-        db.commit()
+        db.flush()
+    prepare_theory_content(db, session)
+    db.commit()
 
     return AllQuestionsResponse(blocks=result_blocks)
 

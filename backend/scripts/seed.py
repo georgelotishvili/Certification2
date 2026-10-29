@@ -63,8 +63,8 @@ def seed() -> None:
             Option(question_id=q6.id, text="არა", is_correct=True),
         ])
 
-        # exam code: TEST123
-        code = ExamCode(exam_id=exam.id, code_hash=hash_code("TEST123"), used=False, disabled=False)
+        # exam code: TEST123 (disabled by default)
+        code = ExamCode(exam_id=exam.id, code_hash=hash_code("TEST123"), used=False, disabled=True)
         db.add(code)
 
         db.commit()

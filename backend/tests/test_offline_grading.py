@@ -169,6 +169,69 @@ class OfflineGradingSnapshotTests(unittest.TestCase):
         report = self.client.get(f'/admin/multi-apartment/evaluations/detail/{next_result.json()["id"]}', headers=self.headers(2))
         self.assertEqual(report.json()["answers"][0]["text"], 'New authorized version')
 
+    def test_theory_edits_between_prepare_and_start_keep_prepared_snapshot(self):
+        self.grant("theory")
+        prepared = self.prepare_theory()
+        path = f'/exam/{prepared["session_id"]}'
+        headers = {"Authorization": f'Bearer {prepared["token"]}'}
+        first_q = self.client.get(path + "/all-questions", headers=headers)
+        self.assertEqual(first_q.status_code, 200, first_q.text)
+        # Admin edits and deletes live questions between Prepare and Begin
+        self.db.get(Option, 1).is_correct = False
+        self.db.get(Option, 1).text = "Mutated before begin"
+        self.db.get(Question, 1).text = "Mutated question before begin"
+        self.db.commit()
+        second_q = self.client.get(path + "/all-questions", headers=headers)
+        self.assertEqual(second_q.json(), first_q.json())
+        begin = self.client.post(path + "/begin?offline=true", headers=headers)
+        self.assertEqual(begin.status_code, 200, begin.text)
+        started = begin.json()
+        final = self.theory_final(prepared, started, self.theory_payload(prepared))
+        self.assertEqual(final.status_code, 200, final.text)
+        self.assertEqual(final.json()["score_percent"], 100)
+
+    def test_project_edits_and_code_substitution_between_prepare_and_start_are_bound(self):
+        for kind, stage, project_model, answer_model in (
+            ("multi-apartment", "project_stage_1", MultiApartmentProject, MultiApartmentAnswer),
+            ("multi-functional", "project_stage_2", MultiFunctionalProject, MultiFunctionalAnswer),
+        ):
+            with self.subTest(kind=kind):
+                self.grant(stage)
+                project = self.project_prepare(kind)
+                self.db.add(project_model(id=2, number=2, code="OTHER-PROJ"))
+                self.db.get(answer_model, 1).is_correct = False
+                self.db.get(answer_model, 1).text = "Mutated before start"
+                self.db.get(project_model, 1).code = "RENAMED-BEFORE-START"
+                self.db.commit()
+                # Substituting another project code at Start is rejected
+                wrong_start = self.client.post(
+                    f"/public/{kind}/start",
+                    headers=self.headers(),
+                    json={
+                        "stageGrantId": project["stageGrantId"],
+                        "projectCode": "OTHER-PROJ",
+                        "offline": True,
+                        "startRequestId": "00000000-0000-0000-0000-000000000099",
+                    },
+                )
+                self.assertEqual(wrong_start.status_code, 409, wrong_start.text)
+                # Starting with the prepared project code succeeds and uses the prepared snapshot
+                ok_start = self.client.post(
+                    f"/public/{kind}/start",
+                    headers=self.headers(),
+                    json={
+                        "stageGrantId": project["stageGrantId"],
+                        "projectCode": project["code"],
+                        "offline": True,
+                        "startRequestId": f"00000000-0000-0000-0000-00000000000{1 if kind == 'multi-apartment' else 2}",
+                    },
+                )
+                self.assertEqual(ok_start.status_code, 200, ok_start.text)
+                started = ok_start.json()
+                res = self.client.post(f"/public/{kind}/evaluations", json=self.project_payload(project, started))
+                self.assertEqual(res.status_code, 201, res.text)
+                self.assertEqual(res.json()["percentage"], 100)
+
 
 if __name__ == '__main__':
     unittest.main()

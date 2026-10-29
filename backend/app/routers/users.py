@@ -48,6 +48,7 @@ from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
 from ..services.exam_stage_grants import (
     exam_state_with_permissions,
     expire_unused_stage_permissions,
+    lock_user_stage_transitions,
 )
 from ..services.user_codes import (
     UserCodeConflict,
@@ -781,11 +782,12 @@ def _send_certificate_activation_notification(
     actor_email: str,
     custom_subject: str | None = None,
     custom_body: str | None = None,
+    request_id: str | None = None,
 ) -> tuple[str, str | None]:
+    lock_user_stage_transitions(db, user)
     _require_certificate_uploaded_pdf(cert)
     subject, body = _build_certificate_activation_email(user, cert, custom_subject, custom_body)
     now = datetime.utcnow()
-    req_id = str(uuid4())
     fingerprint = hashlib.sha256(
         json.dumps(
             {
@@ -793,37 +795,82 @@ def _send_certificate_activation_notification(
                 "cert_id": cert.id,
                 "unique_code": cert.unique_code,
                 "status": cert.status,
-                "req_id": req_id,
+                "file_path": cert.file_path,
+                "to_email": (user.email or "").lower(),
+                "subject": subject,
+                "body": body,
             },
             ensure_ascii=False,
             sort_keys=True,
         ).encode("utf-8")
     ).hexdigest()
 
+    explicit_req_id = (request_id or "").strip() or None
+    if explicit_req_id:
+        existing_by_req = db.scalar(
+            select(PlanningLetter).where(PlanningLetter.request_id == explicit_req_id)
+        )
+        if existing_by_req is not None:
+            if existing_by_req.user_id != user.id or existing_by_req.request_fingerprint != fingerprint:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Request ID already used for another notification",
+                )
+            return existing_by_req.status, existing_by_req.error
+
+    recent_duplicate = db.scalar(
+        select(PlanningLetter)
+        .where(
+            PlanningLetter.user_id == user.id,
+            PlanningLetter.kind == "certificate",
+            PlanningLetter.period == "cert_issued",
+            PlanningLetter.request_fingerprint == fingerprint,
+            PlanningLetter.status.in_(("sending", "sent", "simulated", "uncertain")),
+            PlanningLetter.created_at >= now - timedelta(seconds=60),
+        )
+        .order_by(PlanningLetter.id.desc())
+    )
+    if recent_duplicate is not None:
+        return recent_duplicate.status, recent_duplicate.error
+
+    req_id = explicit_req_id or str(uuid4())
+    dest_path: Path | None = None
     attachment_path_rel: str | None = None
     attachment_filename: str | None = None
     attachment_size: int | None = None
 
-    if cert.file_path:
-        try:
-            src_path = resolve_storage_path(cert.file_path)
-            if src_path.is_file():
-                size = src_path.stat().st_size
-                if 0 < size <= ATTACHMENT_MAX_BYTES:
-                    root = ensure_media_root().resolve()
-                    dest_dir = (root / "planning" / f"letters/{user.id}").resolve()
-                    if dest_dir.is_relative_to(root / "planning"):
-                        dest_dir.mkdir(parents=True, exist_ok=True)
-                        dest_path = dest_dir / f"{uuid4().hex}.pdf"
-                        shutil.copyfile(src_path, dest_path)
-                        attachment_path_rel = relative_storage_path(dest_path)
-                        code_label = (cert.unique_code or user.code or "certificate").strip()
-                        attachment_filename = f"certificate-{code_label}.pdf"
-                        attachment_size = int(size)
-        except Exception:
-            attachment_path_rel = None
-            attachment_filename = None
-            attachment_size = None
+    try:
+        if not cert.file_path:
+            raise ValueError("Missing certificate file_path")
+        src_path = resolve_storage_path(cert.file_path)
+        if not src_path.is_file():
+            raise ValueError("Certificate PDF file missing on disk")
+        size = src_path.stat().st_size
+        if not (0 < size <= ATTACHMENT_MAX_BYTES):
+            raise ValueError("Certificate PDF file size invalid")
+        root = ensure_media_root().resolve()
+        dest_dir = (root / "planning" / f"letters/{user.id}").resolve()
+        if not dest_dir.is_relative_to(root / "planning"):
+            raise ValueError("Invalid letter attachment destination")
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / f"{uuid4().hex}.pdf"
+        shutil.copyfile(src_path, dest_path)
+        if not dest_path.is_file() or dest_path.stat().st_size != size:
+            raise ValueError("Copied certificate PDF verification failed")
+        attachment_path_rel = relative_storage_path(dest_path)
+        code_label = (cert.unique_code or user.code or "certificate").strip()
+        attachment_filename = f"certificate-{code_label}.pdf"
+        attachment_size = int(size)
+    except Exception as exc:
+        if dest_path is not None:
+            try:
+                dest_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="სერტიფიკატის PDF დანართის მომზადება ვერ მოხერხდა. შეტყობინება არ გაიგზავნა.",
+        ) from exc
 
     letter = PlanningLetter(
         user_id=user.id,
@@ -843,9 +890,21 @@ def _send_certificate_activation_notification(
         attempts=1,
         created_by=actor_email,
     )
-    db.add(letter)
-    db.commit()
-    db.refresh(letter)
+    try:
+        db.add(letter)
+        db.commit()
+        db.refresh(letter)
+    except BaseException:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        if dest_path is not None:
+            try:
+                dest_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
 
     try:
         delivery_status, error = deliver_letter(letter)
@@ -961,7 +1020,7 @@ def create_certificate(
     notif_error = None
     if payload.send_notification:
         notif_status, notif_error = _send_certificate_activation_notification(
-            db, user, cert, actor.email, payload.notification_subject, payload.notification_body
+            db, user, cert, actor.email, payload.notification_subject, payload.notification_body, payload.request_id
         )
     
     return _certificate_out_with_notification(cert, notif_status, notif_error, deadline_date=dl)
@@ -1035,7 +1094,7 @@ def update_certificate(
     notif_error = None
     if payload.send_notification:
         notif_status, notif_error = _send_certificate_activation_notification(
-            db, user, cert, actor.email, payload.notification_subject, payload.notification_body
+            db, user, cert, actor.email, payload.notification_subject, payload.notification_body, payload.request_id
         )
     
     return _certificate_out_with_notification(cert, notif_status, notif_error, deadline_date=dl)
@@ -1064,6 +1123,7 @@ def notify_certificate_activation(
         actor.email,
         payload.subject if payload else None,
         payload.body if payload else None,
+        payload.request_id if payload else None,
     )
     return _certificate_out_with_notification(cert, notif_status, notif_error)
 
