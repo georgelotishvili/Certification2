@@ -259,15 +259,20 @@ def admin_delete_app_file(
     if not app_file:
         return
 
-    if app_file.storage_path:
+    storage_path = app_file.storage_path
+    try:
+        db.delete(app_file)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+
+    if storage_path:
         try:
-            delete_storage_file(app_file.storage_path)
+            delete_storage_file(storage_path)
         except Exception:
             # Best-effort: ignore filesystem errors
             pass
-
-    db.delete(app_file)
-    db.commit()
     return
 
 

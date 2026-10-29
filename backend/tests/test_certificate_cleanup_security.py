@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+from fastapi import HTTPException
 
 try:
     from backend.app.routers import admin, users
@@ -202,18 +203,20 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
 
     def test_users_certificate_endpoint_dispatches_cleanup_wrapper(self) -> None:
         user = SimpleNamespace(id=42, photo_path=None, photo_filename=None)
+        founder = SimpleNamespace(email="founder@example.invalid")
         cert = SimpleNamespace(
             file_path=None,
             level="expert",
             unique_code="EX-users-endpoint",
         )
         db = _QueueDb(
-            scalar_results=[user, cert],
+            scalar_results=[user, cert, None],
             scalars_results=[[]],
         )
 
         with (
-            patch.object(users, "_require_admin"),
+            patch.object(users, "_require_admin", return_value=founder),
+            patch.object(users, "get_settings", return_value=SimpleNamespace(founder_admin_email=founder.email)),
             patch.object(users, "_delete_certificate_files") as cleanup,
         ):
             result = users.delete_certificate(
@@ -223,12 +226,15 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
             )
 
         self.assertIsNone(result)
-        cleanup.assert_called_once_with(cert, user.id)
+        cleanup.assert_called_once()
+        cleanup_snapshot, cleanup_user_id = cleanup.call_args.args
+        self.assertEqual(cleanup_user_id, user.id)
+        self.assertEqual(vars(cleanup_snapshot), vars(cert))
         self.assertEqual(db.deleted, [cert])
         self.assertEqual(db.commit_calls, 1)
 
     def test_admin_single_delete_dispatches_contained_cleanup(self) -> None:
-        user = SimpleNamespace(id=43, email="target@example.com")
+        user = SimpleNamespace(id=43, email="target@example.com", photo_path=None)
         cert = SimpleNamespace(
             file_path=None,
             level="expert",
@@ -236,8 +242,8 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
         )
         db = _QueueDb(
             get_value=user,
-            scalar_results=[cert],
-            scalars_results=[[], []],
+            scalar_results=[cert, None, None],
+            scalars_results=[[], [], [], []],
         )
         settings = SimpleNamespace(founder_admin_email="founder@example.com")
 
@@ -245,7 +251,7 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
             patch.object(admin, "get_settings", return_value=settings),
             patch.object(admin, "_is_founder_actor", return_value=True),
             patch.object(admin, "remember_user_code") as preserve_code,
-            patch.object(admin, "_delete_user_photo_file"),
+            patch.object(admin, "_cleanup_committed_media"),
             patch.object(admin, "delete_expert_certificate_files") as cleanup,
         ):
             result = admin.admin_delete_user(
@@ -260,7 +266,7 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
         self.assertEqual(db.deleted, [user])
         self.assertEqual(db.commit_calls, 1)
 
-    def test_admin_bulk_delete_dispatches_contained_cleanup(self) -> None:
+    def test_admin_bulk_delete_is_retired_without_cleanup(self) -> None:
         founder = SimpleNamespace(id=1, email="founder@example.com")
         target = SimpleNamespace(id=44, email="target@example.com")
         cert = SimpleNamespace(
@@ -276,21 +282,19 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
 
         with (
             patch.object(admin, "get_settings", return_value=settings),
-            patch.object(admin, "_is_founder_actor", return_value=True),
+            patch.object(admin, "_require_admin"),
             patch.object(admin, "remember_user_code") as preserve_code,
-            patch.object(admin, "_delete_user_photo_file"),
+            patch.object(admin, "_cleanup_committed_media"),
             patch.object(admin, "delete_expert_certificate_files") as cleanup,
         ):
-            result = admin.admin_delete_all_users(
-                authorization=None,
-                db=db,
-            )
+            with self.assertRaises(HTTPException) as caught:
+                admin.admin_delete_all_users(authorization=None, db=db)
 
-        self.assertIsNone(result)
-        preserve_code.assert_called_once_with(db, target)
-        cleanup.assert_called_once_with("EX-admin-bulk")
-        self.assertEqual(db.deleted, [target])
-        self.assertEqual(db.commit_calls, 1)
+        self.assertEqual(caught.exception.status_code, 410)
+        preserve_code.assert_not_called()
+        cleanup.assert_not_called()
+        self.assertEqual(db.deleted, [])
+        self.assertEqual(db.commit_calls, 0)
 
     def test_routers_no_longer_join_unique_code_into_expert_path(self) -> None:
         raw_join = 'expert_dir = media_root / "expert" / unique_code'

@@ -286,7 +286,7 @@ class ExamScheduleTests(unittest.TestCase):
         candidate_id = self.candidate.id
         personal_id, code = self.candidate.personal_id, self.candidate.code
         other = self.create(user=self.other_candidate)
-        with patch.object(admin, "_delete_user_photo_file"):
+        with patch.object(admin, "_cleanup_committed_media"):
             admin.admin_delete_user(candidate_id, authorization="Bearer token-5", db=self.db)
         self.assertIsNone(self.db.get(User, candidate_id))
         self.assertEqual(self.db.scalars(select(ExamSchedule).where(ExamSchedule.user_id == candidate_id)).all(), [])

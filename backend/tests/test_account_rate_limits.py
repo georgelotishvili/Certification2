@@ -61,6 +61,7 @@ class _LoginDb:
     def __init__(self, user):
         self.user = user
         self.added = []
+        self.executed = []
         self.commit_calls = 0
         self.rollback_calls = 0
 
@@ -69,6 +70,9 @@ class _LoginDb:
 
     def add(self, item):
         self.added.append(item)
+
+    def execute(self, statement):
+        self.executed.append(statement)
 
     def commit(self):
         self.commit_calls += 1

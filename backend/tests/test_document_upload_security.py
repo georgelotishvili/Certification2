@@ -113,6 +113,7 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
             created = await documents.admin_create_document(
                 title="Title",
                 content="Content",
+                contract_type=None,
                 file=_docx_upload("../../../../outside.docx"),
                 authorization=None,
                 db=db,
@@ -133,6 +134,7 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
             id=10,
             title="Old",
             content="Old",
+            contract_type=None,
             file_path=str(legacy_file),
             filename=legacy_file.name,
             file_size_bytes=legacy_file.stat().st_size,
@@ -151,6 +153,7 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
                 doc_id=doc.id,
                 title=None,
                 content=None,
+                contract_type=None,
                 file=_docx_upload("..\\..\\replacement.docx"),
                 authorization=None,
                 db=db,
@@ -171,6 +174,7 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
             id=11,
             title="Old",
             content="Old",
+            contract_type=None,
             file_path=str(legacy_file),
             filename=legacy_file.name,
             file_size_bytes=legacy_file.stat().st_size,
@@ -183,6 +187,7 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
                     doc_id=doc.id,
                     title=None,
                     content=None,
+                    contract_type=None,
                     file=_docx_upload("replacement.docx"),
                     authorization=None,
                     db=db,
@@ -199,10 +204,14 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
             id=12,
             file_path=str(outside_file),
             filename="outside.docx",
+            contract_type=None,
         )
 
         with self.assertRaises(HTTPException) as raised:
-            documents.download_document_file(doc_id=doc.id, db=_FakeDb(doc))
+            documents.download_document_file(
+                doc_id=doc.id, user_id=None, category=None, regime=None,
+                token=None, authorization=None, db=_FakeDb(doc),
+            )
 
         self.assertEqual(raised.exception.status_code, 404)
         self.assertTrue(outside_file.exists())
@@ -285,10 +294,16 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
             id=14,
             file_path=str(legacy_file),
             filename='legacy "display".docx',
+            contract_type=None,
         )
 
         response = documents.download_document_file(
             doc_id=doc.id,
+            user_id=None,
+            category=None,
+            regime=None,
+            token=None,
+            authorization=None,
             db=_FakeDb(doc),
         )
 
@@ -321,6 +336,7 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
             created = await documents.admin_create_document(
                 title="ხელშეკრულება",
                 content="<p>ხელშეკრულების ტექსტი</p>",
+                contract_type=None,
                 file=pdf_upload,
                 authorization=None,
                 db=db,
@@ -331,7 +347,10 @@ class DocumentUploadSecurityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(created.filename, "official_contract.pdf")
 
         created.id = 99
-        response = documents.download_document_file(doc_id=99, db=_FakeDb(created))
+        response = documents.download_document_file(
+            doc_id=99, user_id=None, category=None, regime=None,
+            token=None, authorization=None, db=_FakeDb(created),
+        )
         self.assertEqual(response.media_type, "application/pdf")
 
 

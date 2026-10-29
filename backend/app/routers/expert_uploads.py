@@ -358,11 +358,15 @@ def delete_file(
     path_attr = f"{file_type}_path"
     name_attr = f"{file_type}_filename"
     path = getattr(eu, path_attr, None)
+    try:
+        setattr(eu, path_attr, None)
+        setattr(eu, name_attr, None)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
     if path:
         delete_storage_file(path)
-    setattr(eu, path_attr, None)
-    setattr(eu, name_attr, None)
-    db.commit()
     return {"ok": True}
 
 @router.post("/{upload_id}/delete")
@@ -467,11 +471,15 @@ def admin_delete_upload(
     eu = db.scalar(select(ExpertUpload).where(ExpertUpload.id == upload_id))
     if not eu:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
-    # Remove files if present
-    for path_attr in ("expertise_path", "project_path"):
-        path = getattr(eu, path_attr, None)
+    # Keep files usable until the row deletion is durably committed.
+    stored_paths = [eu.expertise_path, eu.project_path]
+    try:
+        db.delete(eu)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+    for path in stored_paths:
         if path:
             delete_storage_file(path)
-    db.delete(eu)
-    db.commit()
     return {"ok": True}

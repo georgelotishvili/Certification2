@@ -142,6 +142,9 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     
     # Create session in database
     try:
+        # Authentication accepts only expires_at > now. Prune rejected web
+        # tokens in the same transaction as the new token, never exam sessions.
+        db.execute(delete(UserSession).where(UserSession.expires_at <= now))
         session = UserSession(
             user_id=user.id,
             token=token,

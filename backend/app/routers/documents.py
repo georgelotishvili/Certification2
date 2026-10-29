@@ -283,6 +283,8 @@ def _doc_matches_item(doc: SiteDocument, code: str, source_docx: str, default_ti
 
 def _ensure_default_contracts(db: Session) -> None:
     """Ensure the 5 public official documents and the 6 standard/transitional contracts are seeded in site_documents."""
+    new_files_created: list[str] = []
+    old_files_to_delete: list[str] = []
     try:
         existing_docs = db.scalars(select(SiteDocument)).all()
         changed = False
@@ -349,6 +351,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 docx_bytes = markdown_to_docx_bytes(md_text)
 
             file_path, resolved_file_path = _new_document_storage_path(".docx")
+            new_files_created.append(file_path)
             resolved_file_path.write_bytes(docx_bytes)
             filename = source_docx
             file_size_bytes = len(docx_bytes)
@@ -363,7 +366,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 matched.file_size_bytes = file_size_bytes
                 db.add(matched)
                 if old_file and old_file != file_path:
-                    _delete_document_file(old_file)
+                    old_files_to_delete.append(old_file)
             else:
                 doc = SiteDocument(
                     title=default_title,
@@ -398,7 +401,7 @@ def _ensure_default_contracts(db: Session) -> None:
             if obsolete_doc in existing_docs:
                 existing_docs.remove(obsolete_doc)
             if old_fp:
-                _delete_document_file(old_fp)
+                old_files_to_delete.append(old_fp)
             changed = True
 
         for key, slot in CONTRACT_SLOTS.items():
@@ -453,6 +456,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 docx_bytes = markdown_to_docx_bytes(md_text)
 
             file_path, resolved_file_path = _new_document_storage_path(".docx")
+            new_files_created.append(file_path)
             resolved_file_path.write_bytes(docx_bytes)
             filename = slot["source_docx"]
             file_size_bytes = len(docx_bytes)
@@ -468,7 +472,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 matched.file_size_bytes = file_size_bytes
                 db.add(matched)
                 if old_file and old_file != file_path:
-                    _delete_document_file(old_file)
+                    old_files_to_delete.append(old_file)
             else:
                 doc = SiteDocument(
                     title=slot["default_title"],
@@ -484,11 +488,21 @@ def _ensure_default_contracts(db: Session) -> None:
 
         if changed:
             db.commit()
-    except Exception:
+    except BaseException as exc:
         try:
             db.rollback()
         except Exception:
             pass
+        for new_file in new_files_created:
+            _delete_document_file(new_file)
+        if not isinstance(exc, Exception):
+            raise
+        return
+
+    # Do not let an interruption during old-file cleanup remove committed new
+    # files. Keep this phase outside the transaction's rollback/cleanup handler.
+    for old_file in old_files_to_delete:
+        _delete_document_file(old_file)
 
 
 def _is_admin_user(user: User | None) -> bool:

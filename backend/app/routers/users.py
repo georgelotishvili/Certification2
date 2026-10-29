@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+from types import SimpleNamespace
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, Header, UploadFile, File, Request
@@ -316,6 +317,9 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
     try:
         now = datetime.utcnow()
         session_token = generate_session_token()
+        # Keep active logins and exam attempts; roll this cleanup back if the
+        # automatic login cannot be persisted after registration.
+        db.execute(delete(UserSession).where(UserSession.expires_at <= now))
         session = UserSession(
             user_id=user.id,
             token=session_token,
@@ -1090,57 +1094,62 @@ def delete_certificate(
 
     old_level = (cert.level or "").strip().lower()
 
-    # Delete all certificate-related files and directories (do NOT delete user profile photo)
-    _delete_certificate_files(cert, user_id)
-
-    # Delete all ratings and comments for this user
-    db.execute(Rating.__table__.delete().where(Rating.target_user_id == user_id))
-    db.execute(Comment.__table__.delete().where(Comment.target_user_id == user_id))
-
-    # Delete all expert uploads and their files
-    uploads = db.scalars(select(ExpertUpload).where(ExpertUpload.user_id == user_id)).all()
-    for upload in uploads:
-        if upload.expertise_path:
-            try:
-                delete_storage_file(upload.expertise_path)
-            except Exception:
-                pass
-        if upload.project_path:
-            try:
-                delete_storage_file(upload.project_path)
-            except Exception:
-                pass
-    db.execute(ExpertUpload.__table__.delete().where(ExpertUpload.user_id == user_id))
-
-    now = datetime.utcnow()
-    # Restore cert_candidate status if the user has a valid certificate handover letter within the last 30 days
-    pass_letter = db.scalar(
-        select(PlanningLetter)
-        .where(
-            PlanningLetter.user_id == user_id,
-            PlanningLetter.kind == "certificate",
-            or_(
-                PlanningLetter.period.is_(None),
-                ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
-            ),
-            PlanningLetter.status != "failed",
-        )
-        .order_by(PlanningLetter.created_at.desc(), PlanningLetter.id.desc())
+    # Snapshot paths before deleting ORM rows. Files stay usable if the database
+    # transaction fails; post-commit cleanup must not reload deleted objects.
+    certificate_files = SimpleNamespace(
+        file_path=cert.file_path, level=cert.level, unique_code=cert.unique_code,
     )
-    if pass_letter is not None:
-        letter_dt = pass_letter.sent_at or pass_letter.created_at
-        if letter_dt is not None and (now - letter_dt) <= timedelta(days=30):
-            fallback_cat = "C" if old_level == "expert" else ("B" if old_level == "municipal" else "A")
-            restored_cat = normalize_cert_category(
-                user.candidate_category or get_user_latest_requested_category(db, user_id) or fallback_cat
-            )
-            user.candidate_status = "cert_candidate"
-            user.candidate_category = restored_cat
-            user.candidate_updated_at = now
-            db.add(user)
+    uploads = db.scalars(select(ExpertUpload).where(ExpertUpload.user_id == user_id)).all()
+    upload_paths = [
+        path for upload in uploads
+        for path in (upload.expertise_path, upload.project_path) if path
+    ]
+    try:
+        # Delete all ratings, comments and expert-upload rows for this user.
+        db.execute(Rating.__table__.delete().where(Rating.target_user_id == user_id))
+        db.execute(Comment.__table__.delete().where(Comment.target_user_id == user_id))
+        db.execute(ExpertUpload.__table__.delete().where(ExpertUpload.user_id == user_id))
 
-    db.delete(cert)
-    db.commit()
+        now = datetime.utcnow()
+        # Restore cert_candidate status if the user has a valid certificate handover letter within the last 30 days
+        pass_letter = db.scalar(
+            select(PlanningLetter)
+            .where(
+                PlanningLetter.user_id == user_id,
+                PlanningLetter.kind == "certificate",
+                or_(
+                    PlanningLetter.period.is_(None),
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
+                ),
+                PlanningLetter.status != "failed",
+            )
+            .order_by(PlanningLetter.created_at.desc(), PlanningLetter.id.desc())
+        )
+        if pass_letter is not None:
+            letter_dt = pass_letter.sent_at or pass_letter.created_at
+            if letter_dt is not None and (now - letter_dt) <= timedelta(days=30):
+                fallback_cat = "C" if old_level == "expert" else ("B" if old_level == "municipal" else "A")
+                restored_cat = normalize_cert_category(
+                    user.candidate_category or get_user_latest_requested_category(db, user_id) or fallback_cat
+                )
+                user.candidate_status = "cert_candidate"
+                user.candidate_category = restored_cat
+                user.candidate_updated_at = now
+                db.add(user)
+
+        db.delete(cert)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+
+    # Cleanup targets are unchanged; the profile photo is deliberately kept.
+    _delete_certificate_files(certificate_files, user_id)
+    for path in upload_paths:
+        try:
+            delete_storage_file(path)
+        except Exception:
+            pass
     return None
 
 

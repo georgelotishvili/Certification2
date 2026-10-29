@@ -51,7 +51,7 @@ class UserCodePersistenceTests(unittest.TestCase):
             self.patches.enter_context(patch.object(module, "ensure_media_root", return_value=self.media_root))
             self.patches.enter_context(patch.object(module, "delete_storage_file"))
             self.patches.enter_context(patch.object(module, "delete_expert_certificate_files"))
-        self.photo_cleanup = self.patches.enter_context(patch.object(admin, "_delete_user_photo_file"))
+        self.photo_cleanup = self.patches.enter_context(patch.object(admin, "_cleanup_committed_media"))
         self.patches.enter_context(patch.object(admin, "_require_admin"))
         self.patches.enter_context(patch.object(admin, "_is_founder_actor", return_value=True))
         self.verification = self.patches.enter_context(
@@ -63,8 +63,8 @@ class UserCodePersistenceTests(unittest.TestCase):
     def payload(self, number=1, **overrides):
         values = dict(
             personal_id=f"{number:011d}",
-            first_name="Example",
-            last_name="Person",
+            first_name="საცდელი",
+            last_name="მომხმარებელი",
             phone=f"555{number:06d}",
             email=f"person{number}@example.com",
             password="Test-password-123!",
@@ -78,7 +78,7 @@ class UserCodePersistenceTests(unittest.TestCase):
 
     def legacy_user(self, number=1, **overrides):
         values = dict(
-            personal_id=f"{number:011d}", first_name="Legacy", last_name="Person",
+            personal_id=f"{number:011d}", first_name="ძველი", last_name="მომხმარებელი",
             phone=f"555{number:06d}", email=f"person{number}@example.com",
             password_hash="legacy-password-hash", code=str(1000000000 + number),
         )
@@ -144,21 +144,23 @@ class UserCodePersistenceTests(unittest.TestCase):
         self.assertEqual(self.reservation(original_pid).code, original_code)
         self.assertEqual(self.register().code, original_code)
 
-    def test_bulk_delete_preserves_all_codes_and_does_not_delete_founder(self):
+    def test_retired_bulk_delete_preserves_all_accounts_and_codes(self):
         founder = self.legacy_user(99, email="founder@example.com", is_admin=True)
         first = self.register(1)
         legacy = self.legacy_user(2)
         codes = {first.personal_id: first.code, legacy.personal_id: legacy.code}
         founder_id, founder_code = founder.id, founder.code
 
-        admin.admin_delete_all_users(authorization="Bearer test-founder", db=self.db)
+        with self.assertRaises(HTTPException) as caught:
+            admin.admin_delete_all_users(authorization="Bearer test-founder", db=self.db)
 
-        self.assertEqual(self.db.query(User).count(), 1)
+        self.assertEqual(caught.exception.status_code, 410)
+        self.assertEqual(self.db.query(User).count(), 3)
         self.assertEqual(self.db.get(User, founder_id).code, founder_code)
-        for personal_id, code in codes.items():
-            self.assertEqual(self.reservation(personal_id).code, code)
-        self.assertEqual(self.register(1).code, codes[first.personal_id])
-        self.assertEqual(self.register(2).code, codes[f"{2:011d}"])
+        self.assertEqual(self.reservation(first.personal_id).code, codes[first.personal_id])
+        self.assertIsNone(self.reservation(legacy.personal_id))
+        self.assertEqual(legacy.code, codes[legacy.personal_id])
+        self.photo_cleanup.assert_not_called()
 
     def test_delete_removes_old_records_and_never_restores_old_privileges(self):
         user = self.legacy_user(is_admin=True, exam_permission=True, exam_stage="all")
@@ -191,18 +193,23 @@ class UserCodePersistenceTests(unittest.TestCase):
         self.assertEqual(caught.exception.status_code, 400)
         self.assertIsNotNone(self.db.get(User, founder.id))
 
-    def test_already_registered_personal_number_email_or_phone_still_conflicts(self):
+    def test_already_registered_personal_number_or_email_still_conflicts(self):
         existing = self.register()
         for duplicate in (
             dict(personal_id=existing.personal_id),
             dict(email=existing.email),
-            dict(phone=existing.phone),
         ):
             with self.subTest(duplicate=duplicate), self.assertRaises(HTTPException) as caught:
                 self.register(2, **duplicate)
             self.assertEqual(caught.exception.status_code, 409)
         self.assertEqual(self.db.query(User).count(), 1)
         self.assertEqual(self.db.query(UserCodeReservation).count(), 1)
+
+    def test_shared_contact_phone_does_not_share_a_registration_code(self):
+        existing = self.register()
+        other = self.register(2, phone=existing.phone)
+        self.assertNotEqual(other.code, existing.code)
+        self.assertEqual(self.db.query(UserCodeReservation).count(), 2)
 
     def test_registration_verification_is_still_required_for_a_reserved_code(self):
         first = self.register()
@@ -354,7 +361,7 @@ class UserCodePersistenceTests(unittest.TestCase):
                         admin.admin_delete_all_users(authorization="Bearer test-founder", db=self.db)
                     else:
                         self.delete(user)
-                self.assertEqual(caught.exception.status_code, 409)
+                self.assertEqual(caught.exception.status_code, 410 if bulk else 409)
                 self.photo_cleanup.assert_not_called()
                 self.assertEqual(self.db.query(User).count(), 1)
                 self.db.rollback()
@@ -363,14 +370,14 @@ class UserCodePersistenceTests(unittest.TestCase):
                 self.db.commit()
                 self.db.expunge_all()
 
-    def test_bulk_delete_checks_all_reservations_before_deleting_any_files(self):
+    def test_retired_bulk_delete_does_not_mutate_even_mismatched_reservations(self):
         first = self.legacy_user(1)
         second = self.legacy_user(2)
         self.db.add(UserCodeReservation(personal_id=second.personal_id, code="9999999999"))
         self.db.commit()
         with self.assertRaises(HTTPException) as caught:
             admin.admin_delete_all_users(authorization="Bearer test-founder", db=self.db)
-        self.assertEqual(caught.exception.status_code, 409)
+        self.assertEqual(caught.exception.status_code, 410)
         self.photo_cleanup.assert_not_called()
         self.db.rollback()
         self.assertEqual(self.db.query(User).count(), 2)

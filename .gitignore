@@ -31,6 +31,9 @@ backend/app.db
 backend/verification_codes.txt
 rehost.ge server.txt
 
+# Local recovery archives may contain retired uploads and expired tokens.
+.deploy/local-cleanup-archives/
+
 # AI-to-AI communication file (local-only, not deployed)
 communication.md
 გეგმა.md
