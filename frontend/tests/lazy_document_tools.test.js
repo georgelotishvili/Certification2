@@ -132,9 +132,12 @@ test('public profile does not download unused PDF tooling', () => {
 });
 
 test('admin entry point defers Word and PDF libraries until an action needs them', () => {
-  assert.doesNotMatch(read('pages/admin.html'), /<script[^>]*vendor\/(?:jspdf|svg2pdf|mammoth)/);
-  for (const name of ['shared', 'certificate', 'results', 'project-results', 'statements', 'documents']) {
-    assert.ok(read('pages/admin.html').includes(`scripts/admin/${name}.js?v=20261008-perf1`));
+  const html = read('pages/admin.html');
+  assert.doesNotMatch(html, /<script[^>]*vendor\/(?:jspdf|svg2pdf|mammoth)/);
+  for (const name of ['shared', 'certificate', 'results', 'project-results', 'statements', 'documents', 'users']) {
+    const tag = html.match(new RegExp(`<script\\b[^>]*src=["'][^"']*scripts/admin/${name}\\.js\\?v=[^"'\\s]+["'][^>]*>`, 'i'))?.[0];
+    assert.ok(tag, `${name} must have a cache-versioned script entry`);
+    assert.match(tag, /\bdefer(?:\s|=|>)/i, `${name} must remain deferred`);
   }
 });
 

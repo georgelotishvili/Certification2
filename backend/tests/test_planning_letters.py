@@ -1,7 +1,7 @@
 """Local-only planning-letter regression coverage: no real SMTP or media writes."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -75,6 +75,10 @@ class PlanningLetterTests(unittest.TestCase):
         self.storage_patch = patch.object(media_storage, "_MEDIA_ROOT_CACHE", self.media)
         self.storage_patch.start()
         self.addCleanup(self.storage_patch.stop)
+        # Keep appointment fixtures beyond the eight-day notice window on every run.
+        today_patch = patch.object(planning_letters, "_today_in_tbilisi", return_value=date(2026, 10, 30))
+        today_patch.start()
+        self.addCleanup(today_patch.stop)
         self.candidate = self.add_user(1)
         self.staff = self.add_user(2, is_admin=True)
         self.other_candidate = self.add_user(3)
@@ -106,7 +110,7 @@ class PlanningLetterTests(unittest.TestCase):
 
     def form(self, **overrides):
         result = dict(
-            kind="exam", event_date="2027-03-20", event_time="10:30", subject="Exam invitation",
+            kind="exam", event_date="2027-03-22", event_time="10:30", subject="Exam invitation",
             body="Please attend the exam at the confirmed time.", request_id=str(uuid4()),
             confirmed="true", expected_to_email=self.candidate.email,
             use_template_attachment="false",
@@ -123,6 +127,26 @@ class PlanningLetterTests(unittest.TestCase):
     def saved(self, response):
         self.assertIn(response.status_code, (200, 201), response.text)
         return response.json()
+
+    @staticmethod
+    def certificate_pdf_bytes():
+        """A complete one-page PDF fixture; no real certificate data or dependency."""
+        objects = (
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << >> /Contents 4 0 R >>",
+            b"<< /Length 0 >>\nstream\nendstream",
+        )
+        data = b"%PDF-1.4\n"
+        offsets = []
+        for number, content in enumerate(objects, 1):
+            offsets.append(len(data))
+            data += f"{number} 0 obj\n".encode() + content + b"\nendobj\n"
+        xref_offset = len(data)
+        data += b"xref\n0 5\n0000000000 65535 f \n"
+        data += b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets)
+        data += f"trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode()
+        return data
 
     def history(self, user_id=None):
         result = self.client.get(
@@ -172,7 +196,7 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(self.db.scalars(select(ExamSchedule)).all(), [])
 
     def test_noon_boundary_is_automatic_and_exam_permission_stays_unchanged(self):
-        for day, time, period in (("2027-03-20", "11:59", "morning"), ("2027-03-21", "12:00", "evening"), ("2027-03-22", "00:00", "morning")):
+        for day, time, period in (("2027-03-22", "11:59", "morning"), ("2027-03-23", "12:00", "evening"), ("2027-03-24", "00:00", "morning")):
             letter = self.saved(self.send(self.form(event_date=day, event_time=time)))
             schedule = self.db.get(ExamSchedule, letter["exam_schedule_id"])
             self.assertEqual(schedule.period, period)
@@ -181,6 +205,17 @@ class PlanningLetterTests(unittest.TestCase):
         self.db.refresh(self.candidate)
         self.assertFalse(self.candidate.exam_permission)
         self.assertEqual(self.candidate.exam_stage, "none")
+
+    def test_weekend_exam_dates_are_rejected_without_sending_or_scheduling(self):
+        for day in ("2027-03-20", "2027-03-21"):
+            for action_mode in ("save_only", "save_and_send", "send_only"):
+                with self.subTest(day=day, action_mode=action_mode):
+                    response = self.send(self.form(event_date=day, action_mode=action_mode))
+                    self.assertEqual(response.status_code, 422, response.text)
+                    self.assertIn("შაბათ-კვირას", response.json()["detail"])
+        self.delivery.assert_not_called()
+        self.assertEqual(self.db.scalars(select(ExamSchedule)).all(), [])
+        self.assertEqual(self.history(), [])
 
     def test_certificate_letter_does_not_schedule_exam_or_issue_certificate(self):
         letter = self.saved(self.send(self.form(kind="certificate")))
@@ -289,7 +324,7 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(self.delivery.call_count, 2)
 
     def test_sent_or_uncertain_letter_cannot_be_retried_blindly(self):
-        for day, status in (("2027-03-20", "sent"), ("2027-03-21", "uncertain")):
+        for day, status in (("2027-03-22", "sent"), ("2027-03-23", "uncertain")):
             self.delivery.return_value = (status, None)
             letter = self.saved(self.send(self.form(event_date=day)))
             result = self.client.post(
@@ -322,7 +357,7 @@ class PlanningLetterTests(unittest.TestCase):
     def test_save_only_creates_schedule_and_saved_letter_without_smtp(self):
         response = self.send(self.form(
             action_mode="save_only",
-            event_date="2027-04-10",
+            event_date="2027-04-12",
             event_time="11:30",
             period="morning",
         ))
@@ -333,7 +368,7 @@ class PlanningLetterTests(unittest.TestCase):
         self.delivery.assert_not_called()
         schedule = self.db.get(ExamSchedule, letter["exam_schedule_id"])
         self.assertIsNotNone(schedule)
-        self.assertEqual(str(schedule.exam_date), "2027-04-10")
+        self.assertEqual(str(schedule.exam_date), "2027-04-12")
         self.assertEqual(schedule.period, "morning")
 
     def test_send_only_sends_email_without_creating_exam_schedule(self):
@@ -360,7 +395,7 @@ class PlanningLetterTests(unittest.TestCase):
         self.delivery.return_value = ("sent", None)
         first = self.saved(self.send(self.form(
             action_mode="save_only",
-            event_date="2027-05-01",
+            event_date="2027-05-03",
             event_time="10:00",
             period="morning",
         )))
@@ -373,22 +408,22 @@ class PlanningLetterTests(unittest.TestCase):
             action_mode="save_and_send",
             schedule_id=str(schedule_id),
             edit_letter_id=str(letter_id),
-            event_date="2027-05-02",
+            event_date="2027-05-04",
             event_time="16:30",
             period="evening",
             subject="განახლებული სათაური",
-            body="განახლებული ტექსტი 02.05.2027 16:30",
+            body="განახლებული ტექსტი 04.05.2027 16:30",
         )))
         self.assertEqual(len(self.history()), 1)
         self.assertEqual(edited["exam_schedule_id"], schedule_id)
         self.assertEqual(edited["status"], "sent")
-        self.assertEqual(edited["event_date"], "2027-05-02")
+        self.assertEqual(edited["event_date"], "2027-05-04")
         self.assertEqual(edited["event_time"], "16:30")
         self.assertEqual(edited["period"], "evening")
         self.delivery.assert_called_once()
         self.db.expire_all()
         schedule = self.db.get(ExamSchedule, schedule_id)
-        self.assertEqual(str(schedule.exam_date), "2027-05-02")
+        self.assertEqual(str(schedule.exam_date), "2027-05-04")
         self.assertEqual(schedule.period, "evening")
 
     def test_rejection_template_and_letters(self):
@@ -489,6 +524,16 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(self.db.scalars(select(PlanningLetter)).all(), [])
         self.delivery.assert_not_called()
 
+        # An uploaded PDF is mandatory before either notification endpoint can send.
+        pdf_bytes = self.certificate_pdf_bytes()
+        upload_res = self.client.post(
+            "/users/1/certificate/file",
+            headers=self.auth,
+            files={"file": ("certificate.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(upload_res.status_code, 204, upload_res.text)
+        self.delivery.assert_not_called()
+
         # 2. Update certificate with send_notification=True -> saves AND sends §3.11 notification
         update_res = self.client.put(
             "/users/1/certificate",
@@ -513,15 +558,9 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertIn("გილოცავთ! თქვენზე გაიცა სერტიფიკატი.", letters[0].body)
         self.assertIn("gipc.org.ge", letters[0].body)
         self.assertEqual(letters[0].subject, "სერტიფიკატის გაცემა და საჯარო რეესტრში ასახვა")
+        self.assertEqual(media_storage.resolve_storage_path(letters[0].attachment_path).read_bytes(), pdf_bytes)
 
-        # 3. Upload PDF and call POST /users/1/certificate/notify -> attaches PDF to §3.11 email
-        upload_res = self.client.post(
-            "/users/1/certificate/file",
-            headers=self.auth,
-            files={"file": ("certificate.pdf", b"%PDF-1.4 sample certificate", "application/pdf")},
-        )
-        self.assertEqual(upload_res.status_code, 204, upload_res.text)
-
+        # 3. Explicit notify also attaches the uploaded PDF to the §3.11 email.
         notify_res = self.client.post(
             "/users/1/certificate/notify",
             headers=self.auth,
@@ -535,6 +574,7 @@ class PlanningLetterTests(unittest.TestCase):
         letters = self.db.scalars(select(PlanningLetter).order_by(PlanningLetter.id)).all()
         self.assertEqual(len(letters), 2)
         self.assertEqual(letters[1].attachment_filename, "certificate-1000000001.pdf")
+        self.assertEqual(media_storage.resolve_storage_path(letters[1].attachment_path).read_bytes(), pdf_bytes)
         self.assertEqual(letters[1].subject, "ჩასწორებული სათაური — 1000000001")
         self.assertIn("ჩასწორებული ტექსტი: Person1 Family, კოდი: 1000000001", letters[1].body)
 
@@ -546,6 +586,38 @@ class PlanningLetterTests(unittest.TestCase):
         )
         self.assertEqual(put_cert_tmpl.status_code, 200, put_cert_tmpl.text)
         self.assertEqual(put_cert_tmpl.json()["subject"], "ახალი შაბლონი — {code}")
+
+    def test_certificate_notifications_require_an_uploaded_pdf(self):
+        payload = {
+            "unique_code": "1000000001",
+            "level": "architect",
+            "status": "active",
+            "issue_date": "2026-10-16",
+            "validity_term": 5,
+            "valid_until": "2031-10-16",
+            "send_notification": True,
+        }
+        rejected_create = self.client.post("/users/1/certificate", headers=self.auth, json=payload)
+        self.assertEqual(rejected_create.status_code, 409, rejected_create.text)
+        self.db.refresh(self.candidate)
+        self.assertIsNone(self.candidate.certificate)
+
+        created = self.client.post(
+            "/users/1/certificate", headers=self.auth, json={**payload, "send_notification": False},
+        )
+        self.assertEqual(created.status_code, 201, created.text)
+        rejected_update = self.client.put(
+            "/users/1/certificate", headers=self.auth, json={**payload, "level": "expert"},
+        )
+        self.assertEqual(rejected_update.status_code, 409, rejected_update.text)
+        rejected_notify = self.client.post("/users/1/certificate/notify", headers=self.auth, json={})
+        self.assertEqual(rejected_notify.status_code, 409, rejected_notify.text)
+        for response in (rejected_create, rejected_update, rejected_notify):
+            self.assertIn("PDF", response.json()["detail"])
+        self.db.expire_all()
+        self.assertEqual(self.db.get(User, 1).certificate.level, "architect")
+        self.assertEqual(self.history(), [])
+        self.delivery.assert_not_called()
 
     def test_schedule_times_persist_via_endpoint_and_one_time_letter_preserves_defaults(self):
         # 1. Default times returned in GET /admin/planning-templates

@@ -299,7 +299,7 @@ try:
         os.replace(tmp, p)
 
     contracts_dir = root / "backend/app/data/contracts"
-    if contracts_dir.is_dir():
+    if any(rel.startswith("backend/app/data/contracts/") for rel in files) and contracts_dir.is_dir():
         for old_p in contracts_dir.glob("*_\u10d0\u10e0\u10d2\u10dd\u10dc.*"):
             try:
                 old_p.unlink()

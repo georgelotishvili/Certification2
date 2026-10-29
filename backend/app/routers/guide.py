@@ -273,15 +273,23 @@ def _ensure_default_guide_docs(db: Session) -> None:
 
         if changed:
             db.commit()
-            for old_fp in old_files_to_delete:
-                _delete_guide_file_from_disk(old_fp)
-    except BaseException:
+    except BaseException as exc:
         try:
             db.rollback()
         except Exception:
             pass
         for new_fp in new_files_created:
             _delete_guide_file_from_disk(new_fp)
+        # Keep ordinary seeding failures non-fatal, but do not swallow shutdown
+        # or cancellation after cleaning up an uncommitted attempt.
+        if not isinstance(exc, Exception):
+            raise
+        return
+
+    # The new paths are now committed. A failure/interruption while removing
+    # old files must never roll back or delete those committed replacements.
+    for old_fp in old_files_to_delete:
+        _delete_guide_file_from_disk(old_fp)
 
 
 def _get_guide_doc_record(db: Session) -> Optional[GuideDocument]:

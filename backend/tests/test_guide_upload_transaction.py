@@ -1,6 +1,7 @@
 """Transactional file cleanup tests for backend/app/routers/guide.py across all 3 failure points."""
 from __future__ import annotations
 
+from asyncio import CancelledError
 from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -49,9 +50,9 @@ class GuideUploadTransactionTests(unittest.TestCase):
         self.addCleanup(self.admin_settings.stop)
 
         founder = User(
-            first_name="ლაშა",
-            last_name="ფოფხაძე",
-            personal_id="01031003115",
+            first_name="Synthetic",
+            last_name="GuideAdmin",
+            personal_id="00000000001",
             phone="599000000",
             email="founder@example.test",
             password_hash="hash",
@@ -75,6 +76,11 @@ class GuideUploadTransactionTests(unittest.TestCase):
         app.dependency_overrides[get_db] = lambda: self.db
         self.client = TestClient(app, raise_server_exceptions=False)
         self.addCleanup(self.client.close)
+
+        for smtp_class in ("smtplib.SMTP", "smtplib.SMTP_SSL"):
+            smtp_patch = patch(smtp_class, side_effect=AssertionError("Real SMTP is forbidden in tests"))
+            smtp_patch.start()
+            self.addCleanup(smtp_patch.stop)
 
     def _seed_existing_doc(self) -> tuple[GuideDocument, Path, bytes]:
         old_bytes = b"OLD_DOCX_CONTENT_12345"
@@ -106,6 +112,141 @@ class GuideUploadTransactionTests(unittest.TestCase):
         self.assertEqual(old_path.read_bytes(), old_bytes)
         files_on_disk = list(self.guide_root.iterdir())
         self.assertEqual(files_on_disk, [old_path], f"Orphaned new files left on disk: {files_on_disk}")
+
+    def _seed_factory_doc(self, label: str):
+        title = f"Synthetic factory guide {label}"
+        filename = f"{label}.docx"
+        old_path = self.guide_root / f"old_{label}.docx"
+        old_bytes = b"SYNTHETIC_OLD_GUIDE"
+        old_path.write_bytes(old_bytes)
+        doc = GuideDocument(
+            title=title, content="", order_index=1,
+            file_path=str(old_path), filename=filename,
+            file_size_bytes=len(old_bytes),
+        )
+        self.db.add(doc)
+        self.db.commit()
+        section = (1, title, "Synthetic replacement", "<p>Synthetic replacement</p>", filename)
+        return doc.id, old_path, old_bytes, section
+
+    def test_seeder_precommit_cancellation_cleans_up_and_propagates(self):
+        original_write = Path.write_bytes
+        for failure_point in ("before_write", "partial_write", "commit"):
+            with self.subTest(failure_point=failure_point):
+                doc_id, old_path, old_bytes, section = self._seed_factory_doc(failure_point)
+                files_before = set(self.guide_root.iterdir())
+
+                def fail_write(path, content):
+                    if failure_point == "partial_write":
+                        original_write(path, b"PARTIAL_SYNTHETIC_GUIDE")
+                    raise CancelledError("Synthetic precommit cancellation")
+
+                failure_patch = (
+                    patch.object(self.db, "commit", side_effect=CancelledError("Synthetic commit cancellation"))
+                    if failure_point == "commit" else patch.object(Path, "write_bytes", fail_write)
+                )
+                with (
+                    patch.object(guide, "_get_bundled_doc28_sections", return_value=[section]),
+                    patch.object(guide, "markdown_to_docx_bytes", return_value=b"SYNTHETIC_NEW_GUIDE"),
+                    patch.object(self.db, "rollback", wraps=self.db.rollback) as rollback,
+                    failure_patch,
+                ):
+                    with self.assertRaises(CancelledError):
+                        guide._ensure_default_guide_docs(self.db)
+                    rollback.assert_called_once()
+
+                self.db.expire_all()
+                row = self.db.get(GuideDocument, doc_id)
+                self.assertEqual(row.content, "")
+                self.assertEqual(row.file_path, str(old_path))
+                self.assertEqual(old_path.read_bytes(), old_bytes)
+                self.assertEqual(set(self.guide_root.iterdir()), files_before)
+
+    def test_seeder_postcommit_cancellation_keeps_committed_replacement(self):
+        doc_id, old_path, old_bytes, section = self._seed_factory_doc("postcommit_cancel")
+
+        def cancel_old_cleanup(stored_path):
+            self.assertEqual(stored_path, str(old_path))
+            raise CancelledError("Synthetic cancellation after commit")
+
+        with (
+            patch.object(guide, "_get_bundled_doc28_sections", return_value=[section]),
+            patch.object(guide, "markdown_to_docx_bytes", return_value=b"SYNTHETIC_NEW_GUIDE"),
+            patch.object(guide, "_delete_guide_file_from_disk", side_effect=cancel_old_cleanup) as cleanup,
+            patch.object(self.db, "commit", wraps=self.db.commit) as commit,
+            patch.object(self.db, "rollback", wraps=self.db.rollback) as rollback,
+        ):
+            with self.assertRaises(CancelledError):
+                guide._ensure_default_guide_docs(self.db)
+            commit.assert_called_once()
+            rollback.assert_not_called()
+            cleanup.assert_called_once_with(str(old_path))
+
+        self.db.expire_all()
+        row = self.db.get(GuideDocument, doc_id)
+        new_path = Path(row.file_path)
+        self.assertNotEqual(new_path, old_path)
+        self.assertEqual(row.content, section[3])
+        self.assertEqual(new_path.read_bytes(), b"SYNTHETIC_NEW_GUIDE")
+        self.assertEqual(old_path.read_bytes(), old_bytes)
+        self.assertEqual(set(self.guide_root.iterdir()), {old_path, new_path})
+
+    def test_seeder_old_file_unlink_error_keeps_committed_replacement(self):
+        doc_id, old_path, old_bytes, section = self._seed_factory_doc("postcommit_unlink")
+        original_unlink = Path.unlink
+
+        def fail_old_unlink(path, *args, **kwargs):
+            if path == old_path:
+                raise OSError("Synthetic locked old file")
+            return original_unlink(path, *args, **kwargs)
+
+        with (
+            patch.object(guide, "_get_bundled_doc28_sections", return_value=[section]),
+            patch.object(guide, "markdown_to_docx_bytes", return_value=b"SYNTHETIC_NEW_GUIDE"),
+            patch.object(Path, "unlink", fail_old_unlink),
+            patch.object(self.db, "rollback", wraps=self.db.rollback) as rollback,
+        ):
+            guide._ensure_default_guide_docs(self.db)
+            rollback.assert_not_called()
+
+        self.db.expire_all()
+        row = self.db.get(GuideDocument, doc_id)
+        new_path = Path(row.file_path)
+        self.assertNotEqual(new_path, old_path)
+        self.assertEqual(row.content, section[3])
+        self.assertEqual(new_path.read_bytes(), b"SYNTHETIC_NEW_GUIDE")
+        self.assertEqual(old_path.read_bytes(), old_bytes)
+
+    def test_seeder_deletes_old_file_only_after_successful_commit(self):
+        doc_id, old_path, _old_bytes, section = self._seed_factory_doc("successful_commit")
+        original_commit = self.db.commit
+        original_cleanup = guide._delete_guide_file_from_disk
+        operations = []
+
+        def commit():
+            self.assertTrue(old_path.is_file())
+            original_commit()
+            operations.append("committed")
+
+        def cleanup(stored_path):
+            self.assertEqual(operations, ["committed"])
+            original_cleanup(stored_path)
+            operations.append("old_file_deleted")
+
+        with (
+            patch.object(guide, "_get_bundled_doc28_sections", return_value=[section]),
+            patch.object(guide, "markdown_to_docx_bytes", return_value=b"SYNTHETIC_NEW_GUIDE"),
+            patch.object(self.db, "commit", side_effect=commit),
+            patch.object(guide, "_delete_guide_file_from_disk", side_effect=cleanup),
+        ):
+            guide._ensure_default_guide_docs(self.db)
+
+        self.db.expire_all()
+        row = self.db.get(GuideDocument, doc_id)
+        new_path = Path(row.file_path)
+        self.assertEqual(operations, ["committed", "old_file_deleted"])
+        self.assertEqual(new_path.read_bytes(), b"SYNTHETIC_NEW_GUIDE")
+        self.assertEqual(set(self.guide_root.iterdir()), {new_path})
 
     def test_admin_update_three_failure_points_and_success(self):
         doc, old_path, old_bytes = self._seed_existing_doc()
