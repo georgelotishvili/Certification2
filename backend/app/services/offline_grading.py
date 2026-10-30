@@ -5,6 +5,7 @@ from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
+import random
 import shutil
 from uuid import uuid4
 
@@ -12,12 +13,16 @@ from fastapi import HTTPException
 from sqlalchemy import select, update
 
 from ..models import (
+    Answer,
+    Block,
     Exam,
     MultiApartmentEvaluation,
     MultiFunctionalEvaluation,
     OfflineExamAttempt,
     OfflineExamContent,
+    Option,
     PreparedExamMaterial,
+    Question,
     Session as ExamSession,
     UserExamStageGrant,
 )
@@ -280,6 +285,7 @@ def capture_theory_content(db, attempt, session):
     prepared = get_prepared_theory_material(db, session.id)
     if prepared is not None:
         snapshot = json.loads(prepared.snapshot)
+        snapshot.pop("recorded_answers", None)
         if isinstance(snapshot.get("session"), dict):
             snapshot["session"]["started_at"] = _iso(attempt.started_at)
             snapshot["session"]["ends_at"] = _iso(attempt.ends_at)
@@ -290,6 +296,308 @@ def capture_theory_content(db, attempt, session):
     if not selected or selected != captured:
         raise HTTPException(409, "Prepared exam content changed; download the materials again")
     db.add(OfflineExamContent(attempt_id=attempt.id, snapshot=json.dumps(snapshot, ensure_ascii=False)))
+
+
+def ensure_prepared_theory_block(db, session, block_id: int) -> tuple[dict, bool]:
+    existing = get_prepared_theory_material(db, session.id)
+    if existing is not None:
+        snapshot = json.loads(existing.snapshot)
+        found = next((item for item in theory_blocks(snapshot) if item["id"] == block_id), None)
+        if found is not None:
+            return found, False
+
+    block = db.get(Block, block_id)
+    if not block or block.exam_id != session.exam_id or not block.enabled:
+        raise HTTPException(404, "Block not found")
+
+    selected_map: dict[str, list[int]] = {}
+    if session.selected_map:
+        try:
+            selected_map = json.loads(session.selected_map)
+        except Exception:
+            selected_map = {}
+
+    blocks = db.scalars(
+        select(Block)
+        .where(Block.exam_id == session.exam_id, Block.enabled == True)  # noqa: E712
+        .order_by(Block.order_index)
+    ).all()
+    map_changed = False
+    for blk in blocks:
+        key = str(blk.id)
+        if key not in selected_map:
+            all_questions = db.scalars(
+                select(Question)
+                .where(Question.block_id == blk.id, Question.enabled == True)  # noqa: E712
+                .order_by(Question.order_index)
+            ).all()
+            if not all_questions:
+                if blk.id == block_id:
+                    raise HTTPException(404, "No questions in block")
+                continue
+            choose_n = min(blk.qty, len(all_questions))
+            selected = random.sample(all_questions, k=choose_n)
+            random.shuffle(selected)
+            selected_map[key] = [q.id for q in selected]
+            map_changed = True
+
+    if str(block_id) not in selected_map or not selected_map[str(block_id)]:
+        raise HTTPException(404, "No questions in block")
+
+    if map_changed or not session.selected_map:
+        session.selected_map = json.dumps(selected_map)
+        db.add(session)
+        db.flush()
+
+    if existing is not None:
+        from .exam_lifecycle import build_exam_snapshot
+        old_snap = json.loads(existing.snapshot)
+        recorded = old_snap.get("recorded_answers")
+        snapshot, _ = build_exam_snapshot(db, session, finished_at=session.started_at)
+        if recorded:
+            snapshot["recorded_answers"] = recorded
+        existing.snapshot = json.dumps(snapshot, ensure_ascii=False)
+        db.add(existing)
+        db.flush()
+    else:
+        snapshot = prepare_theory_content(db, session)
+
+    found = next((item for item in theory_blocks(snapshot) if item["id"] == block_id), None)
+    if found is None:
+        raise HTTPException(404, "Block not found")
+    return found, True
+
+
+def record_legacy_theory_answers(
+    db,
+    session,
+    items: list[tuple[int, int]],
+    *,
+    strict: bool,
+) -> int:
+    from .exam_lifecycle import _iso
+
+    if not session.selected_map:
+        raise HTTPException(400, "Questions not initialized")
+
+    prepared = get_prepared_theory_material(db, session.id)
+    if prepared is None:
+        try:
+            prepare_theory_content(db, session)
+            prepared = get_prepared_theory_material(db, session.id)
+        except HTTPException:
+            prepared = None
+
+    if prepared is not None:
+        snapshot = json.loads(prepared.snapshot)
+        questions_by_id = {
+            q["id"]: q
+            for b in theory_blocks(snapshot)
+            for q in b.get("questions", [])
+        }
+        all_snapshot_options = {
+            o["id"]: q["id"]
+            for q in questions_by_id.values()
+            for o in q.get("options", [])
+        }
+        recorded = dict(snapshot.get("recorded_answers") or {})
+        now_dt = datetime.utcnow()
+        now_iso = _iso(now_dt)
+        saved_count = 0
+
+        for question_id, option_id in items:
+            q_snap = questions_by_id.get(question_id)
+            if q_snap is None:
+                if strict:
+                    raise HTTPException(400, "Question not allowed in this session")
+                continue
+
+            opt_snap = next(
+                (o for o in q_snap.get("options", []) if o["id"] == option_id),
+                None,
+            )
+            if opt_snap is None:
+                if strict:
+                    if option_id in all_snapshot_options:
+                        raise HTTPException(400, "Option does not belong to question")
+                    live_opt = db.get(Option, option_id)
+                    if live_opt is None:
+                        raise HTTPException(404, "Option not found")
+                    raise HTTPException(400, "Option does not belong to question")
+                continue
+
+            is_correct = bool(opt_snap.get("is_correct", False))
+            recorded[str(question_id)] = {
+                "option_id": option_id,
+                "is_correct": is_correct,
+                "answered_at": now_iso,
+            }
+
+            live_q = db.get(Question, question_id)
+            live_opt = db.get(Option, option_id)
+            if live_q is not None and live_opt is not None and live_opt.question_id == question_id:
+                existing_ans = db.scalar(
+                    select(Answer).where(
+                        Answer.session_id == session.id,
+                        Answer.question_id == question_id,
+                    )
+                )
+                if existing_ans is not None:
+                    existing_ans.option_id = option_id
+                    existing_ans.is_correct = is_correct
+                    existing_ans.answered_at = now_dt
+                else:
+                    db.add(
+                        Answer(
+                            session_id=session.id,
+                            question_id=question_id,
+                            option_id=option_id,
+                            is_correct=is_correct,
+                            answered_at=now_dt,
+                        )
+                    )
+            saved_count += 1
+
+        snapshot["recorded_answers"] = recorded
+        prepared.snapshot = json.dumps(snapshot, ensure_ascii=False)
+        db.add(prepared)
+        return saved_count
+
+    selected_map: dict[str, list[int]] = json.loads(session.selected_map)
+    allowed_qids = {qid for ids in selected_map.values() for qid in ids}
+    saved_count = 0
+    for question_id, option_id in items:
+        if question_id not in allowed_qids:
+            if strict:
+                raise HTTPException(400, "Question not allowed in this session")
+            continue
+        opt = db.get(Option, option_id)
+        if not opt:
+            if strict:
+                raise HTTPException(404, "Option not found")
+            continue
+        if opt.question_id != question_id:
+            if strict:
+                raise HTTPException(400, "Option does not belong to question")
+            continue
+        is_correct = bool(getattr(opt, "is_correct", False))
+        existing_ans = db.scalar(
+            select(Answer).where(
+                Answer.session_id == session.id,
+                Answer.question_id == question_id,
+            )
+        )
+        if existing_ans is not None:
+            existing_ans.option_id = option_id
+            existing_ans.is_correct = is_correct
+        else:
+            db.add(
+                Answer(
+                    session_id=session.id,
+                    question_id=question_id,
+                    option_id=option_id,
+                    is_correct=is_correct,
+                )
+            )
+        saved_count += 1
+    return saved_count
+
+
+def grade_prepared_theory_session(
+    db,
+    session,
+    *,
+    finished_at=None,
+    auto_closed: bool = False,
+    auto_close_reason: str | None = None,
+) -> dict | None:
+    from .exam_lifecycle import _iso, _stats, _sum_stats, utcnow
+
+    prepared = get_prepared_theory_material(db, session.id)
+    if prepared is None:
+        return None
+
+    snapshot = json.loads(prepared.snapshot)
+    recorded = dict(snapshot.pop("recorded_answers", None) or {})
+    live_answers = list(
+        db.scalars(select(Answer).where(Answer.session_id == session.id)).all()
+    )
+    live_by_qid = {ans.question_id: ans for ans in live_answers}
+
+    blocks = theory_blocks(snapshot)
+    block_stats = []
+    for block in blocks:
+        answered = correct = 0
+        for question in block.get("questions", []):
+            qid = question["id"]
+            rec = recorded.get(str(qid))
+            option_id = rec.get("option_id") if isinstance(rec, dict) else None
+            answered_at_iso = rec.get("answered_at") if isinstance(rec, dict) else None
+
+            if option_id is None and qid in live_by_qid:
+                live_ans = live_by_qid[qid]
+                option_id = live_ans.option_id
+                answered_at_iso = _iso(live_ans.answered_at) or _iso(finished_at)
+
+            selected = next(
+                (item for item in question.get("options", []) if item["id"] == option_id),
+                None,
+            )
+            if selected is None:
+                option_id = None
+                is_correct = False
+            else:
+                is_correct = bool(selected.get("is_correct", False))
+
+            question.update(
+                selected_option_id=option_id,
+                selected_option={"id": selected["id"], "text": selected["text"]} if selected else None,
+                is_correct=is_correct if selected else None,
+                answered_at=(answered_at_iso or _iso(finished_at)) if selected else None,
+            )
+            for option in question.get("options", []):
+                option["is_selected"] = option["id"] == option_id
+
+            answered += int(selected is not None)
+            correct += int(is_correct)
+
+            if qid in live_by_qid:
+                live_ans = live_by_qid[qid]
+                if selected is not None:
+                    live_ans.is_correct = is_correct
+                    db.add(live_ans)
+
+        block["stats"] = _stats(len(block.get("questions", [])), answered, correct)
+        block_stats.append(
+            {
+                "block_id": block["id"],
+                "correct": correct,
+                "total": len(block.get("questions", [])),
+                "percent": block["stats"]["percent"],
+            }
+        )
+
+    for chapter in snapshot.get("chapters", []):
+        for subchapter in chapter.get("subchapters", []):
+            subchapter["stats"] = _sum_stats(block["stats"] for block in subchapter.get("blocks", []))
+        chapter["stats"] = _sum_stats(subchapter["stats"] for subchapter in chapter.get("subchapters", []))
+
+    summary = _sum_stats(block["stats"] for block in blocks)
+    if isinstance(snapshot.get("session"), dict):
+        snapshot["session"]["started_at"] = _iso(session.started_at)
+        snapshot["session"]["ends_at"] = _iso(session.ends_at)
+        snapshot["session"]["finished_at"] = _iso(finished_at)
+
+    snapshot.update(
+        summary=summary,
+        block_stats=block_stats,
+        status="auto_closed" if auto_closed else "completed",
+        auto_closed=auto_closed,
+        auto_closed_no_submission=bool(auto_closed and summary["answered"] == 0),
+        auto_close_reason=auto_close_reason,
+        generated_at=_iso(utcnow()),
+    )
+    return snapshot
 
 
 def capture_project_content(db, attempt, project, prepared_snapshot: str | None = None):

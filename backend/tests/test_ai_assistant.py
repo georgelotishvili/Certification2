@@ -462,6 +462,79 @@ class AiAssistantTests(unittest.TestCase):
             self.assertEqual(len(items4), 2)
             self.assertEqual(first_txt.read_text(encoding="utf-8").strip(), "დოკუმენტი 1 ტექსტი")
 
+    def test_concurrent_kb_uploads_deletes_and_reseeds_do_not_clobber_each_other(self):
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+        import io
+        import zipfile
+        from fastapi import UploadFile
+
+        seed_zip = self.media_root / "concurrent_seed.zip"
+        with zipfile.ZipFile(seed_zip, "w") as zf:
+            for i in range(1, 5):
+                zf.writestr(f"კანონმდებლობა/seed_{i}.txt", f"საბაზისო დოკუმენტი {i}".encode("utf-8"))
+
+        with patch.object(ai_assistant, "_seed_zip_path", return_value=seed_zip):
+            initial = ai_assistant._ensure_kb_seeded(force=True)
+            self.assertEqual(len(initial), 4)
+            seed_ids_by_name = {it["filename"]: it["id"] for it in initial}
+
+            def upload_worker(idx: int):
+                uf = UploadFile(
+                    filename=f"custom_{idx}.md",
+                    file=io.BytesIO(f"# დამატებითი დოკუმენტი {idx}\nშინაარსი {idx}".encode("utf-8")),
+                )
+                return asyncio.run(
+                    ai_assistant.upload_ai_knowledge_base_files(
+                        files=[uf],
+                        folder_name="ატვირთული",
+                        authorization=None,
+                        db=self.db,
+                    )
+                )
+
+            def delete_worker(seed_fname: str):
+                return ai_assistant.delete_ai_knowledge_base_file(
+                    doc_id=seed_ids_by_name[seed_fname],
+                    authorization=None,
+                    db=self.db,
+                )
+
+            def reader_worker():
+                return ai_assistant._load_kb_cache()
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = []
+                for i in range(1, 7):
+                    futures.append(pool.submit(upload_worker, i))
+                futures.append(pool.submit(delete_worker, "seed_2.txt"))
+                futures.append(pool.submit(delete_worker, "seed_3.txt"))
+                for _ in range(4):
+                    futures.append(pool.submit(reader_worker))
+                for fut in futures:
+                    fut.result()
+
+            items, texts_by_id = ai_assistant._load_kb_cache()
+            filenames = {it["filename"] for it in items}
+            for i in range(1, 7):
+                self.assertIn(f"custom_{i}.md", filenames)
+            self.assertIn("seed_1.txt", filenames)
+            self.assertIn("seed_4.txt", filenames)
+            self.assertNotIn("seed_2.txt", filenames)
+            self.assertNotIn("seed_3.txt", filenames)
+            self.assertEqual(len(items), 8)
+            for it in items:
+                self.assertTrue(texts_by_id.get(it["id"]), f"Missing text for {it['filename']}")
+
+            # Restoring defaults brings back deleted seeds while preserving all 6 concurrent uploads
+            restored = ai_assistant.restore_ai_knowledge_base_defaults(authorization=None, db=self.db)
+            restored_names = {it["filename"] for it in restored["items"]}
+            self.assertEqual(len(restored["items"]), 10)
+            for i in range(1, 5):
+                self.assertIn(f"seed_{i}.txt", restored_names)
+            for i in range(1, 7):
+                self.assertIn(f"custom_{i}.md", restored_names)
+
 
 if __name__ == "__main__":
     unittest.main()

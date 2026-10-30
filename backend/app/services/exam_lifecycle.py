@@ -391,6 +391,15 @@ def finalize_exam_session(
 ) -> dict[str, Any]:
     finished_at = _naive_utc(finished_at) or utcnow()
     if grading_snapshot is None:
+        from .offline_grading import grade_prepared_theory_session
+        grading_snapshot = grade_prepared_theory_session(
+            db,
+            session,
+            finished_at=finished_at,
+            auto_closed=auto_closed,
+            auto_close_reason=auto_close_reason,
+        )
+    if grading_snapshot is None:
         snapshot, block_stats = build_exam_snapshot(
             db, session, finished_at=finished_at, auto_closed=auto_closed,
             auto_close_reason=auto_close_reason,

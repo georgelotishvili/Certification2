@@ -344,6 +344,84 @@ class OfflineGradingSnapshotTests(unittest.TestCase):
                         self.assertEqual(res_after_del.status_code, 200)
                         self.assertEqual(res_after_del.content, orig_bytes)
 
+    def test_legacy_theory_endpoints_grade_against_prepared_snapshot_after_edits_and_deletes(self):
+        # Add a second question to Block 1 so we can test both /answer before edit and /answers/batch after delete
+        blk = self.db.get(Block, 1)
+        blk.qty = 2
+        q2 = Question(id=2, block_id=1, code="Q-2", text="Second synthetic question", order_index=2, enabled=True)
+        o2_ok = Option(id=20, question_id=2, text="Second correct", is_correct=True)
+        o2_bad = Option(id=21, question_id=2, text="Second wrong", is_correct=False)
+        self.db.add_all([blk, q2, o2_ok, o2_bad])
+        self.db.commit()
+
+        self.grant("theory")
+        sess = self.prepare_theory()
+        s_headers = {"Authorization": f"Bearer {sess['token']}"}
+        s_path = f"/exam/{sess['session_id']}"
+
+        begin_res = self.client.post(f"{s_path}/begin", headers=s_headers)
+        self.assertEqual(begin_res.status_code, 200, begin_res.text)
+
+        # Fetch block questions via legacy GET /exam/{session_id}/questions?block_id=1
+        block_q_res = self.client.get(f"{s_path}/questions?block_id=1", headers=s_headers)
+        self.assertEqual(block_q_res.status_code, 200, block_q_res.text)
+        self.assertEqual(len(block_q_res.json()["questions"]), 2)
+
+        # Candidate answers Question 1 before admin edits anything
+        ans1 = self.client.post(
+            f"{s_path}/answer",
+            headers=s_headers,
+            json={"question_id": 1, "option_id": 1},
+        )
+        self.assertEqual(ans1.status_code, 200, ans1.text)
+
+        # Mid-exam: Admin mutates Question 1 (flips correctness, changes text, adds new option 99)
+        # and deletes Question 2 completely!
+        self.db.get(Option, 1).is_correct = False
+        self.db.get(Option, 1).text = "Mutated option 1"
+        self.db.get(Question, 1).text = "Mutated question 1"
+        self.db.add(Option(id=99, question_id=1, text="Added mid-exam", is_correct=True))
+        self.db.delete(self.db.get(Option, 20))
+        self.db.delete(self.db.get(Option, 21))
+        self.db.delete(self.db.get(Question, 2))
+        self.db.commit()
+
+        # Re-fetching /questions?block_id=1 still returns the original prepared questions & options
+        block_q_after = self.client.get(f"{s_path}/questions?block_id=1", headers=s_headers)
+        self.assertEqual(block_q_after.status_code, 200, block_q_after.text)
+        self.assertEqual(block_q_after.json(), block_q_res.json())
+
+        # Submitting the newly added mid-exam option 99 is rejected
+        bad_ans = self.client.post(
+            f"{s_path}/answer",
+            headers=s_headers,
+            json={"question_id": 1, "option_id": 99},
+        )
+        self.assertEqual(bad_ans.status_code, 400, bad_ans.text)
+
+        # Submitting Question 2's original correct option (id=20) via /answers/batch succeeds even though Q2 was deleted in live DB
+        batch_res = self.client.post(
+            f"{s_path}/answers/batch",
+            headers=s_headers,
+            json={"answers": [{"question_id": 2, "option_id": 20}]},
+        )
+        self.assertEqual(batch_res.status_code, 200, batch_res.text)
+        self.assertEqual(batch_res.json()["saved"], 1)
+
+        # Finishing the exam via legacy POST /exam/{session_id}/finish grades against the prepared snapshot (2/2 = 100%)
+        fin_res = self.client.post(f"{s_path}/finish", headers=s_headers)
+        self.assertEqual(fin_res.status_code, 200, fin_res.text)
+        self.assertEqual(fin_res.json()["score_percent"], 100.0)
+        self.assertEqual(fin_res.json()["correct"], 2)
+        self.assertEqual(fin_res.json()["total_questions"], 2)
+
+        report = self.client.get(f"/admin/results/{sess['session_id']}", headers=self.headers(2))
+        self.assertEqual(report.status_code, 200, report.text)
+        self.assertEqual(report.json()["correct_answers"], 2)
+        self.assertEqual(report.json()["total_questions"], 2)
+        texts = {a["question_text"] for a in report.json()["answers"]}
+        self.assertEqual(texts, {"Synthetic question", "Second synthetic question"})
+
 
 if __name__ == '__main__':
     unittest.main()
