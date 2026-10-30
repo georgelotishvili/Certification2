@@ -943,6 +943,38 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(cert_item3["subject"], DEFAULT_TEMPLATES["certificate"]["subject"])
         self.assertEqual(cert_item3["body"], DEFAULT_TEMPLATES["certificate"]["body"])
 
+        # Case 4: Old 2-bullet exam body upgrades automatically to the new 3-bullet 3.2 template
+        old_two_bullet_exam_body = (
+            "ადრესატი: {name}\n\n"
+            "მოგესალმებით,\n\n"
+            "გაცნობებთ, რომ თქვენი განაცხადი დადასტურდა და დაშვებული ხართ სერტიფიცირების გამოცდაზე. თქვენი გამოცდა დაიგეგმა {date}, {time}-ზე, მისამართზე: ქ. თბილისი, მირიან მეფის ქუჩა №98, მე-2 სართული, საოფისე ფართი №6.\n\n"
+            "გამოცდაზე დასაშვებად აუცილებელია:\n"
+            "- საგამოცდო და სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერამდე გადაიხადოთ საგამოცდო საფასური (350 ლარი) უნაღდო ანგარიშსწორებით ანგარიშზე: GE33TB7313736080100014 (დანიშნულება: საგამოცდო საფასური, {name});\n"
+            "- საგამოცდო ცენტრში გამოცხადდეთ გამოცდის დაწყებამდე 30 წუთით ადრე პირადობის დამადასტურებელი მოქმედი დოკუმენტით, საგამოცდო და სასერტიფიკაციო ხელშეკრულებაზე ხელმოწერისა და რეგისტრაციის გავლის მიზნით.\n\n"
+            "გთხოვთ წინასწარ გაეცნოთ საგამოცდო და სასერტიფიკაციო ხელშეკრულებას, რომელიც განთავსებულია საიტზე gipc.org.ge.\n\n"
+            "პატივისცემით,\n"
+            "საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი"
+        )
+        put_old_exam = self.client.put(
+            "/admin/planning-templates/exam",
+            headers=self.auth,
+            data={
+                "subject": "გამოცდაზე დაშვება",
+                "body": old_two_bullet_exam_body,
+            },
+        )
+        self.assertEqual(put_old_exam.status_code, 200, put_old_exam.text)
+        exam_item = next(
+            it for it in self.client.get("/admin/planning-templates", headers=self.auth).json()["items"]
+            if it["kind"] == "exam"
+        )
+        self.assertEqual(exam_item["subject"], "გამოცდაზე დაშვება")
+        self.assertEqual(exam_item["body"], DEFAULT_TEMPLATES["exam"]["body"])
+        self.assertIn(
+            "- ზუსტად გახსოვდეთ ვებგვერდზე (gipc.org.ge) რეგისტრაციისას მითითებული თქვენი ელექტრონული ფოსტა და პაროლი",
+            exam_item["body"],
+        )
+
     def test_certificate_notification_copy_failure_and_idempotency(self):
         self.delivery.return_value = ("sent", None)
         create_res = self.client.post(
