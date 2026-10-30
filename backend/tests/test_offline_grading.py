@@ -232,6 +232,118 @@ class OfflineGradingSnapshotTests(unittest.TestCase):
                 self.assertEqual(res.status_code, 201, res.text)
                 self.assertEqual(res.json()["percentage"], 100)
 
+    def test_candidate_cannot_choose_project_without_server_assignment(self):
+        from backend.app.models import UserExamStageGrant
+        for kind, stage, project_model in (
+            ("multi-apartment", "project_stage_1", MultiApartmentProject),
+            ("multi-functional", "project_stage_2", MultiFunctionalProject),
+        ):
+            with self.subTest(kind=kind):
+                grant_info = self.grant(stage)
+                grant_id = grant_info["grant_id"]
+                code = self.db.get(project_model, 1).code
+                # 1. Offline start without /projects/random preparation is rejected
+                unprep_offline = self.client.post(
+                    f"/public/{kind}/start",
+                    headers=self.headers(),
+                    json={
+                        "stageGrantId": grant_id,
+                        "projectCode": code,
+                        "offline": True,
+                        "startRequestId": f"00000000-0000-0000-0000-00000000005{1 if kind == 'multi-apartment' else 2}",
+                    },
+                )
+                self.assertEqual(unprep_offline.status_code, 409, unprep_offline.text)
+
+                # 2. Online start with self-chosen projectCode without /projects/random is rejected
+                unprep_online = self.client.post(
+                    f"/public/{kind}/start",
+                    headers=self.headers(),
+                    json={
+                        "stageGrantId": grant_id,
+                        "projectCode": code,
+                        "offline": False,
+                    },
+                )
+                self.assertEqual(unprep_online.status_code, 409, unprep_online.text)
+
+                # 3. Direct /evaluations submission without server-assigned PreparedExamMaterial is rejected
+                grant_row = self.db.get(UserExamStageGrant, grant_id)
+                grant_row.started_at = grant_row.granted_at
+                self.db.add(grant_row)
+                self.db.commit()
+                unassigned_eval = self.client.post(
+                    f"/public/{kind}/evaluations",
+                    headers=self.headers(),
+                    json={
+                        "projectCode": code,
+                        "projectName": "Test Project",
+                        "percentage": 100.0,
+                        "correctCount": 1,
+                        "wrongCount": 0,
+                        "totalCorrectAnswers": 1,
+                        "selectedAnswerIds": [1],
+                        "startedAt": "2026-10-20T10:00:00Z",
+                        "finishedAt": "2026-10-20T10:05:00Z",
+                        "durationSeconds": 300,
+                        "stageGrantId": grant_id,
+                    },
+                )
+                self.assertEqual(unassigned_eval.status_code, 403, unassigned_eval.text)
+
+    def test_prepared_project_pdf_snapshot_survives_admin_replace_or_delete(self):
+        import tempfile
+        from backend.app.services import media_storage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_root = Path(tmpdir)
+            with patch.object(media_storage, "ensure_media_root", return_value=tmp_root):
+                for kind, stage, project_model in (
+                    ("multi-apartment", "project_stage_1", MultiApartmentProject),
+                    ("multi-functional", "project_stage_2", MultiFunctionalProject),
+                ):
+                    with self.subTest(kind=kind):
+                        orig_bytes = f"%PDF-1.4 original {kind} blueprint".encode("utf-8")
+                        new_bytes = f"%PDF-1.4 replaced {kind} blueprint".encode("utf-8")
+                        up1 = self.client.post(
+                            f"/admin/{kind}/projects/1/pdf",
+                            headers=self.headers(2),
+                            files={"file": ("orig.pdf", orig_bytes, "application/pdf")},
+                        )
+                        self.assertEqual(up1.status_code, 200, up1.text)
+
+                        self.grant(stage)
+                        prepared = self.project_prepare(kind)
+                        self.assertTrue(prepared["pdfUrl"])
+
+                        # Admin replaces the project PDF with a different file after candidate prepared
+                        up2 = self.client.post(
+                            f"/admin/{kind}/projects/1/pdf",
+                            headers=self.headers(2),
+                            files={"file": ("new.pdf", new_bytes, "application/pdf")},
+                        )
+                        self.assertEqual(up2.status_code, 200, up2.text)
+
+                        # Candidate fetching prepared pdfUrl (and bare /pdf) still receives original PDF
+                        res_versioned = self.client.get(prepared["pdfUrl"])
+                        self.assertEqual(res_versioned.status_code, 200)
+                        self.assertEqual(res_versioned.content, orig_bytes)
+
+                        res_bare = self.client.get(f"/public/{kind}/projects/{prepared['code']}/pdf")
+                        self.assertEqual(res_bare.status_code, 200)
+                        self.assertEqual(res_bare.content, orig_bytes)
+
+                        # Admin deletes the live project PDF completely -> prepared PDF still works
+                        del_res = self.client.delete(
+                            f"/admin/{kind}/projects/1/pdf",
+                            headers=self.headers(2),
+                        )
+                        self.assertEqual(del_res.status_code, 204, del_res.text)
+
+                        res_after_del = self.client.get(prepared["pdfUrl"])
+                        self.assertEqual(res_after_del.status_code, 200)
+                        self.assertEqual(res_after_del.content, orig_bytes)
+
 
 if __name__ == '__main__':
     unittest.main()

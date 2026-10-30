@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter
+from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter, format_letter_doc_number
 from ..services.candidate_status import (
     NON_PASS_CERT_PERIODS,
     compute_effective_certificate_status,
@@ -784,7 +784,13 @@ def _send_certificate_activation_notification(
     custom_body: str | None = None,
     request_id: str | None = None,
 ) -> tuple[str, str | None]:
-    lock_user_stage_transitions(db, user)
+    try:
+        lock_user_stage_transitions(db, user)
+    except Exception:
+        db.rollback()
+        lock_user_stage_transitions(db, user)
+        db.refresh(user)
+        db.refresh(cert)
     _require_certificate_uploaded_pdf(cert)
     subject, body = _build_certificate_activation_email(user, cert, custom_subject, custom_body)
     now = datetime.utcnow()
@@ -794,8 +800,10 @@ def _send_certificate_activation_notification(
                 "user_id": user.id,
                 "cert_id": cert.id,
                 "unique_code": cert.unique_code,
+                "level": cert.level,
                 "status": cert.status,
-                "file_path": cert.file_path,
+                "issue_date": str(cert.issue_date or ""),
+                "valid_until": str(cert.valid_until or ""),
                 "to_email": (user.email or "").lower(),
                 "subject": subject,
                 "body": body,
@@ -818,7 +826,7 @@ def _send_certificate_activation_notification(
                 )
             return existing_by_req.status, existing_by_req.error
 
-    recent_duplicate = db.scalar(
+    existing_duplicate = db.scalar(
         select(PlanningLetter)
         .where(
             PlanningLetter.user_id == user.id,
@@ -826,12 +834,11 @@ def _send_certificate_activation_notification(
             PlanningLetter.period == "cert_issued",
             PlanningLetter.request_fingerprint == fingerprint,
             PlanningLetter.status.in_(("sending", "sent", "simulated", "uncertain")),
-            PlanningLetter.created_at >= now - timedelta(seconds=60),
         )
         .order_by(PlanningLetter.id.desc())
     )
-    if recent_duplicate is not None:
-        return recent_duplicate.status, recent_duplicate.error
+    if existing_duplicate is not None:
+        return existing_duplicate.status, existing_duplicate.error
 
     req_id = explicit_req_id or str(uuid4())
     dest_path: Path | None = None
@@ -890,21 +897,67 @@ def _send_certificate_activation_notification(
         attempts=1,
         created_by=actor_email,
     )
+    committed = False
     try:
         db.add(letter)
+        db.flush()
+        if not letter.doc_number:
+            letter.doc_number = format_letter_doc_number(letter)
         db.commit()
-        db.refresh(letter)
-    except BaseException:
+        committed = True
+    except IntegrityError as exc:
         try:
             db.rollback()
         except Exception:
             pass
-        if dest_path is not None:
+        if not committed and dest_path is not None:
             try:
                 dest_path.unlink(missing_ok=True)
             except OSError:
                 pass
+        prior = db.scalar(
+            select(PlanningLetter).where(PlanningLetter.request_id == req_id)
+        )
+        if prior is not None:
+            if prior.user_id != user.id or prior.request_fingerprint != fingerprint:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Request ID already used for another notification",
+                ) from exc
+            return prior.status, prior.error
+        dup = db.scalar(
+            select(PlanningLetter)
+            .where(
+                PlanningLetter.user_id == user.id,
+                PlanningLetter.kind == "certificate",
+                PlanningLetter.period == "cert_issued",
+                PlanningLetter.request_fingerprint == fingerprint,
+            )
+            .order_by(PlanningLetter.id.desc())
+        )
+        if dup is not None:
+            return dup.status, dup.error
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="შეტყობინება უკვე მუშავდება.",
+        ) from exc
+    except BaseException:
+        if not committed:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            if dest_path is not None:
+                try:
+                    dest_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
         raise
+
+    try:
+        db.refresh(letter)
+    except Exception:
+        pass
 
     try:
         delivery_status, error = deliver_letter(letter)
@@ -917,7 +970,10 @@ def _send_certificate_activation_notification(
         letter.sent_at = datetime.utcnow()
     db.add(letter)
     db.commit()
-    db.refresh(letter)
+    try:
+        db.refresh(letter)
+    except Exception:
+        pass
     return letter.status, letter.error
 
 

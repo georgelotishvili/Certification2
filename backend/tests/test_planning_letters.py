@@ -1010,6 +1010,43 @@ class PlanningLetterTests(unittest.TestCase):
         self.assertEqual(self.delivery.call_count, 1)
         self.assertEqual(len(self.db.scalars(select(PlanningLetter)).all()), 1)
 
+        # 4. Even after >60s AND re-uploading certificate PDF with a new random filename, duplicate notify is suppressed
+        letter_row = self.db.scalar(select(PlanningLetter))
+        letter_row.created_at = datetime.utcnow() - timedelta(hours=3)
+        self.db.add(letter_row)
+        self.db.commit()
+
+        reupload_res = self.client.post(
+            "/users/1/certificate/file",
+            headers=self.auth,
+            files={"file": ("certificate.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(reupload_res.status_code, 204, reupload_res.text)
+
+        ok4 = self.client.post(
+            "/users/1/certificate/notify",
+            headers=self.auth,
+            json={"request_id": "req-cert-idem-after-3h-and-reupload"},
+        )
+        self.assertEqual(ok4.status_code, 200, ok4.text)
+        self.assertEqual(self.delivery.call_count, 1)
+        self.assertEqual(len(self.db.scalars(select(PlanningLetter)).all()), 1)
+
+        # 5. Post-commit refresh error must NOT delete the committed letter attachment on disk
+        self.db.delete(letter_row)
+        self.db.commit()
+        with patch.object(self.db, "refresh", side_effect=RuntimeError("refresh failed after commit")):
+            ok5 = self.client.post(
+                "/users/1/certificate/notify",
+                headers=self.auth,
+                json={"request_id": "req-cert-refresh-error"},
+            )
+        self.assertEqual(ok5.status_code, 200, ok5.text)
+        saved_letter = self.db.scalar(select(PlanningLetter).where(PlanningLetter.request_id == "req-cert-refresh-error"))
+        self.assertIsNotNone(saved_letter)
+        saved_att_path = media_storage.resolve_storage_path(saved_letter.attachment_path)
+        self.assertTrue(saved_att_path.is_file(), "Committed certificate letter PDF must remain on disk if refresh fails")
+
     def test_delete_exam_schedule_deletes_attachment_only_after_commit(self):
         doc_bytes = b"%PDF-1.4\nSchedule linked attachment"
         letter = self.saved(

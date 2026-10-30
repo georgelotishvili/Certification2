@@ -129,7 +129,9 @@ class AiAssistantTests(unittest.TestCase):
 
         with patch.object(
             ai_assistant, "_call_gemini_api", return_value=fake_gemini_response
-        ) as mocked_gemini:
+        ) as mocked_gemini, patch.object(
+            ai_assistant, "_today_in_tbilisi", return_value=datetime(2026, 10, 14).date()
+        ):
             resp = ai_assistant.ai_chat(
                 payload=ai_assistant.AIChatRequest(
                     messages=[
@@ -438,8 +440,27 @@ class AiAssistantTests(unittest.TestCase):
             # 2. Atomic failure safety: corrupt seed zip and force re-seed -> old files and manifest remain intact
             seed_zip.write_bytes(b"corrupt-not-a-zip")
             items3 = ai_assistant._ensure_kb_seeded(force=True)
-            self.assertEqual(len(items3), 2)
+            self.assertEqual(items3, items2)
             self.assertTrue(first_txt.is_file(), "Existing seed files must not be wiped when seed zip is unreadable")
+
+            # 3. Mid-replace failure rolls back .bak files so files on disk match manifest.json
+            with zipfile.ZipFile(seed_zip, "w") as zf:
+                zf.writestr("კანონმდებლობა/doc1.txt", "განახლებული ტექსტი 1".encode("utf-8"))
+                zf.writestr("კანონმდებლობა/doc2.txt", "განახლებული ტექსტი 2".encode("utf-8"))
+
+            orig_replace = Path.replace
+            replace_calls = {"count": 0}
+
+            def fail_on_manifest_replace(self_path, target):
+                replace_calls["count"] += 1
+                if str(target).endswith("manifest.json"):
+                    raise OSError("Simulated failure replacing manifest.json after files were replaced")
+                return orig_replace(self_path, target)
+
+            with patch.object(Path, "replace", fail_on_manifest_replace):
+                items4 = ai_assistant._ensure_kb_seeded(force=True)
+            self.assertEqual(len(items4), 2)
+            self.assertEqual(first_txt.read_text(encoding="utf-8").strip(), "დოკუმენტი 1 ტექსტი")
 
 
 if __name__ == "__main__":

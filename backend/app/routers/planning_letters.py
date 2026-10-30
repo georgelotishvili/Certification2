@@ -630,6 +630,7 @@ def save_template(
         template = PlanningTemplate(kind=kind)
         db.add(template)
     new_path = None
+    committed = False
     try:
         if attachment:
             new_path, name, size = _store(attachment.file, _filename(attachment), namespace)
@@ -639,9 +640,11 @@ def save_template(
         template.subject, template.body = subject, body
         template.updated_at, template.updated_by = datetime.utcnow(), actor.email
         db.commit()
-    except Exception:
-        db.rollback()
-        _remove_file(new_path, namespace)
+        committed = True
+    except BaseException:
+        if not committed:
+            db.rollback()
+            _remove_file(new_path, namespace)
         raise
     if old_path and (attachment or remove_attachment):
         _remove_file(old_path, namespace)
@@ -841,6 +844,7 @@ def send_letter(
     )
     namespace = f"letters/{user_id}"
     new_path = None
+    committed = False
     try:
         if kind == "exam" and not custom_kind:
             if action_mode in ("save_and_send", "save_only"):
@@ -981,21 +985,24 @@ def send_letter(
         if not letter.doc_number:
             letter.doc_number = format_letter_doc_number(letter)
         db.commit()
-        if old_letter_path_to_delete:
-            _remove_file(old_letter_path_to_delete, namespace)
+        committed = True
     except IntegrityError as exc:
-        db.rollback()
-        _remove_file(new_path, namespace)
+        if not committed:
+            db.rollback()
+            _remove_file(new_path, namespace)
         prior = db.scalar(select(PlanningLetter).where(PlanningLetter.request_id == request_id))
         if prior and prior.user_id == user_id and prior.request_fingerprint != fingerprint:
             raise HTTPException(409, "ამ მოთხოვნის კოდით სხვა წერილი უკვე არსებობს. თავიდან გადაამოწმეთ.") from exc
         if prior and prior.user_id == user_id and prior.request_fingerprint == fingerprint:
             return _letter_out(prior)
         raise HTTPException(409, "დაგეგმვა უკვე შეიცვალა. განაახლეთ ისტორია და გადაამოწმეთ.") from exc
-    except Exception:
-        db.rollback()
-        _remove_file(new_path, namespace)
+    except BaseException:
+        if not committed:
+            db.rollback()
+            _remove_file(new_path, namespace)
         raise
+    if old_letter_path_to_delete:
+        _remove_file(old_letter_path_to_delete, namespace)
     db.refresh(letter)
     if is_save_only:
         return _letter_out(letter)

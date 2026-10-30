@@ -1,12 +1,28 @@
 """Server-only grading versions. Correctness is never sent at authorization."""
 from __future__ import annotations
 
+from datetime import datetime
+import hashlib
 import json
+from pathlib import Path
+import shutil
+from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
 
-from ..models import Exam, OfflineExamAttempt, OfflineExamContent, PreparedExamMaterial, Session as ExamSession
+from ..models import (
+    Exam,
+    MultiApartmentEvaluation,
+    MultiFunctionalEvaluation,
+    OfflineExamAttempt,
+    OfflineExamContent,
+    PreparedExamMaterial,
+    Session as ExamSession,
+    UserExamStageGrant,
+)
+from . import media_storage
+from .exam_stage import STAGE_PROJECT_1
 
 
 def lock_exam_content(db, exam_id):
@@ -62,11 +78,153 @@ def get_prepared_project_material(db, user_id: int, stage: str, stage_grant_id: 
     )
 
 
+def _snapshot_project_pdf(project) -> dict:
+    pdf_rel = getattr(project, "pdf_path", None)
+    pdf_filename = getattr(project, "pdf_filename", None)
+    if not pdf_rel:
+        return {}
+    try:
+        src_path = media_storage.resolve_storage_path(pdf_rel)
+        if not src_path.is_file():
+            return {}
+        stat = src_path.stat()
+        digest_hasher = hashlib.sha256()
+        with src_path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                digest_hasher.update(chunk)
+        sha256 = digest_hasher.hexdigest()
+        pdf_version = f"{stat.st_mtime_ns}_{stat.st_size}_{sha256[:12]}"
+        dest_dir = (media_storage.ensure_media_root().resolve() / "prepared_pdfs").resolve()
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / f"{sha256}.pdf"
+        if not dest_path.is_file() or dest_path.stat().st_size != stat.st_size:
+            tmp_path = dest_dir / f"{sha256}.{uuid4().hex}.tmp"
+            try:
+                shutil.copyfile(src_path, tmp_path)
+                tmp_path.replace(dest_path)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+        return {
+            "pdf_storage_path": media_storage.relative_storage_path(dest_path),
+            "pdf_filename": pdf_filename or "project.pdf",
+            "pdf_version": pdf_version,
+            "pdf_sha256": sha256,
+        }
+    except Exception:
+        return {}
+
+
+def _is_prepared_row_active(db, stage: str, row: PreparedExamMaterial) -> bool:
+    if row.stage_grant_id is not None:
+        grant = db.get(UserExamStageGrant, row.stage_grant_id)
+        return (
+            grant is not None
+            and grant.consumed_at is None
+            and grant.revoked_at is None
+            and grant.expired_at is None
+        )
+    eval_model = (
+        MultiApartmentEvaluation
+        if stage == STAGE_PROJECT_1
+        else MultiFunctionalEvaluation
+    )
+    if row.user_id is not None and row.project_id is not None and row.prepared_at is not None:
+        done = db.scalar(
+            select(eval_model.id).where(
+                eval_model.user_id == row.user_id,
+                eval_model.project_id == row.project_id,
+                eval_model.created_at >= row.prepared_at,
+            )
+        )
+        return done is None
+    return True
+
+
+def resolve_prepared_project_pdf(
+    db,
+    stage: str,
+    code: str,
+    version: str | None = None,
+    user_id: int | None = None,
+    allow_historical_fallback: bool = False,
+) -> tuple[Path, str | None] | None:
+    clean_code = (code or "").strip()
+    if not clean_code:
+        return None
+    stmt = (
+        select(PreparedExamMaterial)
+        .where(
+            PreparedExamMaterial.stage == stage,
+            PreparedExamMaterial.project_code == clean_code,
+        )
+        .order_by(PreparedExamMaterial.id.desc())
+    )
+    rows = list(db.scalars(stmt).all())
+    if not rows:
+        return None
+    if user_id is not None:
+        rows.sort(key=lambda r: (0 if r.user_id == user_id else 1, -r.id))
+
+    def _extract_valid_pdf(row: PreparedExamMaterial) -> tuple[Path, str | None, dict] | None:
+        try:
+            snap = json.loads(row.snapshot or "{}")
+        except Exception:
+            return None
+        rel = snap.get("pdf_storage_path")
+        if not rel:
+            return None
+        try:
+            path = media_storage.resolve_storage_path(rel)
+            if path.is_file():
+                return path, snap.get("pdf_filename"), snap
+        except Exception:
+            return None
+        return None
+
+    if version:
+        for row in rows:
+            extracted = _extract_valid_pdf(row)
+            if not extracted:
+                continue
+            path, filename, snap = extracted
+            snap_ver = str(snap.get("pdf_version") or "")
+            if snap_ver and (snap_ver == version or snap_ver.startswith(f"{version}_")):
+                return path, filename
+
+    for row in rows:
+        if user_id is not None and row.user_id == user_id:
+            extracted = _extract_valid_pdf(row)
+            if extracted:
+                return extracted[0], extracted[1]
+        if _is_prepared_row_active(db, stage, row):
+            extracted = _extract_valid_pdf(row)
+            if extracted:
+                return extracted[0], extracted[1]
+
+    if allow_historical_fallback:
+        for row in rows:
+            extracted = _extract_valid_pdf(row)
+            if extracted:
+                return extracted[0], extracted[1]
+    return None
+
+
 def prepare_project_content(db, user_id: int, stage: str, stage_grant_id: int | None, project) -> dict:
     if stage_grant_id is not None:
         existing = get_prepared_project_material(db, user_id, stage, stage_grant_id)
         if existing is not None:
-            return json.loads(existing.snapshot)
+            snap = json.loads(existing.snapshot)
+            if not snap.get("pdf_storage_path") and project is not None:
+                pdf_meta = _snapshot_project_pdf(project)
+                if pdf_meta:
+                    snap.update(pdf_meta)
+                    existing.snapshot = json.dumps(snap, ensure_ascii=False)
+                    db.add(existing)
+                    db.flush()
+            return snap
+    lock_project_content(db, project.__class__, project.id)
+    db.refresh(project)
+    pdf_meta = _snapshot_project_pdf(project)
     snapshot = {
         "version": 1,
         "stage": stage,
@@ -77,6 +235,7 @@ def prepare_project_content(db, user_id: int, stage: str, stage_grant_id: int | 
             {"id": answer.id, "text": answer.text, "is_correct": bool(answer.is_correct)}
             for answer in sorted(project.answers, key=lambda item: (item.order_index, item.id))
         ],
+        **pdf_meta,
     }
     raw = json.dumps(snapshot, ensure_ascii=False)
     if stage_grant_id is None:
@@ -85,6 +244,7 @@ def prepare_project_content(db, user_id: int, stage: str, stage_grant_id: int | 
             existing.project_id = project.id
             existing.project_code = project.code
             existing.snapshot = raw
+            existing.prepared_at = datetime.utcnow()
             db.add(existing)
             db.flush()
             return snapshot
@@ -96,6 +256,7 @@ def prepare_project_content(db, user_id: int, stage: str, stage_grant_id: int | 
         project_id=project.id,
         project_code=project.code,
         snapshot=raw,
+        prepared_at=datetime.utcnow(),
     )
     db.add(row)
     db.flush()

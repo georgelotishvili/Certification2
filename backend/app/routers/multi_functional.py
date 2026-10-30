@@ -62,6 +62,7 @@ from ..services.offline_grading import (
     get_prepared_project_material, grade_project_snapshot,
     grade_project_snapshot_data, guard_pending_project_delete,
     prepare_project_content, project_report_answers,
+    resolve_prepared_project_pdf,
 )
 
 
@@ -599,10 +600,12 @@ def get_random_project(
     if stage_grant is not None:
         existing_prepared = get_prepared_project_material(db, user.id, STAGE_PROJECT_2, stage_grant.id)
         if existing_prepared is not None:
-            import json as _json
-            snap = _json.loads(existing_prepared.snapshot)
             proj_obj = db.get(MultiFunctionalProject, existing_prepared.project_id)
-            pdf_url = _safe_public_pdf_url(proj_obj) if proj_obj else f"/public/multi-functional/projects/{snap['code']}/pdf"
+            snap = prepare_project_content(db, user.id, STAGE_PROJECT_2, stage_grant.id, proj_obj)
+            if snap.get("pdf_storage_path") and snap.get("pdf_version"):
+                pdf_url = f"/public/multi-functional/projects/{snap['code']}/pdf?v={snap['pdf_version']}"
+            else:
+                pdf_url = _safe_public_pdf_url(proj_obj) if proj_obj else None
             db.commit()
             return PublicMultiFunctionalProjectResponse(
                 id=snap["project_id"],
@@ -706,7 +709,10 @@ def get_random_project(
         stage_grant.id if stage_grant else None,
         project,
     )
-    pdf_url = _safe_public_pdf_url(project)
+    if snap.get("pdf_storage_path") and snap.get("pdf_version"):
+        pdf_url = f"/public/multi-functional/projects/{snap['code']}/pdf?v={snap['pdf_version']}"
+    else:
+        pdf_url = _safe_public_pdf_url(project)
     db.commit()
 
     return PublicMultiFunctionalProjectResponse(
@@ -745,6 +751,11 @@ def start_multi_functional_stage(
         )
     if payload.projectCode:
         prepared = get_prepared_project_material(db, user.id, STAGE_PROJECT_2, payload.stageGrantId)
+        if prepared is None and not is_admin_like(user):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Project must be prepared before starting",
+            )
         if prepared is not None and prepared.project_code != payload.projectCode.strip():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -797,33 +808,64 @@ def get_public_project(
 @router.get("/public/multi-functional/projects/{code}/pdf")
 def get_public_pdf(
     code: str = FPath(...),
+    v: str | None = Query(None),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
+    user = _get_user_from_token(db, authorization)
+    prepared_pdf = resolve_prepared_project_pdf(
+        db,
+        STAGE_PROJECT_2,
+        code,
+        version=v,
+        user_id=user.id if user else None,
+    )
+    if prepared_pdf is not None:
+        pdf_path, pdf_filename = prepared_pdf
+        try:
+            return FileResponse(
+                pdf_path,
+                media_type="application/pdf",
+                filename=safe_pdf_display_filename(pdf_filename),
+                content_disposition_type="inline",
+                headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+            )
+        except Exception:
+            pass
+
     project = db.scalar(
         select(MultiFunctionalProject).where(MultiFunctionalProject.code == code.strip())
     )
-    if not project or not project.pdf_path:
+    pdf_path = None
+    pdf_filename = project.pdf_filename if project else None
+    if project and project.pdf_path:
+        try:
+            candidate_path = resolve_storage_path(project.pdf_path)
+            if candidate_path.exists() and candidate_path.is_file():
+                pdf_path = candidate_path
+        except Exception:
+            pdf_path = None
+
+    if pdf_path is None:
+        fallback_pdf = resolve_prepared_project_pdf(
+            db,
+            STAGE_PROJECT_2,
+            code,
+            version=v,
+            user_id=user.id if user else None,
+            allow_historical_fallback=True,
+        )
+        if fallback_pdf is not None:
+            pdf_path, pdf_filename = fallback_pdf
+
+    if pdf_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
 
-    try:
-        pdf_path = resolve_storage_path(project.pdf_path)
-        # თუ ფაილი არ არსებობს ან არის დირექტორია – ჩავთვალოთ, რომ PDF არ არის
-        if not pdf_path.exists() or not pdf_path.is_file():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file missing")
-    except HTTPException:
-        raise
-    except Exception:
-        # ნებისმიერი სხვა გაუთვალისწინებელი შეცდომა – ვუბრუნებთ 404-ს, რომ არ იყოს 500
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF not found")
-
-    # PDF-ს აბრუნებს <iframe>-ში საჩვენებლად; ნებისმიერი გაუთვალისწინებელი შეცდომის
-    # შემთხვევაში ვაბრუნებთ 404-ს, რომ მომხმარებელმა დაინახოს „PDF არ არის ხელმისაწვდომი"
-    # და არ მიიღოს 500 Internal Server Error.
     try:
         return FileResponse(
             pdf_path,
             media_type="application/pdf",
-            filename=safe_pdf_display_filename(project.pdf_filename),
+            filename=safe_pdf_display_filename(pdf_filename),
             content_disposition_type="inline",
             headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
         )
@@ -844,6 +886,11 @@ def submit_simple_evaluation(
     prepared_material = get_prepared_project_material(
         db, user.id, STAGE_PROJECT_2, stage_grant.id if stage_grant else None
     )
+    if not is_admin_like(user) and prepared_material is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Project was not assigned by the server",
+        )
     if prepared_material is not None and prepared_material.project_code != payload.projectCode.strip():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -968,6 +1015,11 @@ def submit_full_evaluation(
         prepared_material = get_prepared_project_material(
             db, user.id, STAGE_PROJECT_2, stage_grant.id if stage_grant else None
         )
+        if not is_admin_like(user) and prepared_material is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Project was not assigned by the server",
+            )
         if prepared_material is not None and prepared_material.project_code != payload.projectCode.strip():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

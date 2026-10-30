@@ -10,6 +10,7 @@ import mimetypes
 import os
 from pathlib import Path
 import re
+import shutil
 import socket
 import time
 import urllib.error
@@ -2990,6 +2991,7 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
                     and bool(it.get("storage_name"))
                     and bool(it.get("id"))
                     and (files_dir / str(it.get("storage_name"))).is_file()
+                    and (files_dir / str(it.get("storage_name"))).stat().st_size == it.get("size_bytes")
                     and (texts_dir / f"{it.get('id')}.txt").is_file()
                     for it in seed_entries
                 )
@@ -3094,9 +3096,6 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
                 return existing_raw_list
             return existing_items
 
-    for tmp_path, target_path in staged_pairs:
-        tmp_path.replace(target_path)
-
     new_seed_files = {str(it["storage_name"]) for it in seeded_items}
     new_seed_texts = {f"{it['id']}.txt" for it in seeded_items}
 
@@ -3108,8 +3107,53 @@ def _ensure_kb_seeded(force: bool = False) -> list[dict[str, Any]]:
 
     final_list = list(by_id.values())
     manifest_tmp = manifest_file.with_suffix(".json.tmp")
-    manifest_tmp.write_text(json.dumps(final_list, ensure_ascii=False, indent=2), encoding="utf-8")
-    manifest_tmp.replace(manifest_file)
+    backups: list[tuple[Path | None, Path, bool]] = []
+    try:
+        manifest_tmp.write_text(json.dumps(final_list, ensure_ascii=False, indent=2), encoding="utf-8")
+        for _, target_path in staged_pairs:
+            if target_path.is_file():
+                bak_path = target_path.with_name(f"{target_path.name}.bak")
+                shutil.copy2(target_path, bak_path)
+                backups.append((bak_path, target_path, True))
+            else:
+                backups.append((None, target_path, False))
+        for tmp_path, target_path in staged_pairs:
+            tmp_path.replace(target_path)
+        manifest_tmp.replace(manifest_file)
+    except Exception:
+        for bak_path, target_path, existed in reversed(backups):
+            try:
+                if existed and bak_path is not None and bak_path.is_file():
+                    bak_path.replace(target_path)
+                elif not existed:
+                    target_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+        for bak_path, _, _ in backups:
+            if bak_path is not None:
+                try:
+                    bak_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+        for tmp_path, _ in staged_pairs:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+        try:
+            manifest_tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+        if existing_raw_list:
+            return existing_raw_list
+        return existing_items
+
+    for bak_path, _, _ in backups:
+        if bak_path is not None:
+            try:
+                bak_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     for obsolete_file in old_seed_files - new_seed_files:
         try:

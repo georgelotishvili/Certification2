@@ -107,6 +107,8 @@ def start_project_attempt(db: Session, user: User, stage: str, payload, project_
         require_uncancelled_attempt(attempt)
         return attempt
     prepared = get_prepared_project_material(db, user.id, stage, payload.stageGrantId)
+    if prepared is None and not is_admin_like(user):
+        raise HTTPException(409, "Project must be prepared before starting")
     if prepared is not None:
         if (prepared.user_id != user.id or prepared.stage != stage
                 or prepared.project_code != payload.projectCode.strip()):
