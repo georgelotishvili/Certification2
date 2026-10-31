@@ -1,6 +1,6 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "deployed_at": "2026-10-29T17:23:13.258805+00:00",
+  "deployed_at": "2026-10-30T14:59:37.026843+00:00",
   "remote": {
     "ok": true,
     "service": "active",
@@ -8,87 +8,23 @@
     "has_admin_users_route": true,
     "has_planning_templates_route": true,
     "verified_files": {
-      "backend/app/models.py": true,
-      "backend/app/routers/admin.py": true,
       "backend/app/routers/ai_assistant.py": true,
-      "backend/app/routers/auth.py": true,
-      "backend/app/routers/documents.py": true,
-      "backend/app/routers/expert_uploads.py": true,
-      "backend/app/routers/guide.py": true,
       "backend/app/routers/planning_letters.py": true,
-      "backend/app/routers/users.py": true,
-      "backend/app/services/candidate_status.py": true,
-      "backend/app/services/contract_assembler.py": true,
-      "backend/app/services/exam_stage_grants.py": true,
-      "backend/scripts/migrate_candidate_status.py": true,
+      "backend/app/data/ai_knowledge_seed.zip": true,
       "frontend/pages/admin.html": true,
-      "frontend/pages/documents.html": true,
-      "frontend/pages/index.html": true,
-      "frontend/pages/my.html": true,
-      "frontend/pages/registry.html": true,
-      "frontend/scripts/admin/certificate.js": true,
-      "frontend/scripts/admin/exam-schedules.js": true,
-      "frontend/scripts/admin/users.js": true,
-      "frontend/scripts/header.js": true,
-      "frontend/scripts/my.js": true,
-      "frontend/scripts/script.js": true
+      "frontend/scripts/admin/exam-schedules.js": true
     }
   },
   "public_checks": {
     "https://gipc.org.ge/pages/admin.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "17dbcb2eb4b67e2ec2289ca6925dd8be2e8c78883c949ae3f25fe4d2ec4a343d"
-    },
-    "https://gipc.org.ge/pages/documents.html": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "d1212f7c979e48588733ac42b023fa5e5ce6152f47e672c947d1eedf72c0a53d"
-    },
-    "https://gipc.org.ge/pages/index.html": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "6eaa22c5866cf3876b60785bf4d99254d76da02e4ca787324dda3b50eb752948"
-    },
-    "https://gipc.org.ge/pages/my.html": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "76b60ceb1385307d70bc4c8c943ba5f6b5f91dce01e8d3473b2d9b54935f2747"
-    },
-    "https://gipc.org.ge/pages/registry.html": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "ce2dbbdf0b743ea3b512f409b830f79bdb449461aacff59c97fddc035521a6d3"
-    },
-    "https://gipc.org.ge/scripts/admin/certificate.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "a06ea622d94dd0177cde0bd3f086d10398b0649551598c2bbde8c64adc3caa52"
+      "sha256": "afdae46d32bfc9341a897f0896959e837a4d8134cb59624c0f7751d64df62d79"
     },
     "https://gipc.org.ge/scripts/admin/exam-schedules.js": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "1447a776101391791429083242ebe8d5b2968ec62f80629534cb35cf68514f48"
-    },
-    "https://gipc.org.ge/scripts/admin/users.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "99069fc3157535c4583b359acb7d42f99d19808f84a520f841ef0843bc8f850d"
-    },
-    "https://gipc.org.ge/scripts/header.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "c2f6cdbe0331f5297739a17fe106ca7ad238c286ae8690de41922dbd2825c474"
-    },
-    "https://gipc.org.ge/scripts/my.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "9cc2d27b6bb1de6d96cd6910bc7e7a9a5001b93b1b4c7475d6f7c733f626d50e"
-    },
-    "https://gipc.org.ge/scripts/script.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "52a2a00e597a8a47b43c2524aef1b9ee6cf5eb5751fb2f6b0bc18931d4c38100"
+      "sha256": "edd0107a7e4f0e43864dea148e12604b3c07ca9e0bab536b6905748f0d398785"
     }
   }
 }

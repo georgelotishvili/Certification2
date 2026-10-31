@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import quote
@@ -102,10 +103,102 @@ def _guide_file_exists(file_path: str | None) -> bool:
         return False
 
 
-def _ensure_default_guide_docs(db: Session) -> None:
-    """Keep the 8 default GuideDocument pages synchronized with bundled 28_... .md."""
+def _guide_html_hash(html: str | None) -> str:
+    cleaned = re.sub(r"\s+", " ", (html or "").strip())
+    return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:16]
+
+
+KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
+    "ჩვენს შესახებ": frozenset(["60098254270038b3", "a417b2e6079fb740"]),
+    "სერტიფიცირება": frozenset([
+        "53889f316e914934",
+        "92f7920d4b45b24f",
+        "989f160c1cdec4b4",
+        "a1adebcbcbda6714",
+        "a417b2e6079fb740",
+        "ab32d667de33898a",
+        "b679f77565ac3143",
+        "b8c10a7fc6e8008f",
+    ]),
+    "გამოცდა": frozenset([
+        "003631669368aa45",
+        "082d58ffabbf946b",
+        "736dd4d1e94487d7",
+        "989f160c1cdec4b4",
+        "a417b2e6079fb740",
+        "b8c10a7fc6e8008f",
+    ]),
+    "საფასურები": frozenset([
+        "31f030884011eed8",
+        "5b68f8fb225f7f32",
+        "69e9cd6193e5eceb",
+        "989f160c1cdec4b4",
+        "b8c10a7fc6e8008f",
+    ]),
+    "საჯარო რეესტრი": frozenset([
+        "01198574571bebab",
+        "122e49bcd5251446",
+        "d07f2a77240f5c5c",
+        "e81dbece7be73d1d",
+    ]),
+    "საჩივარი და აპელაცია": frozenset([
+        "ab32d667de33898a",
+        "aced8d4ea7f785c4",
+        "ee6a95135247dd4f",
+    ]),
+    "კონფიდენციალურობა და კონტაქტი": frozenset([
+        "9f9e8267d3090a48",
+        "e81dbece7be73d1d",
+        "fcc5eb7433ea8270",
+    ]),
+    "ფორმები და საჯარო დოკუმენტაცია": frozenset([
+        "8368166b86c8a21f",
+        "ac37115ff09a6b4a",
+        "b679f77565ac3143",
+    ]),
+}
+
+
+_DOC28_SECTIONS_CACHE: tuple[tuple[int, int], list[tuple[int, str, str, str, str]]] | None = None
+
+
+def _get_bundled_doc28_sections() -> list[tuple[int, str, str, str, str]]:
+    global _DOC28_SECTIONS_CACHE
     if not BUNDLED_DOC28_MD.is_file():
+        return []
+    st = BUNDLED_DOC28_MD.stat()
+    cache_key = (st.st_mtime_ns, st.st_size)
+    if _DOC28_SECTIONS_CACHE is not None and _DOC28_SECTIONS_CACHE[0] == cache_key:
+        return _DOC28_SECTIONS_CACHE[1]
+
+    raw_md = BUNDLED_DOC28_MD.read_text(encoding="utf-8-sig")
+    parts = re.split(r"(?m)^## გვერდი:\s*", raw_md)
+    sections: list[tuple[int, str, str, str, str]] = []
+    for idx, part in enumerate(parts[1:], 1):
+        part_clean = re.split(r"(?m)^## საჯარო ინფორმაციის გამოქვეყნებისა", part)[0].strip()
+        lines = part_clean.splitlines()
+        if not lines:
+            continue
+        title = lines[0].strip()
+        body = "\n".join(lines[1:]).strip()
+        body_promoted = re.sub(r"(?m)^####\s+", "### ", body)
+        body_promoted = re.sub(r"(?m)^###\s+", "## ", body_promoted)
+        html_content = markdown_to_html(body_promoted)
+        display_filename = f"{idx}. {title}.docx"
+        sections.append((idx, title, body_promoted, html_content, display_filename))
+
+    _DOC28_SECTIONS_CACHE = (cache_key, sections)
+    return sections
+
+
+def _ensure_default_guide_docs(db: Session) -> None:
+    """Keep the 8 default GuideDocument pages synchronized with bundled 28_... .md
+    while preserving any page modified by an administrator."""
+    sections = _get_bundled_doc28_sections()
+    if not sections:
         return
+    new_files_created: list[str] = []
+    old_files_to_delete: list[str] = []
     try:
         docs = list(
             db.scalars(
@@ -113,62 +206,59 @@ def _ensure_default_guide_docs(db: Session) -> None:
             ).all()
         )
         by_title = {(d.title or "").strip(): d for d in docs}
-        cert_doc = by_title.get("სერტიფიცირება")
-        forms_doc = by_title.get("ფორმები და საჯარო დოკუმენტაცია")
-        if (
-            cert_doc is not None
-            and forms_doc is not None
-            and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in (cert_doc.content or "")
-            and "საგამოცდო და სასერტიფიკაციო ხელშეკრულება" in (forms_doc.content or "")
-            and "GIPC-CON-" not in (forms_doc.content or "")
-            and all(_guide_file_exists(d.file_path) for d in docs)
-        ):
-            return
-
-        raw_md = BUNDLED_DOC28_MD.read_text(encoding="utf-8-sig")
-        parts = re.split(r"(?m)^## გვერდი:\s*", raw_md)
-        if len(parts) <= 1:
-            return
 
         changed = False
-        for idx, part in enumerate(parts[1:], 1):
-            part_clean = re.split(r"(?m)^## საჯარო ინფორმაციის გამოქვეყნებისა", part)[0].strip()
-            lines = part_clean.splitlines()
-            if not lines:
-                continue
-            title = lines[0].strip()
-            body = "\n".join(lines[1:]).strip()
-            body_promoted = re.sub(r"(?m)^####\s+", "### ", body)
-            body_promoted = re.sub(r"(?m)^###\s+", "## ", body_promoted)
-            html_content = markdown_to_html(body_promoted)
-            docx_bytes = markdown_to_docx_bytes(f"# {title}\n\n{body_promoted}\n")
-            display_filename = f"{idx}. {title}.docx"
-
+        for idx, title, body_promoted, html_content, display_filename in sections:
             existing = by_title.get(title)
             if existing is not None:
-                if (
-                    existing.content == html_content
-                    and existing.file_size_bytes == len(docx_bytes)
-                    and _guide_file_exists(existing.file_path)
-                ):
+                is_factory_filename = not existing.filename or existing.filename == display_filename
+                if existing.content == html_content:
+                    if _guide_file_exists(existing.file_path) or not is_factory_filename:
+                        continue
+                    docx_bytes = markdown_to_docx_bytes(f"# {title}\n\n{body_promoted}\n")
+                    unique_name = f"guide_{uuid.uuid4().hex[:12]}.docx"
+                    file_path = _resolve_guide_path(_guide_root() / unique_name)
+                    new_files_created.append(str(file_path))
+                    file_path.write_bytes(docx_bytes)
+                    old_fp = existing.file_path
+                    existing.file_path = str(file_path)
+                    existing.filename = display_filename
+                    existing.file_size_bytes = len(docx_bytes)
+                    db.add(existing)
+                    if old_fp and old_fp != str(file_path):
+                        old_files_to_delete.append(old_fp)
+                    changed = True
                     continue
+
+                known_hashes = KNOWN_FACTORY_GUIDE_HTML_HASHES.get(title, frozenset())
+                current_hash = _guide_html_hash(existing.content)
+                is_unmodified_factory = (
+                    (not (existing.content or "").strip() or current_hash in known_hashes)
+                    and is_factory_filename
+                )
+                if not is_unmodified_factory:
+                    continue
+
+                docx_bytes = markdown_to_docx_bytes(f"# {title}\n\n{body_promoted}\n")
                 unique_name = f"guide_{uuid.uuid4().hex[:12]}.docx"
                 file_path = _resolve_guide_path(_guide_root() / unique_name)
+                new_files_created.append(str(file_path))
                 file_path.write_bytes(docx_bytes)
                 old_fp = existing.file_path
                 existing.content = html_content
                 existing.file_path = str(file_path)
                 existing.filename = display_filename
                 existing.file_size_bytes = len(docx_bytes)
-                existing.order_index = idx
                 existing.updated_at = datetime.utcnow()
                 db.add(existing)
                 if old_fp and old_fp != str(file_path):
-                    _delete_guide_file_from_disk(old_fp)
+                    old_files_to_delete.append(old_fp)
                 changed = True
             else:
+                docx_bytes = markdown_to_docx_bytes(f"# {title}\n\n{body_promoted}\n")
                 unique_name = f"guide_{uuid.uuid4().hex[:12]}.docx"
                 file_path = _resolve_guide_path(_guide_root() / unique_name)
+                new_files_created.append(str(file_path))
                 file_path.write_bytes(docx_bytes)
                 new_doc = GuideDocument(
                     title=title,
@@ -183,11 +273,15 @@ def _ensure_default_guide_docs(db: Session) -> None:
 
         if changed:
             db.commit()
-    except Exception:
+            for old_fp in old_files_to_delete:
+                _delete_guide_file_from_disk(old_fp)
+    except BaseException:
         try:
             db.rollback()
         except Exception:
             pass
+        for new_fp in new_files_created:
+            _delete_guide_file_from_disk(new_fp)
 
 
 def _get_guide_doc_record(db: Session) -> Optional[GuideDocument]:
@@ -270,69 +364,85 @@ async def _apply_guide_doc_fields(
     Caller must delete `old_file_path_to_delete` AFTER `db.commit()`, or delete
     `new_file_path_created` if `db.commit()` fails.
     """
-    if title is not None:
-        cleaned_title = title.strip()
-        if cleaned_title:
-            doc.title = cleaned_title
-        elif not doc.title:
-            doc.title = "ინფორმაცია"
-
     old_file_to_delete: Optional[str] = None
     new_file_created: Optional[str] = None
 
-    if remove_file and not (file and file.filename):
-        old_file_to_delete = doc.file_path
-        doc.file_path = None
-        doc.filename = None
-        doc.file_size_bytes = None
+    try:
+        next_title = doc.title
+        if title is not None:
+            cleaned_title = title.strip()
+            if cleaned_title:
+                next_title = cleaned_title
+            elif not next_title:
+                next_title = "ინფორმაცია"
 
-    extracted_html_from_file = ""
-    if file and file.filename:
-        ext = Path(file.filename).suffix.lower()
-        allowed_exts = {".docx", ".doc", ".md", ".txt", ".pdf"}
-        if ext not in allowed_exts:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="დაშვებულია მხოლოდ .docx, .md, .txt ან .pdf ფაილები",
-            )
+        next_file_path = doc.file_path
+        next_filename = doc.filename
+        next_file_size = doc.file_size_bytes
 
-        unique_name = f"guide_{uuid.uuid4().hex[:12]}{ext}"
-        file_path = _resolve_guide_path(_guide_root() / unique_name)
-        try:
-            file_size = await save_async_upload(
-                file, file_path, max_bytes=GUIDE_UPLOAD_MAX_BYTES
-            )
-        except UploadTooLarge as exc:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="ფაილის ზომა აჭარბებს დასაშვებ ლიმიტს",
-            ) from exc
+        if remove_file and not (file and file.filename):
+            old_file_to_delete = doc.file_path
+            next_file_path = None
+            next_filename = None
+            next_file_size = None
 
-        old_file_to_delete = doc.file_path
-        new_file_created = str(file_path)
-        doc.file_path = new_file_created
-        doc.filename = _safe_guide_filename(file.filename)
-        doc.file_size_bytes = file_size
+        extracted_html_from_file = ""
+        if file and file.filename:
+            ext = Path(file.filename).suffix.lower()
+            allowed_exts = {".docx", ".doc", ".md", ".txt", ".pdf"}
+            if ext not in allowed_exts:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="დაშვებულია მხოლოდ .docx, .md, .txt ან .pdf ფაილები",
+                )
 
-        try:
-            raw_bytes = file_path.read_bytes()
-            if ext in {".docx", ".doc"}:
-                extracted_html_from_file = docx_bytes_to_html(raw_bytes)
-            elif ext in {".md", ".txt"}:
-                text_str = strip_internal_annexes(raw_bytes.decode("utf-8-sig", errors="replace"))
-                extracted_html_from_file = structured_text_to_html(text_str)
-        except Exception:
-            extracted_html_from_file = ""
+            unique_name = f"guide_{uuid.uuid4().hex[:12]}{ext}"
+            file_path = _resolve_guide_path(_guide_root() / unique_name)
+            new_file_created = str(file_path)
+            try:
+                file_size = await save_async_upload(
+                    file, file_path, max_bytes=GUIDE_UPLOAD_MAX_BYTES
+                )
+            except UploadTooLarge as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="ფაილის ზომა აჭარბებს დასაშვებ ლიმიტს",
+                ) from exc
 
-    if extracted_html_from_file:
-        doc.content = extracted_html_from_file
-    elif content is not None and content.strip():
-        doc.content = structured_text_to_html(strip_internal_annexes(content))
-    elif content is not None and not (file and file.filename):
-        doc.content = ""
+            old_file_to_delete = doc.file_path
+            next_file_path = new_file_created
+            next_filename = _safe_guide_filename(file.filename)
+            next_file_size = file_size
 
-    doc.updated_at = datetime.utcnow()
-    return old_file_to_delete, new_file_created
+            try:
+                raw_bytes = file_path.read_bytes()
+                if ext in {".docx", ".doc"}:
+                    extracted_html_from_file = docx_bytes_to_html(raw_bytes)
+                elif ext in {".md", ".txt"}:
+                    text_str = strip_internal_annexes(raw_bytes.decode("utf-8-sig", errors="replace"))
+                    extracted_html_from_file = structured_text_to_html(text_str)
+            except Exception:
+                extracted_html_from_file = ""
+
+        next_content = doc.content
+        if extracted_html_from_file:
+            next_content = extracted_html_from_file
+        elif content is not None and content.strip():
+            next_content = structured_text_to_html(strip_internal_annexes(content))
+        elif content is not None and not (file and file.filename):
+            next_content = ""
+
+        doc.title = next_title
+        doc.file_path = next_file_path
+        doc.filename = next_filename
+        doc.file_size_bytes = next_file_size
+        doc.content = next_content
+        doc.updated_at = datetime.utcnow()
+        return old_file_to_delete, new_file_created
+    except BaseException:
+        if new_file_created:
+            _delete_guide_file_from_disk(new_file_created)
+        raise
 
 
 def _serve_guide_doc_file(doc: Optional[GuideDocument]) -> FileResponse:
@@ -620,16 +730,11 @@ def admin_delete_guide_document(
     if not doc:
         return
 
-    if doc.file_path:
-        try:
-            fp = _resolve_guide_path(doc.file_path)
-            if fp.exists():
-                fp.unlink()
-        except (OSError, ValueError):
-            pass
-
+    old_file = doc.file_path
     db.delete(doc)
     db.commit()
+    if old_file:
+        _delete_guide_file_from_disk(old_file)
     return
 
 

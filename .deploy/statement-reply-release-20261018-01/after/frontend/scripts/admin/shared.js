@@ -172,6 +172,7 @@
       return;
     }
     if (response.status === 401) {
+      try { global.Auth?.clearSession?.(); global.localStorage?.setItem?.('authLoggedIn', 'false'); global.localStorage?.removeItem?.('auth_token'); global.localStorage?.removeItem?.('currentUser'); } catch {}
       showToastFn('ადმინის სესია არ არის ავტორიზებული', 'error');
       return;
     }

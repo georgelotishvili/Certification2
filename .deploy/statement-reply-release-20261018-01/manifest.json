@@ -1,150 +1,36 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "created_at": "2026-10-29T17:22:46.547691+00:00",
+  "created_at": "2026-10-30T14:59:14.615627+00:00",
   "host": "gipcadmin@148.251.167.229",
   "files": [
     {
-      "path": "backend/app/models.py",
-      "before_sha256": "6546952c0214e75e91f831fd61b47253f10c66e78027e3ee4d75f77f76c82ae0",
-      "after_sha256": "99a8dea3976bcfd5012dd4248df11b9738ebe58c173c7ccda4faa663ed2e0c5b",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/admin.py",
-      "before_sha256": "642f54e6b3c99dcb46c09c5851d25153e5be976efc3b8074047b64b763457f27",
-      "after_sha256": "917bba5f2c63eb16dc86b8a9dc6d6b1c5fd1c816fdfb8dff58c08c089cd84e35",
-      "existed_before": true
-    },
-    {
       "path": "backend/app/routers/ai_assistant.py",
-      "before_sha256": "019b5d2426b8e5bc4712462f1cf91960d065ff3b4b8a3bffbd4da6aecf1c60f9",
-      "after_sha256": "d3fb8cd10dc3508d1b80010fd20989b952ae14fe620c82bfb06939b4a8e9a7d3",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/auth.py",
-      "before_sha256": "e8434543c25894e91bc75fc74b05f4d73fdd2da3ec461eb105be801fc8f63c5e",
-      "after_sha256": "49ca584ebc51573ae092f548dc9859f8d4faab538effc1e0ee08ed6004028e51",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/documents.py",
-      "before_sha256": "9affff97912e491104305b537b12c7bb42135440337339ce6e281bbbf989c23d",
-      "after_sha256": "a53d34dfcbec02baeafd0228db2a3347f69ef067d98a99ae38342da8e71bed68",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/expert_uploads.py",
-      "before_sha256": "8eaf4e0d10f40ab4ae6f9844e30c9022468f979997f8a5cef57d7d3eec4c9d39",
-      "after_sha256": "0dc7d2fc31c3cfe4e4ba6ba51b7916241c1474f1c0a6e022b9f4bcc7d482cb29",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/guide.py",
-      "before_sha256": "5ba9c0159eef035f65d5c7cacdbe0591955d09d1adeca874098d886ba5b72d1e",
-      "after_sha256": "aba10529492d64a477ef64af70ec251ed10b354fd77a7da1f67ba58e78c7b8c6",
+      "before_sha256": "c4e595ee81cb1eb3262f237201bdd177bab7ddd4ee670ff1728d08224438c49d",
+      "after_sha256": "cf7123e262d5f450f8850b3dd017591f0b8843c57bb7275660813911ed7037ef",
       "existed_before": true
     },
     {
       "path": "backend/app/routers/planning_letters.py",
-      "before_sha256": "cbd244dea99994d1ba731b65dce4e2d28bca7d5832ec379b1725d2276ed16ab2",
-      "after_sha256": "46faa8461c56e04d2e50e99019787592027d7267d4242c07829e6a58a618d3d5",
+      "before_sha256": "18551a7b0ec756ca305b35df117f51957b4605d00c33e7c2b77accebbc3c34e6",
+      "after_sha256": "c200e8865ea9abe187af390b671efe952dfebb91a5e4df8dd36e942ff48919c2",
       "existed_before": true
     },
     {
-      "path": "backend/app/routers/users.py",
-      "before_sha256": "78e7b27bdb42c27904c1d266b2b9e0e4e83687714be2f1c84bfcf7e6eb491ffd",
-      "after_sha256": "84413d4e340fccefbacbcb3e00b2199f702a79b80e3711818ddbdecc7e0f1b6c",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/services/candidate_status.py",
-      "before_sha256": "b0e7ebc06a06c5e1e7f575970cb65580137372280dece7dd8eb53c005d8ed48a",
-      "after_sha256": "534ca46d071d58406f1bd52d4bf560e951092fcefeb11ef1717e2342265d6fab",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/services/contract_assembler.py",
-      "before_sha256": "77df326d12e24252007da4a8c2fade6d34e33b6da2f55fb159f212b26001f8e1",
-      "after_sha256": "7bb6dfee80df9620ee94392eea1ca0451f6d105ad4beaf683c9eb8c190b62545",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/services/exam_stage_grants.py",
-      "before_sha256": "0748a40e15f288cdfab3a5ffd9219adee1be84be46d4450ab70949c3b3dba58d",
-      "after_sha256": "4a616756a4b77c57031a45a508f6510353abdfdab6bf01f8f34cda615ae10f2d",
-      "existed_before": true
-    },
-    {
-      "path": "backend/scripts/migrate_candidate_status.py",
-      "before_sha256": "b2992b2bb23c562457c63d8c9a2ea3aa148de38d7a1b36ef072a73bf8181af9a",
-      "after_sha256": "28c79aadf3f87810fc1959ab0276a80ce7a89ccd60121e7821682f460f818ea3",
+      "path": "backend/app/data/ai_knowledge_seed.zip",
+      "before_sha256": "5f3b6050367b0eb549affeca38925b99f108e15f8741aba9f0120843bf7a6b4e",
+      "after_sha256": "a84d421b08449edd6fea16658cff2824628e9da57518ead15bcaca8e4bcb836a",
       "existed_before": true
     },
     {
       "path": "frontend/pages/admin.html",
-      "before_sha256": "2b73ebcebe7201745b5cf9c986cfe8ae62305b4bb656a6567e4251f3e30fc5fe",
-      "after_sha256": "17dbcb2eb4b67e2ec2289ca6925dd8be2e8c78883c949ae3f25fe4d2ec4a343d",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/pages/documents.html",
-      "before_sha256": "f4dc656117d94932b9ae0e647fe23a26dcb66dc3fefef2007f4b6321f4f8874c",
-      "after_sha256": "d1212f7c979e48588733ac42b023fa5e5ce6152f47e672c947d1eedf72c0a53d",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/pages/index.html",
-      "before_sha256": "4b43df52f0da81e8ed36fe905f19c702261f2d5c444c210d131935e25a94add5",
-      "after_sha256": "6eaa22c5866cf3876b60785bf4d99254d76da02e4ca787324dda3b50eb752948",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/pages/my.html",
-      "before_sha256": "ae4466f5c9ea634a79f3f73abadfd9ed2ea6c2317e9b7f3af4aa83eb50cc1bfb",
-      "after_sha256": "76b60ceb1385307d70bc4c8c943ba5f6b5f91dce01e8d3473b2d9b54935f2747",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/pages/registry.html",
-      "before_sha256": "cb04e8dfa7e848b334ca82e75f3221be4403dad8d371a3e7d5385426eff60ab1",
-      "after_sha256": "ce2dbbdf0b743ea3b512f409b830f79bdb449461aacff59c97fddc035521a6d3",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/certificate.js",
-      "before_sha256": "ff6bcfa066a0887a4da78b18a367ce993fe517de3237f137fd05cfa4c8e156bb",
-      "after_sha256": "a06ea622d94dd0177cde0bd3f086d10398b0649551598c2bbde8c64adc3caa52",
+      "before_sha256": "af71d95b37c94db1d0b05666fb6a94632645f40c800a8633c5a3d305d2fa1254",
+      "after_sha256": "afdae46d32bfc9341a897f0896959e837a4d8134cb59624c0f7751d64df62d79",
       "existed_before": true
     },
     {
       "path": "frontend/scripts/admin/exam-schedules.js",
-      "before_sha256": "f09cb8fe2d948d6ddcee7803cf33da7bc4caf985396cbbad37f512b86fd28113",
-      "after_sha256": "1447a776101391791429083242ebe8d5b2968ec62f80629534cb35cf68514f48",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/users.js",
-      "before_sha256": "3cda8fadb608b345b43579c65006db0d0d542723f0bed5c4c917f0e04a0f1b65",
-      "after_sha256": "99069fc3157535c4583b359acb7d42f99d19808f84a520f841ef0843bc8f850d",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/header.js",
-      "before_sha256": "7e1c9f77e4e4bdb1353d40ab4dec9978cc2cedc261aadc5b75577ea0ee6ce262",
-      "after_sha256": "c2f6cdbe0331f5297739a17fe106ca7ad238c286ae8690de41922dbd2825c474",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/my.js",
-      "before_sha256": "46e71023e5deaef205919a2c6c672e84797cf7f26d42eb0104a99b03577a5e31",
-      "after_sha256": "9cc2d27b6bb1de6d96cd6910bc7e7a9a5001b93b1b4c7475d6f7c733f626d50e",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/script.js",
-      "before_sha256": "7eadcb059dbd2ab1ed2492aec16156f86711aa80638ed7832001c0b3457cc57a",
-      "after_sha256": "52a2a00e597a8a47b43c2524aef1b9ee6cf5eb5751fb2f6b0bc18931d4c38100",
+      "before_sha256": "231609ef221fcb4e87718e97dff8db692300b0c48022baa6cace77389b92410a",
+      "after_sha256": "edd0107a7e4f0e43864dea148e12604b3c07ca9e0bab536b6905748f0d398785",
       "existed_before": true
     }
   ]

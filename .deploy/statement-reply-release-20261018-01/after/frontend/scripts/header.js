@@ -142,96 +142,16 @@
     return `${dd}.${mm}.${yyyy}`;
   }
 
-  function populateContractHtmlForCurrentUser(html, contractType = null) {
-    if (!html) return '';
-    const out0 = String(html);
-    const isContract = Boolean(contractType) || (out0.includes('პირადი ნომერი') && (out0.includes('___') || out0.includes('[')));
-    if (!isContract) return out0;
-
-    const user = getCurrentUserForContract();
-    if (!user) return out0;
-
-    const first = String(user.firstName || user.first_name || '').trim();
-    const last = String(user.lastName || user.last_name || '').trim();
-    const fullName = `${first} ${last}`.trim();
-    const personalId = String(user.personalId || user.personal_id || '').trim();
-    const phone = String(user.phone || '').trim();
-    const email = String(user.email || '').trim();
-    const code = String(user.code || '').trim();
-    const dateStr = formatTodayDateKa();
-
-    let out = out0;
-    out = out.replace(/\[თარიღი\]/g, escapeHtml(dateStr));
-    out = out.replace(
-      /(თარიღი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
-      `$1<strong>${escapeHtml(dateStr)}</strong>`
-    );
-    if (fullName) {
-      out = out.replace(/\[სახელი,\s*გვარი\]/g, escapeHtml(fullName));
-      out = out.replace(/\[სახელი\s+გვარი\]/g, escapeHtml(fullName));
-      out = out.replace(
-        /(სახელი\s*,\s*გვარი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
-        `$1<strong>${escapeHtml(fullName)}</strong>`
-      );
-    }
-    if (personalId) {
-      out = out.replace(/\[პირადი\s*ნომერი\]/g, escapeHtml(personalId));
-      out = out.replace(
-        /(პირადი\s+ნომერი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
-        `$1<strong>${escapeHtml(personalId)}</strong>`
-      );
-    }
-    if (phone) {
-      out = out.replace(/\[ტელეფონის\s*ნომერი\]/g, escapeHtml(phone));
-      out = out.replace(/\[ტელეფონი\]/g, escapeHtml(phone));
-      out = out.replace(
-        /(ტელეფონი\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
-        `$1<strong>${escapeHtml(phone)}</strong>`
-      );
-    }
-    if (email) {
-      out = out.replace(/\[ელექტრონული\s*ფოსტა\]/g, escapeHtml(email));
-      out = out.replace(/\[ელ\.?\s*ფოსტა\]/g, escapeHtml(email));
-      out = out.replace(
-        /(ელ\.?\s*ფოსტა\s*:(?:\s|&nbsp;|&#160;|<\/?(?:strong|b|span|em|i)[^>]*>)*)_{3,}/gi,
-        `$1<strong>${escapeHtml(email)}</strong>`
-      );
-    }
-    if (code) {
-      out = out.replace(/\[უნიკალური\s*კოდი\]/g, escapeHtml(code));
-    }
-
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(out, 'text/html');
-      doc.querySelectorAll('tr').forEach((tr) => {
-        const cells = tr.querySelectorAll('td, th');
-        if (cells.length < 2) return;
-        const label = (cells[0].textContent || '').replace(/\s+/g, ' ').trim();
-        const valText = (cells[1].textContent || '').replace(/\s+/g, ' ').trim();
-        const isPlaceholder = !valText || /^\[.*\]$/.test(valText) || /^_{2,}$/.test(valText) || valText === '—' || valText === '-';
-        if (!isPlaceholder) return;
-        if (label.includes('სახელი') && label.includes('გვარი') && fullName) {
-          cells[1].textContent = fullName;
-        } else if (label.includes('პირადი ნომერი') && personalId) {
-          cells[1].textContent = personalId;
-        } else if (label.includes('ტელეფონ') && phone) {
-          cells[1].textContent = phone;
-        } else if ((label.includes('ელ. ფოსტა') || label.includes('ელ-ფოსტა') || label.includes('ელფოსტა')) && email) {
-          cells[1].textContent = email;
-        }
-      });
-      out = doc.body.innerHTML;
-    } catch {}
-
-    return out;
+  function populateContractHtmlForCurrentUser(html) {
+    // Public documents must always remain blank templates; personalized contracts are assembled only in Admin User Cards.
+    return html ? String(html) : '';
   }
 
   // Site Documents - dynamic loading from API with sessionStorage cache
   let cachedDocuments = null;
   let cachedDocumentsKey = null;
   let currentModalDoc = null;
-  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v6_';
+  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v7_';
 
   function getSiteDocsCacheKey() {
     const user = getCurrentUserForContract();
@@ -1496,8 +1416,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261029-unified1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261029_unified1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261029-contract1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261029_contract1';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1532,6 +1452,7 @@
     const profilePage = isMyPage();
     markCurrentPageLinks();
     syncHeaderInitialAuthUI();
+    document.addEventListener('auth:logout', syncHeaderInitialAuthUI);
 
     const dispatchReady = () => {
       document.dispatchEvent(new CustomEvent('headerReady', { detail: { isProfilePage: profilePage } }));
@@ -1818,6 +1739,21 @@
                   credentials: 'include',
                 });
                 if (!resp.ok) {
+                  if (resp.status === 401) {
+                    try {
+                      if (typeof window.Auth?.clearSession === 'function') {
+                        window.Auth.clearSession();
+                      } else {
+                        localStorage.setItem('authLoggedIn', 'false');
+                        localStorage.removeItem('auth_token');
+                        localStorage.removeItem('currentUser');
+                        document.dispatchEvent(new CustomEvent('auth:logout'));
+                      }
+                    } catch {}
+                    alert('გთხოვთ გაიაროთ ავტორიზაცია');
+                    closeOverlay();
+                    return;
+                  }
                   alert('ფაილის ჩამოტვირთვა ვერ მოხერხდა');
                   return;
                 }
@@ -1867,6 +1803,16 @@
         });
         if (!response.ok) {
           if (response.status === 401) {
+            try {
+              if (typeof window.Auth?.clearSession === 'function') {
+                window.Auth.clearSession();
+              } else {
+                localStorage.setItem('authLoggedIn', 'false');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('currentUser');
+                document.dispatchEvent(new CustomEvent('auth:logout'));
+              }
+            } catch {}
             renderPlaceholder('გთხოვთ გაიაროთ ავტორიზაცია', 'statements-error');
             alert('გთხოვთ გაიაროთ ავტორიზაცია');
             closeOverlay();
@@ -2178,6 +2124,21 @@
           credentials: 'include',
         });
         if (!response.ok) {
+          if (response.status === 401) {
+            try {
+              if (typeof window.Auth?.clearSession === 'function') {
+                window.Auth.clearSession();
+              } else {
+                localStorage.setItem('authLoggedIn', 'false');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('currentUser');
+                document.dispatchEvent(new CustomEvent('auth:logout'));
+              }
+            } catch {}
+            alert('გთხოვთ გაიაროთ ავტორიზაცია');
+            closeOverlay();
+            return;
+          }
           let detail = '';
           try {
             const json = await response.clone().json();
@@ -2246,6 +2207,21 @@
           credentials: 'include',
         });
         if (!response.ok) {
+          if (response.status === 401) {
+            try {
+              if (typeof window.Auth?.clearSession === 'function') {
+                window.Auth.clearSession();
+              } else {
+                localStorage.setItem('authLoggedIn', 'false');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('currentUser');
+                document.dispatchEvent(new CustomEvent('auth:logout'));
+              }
+            } catch {}
+            alert('გთხოვთ გაიაროთ ავტორიზაცია');
+            closeOverlay();
+            return;
+          }
           let detail = '';
           try {
             const json = await response.clone().json();

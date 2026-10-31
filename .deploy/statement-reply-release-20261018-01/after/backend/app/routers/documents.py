@@ -313,6 +313,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 or not _stored_file_exists(matched.file_path)
                 or "<p>– " in matched_content
                 or "იოსებიძ" in matched_content
+                or (code == "GIPC-SCH-001" and "საგადახდო ქვითრის დართვით" not in matched_content)
                 or (
                     item.get("strip_annex_1")
                     and (
@@ -414,6 +415,9 @@ def _ensure_default_contracts(db: Session) -> None:
                 or not _stored_file_exists(existing_slot_doc.file_path)
                 or "<p>– " in slot_content
                 or "იოსებიძ" in slot_content
+                or "☐" in slot_content
+                or "წარმომადგენელი (დირექტორი / უფლებამოსილი პირი)" not in slot_content
+                or "საგადახდო ქვითრის გამოგზავნიდან" not in slot_content
                 or any(leg in slot_content for leg in ("GIPC-CON-002", "GIPC-CON-003", "GIPC-CON-004", "GIPC-CON-005", "GIPC-CON-006", "საგამოცდო მომსახურების ხელშეკრულება"))
             )
             if not slot_needs_refresh and existing_slot_doc is not None:
@@ -516,19 +520,18 @@ def _resolve_target_user(
     token: str | None = None,
     user_id: int | None = None,
 ) -> User | None:
+    if user_id is None:
+        return None
     auth_header = authorization
     if not auth_header and token:
         clean_tok = token.strip()
         auth_header = clean_tok if clean_tok.lower().startswith("bearer ") else f"Bearer {clean_tok}"
 
     caller = _get_user_from_token(db, auth_header)
-    target: User | None = None
-    if user_id is not None:
-        if caller and (_is_admin_user(caller) or caller.id == user_id):
-            target = db.get(User, user_id)
-    else:
-        target = caller
-    return _attach_user_application_context(db, target)
+    if caller and _is_admin_user(caller):
+        target = db.get(User, user_id)
+        return _attach_user_application_context(db, target)
+    return None
 
 
 def _is_contract_document(doc: SiteDocument) -> bool:

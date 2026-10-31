@@ -466,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Optional modal controls for independent header module
   window.Auth.openModal = () => authModule.openModal?.();
   window.Auth.closeModal = () => authModule.closeModal?.();
+  window.Auth.clearSession = () => authModule.clearLocalSession?.();
   window.Auth.checkGeorgianName = (user) => authModule.checkAndEnforceGeorgianName?.(user);
 
   // contact scroll: no contact links in header
@@ -886,9 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!response.ok) {
           if (response.status === 401) {
-            setLoggedIn(false);
-            try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
-            removeGeorgianNameOverlay();
+            clearLocalSession();
             updateAuthUI();
             updateBanner();
             updateAdminLinkVisibility();
@@ -951,6 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openModal() {
       if (!DOM.loginModal) return;
       DOM.loginModal.classList.add('show');
+      DOM.loginModal.setAttribute('aria-hidden', 'false');
       DOM.body.style.overflow = 'hidden';
       const savedEmail = localStorage.getItem(KEYS.SAVED_EMAIL);
       if (DOM.loginForm) {
@@ -962,6 +962,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeModal() {
       if (!DOM.loginModal) return;
       DOM.loginModal.classList.remove('show');
+      DOM.loginModal.setAttribute('aria-hidden', 'true');
       DOM.body.style.overflow = '';
       DOM.loginForm?.reset?.();
       DOM.registerForm?.reset?.();
@@ -1009,6 +1010,17 @@ document.addEventListener('DOMContentLoaded', () => {
       try { localStorage.removeItem('auth_token'); } catch {}
       try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
       removeGeorgianNameOverlay();
+      updateAuthUI();
+      updateBanner();
+      updateAdminLinkVisibility();
+      try { document.dispatchEvent(new CustomEvent('auth:logout')); } catch {}
+    }
+
+    function _legacyClearLocalSessionNoop() {
+      try { setLoggedIn(false); } catch {}
+      try { localStorage.removeItem('auth_token'); } catch {}
+      try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
+      removeGeorgianNameOverlay();
     }
 
     function performLogout() {
@@ -1020,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAuthUI();
       updateBanner();
       updateAdminLinkVisibility();
-      document.dispatchEvent(new CustomEvent('auth:logout'));
+
       notify('გასვლა შესრულებულია', 'success');
       closeModal();
       void revokeServerSession(token);
@@ -1506,6 +1518,7 @@ document.addEventListener('DOMContentLoaded', () => {
       generateUniqueCode,
       getUsedCodes,
       saveUsedCodes,
+      clearLocalSession,
       checkAndEnforceGeorgianName,
     };
   }

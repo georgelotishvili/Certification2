@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+from types import SimpleNamespace
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, Header, UploadFile, File, Request
@@ -15,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter
+from ..models import User, Certificate, Rating, Comment, ExpertUpload, UserSession, PlanningLetter, format_letter_doc_number
 from ..services.candidate_status import (
     NON_PASS_CERT_PERIODS,
     compute_effective_certificate_status,
@@ -47,6 +48,7 @@ from ..services.planning_email import ATTACHMENT_MAX_BYTES, deliver_letter
 from ..services.exam_stage_grants import (
     exam_state_with_permissions,
     expire_unused_stage_permissions,
+    lock_user_stage_transitions,
 )
 from ..services.user_codes import (
     UserCodeConflict,
@@ -316,6 +318,9 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
     try:
         now = datetime.utcnow()
         session_token = generate_session_token()
+        # Keep active logins and exam attempts; roll this cleanup back if the
+        # automatic login cannot be persisted after registration.
+        db.execute(delete(UserSession).where(UserSession.expires_at <= now))
         session = UserSession(
             user_id=user.id,
             token=session_token,
@@ -752,6 +757,24 @@ def _build_certificate_activation_email(
     return _render_cert_tokens(raw_subject, tokens), _render_cert_tokens(raw_body, tokens)
 
 
+def _certificate_has_uploaded_pdf(cert: Certificate | None) -> bool:
+    if not cert or not cert.file_path:
+        return False
+    try:
+        src_path = resolve_storage_path(cert.file_path)
+        return src_path.is_file() and src_path.stat().st_size > 0
+    except Exception:
+        return False
+
+
+def _require_certificate_uploaded_pdf(cert: Certificate | None) -> None:
+    if not _certificate_has_uploaded_pdf(cert):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="სერტიფიკატის PDF ფაილი ჯერ არ არის ატვირთული. შეტყობინების გაგზავნა შეუძლებელია.",
+        )
+
+
 def _send_certificate_activation_notification(
     db: Session,
     user: User,
@@ -759,48 +782,102 @@ def _send_certificate_activation_notification(
     actor_email: str,
     custom_subject: str | None = None,
     custom_body: str | None = None,
+    request_id: str | None = None,
 ) -> tuple[str, str | None]:
+    try:
+        lock_user_stage_transitions(db, user)
+    except Exception:
+        db.rollback()
+        lock_user_stage_transitions(db, user)
+        db.refresh(user)
+        db.refresh(cert)
+    _require_certificate_uploaded_pdf(cert)
     subject, body = _build_certificate_activation_email(user, cert, custom_subject, custom_body)
     now = datetime.utcnow()
-    req_id = str(uuid4())
     fingerprint = hashlib.sha256(
         json.dumps(
             {
                 "user_id": user.id,
                 "cert_id": cert.id,
                 "unique_code": cert.unique_code,
+                "level": cert.level,
                 "status": cert.status,
-                "req_id": req_id,
+                "issue_date": str(cert.issue_date or ""),
+                "valid_until": str(cert.valid_until or ""),
+                "to_email": (user.email or "").lower(),
+                "subject": subject,
+                "body": body,
             },
             ensure_ascii=False,
             sort_keys=True,
         ).encode("utf-8")
     ).hexdigest()
 
+    explicit_req_id = (request_id or "").strip() or None
+    if explicit_req_id:
+        existing_by_req = db.scalar(
+            select(PlanningLetter).where(PlanningLetter.request_id == explicit_req_id)
+        )
+        if existing_by_req is not None:
+            if existing_by_req.user_id != user.id or existing_by_req.request_fingerprint != fingerprint:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Request ID already used for another notification",
+                )
+            return existing_by_req.status, existing_by_req.error
+
+    existing_duplicate = db.scalar(
+        select(PlanningLetter)
+        .where(
+            PlanningLetter.user_id == user.id,
+            PlanningLetter.kind == "certificate",
+            PlanningLetter.period == "cert_issued",
+            PlanningLetter.request_fingerprint == fingerprint,
+            PlanningLetter.status.in_(("sending", "sent", "simulated", "uncertain")),
+        )
+        .order_by(PlanningLetter.id.desc())
+    )
+    if existing_duplicate is not None:
+        return existing_duplicate.status, existing_duplicate.error
+
+    req_id = explicit_req_id or str(uuid4())
+    dest_path: Path | None = None
     attachment_path_rel: str | None = None
     attachment_filename: str | None = None
     attachment_size: int | None = None
 
-    if cert.file_path:
-        try:
-            src_path = resolve_storage_path(cert.file_path)
-            if src_path.is_file():
-                size = src_path.stat().st_size
-                if 0 < size <= ATTACHMENT_MAX_BYTES:
-                    root = ensure_media_root().resolve()
-                    dest_dir = (root / "planning" / f"letters/{user.id}").resolve()
-                    if dest_dir.is_relative_to(root / "planning"):
-                        dest_dir.mkdir(parents=True, exist_ok=True)
-                        dest_path = dest_dir / f"{uuid4().hex}.pdf"
-                        shutil.copyfile(src_path, dest_path)
-                        attachment_path_rel = relative_storage_path(dest_path)
-                        code_label = (cert.unique_code or user.code or "certificate").strip()
-                        attachment_filename = f"certificate-{code_label}.pdf"
-                        attachment_size = int(size)
-        except Exception:
-            attachment_path_rel = None
-            attachment_filename = None
-            attachment_size = None
+    try:
+        if not cert.file_path:
+            raise ValueError("Missing certificate file_path")
+        src_path = resolve_storage_path(cert.file_path)
+        if not src_path.is_file():
+            raise ValueError("Certificate PDF file missing on disk")
+        size = src_path.stat().st_size
+        if not (0 < size <= ATTACHMENT_MAX_BYTES):
+            raise ValueError("Certificate PDF file size invalid")
+        root = ensure_media_root().resolve()
+        dest_dir = (root / "planning" / f"letters/{user.id}").resolve()
+        if not dest_dir.is_relative_to(root / "planning"):
+            raise ValueError("Invalid letter attachment destination")
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / f"{uuid4().hex}.pdf"
+        shutil.copyfile(src_path, dest_path)
+        if not dest_path.is_file() or dest_path.stat().st_size != size:
+            raise ValueError("Copied certificate PDF verification failed")
+        attachment_path_rel = relative_storage_path(dest_path)
+        code_label = (cert.unique_code or user.code or "certificate").strip()
+        attachment_filename = f"certificate-{code_label}.pdf"
+        attachment_size = int(size)
+    except Exception as exc:
+        if dest_path is not None:
+            try:
+                dest_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="სერტიფიკატის PDF დანართის მომზადება ვერ მოხერხდა. შეტყობინება არ გაიგზავნა.",
+        ) from exc
 
     letter = PlanningLetter(
         user_id=user.id,
@@ -820,9 +897,67 @@ def _send_certificate_activation_notification(
         attempts=1,
         created_by=actor_email,
     )
-    db.add(letter)
-    db.commit()
-    db.refresh(letter)
+    committed = False
+    try:
+        db.add(letter)
+        db.flush()
+        if not letter.doc_number:
+            letter.doc_number = format_letter_doc_number(letter)
+        db.commit()
+        committed = True
+    except IntegrityError as exc:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        if not committed and dest_path is not None:
+            try:
+                dest_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        prior = db.scalar(
+            select(PlanningLetter).where(PlanningLetter.request_id == req_id)
+        )
+        if prior is not None:
+            if prior.user_id != user.id or prior.request_fingerprint != fingerprint:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Request ID already used for another notification",
+                ) from exc
+            return prior.status, prior.error
+        dup = db.scalar(
+            select(PlanningLetter)
+            .where(
+                PlanningLetter.user_id == user.id,
+                PlanningLetter.kind == "certificate",
+                PlanningLetter.period == "cert_issued",
+                PlanningLetter.request_fingerprint == fingerprint,
+            )
+            .order_by(PlanningLetter.id.desc())
+        )
+        if dup is not None:
+            return dup.status, dup.error
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="შეტყობინება უკვე მუშავდება.",
+        ) from exc
+    except BaseException:
+        if not committed:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            if dest_path is not None:
+                try:
+                    dest_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        raise
+
+    try:
+        db.refresh(letter)
+    except Exception:
+        pass
 
     try:
         delivery_status, error = deliver_letter(letter)
@@ -835,7 +970,10 @@ def _send_certificate_activation_notification(
         letter.sent_at = datetime.utcnow()
     db.add(letter)
     db.commit()
-    db.refresh(letter)
+    try:
+        db.refresh(letter)
+    except Exception:
+        pass
     return letter.status, letter.error
 
 
@@ -893,6 +1031,11 @@ def create_certificate(
     existing = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Certificate already exists")
+    if payload.send_notification:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="სერტიფიკატის PDF ფაილი ჯერ არ არის ატვირთული. შეტყობინების გაგზავნა შეუძლებელია.",
+        )
     
     now = datetime.utcnow()
     level_val = payload.level or "architect"
@@ -933,7 +1076,7 @@ def create_certificate(
     notif_error = None
     if payload.send_notification:
         notif_status, notif_error = _send_certificate_activation_notification(
-            db, user, cert, actor.email, payload.notification_subject, payload.notification_body
+            db, user, cert, actor.email, payload.notification_subject, payload.notification_body, payload.request_id
         )
     
     return _certificate_out_with_notification(cert, notif_status, notif_error, deadline_date=dl)
@@ -956,6 +1099,8 @@ def update_certificate(
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
+    if payload.send_notification:
+        _require_certificate_uploaded_pdf(cert)
     
     was_transitional = bool(cert.is_transitional)
     if payload.unique_code is not None:
@@ -1005,7 +1150,7 @@ def update_certificate(
     notif_error = None
     if payload.send_notification:
         notif_status, notif_error = _send_certificate_activation_notification(
-            db, user, cert, actor.email, payload.notification_subject, payload.notification_body
+            db, user, cert, actor.email, payload.notification_subject, payload.notification_body, payload.request_id
         )
     
     return _certificate_out_with_notification(cert, notif_status, notif_error, deadline_date=dl)
@@ -1026,18 +1171,7 @@ def notify_certificate_activation(
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
-    has_pdf = False
-    if cert.file_path:
-        try:
-            src_path = resolve_storage_path(cert.file_path)
-            has_pdf = src_path.is_file() and src_path.stat().st_size > 0
-        except Exception:
-            has_pdf = False
-    if not has_pdf:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="სერტიფიკატის PDF ფაილი ჯერ არ არის ატვირთული. შეტყობინების გაგზავნა შეუძლებელია.",
-        )
+    _require_certificate_uploaded_pdf(cert)
     notif_status, notif_error = _send_certificate_activation_notification(
         db,
         user,
@@ -1045,6 +1179,7 @@ def notify_certificate_activation(
         actor.email,
         payload.subject if payload else None,
         payload.body if payload else None,
+        payload.request_id if payload else None,
     )
     return _certificate_out_with_notification(cert, notif_status, notif_error)
 
@@ -1075,57 +1210,62 @@ def delete_certificate(
 
     old_level = (cert.level or "").strip().lower()
 
-    # Delete all certificate-related files and directories (do NOT delete user profile photo)
-    _delete_certificate_files(cert, user_id)
-
-    # Delete all ratings and comments for this user
-    db.execute(Rating.__table__.delete().where(Rating.target_user_id == user_id))
-    db.execute(Comment.__table__.delete().where(Comment.target_user_id == user_id))
-
-    # Delete all expert uploads and their files
-    uploads = db.scalars(select(ExpertUpload).where(ExpertUpload.user_id == user_id)).all()
-    for upload in uploads:
-        if upload.expertise_path:
-            try:
-                delete_storage_file(upload.expertise_path)
-            except Exception:
-                pass
-        if upload.project_path:
-            try:
-                delete_storage_file(upload.project_path)
-            except Exception:
-                pass
-    db.execute(ExpertUpload.__table__.delete().where(ExpertUpload.user_id == user_id))
-
-    now = datetime.utcnow()
-    # Restore cert_candidate status if the user has a valid certificate handover letter within the last 30 days
-    pass_letter = db.scalar(
-        select(PlanningLetter)
-        .where(
-            PlanningLetter.user_id == user_id,
-            PlanningLetter.kind == "certificate",
-            or_(
-                PlanningLetter.period.is_(None),
-                ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
-            ),
-            PlanningLetter.status != "failed",
-        )
-        .order_by(PlanningLetter.created_at.desc(), PlanningLetter.id.desc())
+    # Snapshot paths before deleting ORM rows. Files stay usable if the database
+    # transaction fails; post-commit cleanup must not reload deleted objects.
+    certificate_files = SimpleNamespace(
+        file_path=cert.file_path, level=cert.level, unique_code=cert.unique_code,
     )
-    if pass_letter is not None:
-        letter_dt = pass_letter.sent_at or pass_letter.created_at
-        if letter_dt is not None and (now - letter_dt) <= timedelta(days=30):
-            fallback_cat = "C" if old_level == "expert" else ("B" if old_level == "municipal" else "A")
-            restored_cat = normalize_cert_category(
-                user.candidate_category or get_user_latest_requested_category(db, user_id) or fallback_cat
-            )
-            user.candidate_status = "cert_candidate"
-            user.candidate_category = restored_cat
-            user.candidate_updated_at = now
-            db.add(user)
+    uploads = db.scalars(select(ExpertUpload).where(ExpertUpload.user_id == user_id)).all()
+    upload_paths = [
+        path for upload in uploads
+        for path in (upload.expertise_path, upload.project_path) if path
+    ]
+    try:
+        # Delete all ratings, comments and expert-upload rows for this user.
+        db.execute(Rating.__table__.delete().where(Rating.target_user_id == user_id))
+        db.execute(Comment.__table__.delete().where(Comment.target_user_id == user_id))
+        db.execute(ExpertUpload.__table__.delete().where(ExpertUpload.user_id == user_id))
 
-    db.delete(cert)
-    db.commit()
+        now = datetime.utcnow()
+        # Restore cert_candidate status if the user has a valid certificate handover letter within the last 30 days
+        pass_letter = db.scalar(
+            select(PlanningLetter)
+            .where(
+                PlanningLetter.user_id == user_id,
+                PlanningLetter.kind == "certificate",
+                or_(
+                    PlanningLetter.period.is_(None),
+                    ~PlanningLetter.period.in_(NON_PASS_CERT_PERIODS),
+                ),
+                PlanningLetter.status != "failed",
+            )
+            .order_by(PlanningLetter.created_at.desc(), PlanningLetter.id.desc())
+        )
+        if pass_letter is not None:
+            letter_dt = pass_letter.sent_at or pass_letter.created_at
+            if letter_dt is not None and (now - letter_dt) <= timedelta(days=30):
+                fallback_cat = "C" if old_level == "expert" else ("B" if old_level == "municipal" else "A")
+                restored_cat = normalize_cert_category(
+                    user.candidate_category or get_user_latest_requested_category(db, user_id) or fallback_cat
+                )
+                user.candidate_status = "cert_candidate"
+                user.candidate_category = restored_cat
+                user.candidate_updated_at = now
+                db.add(user)
+
+        db.delete(cert)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+
+    # Cleanup targets are unchanged; the profile photo is deliberately kept.
+    _delete_certificate_files(certificate_files, user_id)
+    for path in upload_paths:
+        try:
+            delete_storage_file(path)
+        except Exception:
+            pass
     return None
 
 
@@ -1166,6 +1306,11 @@ def upload_certificate_file(
             max_bytes=CERTIFICATE_UPLOAD_MAX_BYTES,
         )
         new_file_saved = True
+        if int(size or 0) <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ფაილი ცარიელია",
+            )
 
         # Update DB meta. The filename remains stable so downloads keep the
         # existing public filename even though storage uses a unique name.
@@ -1247,6 +1392,7 @@ def download_certificate_file(
 @router.get("/{user_id}/photo/file")
 def get_user_photo(
     user_id: int,
+    token: str | None = Query(None),
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
@@ -1257,7 +1403,8 @@ def get_user_photo(
 
     has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user_id)) is not None
     if not has_cert:
-        actor = _get_user_from_token(db, authorization)
+        effective_auth = authorization or (f"Bearer {token.strip()}" if token and token.strip() else None)
+        actor = _get_user_from_token(db, effective_auth)
         settings = get_settings()
         founder_email = (settings.founder_admin_email or "").lower()
         is_allowed = actor is not None and (

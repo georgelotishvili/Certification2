@@ -142,6 +142,9 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     
     # Create session in database
     try:
+        # Authentication accepts only expires_at > now. Prune rejected web
+        # tokens in the same transaction as the new token, never exam sessions.
+        db.execute(delete(UserSession).where(UserSession.expires_at <= now))
         session = UserSession(
             user_id=user.id,
             token=token,
@@ -152,11 +155,13 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         db.add(session)
         db.commit()
     except Exception as e:
-        # If session creation fails, still return token (backward compatibility)
-        # Log error but don't fail login
         import logging
         logging.error(f"Failed to create UserSession: {e}")
         db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="?????? ?????? ??? ????????. ?????? ?????? ???????.",
+        ) from e
     
     # Get user info with proper permissions
     settings = get_settings()

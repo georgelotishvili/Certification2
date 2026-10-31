@@ -5,12 +5,15 @@ import io
 import re
 import zipfile
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-TBILISI_TZ = ZoneInfo("Asia/Tbilisi")
+try:
+    TBILISI_TZ = ZoneInfo("Asia/Tbilisi")
+except Exception:
+    TBILISI_TZ = timezone(timedelta(hours=4))
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 ET.register_namespace("w", W_NS)
@@ -212,43 +215,101 @@ def extract_user_fields(
         "code": code,
         "date": (date_str or current_tbilisi_date_str()).strip(),
         "requested_category": norm_cat,
+        "requested_category_label": CONTRACT_CATEGORY_LABELS.get(norm_cat, ""),
         "admission_regime": norm_regime,
+        "admission_regime_label": CONTRACT_REGIME_LABELS.get(norm_regime, ""),
+        "director_name": DEFAULT_DIRECTOR_NAME,
+        "director_personal_id": DEFAULT_DIRECTOR_PERSONAL_ID,
     }
 
+
+DEFAULT_DIRECTOR_NAME = "ლაშა ფოფხაძე"
+DEFAULT_DIRECTOR_PERSONAL_ID = "01031003115"
+
+CONTRACT_CATEGORY_LABELS: dict[str, str] = {
+    "A": "კატეგორია A — შენობა-ნაგებობის არქიტექტორი",
+    "C_A": "კატეგორია C ან A (ქულების ან გამოცდილების/განათლების შესაბამისად)",
+    "B_A": "კატეგორია B ან A (ქულების შესაბამისად)",
+    "B": "კატეგორია B — მხოლოდ არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (A კატეგორიაზე ჩამონაცვლების გარეშე)",
+    "C": "კატეგორია C — მხოლოდ არქიტექტურული პროექტის ექსპერტი (A კატეგორიაზე ჩამონაცვლების გარეშე)",
+}
+
+CONTRACT_REGIME_LABELS: dict[str, str] = {
+    "standard": "სტანდარტული (უმაღლესი არქიტექტურული განათლების დიპლომით)",
+    "transitional": "გარდამავალი / საგამონაკლისო (უდიპლომოდ — №134 დადგენილების მე-12 მუხლით)",
+}
+
+_HTML_DIRECTOR_TOP_RE = re.compile(
+    r"(წარმომადგენელი\s*\([^)]*\)\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}"
+    r"(\s*\(\s*პ\s*/\s*ნ\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}(\s*\))",
+    re.IGNORECASE,
+)
+
+_HTML_DIRECTOR_BOTTOM_BLOCK_RE = re.compile(
+    r"(დირექტორი\s*\([^)]*\)\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}"
+    r"((?:\s*</p>\s*<p[^>]*>|\s*<br\s*/?>\s*|\s+)(?:</?(?:strong|b|span|em|i|u)[^>]*>)*პირადი\s+ნომერი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
+    re.IGNORECASE,
+)
+
+_HTML_DIRECTOR_NAME_ONLY_RE = re.compile(
+    r"(დირექტორი\s*\([^)]*\)\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
+    re.IGNORECASE,
+)
 
 _HTML_FIELD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "full_name",
         re.compile(
-            r"(სახელი\s*,\s*გვარი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*)_{3,}",
+            r"(სახელი(?:\s*,|\s+და)\s*გვარი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
             re.IGNORECASE,
         ),
     ),
     (
         "personal_id",
         re.compile(
-            r"(პირადი\s+ნომერი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*)_{3,}",
+            r"(პირადი\s+ნომერი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
             re.IGNORECASE,
         ),
     ),
     (
         "phone",
         re.compile(
-            r"(ტელეფონი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*)_{3,}",
+            r"(ტელეფონი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
             re.IGNORECASE,
         ),
     ),
     (
         "email",
         re.compile(
-            r"(ელ\.?\s*ფოსტა\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*)_{3,}",
+            r"(ელ\.?\s*ფოსტა\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "code",
+        re.compile(
+            r"(უნიკალური\s+კოდი[^:]*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "requested_category_label",
+        re.compile(
+            r"(მოთხოვნილი\s+კატეგორია\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "admission_regime_label",
+        re.compile(
+            r"(დაშვების\s+რეჟიმი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
             re.IGNORECASE,
         ),
     ),
     (
         "date",
         re.compile(
-            r"(თარიღი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i)[^>]*>)*)_{3,}",
+            r"(თარიღი\s*:(?:\s|&nbsp;|&#160;|</?(?:strong|b|span|em|i|u)[^>]*>)*)_{3,}",
             re.IGNORECASE,
         ),
     ),
@@ -275,7 +336,7 @@ def populate_contract_html(
     category: str | None = None,
     regime: str | None = None,
 ) -> str:
-    """Replace blank underscore lines, bracket placeholders, and application checkboxes in contract/form HTML."""
+    """Replace blank underscore lines, bracket placeholders, and application fields in contract/form HTML."""
     if not content or not user:
         return content or ""
 
@@ -284,6 +345,22 @@ def populate_contract_html(
         return content
 
     result = content
+
+    dir_name = html.escape(fields.get("director_name") or DEFAULT_DIRECTOR_NAME)
+    dir_pid = html.escape(fields.get("director_personal_id") or DEFAULT_DIRECTOR_PERSONAL_ID)
+    result = _HTML_DIRECTOR_TOP_RE.sub(
+        lambda m: f"{m.group(1)}<strong>{dir_name}</strong>{m.group(2)}<strong>{dir_pid}</strong>{m.group(3)}",
+        result,
+    )
+    result = _HTML_DIRECTOR_BOTTOM_BLOCK_RE.sub(
+        lambda m: f"{m.group(1)}<strong>{dir_name}</strong>{m.group(2)}<strong>{dir_pid}</strong>",
+        result,
+    )
+    result = _HTML_DIRECTOR_NAME_ONLY_RE.sub(
+        lambda m: f"{m.group(1)}<strong>{dir_name}</strong>",
+        result,
+    )
+
     for key, pattern in _HTML_FIELD_PATTERNS:
         val = fields.get(key, "")
         if not val:
@@ -320,13 +397,26 @@ def populate_contract_html(
     return result
 
 
+_DOCX_DIRECTOR_TOP_RE = re.compile(
+    r"(წარმომადგენელი\s*\([^)]*\)\s*:[\s\u00a0]*)_{3,}(\s*\(\s*პ\s*/\s*ნ\s*:[\s\u00a0]*)_{3,}(\s*\))"
+)
+_DOCX_DIRECTOR_BOTTOM_NAME_RE = re.compile(r"(დირექტორი\s*\([^)]*\)\s*:[\s\u00a0]*)_{3,}")
+
 _DOCX_FIELD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("full_name", re.compile(r"(სახელი\s*,\s*გვარი\s*:[\s\u00a0]*)_{3,}")),
-    ("personal_id", re.compile(r"(პირადი\s+ნომერი\s*:[\s\u00a0]*)_{3,}")),
-    ("phone", re.compile(r"(ტელეფონი\s*:[\s\u00a0]*)_{3,}")),
-    ("email", re.compile(r"(ელ\.?\s*ფოსტა\s*:[\s\u00a0]*)_{3,}")),
-    ("date", re.compile(r"(თარიღი\s*:[\s\u00a0]*)_{3,}")),
+    ("full_name", re.compile(r"(სახელი(?:\s*,|\s+და)\s*გვარი\s*:(?:\*\*)?[\s\u00a0]*)_{3,}")),
+    ("personal_id", re.compile(r"(პირადი\s+ნომერი\s*:(?:\*\*)?[\s\u00a0]*)_{3,}")),
+    ("phone", re.compile(r"(ტელეფონი\s*:(?:\*\*)?[\s\u00a0]*)_{3,}")),
+    ("email", re.compile(r"(ელ\.?\s*ფოსტა\s*:(?:\*\*)?[\s\u00a0]*)_{3,}")),
+    ("code", re.compile(r"(უნიკალური\s+კოდი[^:]*:(?:\*\*)?[\s\u00a0]*)_{3,}")),
+    ("requested_category_label", re.compile(r"(მოთხოვნილი\s+კატეგორია\s*:(?:\*\*)?[\s\u00a0]*)_{3,}")),
+    ("admission_regime_label", re.compile(r"(დაშვების\s+რეჟიმი\s*:(?:\*\*)?[\s\u00a0]*)_{3,}")),
+    ("date", re.compile(r"(თარიღი\s*:(?:\*\*)?[\s\u00a0]*)_{3,}")),
 ]
+
+_DOCX_BOLD_LABEL_PREFIXES = (
+    "მოთხოვნილი კატეგორია:",
+    "დაშვების რეჟიმი:",
+)
 
 _DOCX_CATEGORY_CHECKBOX_PATTERNS: dict[str, re.Pattern[str]] = {
     "A": re.compile(r"[☐☑](?=[\s\u00a0]*1\)\s*კატეგორია\s+A\b)"),
@@ -354,6 +444,15 @@ def _set_char_in_t_nodes(t_nodes: list[ET.Element], char_index: int, new_char: s
         offset += t_len
 
 
+def _replace_paragraph_runs_with_md(p: ET.Element, md_inline: str, sz: str = "21") -> None:
+    """Replace all <w:r> children in paragraph `p` (keeping <w:pPr>) with parsed Markdown inline runs."""
+    w_r = f"{{{W_NS}}}r"
+    for child in list(p):
+        if child.tag == w_r:
+            p.remove(child)
+    _append_inline_runs(p, md_inline, default_bold=False, sz=sz)
+
+
 def populate_contract_docx_bytes(
     docx_source: Path | bytes,
     user: Any,
@@ -361,7 +460,7 @@ def populate_contract_docx_bytes(
     category: str | None = None,
     regime: str | None = None,
 ) -> bytes:
-    """Return a copy of the .docx file with user's personal fields, date, and application checkboxes populated."""
+    """Return a copy of the .docx file with user's personal fields, director's fields, date, and category/regime populated."""
     raw_bytes = docx_source.read_bytes() if isinstance(docx_source, Path) else docx_source
     if not user:
         return raw_bytes
@@ -372,6 +471,8 @@ def populate_contract_docx_bytes(
 
     req_cat = fields.get("requested_category", "")
     adm_regime = fields.get("admission_regime", "")
+    dir_name = fields.get("director_name") or DEFAULT_DIRECTOR_NAME
+    dir_pid = fields.get("director_personal_id") or DEFAULT_DIRECTOR_PERSONAL_ID
 
     try:
         in_mem = io.BytesIO(raw_bytes)
@@ -384,12 +485,18 @@ def populate_contract_docx_bytes(
 
             w_p = f"{{{W_NS}}}p"
             w_t = f"{{{W_NS}}}t"
+            in_institute_rep_block = False
 
             for p in root.iter(w_p):
                 t_nodes = list(p.iter(w_t))
                 if not t_nodes:
                     continue
                 full_text = "".join(t.text or "" for t in t_nodes)
+
+                if "კანდიდატი / სერტიფიცირებული პირი" in full_text:
+                    in_institute_rep_block = False
+                elif "ინსტიტუტის წარმომადგენელი" in full_text or "დირექტორი (ან უფლებამოსილი პირი)" in full_text:
+                    in_institute_rep_block = True
 
                 if ("☐" in full_text or "☑" in full_text) and (req_cat or adm_regime):
                     if req_cat and req_cat in _DOCX_CATEGORY_CHECKBOX_PATTERNS:
@@ -406,22 +513,40 @@ def populate_contract_docx_bytes(
                 if "___" not in full_text:
                     continue
 
-                new_text = full_text
+                new_md_text = full_text
+                for bold_lbl in _DOCX_BOLD_LABEL_PREFIXES:
+                    if bold_lbl in new_md_text and f"**{bold_lbl}**" not in new_md_text:
+                        new_md_text = new_md_text.replace(bold_lbl, f"**{bold_lbl}**", 1)
+
                 replaced = False
+
+                updated_top, count_top = _DOCX_DIRECTOR_TOP_RE.subn(
+                    lambda m: f"{m.group(1)}**{dir_name}**{m.group(2)}**{dir_pid}**{m.group(3)}",
+                    new_md_text,
+                )
+                if count_top > 0:
+                    new_md_text = updated_top
+                    replaced = True
+
+                updated_bot_name, count_bot_name = _DOCX_DIRECTOR_BOTTOM_NAME_RE.subn(
+                    lambda m: f"{m.group(1)}**{dir_name}**",
+                    new_md_text,
+                )
+                if count_bot_name > 0:
+                    new_md_text = updated_bot_name
+                    replaced = True
+
                 for key, pattern in _DOCX_FIELD_PATTERNS:
-                    val = fields.get(key, "")
+                    val = dir_pid if (key == "personal_id" and in_institute_rep_block) else fields.get(key, "")
                     if not val:
                         continue
-                    updated, count = pattern.subn(lambda m, v=val: f"{m.group(1)}{v}", new_text)
+                    updated, count = pattern.subn(lambda m, v=val: f"{m.group(1)}**{v}**", new_md_text)
                     if count > 0:
-                        new_text = updated
+                        new_md_text = updated
                         replaced = True
 
-                if replaced and new_text != full_text:
-                    t_nodes[0].text = new_text
-                    t_nodes[0].set(XML_SPACE, "preserve")
-                    for extra_t in t_nodes[1:]:
-                        extra_t.text = ""
+                if replaced and new_md_text != full_text:
+                    _replace_paragraph_runs_with_md(p, new_md_text, sz="21")
 
             updated_xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
@@ -1094,6 +1219,100 @@ def markdown_to_docx_bytes(md_text: str, template_docx: Path | bytes | None = No
         except Exception:
             pass
     return _minimal_docx_From_elements(elements)
+
+
+def _inline_html_to_md(fragment: str) -> str:
+    if not fragment:
+        return ""
+    s = re.sub(r"<br\s*/?>", " ", fragment, flags=re.IGNORECASE)
+    s = re.sub(r"<(?:strong|b)\b[^>]*>(.*?)</(?:strong|b)>", r"**\1**", s, flags=re.IGNORECASE | re.DOTALL)
+    s = re.sub(r"<(?:em|i)\b[^>]*>(.*?)</(?:em|i)>", r"*\1*", s, flags=re.IGNORECASE | re.DOTALL)
+    s = re.sub(r"<[^>]+>", "", s)
+    return html.unescape(s).strip()
+
+
+def html_to_markdown(html_str: str) -> str:
+    """Convert semantic document HTML back into clean Markdown for OpenXML (.docx) generation."""
+    if not html_str or not html_str.strip():
+        return ""
+    trimmed = html_str.strip()
+    if not re.search(r"<(?:h[1-6]|p|ul|ol|li|table|tr|td|th|div)\b", trimmed, re.IGNORECASE):
+        return trimmed
+
+    block_re = re.compile(
+        r"<(h1|h2|h3|h4|p|ul|ol|table)\b[^>]*>(.*?)</\1>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    lines: list[str] = []
+    pos = 0
+    for m in block_re.finditer(trimmed):
+        if m.start() > pos:
+            gap = _inline_html_to_md(trimmed[pos : m.start()])
+            if gap:
+                lines.append(gap)
+        pos = m.end()
+        tag = m.group(1).lower()
+        inner = m.group(2)
+        if tag == "h1":
+            lines.append(f"# {_inline_html_to_md(inner)}")
+        elif tag == "h2":
+            lines.append(f"## {_inline_html_to_md(inner)}")
+        elif tag == "h3":
+            lines.append(f"### {_inline_html_to_md(inner)}")
+        elif tag == "h4":
+            lines.append(f"#### {_inline_html_to_md(inner)}")
+        elif tag == "p":
+            txt = _inline_html_to_md(inner)
+            if txt:
+                lines.append(txt)
+        elif tag == "ul":
+            for li_m in re.finditer(r"<li\b[^>]*>(.*?)</li>", inner, re.IGNORECASE | re.DOTALL):
+                li_txt = _inline_html_to_md(li_m.group(1))
+                if li_txt:
+                    lines.append(f"- {li_txt}")
+        elif tag == "ol":
+            for idx, li_m in enumerate(re.finditer(r"<li\b[^>]*>(.*?)</li>", inner, re.IGNORECASE | re.DOTALL), start=1):
+                li_txt = _inline_html_to_md(li_m.group(1))
+                if li_txt:
+                    lines.append(f"{idx}. {li_txt}")
+        elif tag == "table":
+            rows: list[list[str]] = []
+            is_meta = True
+            for tr_m in re.finditer(r"<tr\b[^>]*>(.*?)</tr>", inner, re.IGNORECASE | re.DOTALL):
+                tr_inner = tr_m.group(1)
+                cells = [
+                    _inline_html_to_md(c_m.group(2)).replace("|", "/")
+                    for c_m in re.finditer(r"<(th|td)\b[^>]*>(.*?)</\1>", tr_inner, re.IGNORECASE | re.DOTALL)
+                ]
+                if cells:
+                    rows.append(cells)
+                    if len(cells) != 2 or not _META_LINE_RE.match(f"**{cells[0].rstrip(':')}:** {cells[1]}"):
+                        is_meta = False
+            if rows:
+                if is_meta:
+                    for r in rows:
+                        lines.append(f"**{r[0].rstrip(':')}:** {r[1]}")
+                else:
+                    num_cols = max(len(r) for r in rows)
+                    for r_idx, r in enumerate(rows):
+                        padded = r + [""] * (num_cols - len(r))
+                        lines.append("| " + " | ".join(padded) + " |")
+                        if r_idx == 0:
+                            lines.append("| " + " | ".join(["---"] * num_cols) + " |")
+        lines.append("")
+
+    if pos < len(trimmed):
+        tail = _inline_html_to_md(trimmed[pos:])
+        if tail:
+            lines.append(tail)
+
+    return "\n".join(lines).strip()
+
+
+def html_or_md_to_docx_bytes(content_str: str, template_docx: Path | bytes | None = None) -> bytes:
+    """Convert either HTML or Markdown content into a styled .docx binary."""
+    md_text = html_to_markdown(content_str)
+    return markdown_to_docx_bytes(md_text, template_docx=template_docx)
 
 
 _SECTION_H2_RE = re.compile(

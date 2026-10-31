@@ -1216,11 +1216,25 @@
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data?.cert_issued_template) {
+            const rawSubject = String(data.cert_issued_template.subject || '').trim();
             const rawBody = String(data.cert_issued_template.body || '').trim();
-            const isLegacy = !rawBody || rawBody.startsWith('ბატონო/ქალბატონო') || rawBody.startsWith('გამარჯობა,');
+            const normBody = rawBody.replace(/\s+/g, ' ');
+            const legacyCertIssuedBody = (
+              'ბატონო/ქალბატონო {name},\n' +
+              'გაცნობებთ, რომ თქვენზე გაიცა შესაბამისობის სერტიფიკატი და მონაცემები აისახა ინსტიტუტის სერტიფიცირებულ პირთა საჯარო რეესტრში.\n\n' +
+              '• სერტიფიკატის ნომერი: {code}\n' +
+              '• სერტიფიცირების კატეგორია: {qualification}\n' +
+              '• გაცემის თარიღი: {issue_date}\n' +
+              '• მოქმედების ბოლო თარიღი: {valid_until}\n' +
+              '• საჯარო რეესტრის ბმული: https://gipc.org.ge\n\n' +
+              'შეტყობინებას თან ერთვის ელექტრონული სერტიფიკატი (PDF). სერტიფიკატისა და სერტიფიცირების სტატუსის გამოყენება დასაშვებია მხოლოდ მინიჭებული კატეგორიის, მოქმედების ვადისა და სასერტიფიკაციო ხელშეკრულებით განსაზღვრული პირობების ფარგლებში (GIPC-PRO-006).\n\n' +
+              'პატივისცემით,\n' +
+              'შპს „საქართველოს პროფესიული სერტიფიცირების ინსტიტუტი“'
+            ).replace(/\s+/g, ' ');
+            const isLegacyBody = !normBody || normBody === legacyCertIssuedBody;
             certIssuedTemplate = {
-              subject: isLegacy ? DEFAULT_CERT_ISSUED_SUBJECT : (data.cert_issued_template.subject || DEFAULT_CERT_ISSUED_SUBJECT),
-              body: isLegacy ? DEFAULT_CERT_ISSUED_BODY : rawBody,
+              subject: rawSubject || DEFAULT_CERT_ISSUED_SUBJECT,
+              body: isLegacyBody ? DEFAULT_CERT_ISSUED_BODY : rawBody,
               updated_at: data.cert_issued_template.updated_at || null,
             };
             certIssuedTemplateLoaded = true;

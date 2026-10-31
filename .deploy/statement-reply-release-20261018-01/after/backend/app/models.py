@@ -227,6 +227,33 @@ class OfflineExamContent(Base):
     evaluation_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
 
 
+class PreparedExamMaterial(Base):
+    """Server-authoritative material assignment and grading snapshot captured at preparation time."""
+
+    __tablename__ = "prepared_exam_materials"
+    __table_args__ = (
+        UniqueConstraint("session_id", name="uq_prepared_exam_materials_session"),
+        UniqueConstraint("stage_grant_id", name="uq_prepared_exam_materials_grant"),
+        Index("ix_prepared_exam_materials_user_stage", "user_id", "stage"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    stage: Mapped[str] = mapped_column(String(32), index=True)
+    session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True
+    )
+    stage_grant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user_exam_stage_grants.id", ondelete="CASCADE"), nullable=True
+    )
+    project_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    project_code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    snapshot: Mapped[str] = mapped_column(Text)
+    prepared_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Answer(Base):
     __tablename__ = "answers"
 
@@ -429,6 +456,7 @@ class PlanningLetter(Base):
 
 class Statement(Base):
     __tablename__ = "statements"
+    __table_args__ = ({"sqlite_autoincrement": True},)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -642,7 +670,7 @@ class ExpertUpload(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    unique_code: Mapped[str] = mapped_column(String(32), index=True)
+    unique_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft, submitted
     building_function: Mapped[str] = mapped_column(String(255), default="")
     cadastral_code: Mapped[str] = mapped_column(String(255), default="")

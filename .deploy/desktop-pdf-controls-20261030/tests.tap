@@ -1,0 +1,2413 @@
+TAP version 13
+# Subtest: stage 1: immediate feedback and one permission request even across repeated card clicks
+ok 1 - stage 1: immediate feedback and one permission request even across repeated card clicks
+  ---
+  duration_ms: 8.8324
+  type: 'test'
+  ...
+# Subtest: stage 2: immediate feedback and one permission request even across repeated card clicks
+ok 2 - stage 2: immediate feedback and one permission request even across repeated card clicks
+  ---
+  duration_ms: 2.1261
+  type: 'test'
+  ...
+# Subtest: stage 3: immediate feedback and one permission request even across repeated card clicks
+ok 3 - stage 3: immediate feedback and one permission request even across repeated card clicks
+  ---
+  duration_ms: 1.7474
+  type: 'test'
+  ...
+# Subtest: permission denial and network timeout restore genuine card permissions and allow a fresh attempt
+ok 4 - permission denial and network timeout restore genuine card permissions and allow a fresh attempt
+  ---
+  duration_ms: 2.5161
+  type: 'test'
+  ...
+# Subtest: logout cancels pending navigation immediately; late permission response cannot restore the previous user
+ok 5 - logout cancels pending navigation immediately; late permission response cannot restore the previous user
+  ---
+  duration_ms: 1.9542
+  type: 'test'
+  ...
+# Subtest: late old request cannot navigate or clear the next candidate’s in-flight feedback
+ok 6 - late old request cannot navigate or clear the next candidate’s in-flight feedback
+  ---
+  duration_ms: 3.1668
+  type: 'test'
+  ...
+# Subtest: permission polling cannot erase selected-card feedback; failures use the existing poll only
+ok 7 - permission polling cannot erase selected-card feedback; failures use the existing poll only
+  ---
+  duration_ms: 2.1604
+  type: 'test'
+  ...
+# Subtest: local recovery has immediate visible checking feedback, then releases cards after an empty manifest
+ok 8 - local recovery has immediate visible checking feedback, then releases cards after an empty manifest
+  ---
+  duration_ms: 2.3282
+  type: 'test'
+  ...
+# Subtest: automatic and manual outbox retries visibly lock once, preserve pending results on failure, and await acknowledgement
+ok 9 - automatic and manual outbox retries visibly lock once, preserve pending results on failure, and await acknowledgement
+  ---
+  duration_ms: 1.8947
+  type: 'test'
+  ...
+# Subtest: a rejected retry clears busy UI without deleting or falsely acknowledging a pending attempt
+ok 10 - a rejected retry clears busy UI without deleting or falsely acknowledging a pending attempt
+  ---
+  duration_ms: 2.0285
+  type: 'test'
+  ...
+# Subtest: corrupt local recovery clears busy feedback but retains the existing new-stage safety block
+ok 11 - corrupt local recovery clears busy feedback but retains the existing new-stage safety block
+  ---
+  duration_ms: 1.4504
+  type: 'test'
+  ...
+# Subtest: multi-apartment: verification shows immediate feedback, deduplicates clicks and restores after rejection
+ok 12 - multi-apartment: verification shows immediate feedback, deduplicates clicks and restores after rejection
+  ---
+  duration_ms: 29.224
+  type: 'test'
+  ...
+# Subtest: multi-apartment: all-material progress starts at zero and Start stays unavailable
+ok 13 - multi-apartment: all-material progress starts at zero and Start stays unavailable
+  ---
+  duration_ms: 10.2764
+  type: 'test'
+  ...
+# Subtest: multi-apartment: slow answer writes use one nonmodal hint without delaying selection
+ok 14 - multi-apartment: slow answer writes use one nonmodal hint without delaying selection
+  ---
+  duration_ms: 241.8855
+  type: 'test'
+  ...
+# Subtest: multi-apartment: save retry has visible busy feedback and clears only its recovered error
+ok 15 - multi-apartment: save retry has visible busy feedback and clears only its recovered error
+  ---
+  duration_ms: 4.5042
+  type: 'test'
+  ...
+# Subtest: multi-apartment: successful answer writes do not hide an unrelated recording warning
+ok 16 - multi-apartment: successful answer writes do not hide an unrelated recording warning
+  ---
+  duration_ms: 4.5436
+  type: 'test'
+  ...
+# Subtest: multi-apartment: automatic submission retry visibly disables duplicate manual sends
+ok 17 - multi-apartment: automatic submission retry visibly disables duplicate manual sends
+  ---
+  duration_ms: 5.5054
+  type: 'test'
+  ...
+# Subtest: multi-apartment: prepared Return explains its wait and restores the label on error
+ok 18 - multi-apartment: prepared Return explains its wait and restores the label on error
+  ---
+  duration_ms: 3.8465
+  type: 'test'
+  ...
+# Subtest: multi-apartment: video finalization status is separate and never gates result submission
+ok 19 - multi-apartment: video finalization status is separate and never gates result submission
+  ---
+  duration_ms: 3.7489
+  type: 'test'
+  ...
+# Subtest: multi-apartment: native PDF hint preserves frames and ignores a previous document's late load
+ok 20 - multi-apartment: native PDF hint preserves frames and ignores a previous document's late load
+  ---
+  duration_ms: 1.7331
+  type: 'test'
+  ...
+# Subtest: multi-apartment: a slow native PDF stops animating after bounded help without blocking the exam
+ok 21 - multi-apartment: a slow native PDF stops animating after bounded help without blocking the exam
+  ---
+  duration_ms: 2.9278
+  type: 'test'
+  ...
+# Subtest: multi-apartment: previous PDF timeout cannot resurrect its hint during the next local read
+ok 22 - multi-apartment: previous PDF timeout cannot resurrect its hint during the next local read
+  ---
+  duration_ms: 1.8726
+  type: 'test'
+  ...
+# Subtest: multi-functional: verification shows immediate feedback, deduplicates clicks and restores after rejection
+ok 23 - multi-functional: verification shows immediate feedback, deduplicates clicks and restores after rejection
+  ---
+  duration_ms: 3.5091
+  type: 'test'
+  ...
+# Subtest: multi-functional: all-material progress starts at zero and Start stays unavailable
+ok 24 - multi-functional: all-material progress starts at zero and Start stays unavailable
+  ---
+  duration_ms: 4.5372
+  type: 'test'
+  ...
+# Subtest: multi-functional: slow answer writes use one nonmodal hint without delaying selection
+ok 25 - multi-functional: slow answer writes use one nonmodal hint without delaying selection
+  ---
+  duration_ms: 244.6554
+  type: 'test'
+  ...
+# Subtest: multi-functional: save retry has visible busy feedback and clears only its recovered error
+ok 26 - multi-functional: save retry has visible busy feedback and clears only its recovered error
+  ---
+  duration_ms: 3.492
+  type: 'test'
+  ...
+# Subtest: multi-functional: successful answer writes do not hide an unrelated recording warning
+ok 27 - multi-functional: successful answer writes do not hide an unrelated recording warning
+  ---
+  duration_ms: 4.1544
+  type: 'test'
+  ...
+# Subtest: multi-functional: automatic submission retry visibly disables duplicate manual sends
+ok 28 - multi-functional: automatic submission retry visibly disables duplicate manual sends
+  ---
+  duration_ms: 4.901
+  type: 'test'
+  ...
+# Subtest: multi-functional: prepared Return explains its wait and restores the label on error
+ok 29 - multi-functional: prepared Return explains its wait and restores the label on error
+  ---
+  duration_ms: 4.0625
+  type: 'test'
+  ...
+# Subtest: multi-functional: video finalization status is separate and never gates result submission
+ok 30 - multi-functional: video finalization status is separate and never gates result submission
+  ---
+  duration_ms: 4.6794
+  type: 'test'
+  ...
+# Subtest: multi-functional: native PDF hint preserves frames and ignores a previous document's late load
+ok 31 - multi-functional: native PDF hint preserves frames and ignores a previous document's late load
+  ---
+  duration_ms: 1.8507
+  type: 'test'
+  ...
+# Subtest: multi-functional: a slow native PDF stops animating after bounded help without blocking the exam
+ok 32 - multi-functional: a slow native PDF stops animating after bounded help without blocking the exam
+  ---
+  duration_ms: 1.8573
+  type: 'test'
+  ...
+# Subtest: multi-functional: previous PDF timeout cannot resurrect its hint during the next local read
+ok 33 - multi-functional: previous PDF timeout cannot resurrect its hint during the next local read
+  ---
+  duration_ms: 1.8442
+  type: 'test'
+  ...
+# Subtest: both practical loaders are explicitly above the gate; success overlay styles are unchanged
+ok 34 - both practical loaders are explicitly above the gate; success overlay styles are unchanged
+  ---
+  duration_ms: 0.7212
+  type: 'test'
+  ...
+# Subtest: startup paints its local waiting page before slow recovery and reuses the same visible window afterwards
+ok 35 - startup paints its local waiting page before slow recovery and reuses the same visible window afterwards
+  ---
+  duration_ms: 10.1595
+  type: 'test'
+  ...
+# Subtest: fast recovery cannot strand the waiting view when startup navigation has not committed yet
+ok 36 - fast recovery cannot strand the waiting view when startup navigation has not committed yet
+  ---
+  duration_ms: 1.9728
+  type: 'test'
+  ...
+# Subtest: a startup renderer crash reloads only the waiting page and never exposes home before recovery completes
+ok 37 - a startup renderer crash reloads only the waiting page and never exposes home before recovery completes
+  ---
+  duration_ms: 2.1657
+  type: 'test'
+  ...
+# Subtest: second launch restores and focuses the waiting window without another window or recovery operation
+ok 38 - second launch restores and focuses the waiting window without another window or recovery operation
+  ---
+  duration_ms: 3.5188
+  type: 'test'
+  ...
+# Subtest: BrowserWindow page-title-updated keeps the fixed native title used by repeated-launch focus
+ok 39 - BrowserWindow page-title-updated keeps the fixed native title used by repeated-launch focus
+  ---
+  duration_ms: 2.0856
+  type: 'test'
+  ...
+# Subtest: the waiting page has no trusted IPC access and cannot unlock or mutate exam state
+ok 40 - the waiting page has no trusted IPC access and cannot unlock or mutate exam state
+  ---
+  duration_ms: 2.6889
+  type: 'test'
+  ...
+# Subtest: startup HTML is a local lightweight status page, not another script or network client
+ok 41 - startup HTML is a local lightweight status page, not another script or network client
+  ---
+  duration_ms: 0.4047
+  type: 'test'
+  ...
+# Subtest: ordinary close shows one busy notice and taskbar progress until accepted writes finish
+ok 42 - ordinary close shows one busy notice and taskbar progress until accepted writes finish
+  ---
+  duration_ms: 5.523
+  type: 'test'
+  ...
+# Subtest: shutdown feedback does not bypass exam locks or start draining a running exam
+ok 43 - shutdown feedback does not bypass exam locks or start draining a running exam
+  ---
+  duration_ms: 2.8118
+  type: 'test'
+  ...
+# Subtest: failed shutdown (reject) clears waiting notice and progress instead of claiming a successful save
+ok 44 - failed shutdown (reject) clears waiting notice and progress instead of claiming a successful save
+  ---
+  duration_ms: 2.5432
+  type: 'test'
+  ...
+# Subtest: failed shutdown (cancel-warning) clears waiting notice and progress instead of claiming a successful save
+ok 45 - failed shutdown (cancel-warning) clears waiting notice and progress instead of claiming a successful save
+  ---
+  duration_ms: 2.3853
+  type: 'test'
+  ...
+# Subtest: close during startup, then reject, cannot strand the window on startup.html
+ok 46 - close during startup, then reject, cannot strand the window on startup.html
+  ---
+  duration_ms: 1.7578
+  type: 'test'
+  ...
+# Subtest: close during startup, then cancel-warning, cannot strand the window on startup.html
+ok 47 - close during startup, then cancel-warning, cannot strand the window on startup.html
+  ---
+  duration_ms: 2.0402
+  type: 'test'
+  ...
+# Subtest: preload renders one nonblocking accessible status, ignores supplied markup and removes it on cancel
+ok 48 - preload renders one nonblocking accessible status, ignores supplied markup and removes it on cancel
+  ---
+  duration_ms: 1.7643
+  type: 'test'
+  ...
+# Subtest: theory initial preload shows immediate feedback and resets caption on error
+ok 49 - theory initial preload shows immediate feedback and resets caption on error
+  ---
+  duration_ms: 4.4445
+  type: 'test'
+  ...
+# Subtest: gate verification is visible before awaiting, single-flight, and cleans up on invalid
+ok 50 - gate verification is visible before awaiting, single-flight, and cleans up on invalid
+  ---
+  duration_ms: 1.6261
+  type: 'test'
+  ...
+# Subtest: gate verification is visible before awaiting, single-flight, and cleans up on failure
+ok 51 - gate verification is visible before awaiting, single-flight, and cleans up on failure
+  ---
+  duration_ms: 2.7468
+  type: 'test'
+  ...
+# Subtest: material progress begins at zero with active names and counts only durable completion
+ok 52 - material progress begins at zero with active names and counts only durable completion
+  ---
+  duration_ms: 6.6058
+  type: 'test'
+  ...
+# Subtest: fast checkpoints do not add DOM; slow save shows a small label without unlocking editing
+ok 53 - fast checkpoints do not add DOM; slow save shows a small label without unlocking editing
+  ---
+  duration_ms: 2.9856
+  type: 'test'
+  ...
+# Subtest: slow checkpoint failure hides busy label but preserves retry/error guard and timer
+ok 54 - slow checkpoint failure hides busy label but preserves retry/error guard and timer
+  ---
+  duration_ms: 3.0805
+  type: 'test'
+  ...
+# Subtest: freeze and capture-stop waits expose phases without sending before durable freeze
+ok 55 - freeze and capture-stop waits expose phases without sending before durable freeze
+  ---
+  duration_ms: 2.0647
+  type: 'test'
+  ...
+# Subtest: results return is one-flight and refresh cannot hold navigation indefinitely
+ok 56 - results return is one-flight and refresh cannot hold navigation indefinitely
+  ---
+  duration_ms: 4.1972
+  type: 'test'
+  ...
+# Subtest: late results refresh cannot overwrite a changed candidate or login
+ok 57 - late results refresh cannot overwrite a changed candidate or login
+  ---
+  duration_ms: 1.3628
+  type: 'test'
+  ...
+# Subtest: local PDF keeps a loading hint through iframe setup and preserves cached zoom/scroll
+ok 58 - local PDF keeps a loading hint through iframe setup and preserves cached zoom/scroll
+  ---
+  duration_ms: 2.2118
+  type: 'test'
+  ...
+# Subtest: PDF timeout becomes nonblocking help rather than a permanent spinner or extra network fetch
+ok 59 - PDF timeout becomes nonblocking help rather than a permanent spinner or extra network fetch
+  ---
+  duration_ms: 1.244
+  type: 'test'
+  ...
+# Subtest: update installation indicates busy and repeated clicks send only one request
+ok 60 - update installation indicates busy and repeated clicks send only one request
+  ---
+  duration_ms: 1.9695
+  type: 'test'
+  ...
+# Subtest: blocked update restores retry controls and leaves explanatory message visible
+ok 61 - blocked update restores retry controls and leaves explanatory message visible
+  ---
+  duration_ms: 2.061
+  type: 'test'
+  ...
+# Subtest: synchronous bridge failure and network errors never leave update busy stuck
+ok 62 - synchronous bridge failure and network errors never leave update busy stuck
+  ---
+  duration_ms: 1.2065
+  type: 'test'
+  ...
+# Subtest: failed login remains editable and a corrected second attempt succeeds without native alert
+ok 63 - failed login remains editable and a corrected second attempt succeeds without native alert
+  ---
+  duration_ms: 6.0619
+  type: 'test'
+  ...
+# Subtest: repeated failed logins restore the form after every attempt
+ok 64 - repeated failed logins restore the form after every attempt
+  ---
+  duration_ms: 1.3763
+  type: 'test'
+  ...
+# Subtest: empty form validation is inline and never calls login or native alert
+ok 65 - empty form validation is inline and never calls login or native alert
+  ---
+  duration_ms: 0.9969
+  type: 'test'
+  ...
+# Subtest: missing API client restores submit state and reports inline
+ok 66 - missing API client restores submit state and reports inline
+  ---
+  duration_ms: 2.2423
+  type: 'test'
+  ...
+# Subtest: double submit while login is pending sends only one request
+ok 67 - double submit while login is pending sends only one request
+  ---
+  duration_ms: 1.2088
+  type: 'test'
+  ...
+# Subtest: a late failed request does not steal focus after the login modal is closed
+ok 68 - a late failed request does not steal focus after the login modal is closed
+  ---
+  duration_ms: 1.2713
+  type: 'test'
+  ...
+# Subtest: login error element is an accessible live alert in the shipped HTML
+ok 69 - login error element is an accessible live alert in the shipped HTML
+  ---
+  duration_ms: 0.5587
+  type: 'test'
+  ...
+# Subtest: apiClient.request times out when response.json() hangs after headers
+ok 70 - apiClient.request times out when response.json() hangs after headers
+  ---
+  duration_ms: 28.2188
+  type: 'test'
+  ...
+# Subtest: stale /users/me response from previous user cannot overwrite newly logged-in user
+ok 71 - stale /users/me response from previous user cannot overwrite newly logged-in user
+  ---
+  duration_ms: 3.0913
+  type: 'test'
+  ...
+# Subtest: real store theory final matches capability/UUID contract and freezes every block
+ok 72 - real store theory final matches capability/UUID contract and freezes every block
+  ---
+  duration_ms: 142.4052
+  type: 'test'
+  ...
+# Subtest: both project stages use exact capability and numeric answer IDs with durable UUID
+ok 73 - both project stages use exact capability and numeric answer IDs with durable UUID
+  ---
+  duration_ms: 263.9531
+  type: 'test'
+  ...
+# Subtest: admin null-grant preparation survives restart with same project and startRequestId identity
+ok 74 - admin null-grant preparation survives restart with same project and startRequestId identity
+  ---
+  duration_ms: 177.653
+  type: 'test'
+  ...
+# Subtest: lost final response retries byte-identical durable payload after renderer/store restart
+ok 75 - lost final response retries byte-identical durable payload after renderer/store restart
+  ---
+  duration_ms: 186.2746
+  type: 'test'
+  ...
+# Subtest: expired restarted attempt keeps original deadline and freezes exactly at original end
+ok 76 - expired restarted attempt keeps original deadline and freezes exactly at original end
+  ---
+  duration_ms: 150.5491
+  type: 'test'
+  ...
+# Subtest: slow start deducts transport time without inventing a future finished_at
+ok 77 - slow start deducts transport time without inventing a future finished_at
+  ---
+  duration_ms: 115.1639
+  type: 'test'
+  ...
+# Subtest: explicit original start beats stale prepared duration when constructing a final timestamp
+ok 78 - explicit original start beats stale prepared duration when constructing a final timestamp
+  ---
+  duration_ms: 123.7623
+  type: 'test'
+  ...
+# Subtest: real disk checkpoint/freeze failures never create acknowledgement or discard durable answers
+ok 79 - real disk checkpoint/freeze failures never create acknowledgement or discard durable answers
+  ---
+  duration_ms: 145.5721
+  type: 'test'
+  ...
+# Subtest: 2xx response with missing grade/attempt receipt must not acknowledge frozen data
+ok 80 - 2xx response with missing grade/attempt receipt must not acknowledge frozen data
+  ---
+  duration_ms: 126.6186
+  type: 'test'
+  ...
+# Subtest: well-shaped receipt for a different attempt must leave the real outbox pending
+ok 81 - well-shaped receipt for a different attempt must leave the real outbox pending
+  ---
+  duration_ms: 460.448
+  type: 'test'
+  ...
+# Subtest: correctly bound zero-score receipt is genuine success, including null-grant admin project
+ok 82 - correctly bound zero-score receipt is genuine success, including null-grant admin project
+  ---
+  duration_ms: 426.2082
+  type: 'test'
+  ...
+# Subtest: partial final disk commit recovers the frozen payload without reopening answer editing
+ok 83 - partial final disk commit recovers the frozen payload without reopening answer editing
+  ---
+  duration_ms: 130.4904
+  type: 'test'
+  ...
+# Subtest: confirmed server receipt with local ack disk error keeps identical outbox safe for retry
+ok 84 - confirmed server receipt with local ack disk error keeps identical outbox safe for retry
+  ---
+  duration_ms: 116.7463
+  type: 'test'
+  ...
+# Subtest: a fresh admin grant is not blocked by a stale prepared attempt; active work always wins
+ok 85 - a fresh admin grant is not blocked by a stale prepared attempt; active work always wins
+  ---
+  duration_ms: 178.5476
+  type: 'test'
+  ...
+# Subtest: PDF caching rejects a foreign origin before any request
+ok 86 - PDF caching rejects a foreign origin before any request
+  ---
+  duration_ms: 57.0062
+  type: 'test'
+  ...
+# Subtest: network timeouts bound both headers and slow bodies and abort each request
+ok 87 - network timeouts bound both headers and slow bodies and abort each request
+  ---
+  duration_ms: 22.9623
+  type: 'test'
+  ...
+# Subtest: partially committed activation reconciles the durable deadline without a restart or extra time
+ok 88 - partially committed activation reconciles the durable deadline without a restart or extra time
+  ---
+  duration_ms: 96.186
+  type: 'test'
+  ...
+# Subtest: restored countdown keeps decreasing even when the operating system wall clock moved backward
+ok 89 - restored countdown keeps decreasing even when the operating system wall clock moved backward
+  ---
+  duration_ms: 114.1837
+  type: 'test'
+  ...
+# Subtest: forward then backward wall-clock corrections cannot stall the reduced remaining time
+ok 90 - forward then backward wall-clock corrections cannot stall the reduced remaining time
+  ---
+  duration_ms: 69.5352
+  type: 'test'
+  ...
+# Subtest: server support is verified with a read-only request before any offline activation
+ok 91 - server support is verified with a read-only request before any offline activation
+  ---
+  duration_ms: 58.5821
+  type: 'test'
+  ...
+# Subtest: recording finish seals the queue, awaits the last blob and sends the exact chunk count
+ok 92 - recording finish seals the queue, awaits the last blob and sends the exact chunk count
+  ---
+  duration_ms: 1.5548
+  type: 'test'
+  ...
+# Subtest: failed finalization retries the same closed recording without accepting extra chunks
+ok 93 - failed finalization retries the same closed recording without accepting extra chunks
+  ---
+  duration_ms: 0.3799
+  type: 'test'
+  ...
+# Subtest: a blob conversion failure cannot finalize or clean any recording parts
+ok 94 - a blob conversion failure cannot finalize or clean any recording parts
+  ---
+  duration_ms: 0.2093
+  type: 'test'
+  ...
+# Subtest: cancellation outbox sends only exact binding, no answers, without requiring login
+ok 95 - cancellation outbox sends only exact binding, no answers, without requiring login
+  ---
+  duration_ms: 1.1992
+  type: 'test'
+  ...
+# Subtest: lost-start-response cancellation waits for the same candidate login and uses original project UUID
+ok 96 - lost-start-response cancellation waits for the same candidate login and uses original project UUID
+  ---
+  duration_ms: 1.9325
+  type: 'test'
+  ...
+# Subtest: network loss or server conflict retains cancellation notification without false acknowledgement
+ok 97 - network loss or server conflict retains cancellation notification without false acknowledgement
+  ---
+  duration_ms: 1.3878
+  type: 'test'
+  ...
+# Subtest: cancellation credentials never go to a foreign persisted origin and acknowledged items never resend
+ok 98 - cancellation credentials never go to a foreign persisted origin and acknowledged items never resend
+  ---
+  duration_ms: 0.6522
+  type: 'test'
+  ...
+# Subtest: start intent must be durably confirmed before a renderer may issue Begin
+ok 99 - start intent must be durably confirmed before a renderer may issue Begin
+  ---
+  duration_ms: 58.3768
+  type: 'test'
+  ...
+# Subtest: home never resumes an unexpected active theory; blocks new stages instead
+ok 100 - home never resumes an unexpected active theory; blocks new stages instead
+  ---
+  duration_ms: 2.6337
+  type: 'test'
+  ...
+# Subtest: home never resumes an unexpected active project_stage_1; blocks new stages instead
+ok 101 - home never resumes an unexpected active project_stage_1; blocks new stages instead
+  ---
+  duration_ms: 1.8131
+  type: 'test'
+  ...
+# Subtest: home never resumes an unexpected active project_stage_2; blocks new stages instead
+ok 102 - home never resumes an unexpected active project_stage_2; blocks new stages instead
+  ---
+  duration_ms: 1.1566
+  type: 'test'
+  ...
+# Subtest: home keeps \#offline-recovery hidden for prepared, interrupted, or recording-review records
+ok 103 - home keeps \#offline-recovery hidden for prepared, interrupted, or recording-review records
+  ---
+  duration_ms: 8.9299
+  type: 'test'
+  ...
+# Subtest: home retries every durable pending outbox without login or candidate switching
+ok 104 - home retries every durable pending outbox without login or candidate switching
+  ---
+  duration_ms: 1.5094
+  type: 'test'
+  ...
+# Subtest: new-stage clicks stay blocked until local recovery has been checked
+ok 105 - new-stage clicks stay blocked until local recovery has been checked
+  ---
+  duration_ms: 0.9121
+  type: 'test'
+  ...
+# Subtest: an unreadable local attempt blocks a fresh stage instead of silently ignoring recovery
+ok 106 - an unreadable local attempt blocks a fresh stage instead of silently ignoring recovery
+  ---
+  duration_ms: 1.3439
+  type: 'test'
+  ...
+# Subtest: online and manual retry share one in-flight outbox operation and hide banner once acknowledged
+ok 107 - online and manual retry share one in-flight outbox operation and hide banner once acknowledged
+  ---
+  duration_ms: 1.5145
+  type: 'test'
+  ...
+# Subtest: theory: lifecycle restart cancels active data and deletes exact recording fragments
+ok 108 - theory: lifecycle restart cancels active data and deletes exact recording fragments
+  ---
+  duration_ms: 219.7754
+  type: 'test'
+  ...
+# Subtest: project_stage_1: lifecycle restart cancels active data and deletes exact recording fragments
+ok 109 - project_stage_1: lifecycle restart cancels active data and deletes exact recording fragments
+  ---
+  duration_ms: 183.4763
+  type: 'test'
+  ...
+# Subtest: project_stage_2: lifecycle restart cancels active data and deletes exact recording fragments
+ok 110 - project_stage_2: lifecycle restart cancels active data and deletes exact recording fragments
+  ---
+  duration_ms: 177.7752
+  type: 'test'
+  ...
+# Subtest: completed pending and acknowledged state/video survive byte-for-byte; unused prepared survives
+ok 111 - completed pending and acknowledged state/video survive byte-for-byte; unused prepared survives
+  ---
+  duration_ms: 489.1698
+  type: 'test'
+  ...
+# Subtest: constructing or listing a store never cancels a live offline exam
+ok 112 - constructing or listing a store never cancels a live offline exam
+  ---
+  duration_ms: 57.6621
+  type: 'test'
+  ...
+# Subtest: a durable start intent cancels a prepared attempt when Begin response was lost
+ok 113 - a durable start intent cancels a prepared attempt when Begin response was lost
+  ---
+  duration_ms: 108.4756
+  type: 'test'
+  ...
+# Subtest: a start intent cannot cancel finished pending answers
+ok 114 - a start intent cannot cancel finished pending answers
+  ---
+  duration_ms: 97.4574
+  type: 'test'
+  ...
+# Subtest: tombstone durability failure retains every source and fails closed
+ok 115 - tombstone durability failure retains every source and fails closed
+  ---
+  duration_ms: 47.1813
+  type: 'test'
+  ...
+# Subtest: failed exact deletion resumes from durable tombstone on next startup
+ok 116 - failed exact deletion resumes from durable tombstone on next startup
+  ---
+  duration_ms: 98.5374
+  type: 'test'
+  ...
+# Subtest: a symlink in interrupted data never follows or deletes the external target
+ok 117 - a symlink in interrupted data never follows or deletes the external target
+  ---
+  duration_ms: 78.7738
+  type: 'test'
+  ...
+# Subtest: saved flat video belonging to interrupted active exam is deleted, foreign video is not
+ok 118 - saved flat video belonging to interrupted active exam is deleted, foreign video is not
+  ---
+  duration_ms: 249.4795
+  type: 'test'
+  ...
+# Subtest: changed flat final is retained and cancellation fails closed instead of deleting it
+ok 119 - changed flat final is retained and cancellation fails closed instead of deleting it
+  ---
+  duration_ms: 196.0633
+  type: 'test'
+  ...
+# Subtest: cancellation acknowledgement requires exact binding and strips credential but retains tombstone
+ok 120 - cancellation acknowledgement requires exact binding and strips credential but retains tombstone
+  ---
+  duration_ms: 107.7716
+  type: 'test'
+  ...
+# Subtest: accepted recording queue drains before cancellation removes its directory
+ok 121 - accepted recording queue drains before cancellation removes its directory
+  ---
+  duration_ms: 139.3996
+  type: 'test'
+  ...
+# Subtest: a new UUID cannot reopen an interrupted grant or theory session before cancellation reaches server
+ok 122 - a new UUID cannot reopen an interrupted grant or theory session before cancellation reaches server
+  ---
+  duration_ms: 87.9833
+  type: 'test'
+  ...
+# Subtest: a final replaced after digest verification is not unlinked
+ok 123 - a final replaced after digest verification is not unlinked
+  ---
+  duration_ms: 198.9641
+  type: 'test'
+  ...
+# Subtest: legacy active nested recording is removed without touching a neighboring completed video
+ok 124 - legacy active nested recording is removed without touching a neighboring completed video
+  ---
+  duration_ms: 118.6182
+  type: 'test'
+  ...
+# Subtest: partial owned assembly temp is discarded after active cancellation
+ok 125 - partial owned assembly temp is discarded after active cancellation
+  ---
+  duration_ms: 121.0527
+  type: 'test'
+  ...
+# Subtest: publication committed but final status not yet committed still owns the exact flat video
+ok 126 - publication committed but final status not yet committed still owns the exact flat video
+  ---
+  duration_ms: 228.9194
+  type: 'test'
+  ...
+# Subtest: matching bytes with a foreign file identity are retained
+ok 127 - matching bytes with a foreign file identity are retained
+  ---
+  duration_ms: 175.3248
+  type: 'test'
+  ...
+# Subtest: power loss between publication and temp unlink removes both owned hardlinks safely
+ok 128 - power loss between publication and temp unlink removes both owned hardlinks safely
+  ---
+  duration_ms: 213.3022
+  type: 'test'
+  ...
+# Subtest: finished pending answers keep unfinished video chunks when crash occurs during final recording save
+ok 129 - finished pending answers keep unfinished video chunks when crash occurs during final recording save
+  ---
+  duration_ms: 106.6673
+  type: 'test'
+  ...
+# Subtest: same-byte file replacement between ownership check and stream open is retained
+ok 130 - same-byte file replacement between ownership check and stream open is retained
+  ---
+  duration_ms: 168.1979
+  type: 'test'
+  ...
+# Subtest: offline IPC only accepts exact trusted main frame and local application page
+ok 131 - offline IPC only accepts exact trusted main frame and local application page
+  ---
+  duration_ms: 12.6011
+  type: 'test'
+  ...
+# Subtest: navigation, popups, and camera permissions remain limited to trusted local app
+ok 132 - navigation, popups, and camera permissions remain limited to trusted local app
+  ---
+  duration_ms: 4.2472
+  type: 'test'
+  ...
+# Subtest: active attempt blocks unlock; durable pending permits unlock even without local receipt
+ok 133 - active attempt blocks unlock; durable pending permits unlock even without local receipt
+  ---
+  duration_ms: 4.0034
+  type: 'test'
+  ...
+# Subtest: exam-lock blocks PrintScreen, Ctrl+PrintScreen, before-input-event, and re-enforces kiosk/topmost on focus
+ok 134 - exam-lock blocks PrintScreen, Ctrl+PrintScreen, before-input-event, and re-enforces kiosk/topmost on focus
+  ---
+  duration_ms: 3.0503
+  type: 'test'
+  ...
+# Subtest: installer is gated while active or pending and automatic quit installation is disabled
+ok 135 - installer is gated while active or pending and automatic quit installation is disabled
+  ---
+  duration_ms: 4.516
+  type: 'test'
+  ...
+# Subtest: second app instance quits without opening storage or cancelling a live exam
+ok 136 - second app instance quits without opening storage or cancelling a live exam
+  ---
+  duration_ms: 1.987
+  type: 'test'
+  ...
+# Subtest: startup cancellation failure blocks protected exam IPC
+ok 137 - startup cancellation failure blocks protected exam IPC
+  ---
+  duration_ms: 2.9711
+  type: 'test'
+  ...
+# Subtest: renderer crash cancels only active work, unlocks the UI, and returns home
+ok 138 - renderer crash cancels only active work, unlocks the UI, and returns home
+  ---
+  duration_ms: 3.1256
+  type: 'test'
+  ...
+# Subtest: main-frame reload cancels active work but in-place navigation does not
+ok 139 - main-frame reload cancels active work but in-place navigation does not
+  ---
+  duration_ms: 2.1841
+  type: 'test'
+  ...
+# Subtest: prepared exit preserves unused preparation and returns only after lifecycle check
+ok 140 - prepared exit preserves unused preparation and returns only after lifecycle check
+  ---
+  duration_ms: 2.6713
+  type: 'test'
+  ...
+# Subtest: prepared exit cancels a durable Start intent even after unlock cleared active pointer
+ok 141 - prepared exit cancels a durable Start intent even after unlock cleared active pointer
+  ---
+  duration_ms: 3.0819
+  type: 'test'
+  ...
+# Subtest: prepared exit rejects active and finished attempts without cancellation
+ok 142 - prepared exit rejects active and finished attempts without cancellation
+  ---
+  duration_ms: 5.4528
+  type: 'test'
+  ...
+# Subtest: prepared exit rejects a different owner and any other running attempt
+ok 143 - prepared exit rejects a different owner and any other running attempt
+  ---
+  duration_ms: 1.9948
+  type: 'test'
+  ...
+# Subtest: prepared exit seals concurrent activation and duplicate exit until checked
+ok 144 - prepared exit seals concurrent activation and duplicate exit until checked
+  ---
+  duration_ms: 1.8816
+  type: 'test'
+  ...
+# Subtest: prepared exit propagates cleanup failure and leaves protected IPC blocked
+ok 145 - prepared exit propagates cleanup failure and leaves protected IPC blocked
+  ---
+  duration_ms: 3.06
+  type: 'test'
+  ...
+# Subtest: asynchronous unlock preserves immediate exit-fullscreen ordering and cannot unlock a newer exam lock
+ok 146 - asynchronous unlock preserves immediate exit-fullscreen ordering and cannot unlock a newer exam lock
+  ---
+  duration_ms: 1.6913
+  type: 'test'
+  ...
+# Subtest: window close and app quit wait for accepted worker writes, and seal new exam operations
+ok 147 - window close and app quit wait for accepted worker writes, and seal new exam operations
+  ---
+  duration_ms: 3.7642
+  type: 'test'
+  ...
+# Subtest: failed storage worker allows explicit warning-confirmed exit even under exam lock, without reporting a saved result
+ok 148 - failed storage worker allows explicit warning-confirmed exit even under exam lock, without reporting a saved result
+  ---
+  duration_ms: 1.8097
+  type: 'test'
+  ...
+# Subtest: multi-apartment: requested stop waits for delayed final data and actual stop before cleanup
+ok 149 - multi-apartment: requested stop waits for delayed final data and actual stop before cleanup
+  ---
+  duration_ms: 40.4007
+  type: 'test'
+  ...
+# Subtest: multi-apartment: capture error retains parts without completing the video
+ok 150 - multi-apartment: capture error retains parts without completing the video
+  ---
+  duration_ms: 6.3809
+  type: 'test'
+  ...
+# Subtest: multi-apartment: timeout and late stop cannot silently complete a partial recording
+ok 151 - multi-apartment: timeout and late stop cannot silently complete a partial recording
+  ---
+  duration_ms: 10.2775
+  type: 'test'
+  ...
+# Subtest: multi-apartment: unexpected stop remains unfinished for invigilator review
+ok 152 - multi-apartment: unexpected stop remains unfinished for invigilator review
+  ---
+  duration_ms: 4.9436
+  type: 'test'
+  ...
+# Subtest: multi-apartment: inactive state before a stop request cannot mark truncated capture complete
+ok 153 - multi-apartment: inactive state before a stop request cannot mark truncated capture complete
+  ---
+  duration_ms: 4.5871
+  type: 'test'
+  ...
+# Subtest: multi-apartment: slow disk finish keeps answers frozen and recording indicator stopped
+ok 154 - multi-apartment: slow disk finish keeps answers frozen and recording indicator stopped
+  ---
+  duration_ms: 9.1014
+  type: 'test'
+  ...
+# Subtest: multi-apartment: late verified disk finish clears its timeout warning without restarting recording
+ok 155 - multi-apartment: late verified disk finish clears its timeout warning without restarting recording
+  ---
+  duration_ms: 12.3714
+  type: 'test'
+  ...
+# Subtest: multi-apartment: disk failure after timeout keeps review warning
+ok 156 - multi-apartment: disk failure after timeout keeps review warning
+  ---
+  duration_ms: 15.2206
+  type: 'test'
+  ...
+# Subtest: multi-apartment: late disk success cannot clear a genuine subsequent capture error
+ok 157 - multi-apartment: late disk success cannot clear a genuine subsequent capture error
+  ---
+  duration_ms: 15.1214
+  type: 'test'
+  ...
+# Subtest: multi-apartment: disk timeout does not mask a capture error observed while saving
+ok 158 - multi-apartment: disk timeout does not mask a capture error observed while saving
+  ---
+  duration_ms: 15.6055
+  type: 'test'
+  ...
+# Subtest: multi-apartment: missing regulation PDF blocks Start and retry preserves project and grant
+ok 159 - multi-apartment: missing regulation PDF blocks Start and retry preserves project and grant
+  ---
+  duration_ms: 3.4051
+  type: 'test'
+  ...
+# Subtest: multi-apartment: active answer clicks and heartbeat never call the network
+ok 160 - multi-apartment: active answer clicks and heartbeat never call the network
+  ---
+  duration_ms: 3.4847
+  type: 'test'
+  ...
+# Subtest: multi-apartment: delayed checkpoint failure locks row-click editing until local retry
+ok 161 - multi-apartment: delayed checkpoint failure locks row-click editing until local retry
+  ---
+  duration_ms: 3.498
+  type: 'test'
+  ...
+# Subtest: multi-apartment: final payload stays immutable offline and results require the server ACK
+ok 162 - multi-apartment: final payload stays immutable offline and results require the server ACK
+  ---
+  duration_ms: 5.5247
+  type: 'test'
+  ...
+# Subtest: multi-apartment: online finish transitions via loading overlay without flashing offline save panel
+ok 163 - multi-apartment: online finish transitions via loading overlay without flashing offline save panel
+  ---
+  duration_ms: 3.5536
+  type: 'test'
+  ...
+# Subtest: multi-apartment: expired same-attempt recovery freezes without new preparation or recording
+ok 164 - multi-apartment: expired same-attempt recovery freezes without new preparation or recording
+  ---
+  duration_ms: 6.2275
+  type: 'test'
+  ...
+# Subtest: multi-apartment: recording activation failure keeps the original timer running and allows answer selection with warning
+ok 165 - multi-apartment: recording activation failure keeps the original timer running and allows answer selection with warning
+  ---
+  duration_ms: 3.8815
+  type: 'test'
+  ...
+# Subtest: multi-apartment: failed local freeze offers no exit or network submission
+ok 166 - multi-apartment: failed local freeze offers no exit or network submission
+  ---
+  duration_ms: 5.6155
+  type: 'test'
+  ...
+# Subtest: multi-apartment: active offline recovery uses the same candidate, project, selection and deadline
+ok 167 - multi-apartment: active offline recovery uses the same candidate, project, selection and deadline
+  ---
+  duration_ms: 5.5664
+  type: 'test'
+  ...
+# Subtest: multi-apartment: deadline freezes during delayed capture and late media cannot reopen the attempt
+ok 168 - multi-apartment: deadline freezes during delayed capture and late media cannot reopen the attempt
+  ---
+  duration_ms: 3.5215
+  type: 'test'
+  ...
+# Subtest: multi-apartment: a delayed start response consumes elapsed time without granting a fresh duration
+ok 169 - multi-apartment: a delayed start response consumes elapsed time without granting a fresh duration
+  ---
+  duration_ms: 2.891
+  type: 'test'
+  ...
+# Subtest: multi-apartment: missing cached PDFs block editing while the original timer keeps running
+ok 170 - multi-apartment: missing cached PDFs block editing while the original timer keeps running
+  ---
+  duration_ms: 4.6536
+  type: 'test'
+  ...
+# Subtest: multi-apartment: expired recovery freezes selections without attempting to read missing PDFs
+ok 171 - multi-apartment: expired recovery freezes selections without attempting to read missing PDFs
+  ---
+  duration_ms: 4.7052
+  type: 'test'
+  ...
+# Subtest: multi-apartment: incompatible backend consumes no grant and sends no stage Start request
+ok 172 - multi-apartment: incompatible backend consumes no grant and sends no stage Start request
+  ---
+  duration_ms: 3.08
+  type: 'test'
+  ...
+# Subtest: multi-apartment: failed durable start intent sends no Start request
+ok 173 - multi-apartment: failed durable start intent sends no Start request
+  ---
+  duration_ms: 5.8273
+  type: 'test'
+  ...
+# Subtest: multi-apartment: backend lacking cancellation support cannot consume a grant
+ok 174 - multi-apartment: backend lacking cancellation support cannot consume a grant
+  ---
+  duration_ms: 3.5739
+  type: 'test'
+  ...
+# Subtest: multi-apartment: prepared Home waits for authoritative cancellation before unlock or navigation
+ok 175 - multi-apartment: prepared Home waits for authoritative cancellation before unlock or navigation
+  ---
+  duration_ms: 3.0213
+  type: 'test'
+  ...
+# Subtest: multi-apartment: failed or unavailable safe prepared exit leaves the screen visible and retryable
+ok 176 - multi-apartment: failed or unavailable safe prepared exit leaves the screen visible and retryable
+  ---
+  duration_ms: 8.1788
+  type: 'test'
+  ...
+# Subtest: multi-apartment: in-flight Start blocks Return and Finish until the request settles
+ok 177 - multi-apartment: in-flight Start blocks Return and Finish until the request settles
+  ---
+  duration_ms: 3.9914
+  type: 'test'
+  ...
+# Subtest: multi-apartment: failed post-intent Start explains that returning cancels the uncertain attempt
+ok 178 - multi-apartment: failed post-intent Start explains that returning cancels the uncertain attempt
+  ---
+  duration_ms: 5.6246
+  type: 'test'
+  ...
+# Subtest: multi-apartment: gate-stage Return works without any prepared attempt or server mutation
+ok 179 - multi-apartment: gate-stage Return works without any prepared attempt or server mutation
+  ---
+  duration_ms: 2.4543
+  type: 'test'
+  ...
+# Subtest: multi-apartment: prepared-exit API is unavailable while active or after results freeze
+ok 180 - multi-apartment: prepared-exit API is unavailable while active or after results freeze
+  ---
+  duration_ms: 4.3093
+  type: 'test'
+  ...
+# Subtest: multi-apartment: online submission completes immediately without waiting 5 minutes for video finalization
+ok 181 - multi-apartment: online submission completes immediately without waiting 5 minutes for video finalization
+  ---
+  duration_ms: 3.4362
+  type: 'test'
+  ...
+# Subtest: multi-apartment: displayResults applies Decree 134 colors and sets B/C, A, or Fail banner
+ok 182 - multi-apartment: displayResults applies Decree 134 colors and sets B/C, A, or Fail banner
+  ---
+  duration_ms: 1.5669
+  type: 'test'
+  ...
+# Subtest: multi-functional: requested stop waits for delayed final data and actual stop before cleanup
+ok 183 - multi-functional: requested stop waits for delayed final data and actual stop before cleanup
+  ---
+  duration_ms: 4.4992
+  type: 'test'
+  ...
+# Subtest: multi-functional: capture error retains parts without completing the video
+ok 184 - multi-functional: capture error retains parts without completing the video
+  ---
+  duration_ms: 3.0079
+  type: 'test'
+  ...
+# Subtest: multi-functional: timeout and late stop cannot silently complete a partial recording
+ok 185 - multi-functional: timeout and late stop cannot silently complete a partial recording
+  ---
+  duration_ms: 14.6906
+  type: 'test'
+  ...
+# Subtest: multi-functional: unexpected stop remains unfinished for invigilator review
+ok 186 - multi-functional: unexpected stop remains unfinished for invigilator review
+  ---
+  duration_ms: 3.1385
+  type: 'test'
+  ...
+# Subtest: multi-functional: inactive state before a stop request cannot mark truncated capture complete
+ok 187 - multi-functional: inactive state before a stop request cannot mark truncated capture complete
+  ---
+  duration_ms: 2.645
+  type: 'test'
+  ...
+# Subtest: multi-functional: slow disk finish keeps answers frozen and recording indicator stopped
+ok 188 - multi-functional: slow disk finish keeps answers frozen and recording indicator stopped
+  ---
+  duration_ms: 3.5193
+  type: 'test'
+  ...
+# Subtest: multi-functional: late verified disk finish clears its timeout warning without restarting recording
+ok 189 - multi-functional: late verified disk finish clears its timeout warning without restarting recording
+  ---
+  duration_ms: 22.5271
+  type: 'test'
+  ...
+# Subtest: multi-functional: disk failure after timeout keeps review warning
+ok 190 - multi-functional: disk failure after timeout keeps review warning
+  ---
+  duration_ms: 15.1261
+  type: 'test'
+  ...
+# Subtest: multi-functional: late disk success cannot clear a genuine subsequent capture error
+ok 191 - multi-functional: late disk success cannot clear a genuine subsequent capture error
+  ---
+  duration_ms: 15.9182
+  type: 'test'
+  ...
+# Subtest: multi-functional: disk timeout does not mask a capture error observed while saving
+ok 192 - multi-functional: disk timeout does not mask a capture error observed while saving
+  ---
+  duration_ms: 16.0223
+  type: 'test'
+  ...
+# Subtest: multi-functional: missing regulation PDF blocks Start and retry preserves project and grant
+ok 193 - multi-functional: missing regulation PDF blocks Start and retry preserves project and grant
+  ---
+  duration_ms: 3.8076
+  type: 'test'
+  ...
+# Subtest: multi-functional: active answer clicks and heartbeat never call the network
+ok 194 - multi-functional: active answer clicks and heartbeat never call the network
+  ---
+  duration_ms: 3.7436
+  type: 'test'
+  ...
+# Subtest: multi-functional: delayed checkpoint failure locks row-click editing until local retry
+ok 195 - multi-functional: delayed checkpoint failure locks row-click editing until local retry
+  ---
+  duration_ms: 3.3322
+  type: 'test'
+  ...
+# Subtest: multi-functional: final payload stays immutable offline and results require the server ACK
+ok 196 - multi-functional: final payload stays immutable offline and results require the server ACK
+  ---
+  duration_ms: 3.8332
+  type: 'test'
+  ...
+# Subtest: multi-functional: online finish transitions via loading overlay without flashing offline save panel
+ok 197 - multi-functional: online finish transitions via loading overlay without flashing offline save panel
+  ---
+  duration_ms: 3.4564
+  type: 'test'
+  ...
+# Subtest: multi-functional: expired same-attempt recovery freezes without new preparation or recording
+ok 198 - multi-functional: expired same-attempt recovery freezes without new preparation or recording
+  ---
+  duration_ms: 4.6693
+  type: 'test'
+  ...
+# Subtest: multi-functional: recording activation failure keeps the original timer running and allows answer selection with warning
+ok 199 - multi-functional: recording activation failure keeps the original timer running and allows answer selection with warning
+  ---
+  duration_ms: 3.4352
+  type: 'test'
+  ...
+# Subtest: multi-functional: failed local freeze offers no exit or network submission
+ok 200 - multi-functional: failed local freeze offers no exit or network submission
+  ---
+  duration_ms: 8.1044
+  type: 'test'
+  ...
+# Subtest: multi-functional: active offline recovery uses the same candidate, project, selection and deadline
+ok 201 - multi-functional: active offline recovery uses the same candidate, project, selection and deadline
+  ---
+  duration_ms: 4.95
+  type: 'test'
+  ...
+# Subtest: multi-functional: deadline freezes during delayed capture and late media cannot reopen the attempt
+ok 202 - multi-functional: deadline freezes during delayed capture and late media cannot reopen the attempt
+  ---
+  duration_ms: 2.9894
+  type: 'test'
+  ...
+# Subtest: multi-functional: a delayed start response consumes elapsed time without granting a fresh duration
+ok 203 - multi-functional: a delayed start response consumes elapsed time without granting a fresh duration
+  ---
+  duration_ms: 2.5027
+  type: 'test'
+  ...
+# Subtest: multi-functional: missing cached PDFs block editing while the original timer keeps running
+ok 204 - multi-functional: missing cached PDFs block editing while the original timer keeps running
+  ---
+  duration_ms: 4.57
+  type: 'test'
+  ...
+# Subtest: multi-functional: expired recovery freezes selections without attempting to read missing PDFs
+ok 205 - multi-functional: expired recovery freezes selections without attempting to read missing PDFs
+  ---
+  duration_ms: 4.4814
+  type: 'test'
+  ...
+# Subtest: multi-functional: incompatible backend consumes no grant and sends no stage Start request
+ok 206 - multi-functional: incompatible backend consumes no grant and sends no stage Start request
+  ---
+  duration_ms: 2.4677
+  type: 'test'
+  ...
+# Subtest: multi-functional: failed durable start intent sends no Start request
+ok 207 - multi-functional: failed durable start intent sends no Start request
+  ---
+  duration_ms: 2.4513
+  type: 'test'
+  ...
+# Subtest: multi-functional: backend lacking cancellation support cannot consume a grant
+ok 208 - multi-functional: backend lacking cancellation support cannot consume a grant
+  ---
+  duration_ms: 2.2378
+  type: 'test'
+  ...
+# Subtest: multi-functional: prepared Home waits for authoritative cancellation before unlock or navigation
+ok 209 - multi-functional: prepared Home waits for authoritative cancellation before unlock or navigation
+  ---
+  duration_ms: 2.3296
+  type: 'test'
+  ...
+# Subtest: multi-functional: failed or unavailable safe prepared exit leaves the screen visible and retryable
+ok 210 - multi-functional: failed or unavailable safe prepared exit leaves the screen visible and retryable
+  ---
+  duration_ms: 11.0068
+  type: 'test'
+  ...
+# Subtest: multi-functional: in-flight Start blocks Return and Finish until the request settles
+ok 211 - multi-functional: in-flight Start blocks Return and Finish until the request settles
+  ---
+  duration_ms: 3.8565
+  type: 'test'
+  ...
+# Subtest: multi-functional: failed post-intent Start explains that returning cancels the uncertain attempt
+ok 212 - multi-functional: failed post-intent Start explains that returning cancels the uncertain attempt
+  ---
+  duration_ms: 6.3756
+  type: 'test'
+  ...
+# Subtest: multi-functional: gate-stage Return works without any prepared attempt or server mutation
+ok 213 - multi-functional: gate-stage Return works without any prepared attempt or server mutation
+  ---
+  duration_ms: 2.1195
+  type: 'test'
+  ...
+# Subtest: multi-functional: prepared-exit API is unavailable while active or after results freeze
+ok 214 - multi-functional: prepared-exit API is unavailable while active or after results freeze
+  ---
+  duration_ms: 3.7687
+  type: 'test'
+  ...
+# Subtest: multi-functional: online submission completes immediately without waiting 5 minutes for video finalization
+ok 215 - multi-functional: online submission completes immediately without waiting 5 minutes for video finalization
+  ---
+  duration_ms: 3.3761
+  type: 'test'
+  ...
+# Subtest: multi-functional: displayResults applies Decree 134 colors and sets B/C, A, or Fail banner
+ok 216 - multi-functional: displayResults applies Decree 134 colors and sets B/C, A, or Fail banner
+  ---
+  duration_ms: 1.4589
+  type: 'test'
+  ...
+# Subtest: preflight checks encryption, writable storage, and free disk; no plaintext fallback
+ok 217 - preflight checks encryption, writable storage, and free disk; no plaintext fallback
+  ---
+  duration_ms: 39.6007
+  type: 'test'
+  ...
+# Subtest: encrypted durable snapshots restore same session, binding, credentials, answers after restart
+ok 218 - encrypted durable snapshots restore same session, binding, credentials, answers after restart
+  ---
+  duration_ms: 93.4778
+  type: 'test'
+  ...
+# Subtest: latest same-revision backup recovers corruption without phase rollback
+ok 219 - latest same-revision backup recovers corruption without phase rollback
+  ---
+  duration_ms: 94.2153
+  type: 'test'
+  ...
+# Subtest: atomic crash between backup and primary keeps newest complete revision
+ok 220 - atomic crash between backup and primary keeps newest complete revision
+  ---
+  duration_ms: 92.142
+  type: 'test'
+  ...
+# Subtest: active clock and capability never extend; completed block answers and locks immutable
+ok 221 - active clock and capability never extend; completed block answers and locks immutable
+  ---
+  duration_ms: 101.5931
+  type: 'test'
+  ...
+# Subtest: freeze is immutable/idempotent; retry and acknowledgement survive restart
+ok 222 - freeze is immutable/idempotent; retry and acknowledgement survive restart
+  ---
+  duration_ms: 144.6555
+  type: 'test'
+  ...
+# Subtest: PDF cache validates binary, identifiers, ownership, immutable content, integrity and caps
+ok 223 - PDF cache validates binary, identifiers, ownership, immutable content, integrity and caps
+  ---
+  duration_ms: 100.1127
+  type: 'test'
+  ...
+# Subtest: recording chunks ordered, idempotent, durable per chunk, verified before originals are cleaned
+ok 224 - recording chunks ordered, idempotent, durable per chunk, verified before originals are cleaned
+  ---
+  duration_ms: 270.1732
+  type: 'test'
+  ...
+# Subtest: recording uses bounded reads and complete-write loops when filesystem returns short reads/writes
+ok 225 - recording uses bounded reads and complete-write loops when filesystem returns short reads/writes
+  ---
+  duration_ms: 246.1353
+  type: 'test'
+  ...
+# Subtest: zero writes fail closed, retain every original and preserve the incomplete temp file
+ok 226 - zero writes fail closed, retain every original and preserve the incomplete temp file
+  ---
+  duration_ms: 230.7321
+  type: 'test'
+  ...
+# Subtest: ENOSPC halfway through assembly preserves acknowledged chunks for a later successful retry
+ok 227 - ENOSPC halfway through assembly preserves acknowledged chunks for a later successful retry
+  ---
+  duration_ms: 247.7456
+  type: 'test'
+  ...
+# Subtest: final temporary readback detects silent corruption before publishing and deleting anything
+ok 228 - final temporary readback detects silent corruption before publishing and deleting anything
+  ---
+  duration_ms: 195.0792
+  type: 'test'
+  ...
+# Subtest: truncation during final rename prevents saved state and preserves all originals
+ok 229 - truncation during final rename prevents saved state and preserves all originals
+  ---
+  duration_ms: 250.6245
+  type: 'test'
+  ...
+# Subtest: failed video fsync or atomic rename leaves originals and temporary evidence intact
+ok 230 - failed video fsync or atomic rename leaves originals and temporary evidence intact
+  ---
+  duration_ms: 474.7216
+  type: 'test'
+  ...
+# Subtest: no original is deleted before matching saved manifests are readable from both encrypted state copies
+ok 231 - no original is deleted before matching saved manifests are readable from both encrypted state copies
+  ---
+  duration_ms: 230.3374
+  type: 'test'
+  ...
+# Subtest: failed primary manifest commit retains originals and repairs both state copies on retry
+ok 232 - failed primary manifest commit retains originals and repairs both state copies on retry
+  ---
+  duration_ms: 249.8551
+  type: 'test'
+  ...
+# Subtest: failed backup manifest commit does not permit cleanup even though final video exists
+ok 233 - failed backup manifest commit does not permit cleanup even though final video exists
+  ---
+  duration_ms: 248.9387
+  type: 'test'
+  ...
+# Subtest: silently corrupt primary manifest is detected before cleanup, despite valid backup recovery
+ok 234 - silently corrupt primary manifest is detected before cleanup, despite valid backup recovery
+  ---
+  duration_ms: 254.8762
+  type: 'test'
+  ...
+# Subtest: partial cleanup failure is nonfatal, retries only remaining originals, and is idempotent
+ok 235 - partial cleanup failure is nonfatal, retries only remaining originals, and is idempotent
+  ---
+  duration_ms: 218.6883
+  type: 'test'
+  ...
+# Subtest: cleanup bookkeeping commit failure does not lose saved video and repairs metadata on retry
+ok 236 - cleanup bookkeeping commit failure does not lose saved video and repairs metadata on retry
+  ---
+  duration_ms: 191.4102
+  type: 'test'
+  ...
+# Subtest: saved retry refuses changed, truncated or missing final video without deleting remaining chunks
+ok 237 - saved retry refuses changed, truncated or missing final video without deleting remaining chunks
+  ---
+  duration_ms: 207.286
+  type: 'test'
+  ...
+# Subtest: cleanup refuses tampered chunks and unexpected numbered files while leaving unrelated files alone
+ok 238 - cleanup refuses tampered chunks and unexpected numbered files while leaving unrelated files alone
+  ---
+  duration_ms: 292.5753
+  type: 'test'
+  ...
+# Subtest: legacy saved recording upgrades only after full source and final readback equality
+ok 239 - legacy saved recording upgrades only after full source and final readback equality
+  ---
+  duration_ms: 144.3223
+  type: 'test'
+  ...
+# Subtest: legacy saved recording missing a chunk or with a truncated final is not upgraded or cleaned
+ok 240 - legacy saved recording missing a chunk or with a truncated final is not upgraded or cleaned
+  ---
+  duration_ms: 114.9175
+  type: 'test'
+  ...
+# Subtest: stored final paths cannot redirect cleanup outside the exact attempt and recording directory
+ok 241 - stored final paths cannot redirect cleanup outside the exact attempt and recording directory
+  ---
+  duration_ms: 114.913
+  type: 'test'
+  ...
+# Subtest: malformed saved chunk manifest cannot authorize deletion even when final video is valid
+ok 242 - malformed saved chunk manifest cannot authorize deletion even when final video is valid
+  ---
+  duration_ms: 194.491
+  type: 'test'
+  ...
+# Subtest: recording folder symlink or junction blocks finalization and cleanup of redirected originals
+ok 243 - recording folder symlink or junction blocks finalization and cleanup of redirected originals
+  ---
+  duration_ms: 103.4513
+  type: 'test'
+  ...
+# Subtest: final file or chunk symlinks are refused, never followed or removed during cleanup
+ok 244 - final file or chunk symlinks are refused, never followed or removed during cleanup
+  ---
+  duration_ms: 160.87
+  type: 'test'
+  ...
+# Subtest: finalization waits for queued chunks, rejects late append and competing finish, and verifies expected count
+ok 245 - finalization waits for queued chunks, rejects late append and competing finish, and verifies expected count
+  ---
+  duration_ms: 136.8886
+  type: 'test'
+  ...
+# Subtest: invalid or incomplete producer chunk count preserves all originals before finalization
+ok 246 - invalid or incomplete producer chunk count preserves all originals before finalization
+  ---
+  duration_ms: 96.5076
+  type: 'test'
+  ...
+# Subtest: recording backpressure and disk failures do not drop acknowledged segments
+ok 247 - recording backpressure and disk failures do not drop acknowledged segments
+  ---
+  duration_ms: 133.7935
+  type: 'test'
+  ...
+# Subtest: attempt and snapshot limits are bounded
+ok 248 - attempt and snapshot limits are bounded
+  ---
+  duration_ms: 32.9846
+  type: 'test'
+  ...
+# Subtest: main-process freeze validates exact attempt, stage, capability and saved answers
+ok 249 - main-process freeze validates exact attempt, stage, capability and saved answers
+  ---
+  duration_ms: 51.5588
+  type: 'test'
+  ...
+# Subtest: project stage submission stays bound to original project and grant across restart
+ok 250 - project stage submission stays bound to original project and grant across restart
+  ---
+  duration_ms: 50.0664
+  type: 'test'
+  ...
+# Subtest: asset parent junction/symlink cannot redirect reads outside owned storage
+ok 251 - asset parent junction/symlink cannot redirect reads outside owned storage
+  ---
+  duration_ms: 50.626
+  type: 'test'
+  ...
+# Subtest: administrator project without a grant binds code and attempt ID, and numeric string selections freeze
+ok 252 - administrator project without a grant binds code and attempt ID, and numeric string selections freeze
+  ---
+  duration_ms: 95.6532
+  type: 'test'
+  ...
+# Subtest: failed initial atomic write leaves no listed attempt and later creation can recover
+ok 253 - failed initial atomic write leaves no listed attempt and later creation can recover
+  ---
+  duration_ms: 36.7021
+  type: 'test'
+  ...
+# Subtest: encrypted lifecycle logs creation, start, crash resume, durable freeze and acknowledgement
+ok 254 - encrypted lifecycle logs creation, start, crash resume, durable freeze and acknowledgement
+  ---
+  duration_ms: 75.002
+  type: 'test'
+  ...
+# Subtest: main acknowledgement rejects unrelated UUID, missing grades and invalid score ranges
+ok 255 - main acknowledgement rejects unrelated UUID, missing grades and invalid score ranges
+  ---
+  duration_ms: 68.6534
+  type: 'test'
+  ...
+# Subtest: duration-aware disk readiness budgets recording copies plus assets on a shared volume
+ok 256 - duration-aware disk readiness budgets recording copies plus assets on a shared volume
+  ---
+  duration_ms: 39.5648
+  type: 'test'
+  ...
+# Subtest: separate volumes budget internal video chunks plus assets and one exported video copy
+ok 257 - separate volumes budget internal video chunks plus assets and one exported video copy
+  ---
+  duration_ms: 20.4351
+  type: 'test'
+  ...
+# Subtest: pending and acknowledged summaries retain an unfinished-recording review flag
+ok 258 - pending and acknowledged summaries retain an unfinished-recording review flag
+  ---
+  duration_ms: 152.6631
+  type: 'test'
+  ...
+# Subtest: acknowledgement removes cached PDF assets and prunes old completed attempts at capacity
+ok 259 - acknowledgement removes cached PDF assets and prunes old completed attempts at capacity
+  ---
+  duration_ms: 111.2048
+  type: 'test'
+  ...
+# Subtest: theory preparation waits for regulations and persists every required PDF before ready
+ok 260 - theory preparation waits for regulations and persists every required PDF before ready
+  ---
+  duration_ms: 12.3908
+  type: 'test'
+  ...
+# Subtest: failed PDF blocks preparation; retry keeps the original attempt and questions
+ok 261 - failed PDF blocks preparation; retry keeps the original attempt and questions
+  ---
+  duration_ms: 4.1734
+  type: 'test'
+  ...
+# Subtest: answers, block locks and position checkpoint locally and resume without network
+ok 262 - answers, block locks and position checkpoint locally and resume without network
+  ---
+  duration_ms: 10.9696
+  type: 'test'
+  ...
+# Subtest: finish durably freezes once before recording stop and network; offline close is allowed
+ok 263 - finish durably freezes once before recording stop and network; offline close is allowed
+  ---
+  duration_ms: 3.7601
+  type: 'test'
+  ...
+# Subtest: lost final response retries identical frozen body and only shows acknowledged server results
+ok 264 - lost final response retries identical frozen body and only shows acknowledged server results
+  ---
+  duration_ms: 4.5361
+  type: 'test'
+  ...
+# Subtest: local freeze failure keeps answers disabled and does not unlock or submit
+ok 265 - local freeze failure keeps answers disabled and does not unlock or submit
+  ---
+  duration_ms: 2.3904
+  type: 'test'
+  ...
+# Subtest: pending recovery needs neither login token, PDFs nor network and stays immutable
+ok 266 - pending recovery needs neither login token, PDFs nor network and stays immutable
+  ---
+  duration_ms: 3.979
+  type: 'test'
+  ...
+# Subtest: a missing local PDF never creates an online iframe
+ok 267 - a missing local PDF never creates an online iframe
+  ---
+  duration_ms: 1.3937
+  type: 'test'
+  ...
+# Subtest: begin opts into the offline capability and uses the original server deadline
+ok 268 - begin opts into the offline capability and uses the original server deadline
+  ---
+  duration_ms: 4.384
+  type: 'test'
+  ...
+# Subtest: deadline blocks an answer before the next interval and expired recovery freezes without recording
+ok 269 - deadline blocks an answer before the next interval and expired recovery freezes without recording
+  ---
+  duration_ms: 3.9996
+  type: 'test'
+  ...
+# Subtest: timer heartbeat is local and records elapsed time without an answer change
+ok 270 - timer heartbeat is local and records elapsed time without an answer change
+  ---
+  duration_ms: 2.0769
+  type: 'test'
+  ...
+# Subtest: recording streams chunks to disk in order and completes before returning from stop
+ok 271 - recording streams chunks to disk in order and completes before returning from stop
+  ---
+  duration_ms: 6.9781
+  type: 'test'
+  ...
+# Subtest: theory requested stop waits for delayed final data and observed stop before assembly
+ok 272 - theory requested stop waits for delayed final data and observed stop before assembly
+  ---
+  duration_ms: 2.7539
+  type: 'test'
+  ...
+# Subtest: theory capture error never labels its retained partial recording complete
+ok 273 - theory capture error never labels its retained partial recording complete
+  ---
+  duration_ms: 2.2945
+  type: 'test'
+  ...
+# Subtest: theory stop timeout preserves parts even when final data and stop arrive later
+ok 274 - theory stop timeout preserves parts even when final data and stop arrive later
+  ---
+  duration_ms: 11.9676
+  type: 'test'
+  ...
+# Subtest: theory spontaneous recorder stop stays unfinished for review
+ok 275 - theory spontaneous recorder stop stays unfinished for review
+  ---
+  duration_ms: 2.7389
+  type: 'test'
+  ...
+# Subtest: theory already-inactive recorder cannot disguise a spontaneous stop as a requested completion
+ok 276 - theory already-inactive recorder cannot disguise a spontaneous stop as a requested completion
+  ---
+  duration_ms: 2.6439
+  type: 'test'
+  ...
+# Subtest: theory slow disk finalization keeps answers frozen and capture stopped while awaiting confirmation
+ok 277 - theory slow disk finalization keeps answers frozen and capture stopped while awaiting confirmation
+  ---
+  duration_ms: 3.0318
+  type: 'test'
+  ...
+# Subtest: theory late verified disk success clears only its finalization timeout warning
+ok 278 - theory late verified disk success clears only its finalization timeout warning
+  ---
+  duration_ms: 16.752
+  type: 'test'
+  ...
+# Subtest: theory disk failure after timeout retains a genuine review warning
+ok 279 - theory disk failure after timeout retains a genuine review warning
+  ---
+  duration_ms: 15.4407
+  type: 'test'
+  ...
+# Subtest: theory late disk success does not clear a separate capture error
+ok 280 - theory late disk success does not clear a separate capture error
+  ---
+  duration_ms: 14.8291
+  type: 'test'
+  ...
+# Subtest: theory disk timeout does not replace a capture error observed during finalization
+ok 281 - theory disk timeout does not replace a capture error observed during finalization
+  ---
+  duration_ms: 15.9881
+  type: 'test'
+  ...
+# Subtest: recording write failure retains the failed chunk, pauses capture and shows a warning
+ok 282 - recording write failure retains the failed chunk, pauses capture and shows a warning
+  ---
+  duration_ms: 2.303
+  type: 'test'
+  ...
+# Subtest: theory deadline runs during delayed recording startup and late streams cannot resurrect a frozen attempt
+ok 283 - theory deadline runs during delayed recording startup and late streams cannot resurrect a frozen attempt
+  ---
+  duration_ms: 4.4544
+  type: 'test'
+  ...
+# Subtest: theory recording startup or mid-exam error shows warning without blocking answer selection or navigation
+ok 284 - theory recording startup or mid-exam error shows warning without blocking answer selection or navigation
+  ---
+  duration_ms: 1.9907
+  type: 'test'
+  ...
+# Subtest: theory recording startup and stop hangs are bounded without discarding failed chunks
+ok 285 - theory recording startup and stop hangs are bounded without discarding failed chunks
+  ---
+  duration_ms: 7.0752
+  type: 'test'
+  ...
+# Subtest: slow theory Begin response consumes elapsed request time instead of adding exam time
+ok 286 - slow theory Begin response consumes elapsed request time instead of adding exam time
+  ---
+  duration_ms: 1.9147
+  type: 'test'
+  ...
+# Subtest: theory URL recovery ignores a stale signed-in candidate and does not initialize a pending camera
+ok 287 - theory URL recovery ignores a stale signed-in candidate and does not initialize a pending camera
+  ---
+  duration_ms: 3.9691
+  type: 'test'
+  ...
+# Subtest: theory Begin checks duration-aware disk reserve before a server request
+ok 288 - theory Begin checks duration-aware disk reserve before a server request
+  ---
+  duration_ms: 1.9073
+  type: 'test'
+  ...
+# Subtest: missing cached theory PDF blocks editing without stopping the original deadline
+ok 289 - missing cached theory PDF blocks editing without stopping the original deadline
+  ---
+  duration_ms: 4.046
+  type: 'test'
+  ...
+# Subtest: expired theory recovery freezes saved answers without reading missing PDFs
+ok 290 - expired theory recovery freezes saved answers without reading missing PDFs
+  ---
+  duration_ms: 3.1701
+  type: 'test'
+  ...
+# Subtest: theory recording failure warning survives heartbeat and frozen submission UI
+ok 291 - theory recording failure warning survives heartbeat and frozen submission UI
+  ---
+  duration_ms: 1.9079
+  type: 'test'
+  ...
+# Subtest: incompatible old backend is rejected before theory Begin or grant consumption
+ok 292 - incompatible old backend is rejected before theory Begin or grant consumption
+  ---
+  duration_ms: 3.8247
+  type: 'test'
+  ...
+# Subtest: theory requires durable start intent before any Begin request
+ok 293 - theory requires durable start intent before any Begin request
+  ---
+  duration_ms: 1.4947
+  type: 'test'
+  ...
+# Subtest: theory refuses offline server lacking interruption cancellation before start intent
+ok 294 - theory refuses offline server lacking interruption cancellation before start intent
+  ---
+  duration_ms: 1.2968
+  type: 'test'
+  ...
+# Subtest: incompatible server Start shows inline error; Finish returns home without native dialog, Begin or result
+ok 295 - incompatible server Start shows inline error; Finish returns home without native dialog, Begin or result
+  ---
+  duration_ms: 1.8276
+  type: 'test'
+  ...
+# Subtest: prepared Home button waits for main durable exit confirmation before unlock or navigation
+ok 296 - prepared Home button waits for main durable exit confirmation before unlock or navigation
+  ---
+  duration_ms: 1.3859
+  type: 'test'
+  ...
+# Subtest: failed main prepared exit stays visible and retryable, never silently navigates
+ok 297 - failed main prepared exit stays visible and retryable, never silently navigates
+  ---
+  duration_ms: 1.3191
+  type: 'test'
+  ...
+# Subtest: while Begin is unresolved all prestart exit paths are blocked; failure then permits scoped leave
+ok 298 - while Begin is unresolved all prestart exit paths are blocked; failure then permits scoped leave
+  ---
+  duration_ms: 3.6052
+  type: 'test'
+  ...
+# Subtest: prestart Home cannot bypass an active or frozen pending exam
+ok 299 - prestart Home cannot bypass an active or frozen pending exam
+  ---
+  duration_ms: 2.2067
+  type: 'test'
+  ...
+# Subtest: fresh theory detects incompatible backend before camera or downloads and gate Home is available
+ok 300 - fresh theory detects incompatible backend before camera or downloads and gate Home is available
+  ---
+  duration_ms: 1.8195
+  type: 'test'
+  ...
+# Subtest: theory HTML exposes accessible inline errors and real prestart return buttons
+ok 301 - theory HTML exposes accessible inline errors and real prestart return buttons
+  ---
+  duration_ms: 0.3731
+  type: 'test'
+  ...
+# Subtest: theory online submission completes immediately without waiting 5 minutes for video finalization
+ok 302 - theory online submission completes immediately without waiting 5 minutes for video finalization
+  ---
+  duration_ms: 3.0762
+  type: 'test'
+  ...
+# Subtest: theory showResults renders 4 chapters in Decree 134 format and sets B/C, A, or Fail banner
+ok 303 - theory showResults renders 4 chapters in Decree 134 format and sets B/C, A, or Fail banner
+  ---
+  duration_ms: 1.7856
+  type: 'test'
+  ...
+# Subtest: real worker roundtrips existing protected storage, FIFO video, durable pending and graceful drain
+ok 304 - real worker roundtrips existing protected storage, FIFO video, durable pending and graceful drain
+  ---
+  duration_ms: 393.863
+  type: 'test'
+  ...
+# Subtest: worker bulk PDF encryption/hash keeps main event loop responsive and preserves caller buffer
+ok 305 - worker bulk PDF encryption/hash keeps main event loop responsive and preserves caller buffer
+  ---
+  duration_ms: 327.1859
+  type: 'test'
+  ...
+# 32 MiB asset store+verify: 208 ms, main timer ticks=17, maximum gap=17 ms
+# Subtest: worker interruption drains accepted writes and blocks tombstoned attempt reuse
+ok 306 - worker interruption drains accepted writes and blocks tombstoned attempt reuse
+  ---
+  duration_ms: 183.8708
+  type: 'test'
+  ...
+# Subtest: worker crash rejects pending/future operations, emits one failure and never acknowledges or silently restarts
+ok 307 - worker crash rejects pending/future operations, emits one failure and never acknowledges or silently restarts
+  ---
+  duration_ms: 0.5001
+  type: 'test'
+  ...
+# Subtest: worker IPC applies request backpressure and permits reserved drain only after queued writes
+ok 308 - worker IPC applies request backpressure and permits reserved drain only after queued writes
+  ---
+  duration_ms: 0.846
+  type: 'test'
+  ...
+# Subtest: worker safeStorage bridge fails boundedly on missing/error/malformed replies, without plaintext fallback
+ok 309 - worker safeStorage bridge fails boundedly on missing/error/malformed replies, without plaintext fallback
+  ---
+  duration_ms: 18.9252
+  type: 'test'
+  ...
+# Subtest: OS protector errors become bounded sanitized key failures
+ok 310 - OS protector errors become bounded sanitized key failures
+  ---
+  duration_ms: 0.3693
+  type: 'test'
+  ...
+# Subtest: only the exact built-in PDF viewer URL is accepted
+ok 311 - only the exact built-in PDF viewer URL is accepted
+  ---
+  duration_ms: 0.9824
+  type: 'test'
+  ...
+# Subtest: only three native toolbar controls become disabled; captured actions cannot reach their handlers
+ok 312 - only three native toolbar controls become disabled; captured actions cannot reach their handlers
+  ---
+  duration_ms: 5.0248
+  type: 'test'
+  ...
+# Subtest: zoom, rotate, fit, sidebar, unrelated buttons and nonactivation keys remain untouched
+ok 313 - zoom, rotate, fit, sidebar, unrelated buttons and nonactivation keys remain untouched
+  ---
+  duration_ms: 0.9708
+  type: 'test'
+  ...
+# Subtest: delayed custom element upgrades, replaced controls and native disabled updates are handled without polling
+ok 314 - delayed custom element upgrades, replaced controls and native disabled updates are handled without polling
+  ---
+  duration_ms: 2.763
+  type: 'test'
+  ...
+# Subtest: duplicate installation is a no-op and page teardown disconnects observer
+ok 315 - duplicate installation is a no-op and page teardown disconnects observer
+  ---
+  duration_ms: 1.4248
+  type: 'test'
+  ...
+# Subtest: frame lifecycle covers newly created PDF guests and reloads, ignoring normal app frames
+ok 316 - frame lifecycle covers newly created PDF guests and reloads, ignoring normal app frames
+  ---
+  duration_ms: 0.9073
+  type: 'test'
+  ...
+# Subtest: large immutable material is written once; checkpoints preserve both durable small copies
+ok 317 - large immutable material is written once; checkpoints preserve both durable small copies
+  ---
+  duration_ms: 621.244
+  type: 'test'
+  ...
+# {"bundleBytes":186373,"legacyBytesWrittenPerCheckpoint":498818,"splitBytesWrittenPerCheckpoint":2106,"splitBytesReadPerCheckpoint":249833.68,"fsyncCalls":100}
+# Subtest: legacy embedded-bundle snapshots load unchanged and migrate only on a durable new revision
+ok 318 - legacy embedded-bundle snapshots load unchanged and migrate only on a durable new revision
+  ---
+  duration_ms: 76.4995
+  type: 'test'
+  ...
+# Subtest: a failed legacy migration retains original active answers and never rolls back phase
+ok 319 - a failed legacy migration retains original active answers and never rolls back phase
+  ---
+  duration_ms: 44.476
+  type: 'test'
+  ...
+# Subtest: initial creation failure at bundle-backup preserves durable evidence and can retry safely
+ok 320 - initial creation failure at bundle-backup preserves durable evidence and can retry safely
+  ---
+  duration_ms: 52.3828
+  type: 'test'
+  ...
+# Subtest: initial creation failure at bundle-sealed preserves durable evidence and can retry safely
+ok 321 - initial creation failure at bundle-sealed preserves durable evidence and can retry safely
+  ---
+  duration_ms: 59.6174
+  type: 'test'
+  ...
+# Subtest: initial creation failure at state-backup preserves durable evidence and can retry safely
+ok 322 - initial creation failure at state-backup preserves durable evidence and can retry safely
+  ---
+  duration_ms: 65.3406
+  type: 'test'
+  ...
+# Subtest: initial creation failure at state-sealed preserves durable evidence and can retry safely
+ok 323 - initial creation failure at state-sealed preserves durable evidence and can retry safely
+  ---
+  duration_ms: 44.3288
+  type: 'test'
+  ...
+# Subtest: bundle corruption is checked even with a warm cache; backup recovers but both corrupt fail closed
+ok 324 - bundle corruption is checked even with a warm cache; backup recovers but both corrupt fail closed
+  ---
+  duration_ms: 68.7749
+  type: 'test'
+  ...
+# Subtest: checkpoint after bundle backup recovery restores both durable immutable copies
+ok 325 - checkpoint after bundle backup recovery restores both durable immutable copies
+  ---
+  duration_ms: 93.1727
+  type: 'test'
+  ...
+# Subtest: authenticated bundle references reject another attempt, wrong owner, path traversal and tampering
+ok 326 - authenticated bundle references reject another attempt, wrong owner, path traversal and tampering
+  ---
+  duration_ms: 197.7988
+  type: 'test'
+  ...
+# Subtest: recording cleanup gate requires both immutable material copies, not one recovered copy
+ok 327 - recording cleanup gate requires both immutable material copies, not one recovered copy
+  ---
+  duration_ms: 92.015
+  type: 'test'
+  ...
+# Subtest: immutable bundle symlink paths are refused before any content read
+ok 328 - immutable bundle symlink paths are refused before any content read
+  ---
+  duration_ms: 42.5572
+  type: 'test'
+  ...
+# Subtest: full-state size limit, immutable material and pruning still cover separated bundle
+ok 329 - full-state size limit, immutable material and pruning still cover separated bundle
+  ---
+  duration_ms: 45.9511
+  type: 'test'
+  ...
+# Subtest: binary PDF envelope has bounded overhead, verifies ciphertext, and returns metadata without PDF payload
+ok 330 - binary PDF envelope has bounded overhead, verifies ciphertext, and returns metadata without PDF payload
+  ---
+  duration_ms: 101.2918
+  type: 'test'
+  ...
+# {"pdfBytes":1048585,"legacyEnvelopeBytes":1398301,"binaryEnvelopeBytes":1048697}
+# Subtest: legacy JSON-sealed PDFs remain readable and new binary envelope rejects malformed lengths/headers
+ok 331 - legacy JSON-sealed PDFs remain readable and new binary envelope rejects malformed lengths/headers
+  ---
+  duration_ms: 137.6998
+  type: 'test'
+  ...
+# Subtest: same-hash re-download repairs a missing cached PDF before acknowledging it
+ok 332 - same-hash re-download repairs a missing cached PDF before acknowledging it
+  ---
+  duration_ms: 115.8848
+  type: 'test'
+  ...
+# Subtest: failed rewrite of a missing cached PDF never returns a cache acknowledgement
+ok 333 - failed rewrite of a missing cached PDF never returns a cache acknowledgement
+  ---
+  duration_ms: 125.4802
+  type: 'test'
+  ...
+# Subtest: same-hash re-download repairs a corrupt cached PDF before acknowledging it
+ok 334 - same-hash re-download repairs a corrupt cached PDF before acknowledging it
+  ---
+  duration_ms: 104.1183
+  type: 'test'
+  ...
+# Subtest: failed rewrite of a corrupt cached PDF never returns a cache acknowledgement
+ok 335 - failed rewrite of a corrupt cached PDF never returns a cache acknowledgement
+  ---
+  duration_ms: 126.3433
+  type: 'test'
+  ...
+# Subtest: new PDF refuses successful-but-corrupt writes before cache acknowledgement
+ok 336 - new PDF refuses successful-but-corrupt writes before cache acknowledgement
+  ---
+  duration_ms: 109.8266
+  type: 'test'
+  ...
+# Subtest: repaired PDF refuses successful-but-corrupt writes before cache acknowledgement
+ok 337 - repaired PDF refuses successful-but-corrupt writes before cache acknowledgement
+  ---
+  duration_ms: 129.8102
+  type: 'test'
+  ...
+# Subtest: new PDF refuses successful-but-short writes before cache acknowledgement
+ok 338 - new PDF refuses successful-but-short writes before cache acknowledgement
+  ---
+  duration_ms: 114.813
+  type: 'test'
+  ...
+# Subtest: repaired PDF refuses successful-but-short writes before cache acknowledgement
+ok 339 - repaired PDF refuses successful-but-short writes before cache acknowledgement
+  ---
+  duration_ms: 126.2566
+  type: 'test'
+  ...
+# Subtest: cache repair never writes through an unsafe path or treats an I/O error as missing data
+ok 340 - cache repair never writes through an unsafe path or treats an I/O error as missing data
+  ---
+  duration_ms: 73.3968
+  type: 'test'
+  ...
+# Subtest: unowned summary lists validate each snapshot once rather than decrypting/loading it twice
+ok 341 - unowned summary lists validate each snapshot once rather than decrypting/loading it twice
+  ---
+  duration_ms: 41.4102
+  type: 'test'
+  ...
+# Subtest: native portable progress appears before extraction, not after Electron initializes
+ok 342 - native portable progress appears before extraction, not after Electron initializes
+  ---
+  duration_ms: 1.4436
+  type: 'test'
+  ...
+# Subtest: portable mutex rejects repeated launch before touching extracted files; focuses existing app
+ok 343 - portable mutex rejects repeated launch before touching extracted files; focuses existing app
+  ---
+  duration_ms: 0.2656
+  type: 'test'
+  ...
+# Subtest: upstream portable extraction, environment and cleanup remain intact
+ok 344 - upstream portable extraction, environment and cleanup remain intact
+  ---
+  duration_ms: 0.2305
+  type: 'test'
+  ...
+# Subtest: unreviewed dependency/template updates stop the portable build
+ok 345 - unreviewed dependency/template updates stop the portable build
+  ---
+  duration_ms: 0.4595
+  type: 'test'
+  ...
+# Subtest: successful recording exports exactly one friendly Unicode video and removes all owned staging folders
+ok 346 - successful recording exports exactly one friendly Unicode video and removes all owned staging folders
+  ---
+  duration_ms: 259.8667
+  type: 'test'
+  ...
+# Subtest: all three stages have distinct friendly labels and candidate filenames are Windows safe
+ok 347 - all three stages have distinct friendly labels and candidate filenames are Windows safe
+  ---
+  duration_ms: 755.6517
+  type: 'test'
+  ...
+# Subtest: same candidate, stage and millisecond never overwrite another recording
+ok 348 - same candidate, stage and millisecond never overwrite another recording
+  ---
+  duration_ms: 345.4883
+  type: 'test'
+  ...
+# Subtest: a preexisting output or raced-in file is never overwritten or cleaned
+ok 349 - a preexisting output or raced-in file is never overwritten or cleaned
+  ---
+  duration_ms: 311.0466
+  type: 'test'
+  ...
+# Subtest: flat assembly handles short writes and independent readback rejects silent corruption
+ok 350 - flat assembly handles short writes and independent readback rejects silent corruption
+  ---
+  duration_ms: 370.8735
+  type: 'test'
+  ...
+# Subtest: disk failure leaves original chunks internal and no junk or partial final in the public video folder
+ok 351 - disk failure leaves original chunks internal and no junk or partial final in the public video folder
+  ---
+  duration_ms: 218.73
+  type: 'test'
+  ...
+# Subtest: durable publication intent precedes atomic no-overwrite export, both saved manifests precede chunk deletion
+ok 352 - durable publication intent precedes atomic no-overwrite export, both saved manifests precede chunk deletion
+  ---
+  duration_ms: 226.4797
+  type: 'test'
+  ...
+# Subtest: failure committing final manifest retries the existing verified output without duplication
+ok 353 - failure committing final manifest retries the existing verified output without duplication
+  ---
+  duration_ms: 241.038
+  type: 'test'
+  ...
+# Subtest: a locked source retains saved-video status and cleanup retries remove only this recording
+ok 354 - a locked source retains saved-video status and cleanup retries remove only this recording
+  ---
+  duration_ms: 227.3943
+  type: 'test'
+  ...
+# Subtest: cleanup removes owned failed chunk temp files but preserves unrelated paths and reports incomplete cleanup
+ok 355 - cleanup removes owned failed chunk temp files but preserves unrelated paths and reports incomplete cleanup
+  ---
+  duration_ms: 194.1052
+  type: 'test'
+  ...
+# Subtest: flat output path traversal, symlinks and altered filenames cannot redirect finalization
+ok 356 - flat output path traversal, symlinks and altered filenames cannot redirect finalization
+  ---
+  duration_ms: 324.9572
+  type: 'test'
+  ...
+# Subtest: preflight rejects an output volume without no-overwrite atomic publication and leaves no probe junk
+ok 357 - preflight rejects an output volume without no-overwrite atomic publication and leaves no probe junk
+  ---
+  duration_ms: 135.5624
+  type: 'test'
+  ...
+# Subtest: an owned leftover partial assembly temp can be retried, but foreign files are untouched
+ok 358 - an owned leftover partial assembly temp can be retried, but foreign files are untouched
+  ---
+  duration_ms: 160.4124
+  type: 'test'
+  ...
+# Subtest: same-byte foreign publication collision cannot be adopted as the attempt recording on retry
+ok 359 - same-byte foreign publication collision cannot be adopted as the attempt recording on retry
+  ---
+  duration_ms: 143.0623
+  type: 'test'
+  ...
+# Subtest: saved retry refuses an identical-byte replacement with a different file identity
+ok 360 - saved retry refuses an identical-byte replacement with a different file identity
+  ---
+  duration_ms: 177.3656
+  type: 'test'
+  ...
+# Subtest: publication failure before creating final refreshes intent for the newly verified temp on retry
+ok 361 - publication failure before creating final refreshes intent for the newly verified temp on retry
+  ---
+  duration_ms: 244.772
+  type: 'test'
+  ...
+# Subtest: downloaded PDF becomes usable only after durable ACK, without immediate disk readback
+ok 362 - downloaded PDF becomes usable only after durable ACK, without immediate disk readback
+  ---
+  duration_ms: 9.7606
+  type: 'test'
+  ...
+# Subtest: failed durable PDF write creates no usable Blob and remains retryable
+ok 363 - failed durable PDF write creates no usable Blob and remains retryable
+  ---
+  duration_ms: 4.188
+  type: 'test'
+  ...
+# Subtest: concurrent and repeated local PDF reads share one IPC transfer and one Blob URL
+ok 364 - concurrent and repeated local PDF reads share one IPC transfer and one Blob URL
+  ---
+  duration_ms: 2.7468
+  type: 'test'
+  ...
+# Subtest: replacing a PDF revokes its old URL and disposal rejects late reads without creating URLs
+ok 365 - replacing a PDF revokes its old URL and disposal rejects late reads without creating URLs
+  ---
+  duration_ms: 2.594
+  type: 'test'
+  ...
+# Subtest: metadata validation keeps unopened PDFs out of renderer memory and never downloads during active recovery
+ok 366 - metadata validation keeps unopened PDFs out of renderer memory and never downloads during active recovery
+  ---
+  duration_ms: 2.2633
+  type: 'test'
+  ...
+# Subtest: PDF validation fallback preserves compatibility and still requires a successful durable write
+ok 367 - PDF validation fallback preserves compatibility and still requires a successful durable write
+  ---
+  duration_ms: 1.2916
+  type: 'test'
+  ...
+# Subtest: damaged local PDF plus failed durable repair never becomes a ready material
+ok 368 - damaged local PDF plus failed durable repair never becomes a ready material
+  ---
+  duration_ms: 1.4791
+  type: 'test'
+  ...
+# Subtest: material preparation is bounded at two operations and waits for every durable completion
+ok 369 - material preparation is bounded at two operations and waits for every durable completion
+  ---
+  duration_ms: 4.2737
+  type: 'test'
+  ...
+# Subtest: failed material preparation drains in-flight work before rejecting and schedules no further downloads
+ok 370 - failed material preparation drains in-flight work before rejecting and schedules no further downloads
+  ---
+  duration_ms: 1.4983
+  type: 'test'
+  ...
+# Subtest: answer checkpoint and heartbeat do not redraw question text/dots; durability still locks editing
+ok 371 - answer checkpoint and heartbeat do not redraw question text/dots; durability still locks editing
+  ---
+  duration_ms: 4.3804
+  type: 'test'
+  ...
+# Subtest: dot navigation renders exactly once and retains answered/active styling without rebuilding nodes
+ok 372 - dot navigation renders exactly once and retains answered/active styling without rebuilding nodes
+  ---
+  duration_ms: 1.8894
+  type: 'test'
+  ...
+# Subtest: failed checkpoint still blocks answer editing and navigation until an explicit successful retry
+ok 373 - failed checkpoint still blocks answer editing and navigation until an explicit successful retry
+  ---
+  duration_ms: 1.9028
+  type: 'test'
+  ...
+# Subtest: lazy theory viewer ignores a stale response and preserves existing iframe state
+ok 374 - lazy theory viewer ignores a stale response and preserves existing iframe state
+  ---
+  duration_ms: 4.2068
+  type: 'test'
+  ...
+# Subtest: theory Start waits for the last authenticated material even though Blob URLs are lazy
+ok 375 - theory Start waits for the last authenticated material even though Blob URLs are lazy
+  ---
+  duration_ms: 2.3865
+  type: 'test'
+  ...
+# Subtest: project_stage_1: lazy regulation viewer is local-only and does not display late previous selections
+ok 376 - project_stage_1: lazy regulation viewer is local-only and does not display late previous selections
+  ---
+  duration_ms: 2.7388
+  type: 'test'
+  ...
+# Subtest: project_stage_1: failed or pending PDF preparation cannot consume a Start grant
+ok 377 - project_stage_1: failed or pending PDF preparation cannot consume a Start grant
+  ---
+  duration_ms: 2.1019
+  type: 'test'
+  ...
+# Subtest: project_stage_2: lazy regulation viewer is local-only and does not display late previous selections
+ok 378 - project_stage_2: lazy regulation viewer is local-only and does not display late previous selections
+  ---
+  duration_ms: 2.467
+  type: 'test'
+  ...
+# Subtest: project_stage_2: failed or pending PDF preparation cannot consume a Start grant
+ok 379 - project_stage_2: failed or pending PDF preparation cannot consume a Start grant
+  ---
+  duration_ms: 1.5308
+  type: 'test'
+  ...
+# Subtest: idle home polling performs one manifest read and leaves unchanged DOM intact
+ok 380 - idle home polling performs one manifest read and leaves unchanged DOM intact
+  ---
+  duration_ms: 1.7728
+  type: 'test'
+  ...
+# Subtest: new permission map controls all three stages independently
+ok 381 - new permission map controls all three stages independently
+  ---
+  duration_ms: 1.6255
+  type: 'test'
+  ...
+# Subtest: a present map is authoritative and a missing key never falls back
+ok 382 - a present map is authoritative and a missing key never falls back
+  ---
+  duration_ms: 1.054
+  type: 'test'
+  ...
+# Subtest: legacy single-stage fields remain the fallback only when the map is absent
+ok 383 - legacy single-stage fields remain the fallback only when the map is absent
+  ---
+  duration_ms: 0.3307
+  type: 'test'
+  ...
+# Subtest: admin, founder, and legacy all-stage users keep all-stage access
+ok 384 - admin, founder, and legacy all-stage users keep all-stage access
+  ---
+  duration_ms: 0.2128
+  type: 'test'
+  ...
+# Subtest: nested grant changes are detected for polling updates
+ok 385 - nested grant changes are detected for polling updates
+  ---
+  duration_ms: 0.3822
+  type: 'test'
+  ...
+# Subtest: expired grants are disabled with an explicit status message
+ok 386 - expired grants are disabled with an explicit status message
+  ---
+  duration_ms: 0.1776
+  type: 'test'
+  ...
+# Subtest: started access is spent but its attempt is still distinguishable from no permission
+ok 387 - started access is spent but its attempt is still distinguishable from no permission
+  ---
+  duration_ms: 0.1879
+  type: 'test'
+  ...
+# Subtest: each completed stage stays off and explains that a new admin grant is required
+ok 388 - each completed stage stays off and explains that a new admin grant is required
+  ---
+  duration_ms: 0.2004
+  type: 'test'
+  ...
+# Subtest: theory preparation is prepare-only and retains the grant for begin
+ok 389 - theory preparation is prepare-only and retains the grant for begin
+  ---
+  duration_ms: 15.1474
+  type: 'test'
+  ...
+# Subtest: multi-apartment prepares without starting, then visible Start begins and submits the same grant
+ok 390 - multi-apartment prepares without starting, then visible Start begins and submits the same grant
+  ---
+  duration_ms: 3.3566
+  type: 'test'
+  ...
+# Subtest: multi-apartment accepts an HTTP 201 all-zero evaluation without retrying
+ok 391 - multi-apartment accepts an HTTP 201 all-zero evaluation without retrying
+  ---
+  duration_ms: 1.3569
+  type: 'test'
+  ...
+# Subtest: multi-apartment retries only a null save failure and then accepts zero scores
+ok 392 - multi-apartment retries only a null save failure and then accepts zero scores
+  ---
+  duration_ms: 1.1349
+  type: 'test'
+  ...
+# Subtest: multi-apartment prevents concurrent finish submissions
+ok 393 - multi-apartment prevents concurrent finish submissions
+  ---
+  duration_ms: 1.2159
+  type: 'test'
+  ...
+# Subtest: multi-functional prepares without starting, then visible Start begins and submits the same grant
+ok 394 - multi-functional prepares without starting, then visible Start begins and submits the same grant
+  ---
+  duration_ms: 2.2526
+  type: 'test'
+  ...
+# Subtest: multi-functional accepts an HTTP 201 all-zero evaluation without retrying
+ok 395 - multi-functional accepts an HTTP 201 all-zero evaluation without retrying
+  ---
+  duration_ms: 1.1729
+  type: 'test'
+  ...
+# Subtest: multi-functional retries only a null save failure and then accepts zero scores
+ok 396 - multi-functional retries only a null save failure and then accepts zero scores
+  ---
+  duration_ms: 1.0654
+  type: 'test'
+  ...
+# Subtest: multi-functional prevents concurrent finish submissions
+ok 397 - multi-functional prevents concurrent finish submissions
+  ---
+  duration_ms: 1.5674
+  type: 'test'
+  ...
+# Subtest: legacy project flow skips the new start endpoint when map and grant ID are absent
+ok 398 - legacy project flow skips the new start endpoint when map and grant ID are absent
+  ---
+  duration_ms: 1.1009
+  type: 'test'
+  ...
+# Subtest: new-map admin with no grant ID still calls project start
+ok 399 - new-map admin with no grant ID still calls project start
+  ---
+  duration_ms: 0.9831
+  type: 'test'
+  ...
+# Subtest: project start failure leaves the prepared screen unlocked and retryable
+ok 400 - project start failure leaves the prepared screen unlocked and retryable
+  ---
+  duration_ms: 1.1261
+  type: 'test'
+  ...
+1..400
+# tests 400
+# suites 0
+# pass 400
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8263.4768

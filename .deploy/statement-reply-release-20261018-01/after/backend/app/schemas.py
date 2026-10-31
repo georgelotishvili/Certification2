@@ -659,6 +659,7 @@ class CertificateCreate(BaseModel):
     send_notification: bool = False
     notification_subject: str | None = None
     notification_body: str | None = None
+    request_id: str | None = None
 
 
 class CertificateUpdate(CamelModel):
@@ -672,6 +673,7 @@ class CertificateUpdate(CamelModel):
     send_notification: Optional[bool] = False
     notification_subject: Optional[str] = None
     notification_body: Optional[str] = None
+    request_id: Optional[str] = None
 
 
 class TransitionalDeadlineUpdateRequest(BaseModel):
@@ -690,6 +692,7 @@ class TransitionalDeadlineOut(BaseModel):
 class CertificateNotifyRequest(BaseModel):
     subject: str | None = None
     body: str | None = None
+    request_id: str | None = None
 
 
 class RegistryPersonOut(BaseModel):

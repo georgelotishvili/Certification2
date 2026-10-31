@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status, Header, UploadFile, File, Form, Path as FPath, Query
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -236,17 +237,29 @@ async def create_upload(
 ):
     user = _require_auth(db, authorization)
     _must_expert(db, user.id)
-    code = _gen_unique_code(db)
-    eu = ExpertUpload(
-        user_id=user.id,
-        unique_code=code,
-        status="draft",
-        building_function=building_function.strip(),
-        cadastral_code=cadastral_code.strip(),
-        project_address=project_address.strip(),
-    )
     _validate_file(expertise)
     _validate_file(project)
+    eu: ExpertUpload | None = None
+    code = ""
+    for _attempt in range(5):
+        code = _gen_unique_code(db)
+        candidate = ExpertUpload(
+            user_id=user.id,
+            unique_code=code,
+            status="draft",
+            building_function=building_function.strip(),
+            cadastral_code=cadastral_code.strip(),
+            project_address=project_address.strip(),
+        )
+        db.add(candidate)
+        try:
+            db.flush()
+            eu = candidate
+            break
+        except IntegrityError:
+            db.rollback()
+    if eu is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="????????? ????? ????????? ??? ????????, ?????? ???????")
     saved_paths: list[str] = []
     try:
         if expertise:

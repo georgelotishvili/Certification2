@@ -1,0 +1,860 @@
+{
+  "passed": true,
+  "version": "1.1.24",
+  "timestamp": "2026-10-30T15:47:41.634Z",
+  "tests": {
+    "passed": true,
+    "total": 400,
+    "failures": 0,
+    "skipped": 0
+  },
+  "smoke": {
+    "passed": true,
+    "appRoot": "C:\\Users\\george\\Desktop\\certification kode\\gipc.org.ge\\desktop_app\\dist\\win-unpacked\\resources\\app.asar",
+    "archiveHash": "61942bb680936383dee5e001838e7b9801b8b1ef469b1e10ab1a8bf0410759cb",
+    "electron": "28.3.3",
+    "temporary": "C:\\Users\\george\\AppData\\Local\\Temp\\gipc-electron-performance-hJU5An",
+    "blockedNetwork": 0,
+    "maximumMainGapMs": 23.429199993610382,
+    "realUsersTouched": false,
+    "result": {
+      "realPreload": true,
+      "realIPC": true,
+      "encryption": true,
+      "pdfBytes": 4194304,
+      "checkpoints": 25,
+      "checkpointMedianMs": 20.599999994039536,
+      "checkpointP95Ms": 22.900000005960464,
+      "ownerRejected": true,
+      "offlineCompletion": "pending",
+      "acknowledged": "acknowledged",
+      "realWebmBytes": 1592,
+      "savedVideoDecoded": true,
+      "bulkRecordingBytes": 33554432,
+      "cameraRequired": false,
+      "page": "საგამოცდო აპლიკაცია"
+    }
+  },
+  "uxSmoke": {
+    "passed": true,
+    "appRoot": "C:\\Users\\george\\Desktop\\certification kode\\gipc.org.ge\\desktop_app\\dist\\win-unpacked\\resources\\app.asar",
+    "archiveHash": "61942bb680936383dee5e001838e7b9801b8b1ef469b1e10ab1a8bf0410759cb",
+    "temporary": "C:\\Users\\george\\AppData\\Local\\Temp\\gipc-electron-busy-c5zpXa",
+    "reportPath": "C:\\Users\\george\\AppData\\Local\\Temp\\gipc-electron-busy-c5zpXa\\report.json",
+    "blockedNetwork": 0,
+    "realUsersTouched": false,
+    "actualCameraOrScreenAccess": false,
+    "results": [
+      {
+        "page": "theory",
+        "initial": {
+          "disabled": true,
+          "label": "მონაცემები იტვირთება…"
+        },
+        "gateVisual": {
+          "loaderZ": 1100,
+          "gateZ": 1000,
+          "display": "flex",
+          "topmost": true,
+          "spinner": "gipc-spin"
+        },
+        "settledVisual": {
+          "screenOpacity": 1,
+          "loaderOpacity": 1,
+          "spinnerColor": "rgb(255, 255, 255)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        "reducedMotion": true,
+        "rejectedGateRestored": true
+      },
+      {
+        "page": "multi-apartment",
+        "visual": {
+          "topmost": true,
+          "loaderZ": 1100,
+          "gateZ": 1000,
+          "label": "მოწმდება…"
+        },
+        "invalidGateRestored": true
+      },
+      {
+        "page": "multi-functional",
+        "visual": {
+          "topmost": true,
+          "loaderZ": 1100,
+          "gateZ": 1000,
+          "label": "მოწმდება…"
+        },
+        "invalidGateRestored": true
+      },
+      {
+        "page": "home",
+        "recovery": {
+          "hidden": false,
+          "text": "შენახული შედეგები მოწმდება…",
+          "busy": "true",
+          "spinner": true
+        },
+        "outbox": {
+          "disabled": true,
+          "label": "იგზავნება…",
+          "busy": "true",
+          "retries": 1
+        },
+        "navigation": {
+          "busy": "true",
+          "spinner": true,
+          "disabled": true
+        },
+        "logoutCancelledNavigation": true
+      }
+    ],
+    "screenshots": [
+      "C:\\Users\\george\\AppData\\Local\\Temp\\gipc-electron-busy-c5zpXa\\theory-gate-loading.png",
+      "C:\\Users\\george\\AppData\\Local\\Temp\\gipc-electron-busy-c5zpXa\\home-pending-send.png"
+    ]
+  },
+  "launcherSmoke": {
+    "passed": true,
+    "executable": "C:\\Users\\george\\Desktop\\certification kode\\gipc.org.ge\\desktop_app\\dist\\GIPC_exam_1.1.24.exe",
+    "exeSha256": "05926257A151D391DDBF6E57C8B50FBEC7D18657A43AE673744D14F34F53BAB5",
+    "sha256": "05926257A151D391DDBF6E57C8B50FBEC7D18657A43AE673744D14F34F53BAB5",
+    "temporary": "C:\\Users\\george\\AppData\\Local\\Temp\\GIPC_LauncherSmoke_b6ffa9c83c9c47d895b060693e6f8d02",
+    "errors": [],
+    "firstLauncherPid": 3612,
+    "visibleAfterMs": 95,
+    "duplicateLauncherPid": 8148,
+    "nativeWindow": {
+      "Handle": 461452,
+      "ClassName": "#32770",
+      "Text": "GIPC — იხსნება ",
+      "Visible": true
+    },
+    "nativeControls": [
+      {
+        "Handle": 592462,
+        "ClassName": "Button",
+        "Text": "",
+        "Visible": false
+      },
+      {
+        "Handle": 330352,
+        "ClassName": "Button",
+        "Text": "&Close",
+        "Visible": false
+      },
+      {
+        "Handle": 330354,
+        "ClassName": "Button",
+        "Text": "Cancel",
+        "Visible": false
+      },
+      {
+        "Handle": 395866,
+        "ClassName": "Static",
+        "Text": "",
+        "Visible": true
+      },
+      {
+        "Handle": 330378,
+        "ClassName": "Static",
+        "Text": "",
+        "Visible": false
+      },
+      {
+        "Handle": 526932,
+        "ClassName": "Static",
+        "Text": " ",
+        "Visible": true
+      },
+      {
+        "Handle": 854596,
+        "ClassName": "#32770",
+        "Text": "",
+        "Visible": true
+      },
+      {
+        "Handle": 592314,
+        "ClassName": "msctls_progress32",
+        "Text": "",
+        "Visible": true
+      },
+      {
+        "Handle": 330360,
+        "ClassName": "Static",
+        "Text": "საგამოცდო აპი იხსნება. გთხოვთ, დაელოდოთ.",
+        "Visible": true
+      },
+      {
+        "Handle": 461398,
+        "ClassName": "SysListView32",
+        "Text": "",
+        "Visible": false
+      },
+      {
+        "Handle": 461378,
+        "ClassName": "SysHeader32",
+        "Text": "",
+        "Visible": false
+      },
+      {
+        "Handle": 395910,
+        "ClassName": "Static",
+        "Text": "",
+        "Visible": true
+      },
+      {
+        "Handle": 854534,
+        "ClassName": "Button",
+        "Text": "Show &details",
+        "Visible": false
+      }
+    ],
+    "screenshotCaptured": true,
+    "screenshot": "C:\\Users\\george\\AppData\\Local\\Temp\\GIPC_LauncherSmoke_b6ffa9c83c9c47d895b060693e6f8d02\\launcher-native.png",
+    "windowDcScreenshot": "C:\\Users\\george\\AppData\\Local\\Temp\\GIPC_LauncherSmoke_b6ffa9c83c9c47d895b060693e6f8d02\\launcher-native-window-dc.png",
+    "pageScreenshot": "C:\\Users\\george\\AppData\\Local\\Temp\\GIPC_LauncherSmoke_b6ffa9c83c9c47d895b060693e6f8d02\\launcher-native-page.png",
+    "duplicateExitedWithoutChild": true,
+    "firstChild": {
+      "label": "first",
+      "pid": 3588,
+      "parentPid": 3612,
+      "startedAt": "2026-10-30T15:46:49.025Z",
+      "execPath": "C:\\Users\\george\\AppData\\Local\\Temp\\3LQ7gLa60K7omzT37Lsoqhnj1WL\\საგამოცდო აპლიკაცია.exe",
+      "electron": "28.3.3",
+      "node": "18.18.2",
+      "runAsNode": "1",
+      "appMainLoaded": false
+    },
+    "relaunchPid": 5544,
+    "relaunchWorked": true,
+    "reportPath": "C:\\Users\\george\\AppData\\Local\\Temp\\GIPC_LauncherSmoke_b6ffa9c83c9c47d895b060693e6f8d02\\report.json"
+  },
+  "pdfSmoke": {
+    "passed": true,
+    "appRoot": "C:\\Users\\george\\Desktop\\certification kode\\gipc.org.ge\\desktop_app\\dist\\win-unpacked\\resources\\app.asar",
+    "archiveHash": "61942bb680936383dee5e001838e7b9801b8b1ef469b1e10ab1a8bf0410759cb",
+    "guardHash": "1ed7ccdac81cbdc571d09fe1c8e73691406abe456b5ed9eef255770e5792b786",
+    "electron": "28.3.3",
+    "chrome": "120.0.6099.291",
+    "temporary": "C:\\Users\\george\\AppData\\Local\\Temp\\gipc-electron-pdf-controls-CjWtzo",
+    "blockedNetwork": 0,
+    "attemptedDownloads": 0,
+    "attemptedWindows": 0,
+    "realUsersTouched": false,
+    "productionMainLoaded": false,
+    "productionNetworkAllowed": false,
+    "cameraOrScreenCapture": false,
+    "visibleWindow": false,
+    "syntheticPdfPages": 2,
+    "persistentTestIntervals": 0,
+    "results": [
+      {
+        "name": "theory-regulation",
+        "source": "exam.js",
+        "selector": ".pdf-viewer",
+        "viewerUrl": "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html",
+        "realNativePdf": true,
+        "blocked": {
+          "download": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "more": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "print": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          }
+        },
+        "allowed": {
+          "zoomIn": {
+            "before": 1,
+            "after": 1.1
+          },
+          "zoomOut": {
+            "before": 1.1,
+            "after": 1
+          },
+          "pageChange": {
+            "page": 2,
+            "nativePageIndex": 1,
+            "pageCount": 2
+          },
+          "rotation": {
+            "before": 0,
+            "after": 3
+          },
+          "fit": {
+            "before": "fit-to-width",
+            "after": "fit-to-page",
+            "zoomBefore": 0.9690431519699813,
+            "zoomAfter": 0.8280871670702179
+          },
+          "sidebar": {
+            "before": true,
+            "after": false
+          },
+          "scroll": {
+            "before": {
+              "x": 0,
+              "y": 0
+            },
+            "after": {
+              "x": 0,
+              "y": 180
+            },
+            "nativePluginAcknowledged": true
+          }
+        }
+      },
+      {
+        "name": "apartment-project",
+        "source": "multi-apartment-eval.js",
+        "selector": ".project-pdf-viewer",
+        "viewerUrl": "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html",
+        "realNativePdf": true,
+        "blocked": {
+          "download": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "more": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "print": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          }
+        },
+        "allowed": {
+          "zoomIn": {
+            "before": 1,
+            "after": 1.1
+          },
+          "zoomOut": {
+            "before": 1.1,
+            "after": 1
+          },
+          "pageChange": {
+            "page": 2,
+            "nativePageIndex": 1,
+            "pageCount": 2
+          },
+          "rotation": {
+            "before": 0,
+            "after": 3
+          },
+          "fit": {
+            "before": "fit-to-width",
+            "after": "fit-to-page",
+            "zoomBefore": 0.9690431519699813,
+            "zoomAfter": 0.8280871670702179
+          },
+          "sidebar": {
+            "before": true,
+            "after": false
+          },
+          "scroll": {
+            "before": {
+              "x": 0,
+              "y": 0
+            },
+            "after": {
+              "x": 0,
+              "y": 180
+            },
+            "nativePluginAcknowledged": true
+          }
+        }
+      },
+      {
+        "name": "apartment-regulation",
+        "source": "multi-apartment-eval.js",
+        "selector": "#regulations-tab .pdf-viewer",
+        "viewerUrl": "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html",
+        "realNativePdf": true,
+        "blocked": {
+          "download": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "more": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "print": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          }
+        },
+        "allowed": {
+          "zoomIn": {
+            "before": 1,
+            "after": 1.1
+          },
+          "zoomOut": {
+            "before": 1.1,
+            "after": 1
+          },
+          "pageChange": {
+            "page": 2,
+            "nativePageIndex": 1,
+            "pageCount": 2
+          },
+          "rotation": {
+            "before": 0,
+            "after": 3
+          },
+          "fit": {
+            "before": "fit-to-width",
+            "after": "fit-to-page",
+            "zoomBefore": 0.9690431519699813,
+            "zoomAfter": 0.8280871670702179
+          },
+          "sidebar": {
+            "before": true,
+            "after": false
+          },
+          "scroll": {
+            "before": {
+              "x": 0,
+              "y": 0
+            },
+            "after": {
+              "x": 0,
+              "y": 180
+            },
+            "nativePluginAcknowledged": true
+          }
+        }
+      },
+      {
+        "name": "functional-project",
+        "source": "multi-functional-eval.js",
+        "selector": ".project-pdf-viewer",
+        "viewerUrl": "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html",
+        "realNativePdf": true,
+        "blocked": {
+          "download": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "more": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "print": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          }
+        },
+        "allowed": {
+          "zoomIn": {
+            "before": 1,
+            "after": 1.1
+          },
+          "zoomOut": {
+            "before": 1.1,
+            "after": 1
+          },
+          "pageChange": {
+            "page": 2,
+            "nativePageIndex": 1,
+            "pageCount": 2
+          },
+          "rotation": {
+            "before": 0,
+            "after": 3
+          },
+          "fit": {
+            "before": "fit-to-width",
+            "after": "fit-to-page",
+            "zoomBefore": 0.9690431519699813,
+            "zoomAfter": 0.8280871670702179
+          },
+          "sidebar": {
+            "before": true,
+            "after": false
+          },
+          "scroll": {
+            "before": {
+              "x": 0,
+              "y": 0
+            },
+            "after": {
+              "x": 0,
+              "y": 180
+            },
+            "nativePluginAcknowledged": true
+          }
+        }
+      },
+      {
+        "name": "functional-regulation",
+        "source": "multi-functional-eval.js",
+        "selector": "#regulations-tab .pdf-viewer",
+        "viewerUrl": "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html",
+        "realNativePdf": true,
+        "blocked": {
+          "download": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "more": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "print": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          }
+        },
+        "allowed": {
+          "zoomIn": {
+            "before": 1,
+            "after": 1.1
+          },
+          "zoomOut": {
+            "before": 1.1,
+            "after": 1
+          },
+          "pageChange": {
+            "page": 2,
+            "nativePageIndex": 1,
+            "pageCount": 2
+          },
+          "rotation": {
+            "before": 0,
+            "after": 3
+          },
+          "fit": {
+            "before": "fit-to-width",
+            "after": "fit-to-page",
+            "zoomBefore": 0.9690431519699813,
+            "zoomAfter": 0.8280871670702179
+          },
+          "sidebar": {
+            "before": true,
+            "after": false
+          },
+          "scroll": {
+            "before": {
+              "x": 0,
+              "y": 0
+            },
+            "after": {
+              "x": 0,
+              "y": 180
+            },
+            "nativePluginAcknowledged": true
+          }
+        }
+      },
+      {
+        "name": "iframe-recreation",
+        "realNativePdf": true,
+        "blocked": {
+          "download": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "more": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "print": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          }
+        }
+      },
+      {
+        "name": "host-reload",
+        "realNativePdf": true,
+        "blocked": {
+          "download": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "more": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          },
+          "print": {
+            "auxiliaryPrevented": true,
+            "bindingResetRestored": true,
+            "disabled": true,
+            "forcedPrevented": true,
+            "keyboardPrevented": [
+              true,
+              true
+            ],
+            "ordinaryPrevented": true,
+            "safetySentinelReached": 0
+          }
+        },
+        "allowed": {
+          "zoomIn": {
+            "before": 1,
+            "after": 1.1
+          },
+          "zoomOut": {
+            "before": 1.1,
+            "after": 1
+          },
+          "pageChange": {
+            "page": 2,
+            "nativePageIndex": 1,
+            "pageCount": 2
+          },
+          "rotation": {
+            "before": 0,
+            "after": 3
+          },
+          "fit": {
+            "before": "fit-to-width",
+            "after": "fit-to-page",
+            "zoomBefore": 0.9690431519699813,
+            "zoomAfter": 0.8280871670702179
+          },
+          "sidebar": {
+            "before": true,
+            "after": false
+          },
+          "scroll": {
+            "before": {
+              "x": 0,
+              "y": 0
+            },
+            "after": {
+              "x": 0,
+              "y": 180
+            },
+            "nativePluginAcknowledged": true
+          }
+        }
+      }
+    ]
+  },
+  "exe": {
+    "path": "C:\\Users\\george\\Desktop\\certification kode\\gipc.org.ge\\desktop_app\\dist\\GIPC_exam_1.1.24.exe",
+    "size": 69897678,
+    "sha256": "05926257a151d391ddbf6e57c8b50fbec7d18657a43ae673744d14f34f53bab5"
+  },
+  "archive": {
+    "path": "C:\\Users\\george\\Desktop\\certification kode\\gipc.org.ge\\desktop_app\\dist\\win-unpacked\\resources\\app.asar",
+    "sha256": "61942bb680936383dee5e001838e7b9801b8b1ef469b1e10ab1a8bf0410759cb",
+    "embeddedExeMatch": true
+  },
+  "matchedSources": {
+    "src/config/api.js": "61d61c1197ef9d2f3064960e64af7ba9f6672bce731e36753a6ba0d166dc7171",
+    "src/main/main.js": "cd7e1385487df54d5e0f3f5a193c85f382198497ff808e93f703bc3f7a52b1aa",
+    "src/main/offline-interruption.js": "031fa92afd5ac9919eee54d78d23139d7b9085571e95c411bd979f4f5e2f31ea",
+    "src/main/offline-protector.js": "01be92e2a12074dc4c8dcdbcb34fe73ee7a2e1aff42b13638ed26dd46c3c9660",
+    "src/main/offline-runtime.js": "bc4a0bd56dacec7442ea5f657b614ce16f1f0bcfbbcdc00bcb5ed9235821fec5",
+    "src/main/offline-service.js": "f1d3c4d38dfc3a357f1d8f0316d425b79ed4983c5b41d6e2e83150c891442d18",
+    "src/main/offline-store.js": "f9e34c355d5494ca0b1b9531339a2f4cb3b6f581c356fdd7a46b96918325f852",
+    "src/main/offline-worker.js": "16a9bf5aa2077339f50519300488cdf0a5621f3b84874904374571d29a25b735",
+    "src/main/pdf-controls.js": "1ed7ccdac81cbdc571d09fe1c8e73691406abe456b5ed9eef255770e5792b786",
+    "src/preload/preload.js": "a545c37fb872bf1c8d634aefb997897ab6a33798eb17af568de67c5f0181f272",
+    "src/renderer/exam.html": "5050737d288535ff72e9b272905f13fd8b02294c625f42d6be992352c6f424dc",
+    "src/renderer/exam.js": "1a5f42ca99cad7399bcffb0532faea4be73b2cec8ee602746da70ef427058f88",
+    "src/renderer/index.html": "0ae516df5f66228e6947f7e0cb5dbf0839241625ab02b19937ac8891dfaf3830",
+    "src/renderer/multi-apartment-eval.html": "6609cf63a189c0617cf9b5e45f09f68aa8a482f319688f6f0d3dcaad95e29e92",
+    "src/renderer/multi-apartment-eval.js": "8c86f518643b64d921d467d0886b3b7bd0a30dddee8702305adecb52a098380c",
+    "src/renderer/multi-functional-eval.html": "c926c9cb93885c68459e4e35d8669034a0fba07e0df38da4b032995cc122b287",
+    "src/renderer/multi-functional-eval.js": "bac0826c59ac3698d14c677f030d0f7ecc63a5681b159b767fb9083aff923e12",
+    "src/renderer/offline-exam.js": "4b89e3e15091ef210531deadc9122a2988eb335a4e9e8fa6879163f84bf836f3",
+    "src/renderer/offline-home.js": "fb1c65353d0c0e407d9de3f51c3c1fe6eb2ee6dfa00df05fafd52e553bd6c9ed",
+    "src/renderer/offline-project.js": "57ce9da55af4e4056047654e35fa65b2ca8e04a489cd304dbb6d40f01f233ca4",
+    "src/renderer/renderer.js": "b8878ce5ca5ff93bab7bb18697135ac28c94699ba2ec0a686124ed1cf4d5b362",
+    "src/renderer/startup.html": "6258587c79be52e254c244965bf3f3b2cece83ff82aa8ec53c2fb77000aeae43",
+    "src/services/api.js": "adfddaa8cbd45acc1085547c2904098fc963d73ecfb18cf36d5677d9137f9636",
+    "src/renderer/fonts/bpg_nino_mtavruli_bold.ttf": "daaf598286ceebe8ed7719e66b8f4ae4582f1cb8a4b7dd85dbeca38267f99284",
+    "src/renderer/fonts/dejavu-sans.ttf": "7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954",
+    "src/renderer/images/background.svg": "1f8c77da4345cc914c227b54daea4cf6cd8d948e8f9df12677717a8017cb2ae6",
+    "src/renderer/images/exam logo.svg": "c45e287c5e1d4846c9af8ea1df13e8288863943800075761406a4e7452eed185",
+    "src/renderer/images/logo1-2.ico": "6f4946c58bf357798a2485513f1c1e537b9fe8e525de566bc685dea5b1f9f7da",
+    "src/renderer/images/logo1.svg": "a63e09018e3bf1c1352d61f78262cbdd9b1d4eb5dd2e871050c6f955b81fa42a",
+    "src/renderer/images/logo2.svg": "f3690eb2a3b8ceebb73500191f802d8754d1f4be55cce652e20dbd9d4bbdadae",
+    "src/renderer/images/logo3.svg": "d77906a853f4b4b0693f0e441bf80f2fad7ae97b40195206430a9e6fd773e27d",
+    "src/renderer/images/project logo.svg": "b6e4f363dd678f7b0ebf5cc74b3db047aa2ccf8ae206a36c149a1362db9d73f2",
+    "src/renderer/styles/exam.css": "140ee7bd2958d096742d6d79d4619c27079f13b343faad062033299942663aed",
+    "src/renderer/styles/main.css": "09cd7a1f40b6ed7d38f2ab819eb9f4fff8c1791bde0cef0aee3c3af0f8163467",
+    "src/renderer/styles/offline.css": "bbf4224405036dd5137e7f23198acb7d09d41c7b6924fae69083c96154751cc7",
+    "src/renderer/styles/project-eval.css": "05ff8abaf0956aa4b17d00c7903d8ad333d1da64b9c686ee919d1f2b4de7eed2"
+  },
+  "sourceFileCount": 36,
+  "buildHashes": {
+    "build.cjs": "c17d90b99d4ed0b8f048dea606b6f4201b9bbea90029a269627a1ff5ce998067",
+    "build/portable-launcher.cjs": "e23f42893389c27d4d4df79bab518ce047e6aae2b41a2c410fcee7875a0e3f19"
+  },
+  "packageHashes": {
+    "package.json": "af321e138287d3c055e176ba411431bd85fa12c3a632db5499801c46036e0570",
+    "package-lock.json": "6b64815f93ca36948f1fbdfcb7dd8c94eaa2747474048486582ebcd8322b483b"
+  }
+}

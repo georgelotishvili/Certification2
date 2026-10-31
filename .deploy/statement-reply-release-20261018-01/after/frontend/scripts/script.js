@@ -466,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Optional modal controls for independent header module
   window.Auth.openModal = () => authModule.openModal?.();
   window.Auth.closeModal = () => authModule.closeModal?.();
+  window.Auth.clearSession = () => authModule.clearLocalSession?.();
   window.Auth.checkGeorgianName = (user) => authModule.checkAndEnforceGeorgianName?.(user);
 
   // contact scroll: no contact links in header
@@ -1009,6 +1010,10 @@ document.addEventListener('DOMContentLoaded', () => {
       try { localStorage.removeItem('auth_token'); } catch {}
       try { localStorage.removeItem(KEYS.CURRENT_USER); } catch {}
       removeGeorgianNameOverlay();
+      updateAuthUI();
+      updateBanner();
+      updateAdminLinkVisibility();
+      try { document.dispatchEvent(new CustomEvent('auth:logout')); } catch {}
     }
 
     function performLogout() {
@@ -1017,10 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
       let token = '';
       try { token = localStorage.getItem('auth_token') || ''; } catch {}
       clearLocalSession();
-      updateAuthUI();
-      updateBanner();
-      updateAdminLinkVisibility();
-      document.dispatchEvent(new CustomEvent('auth:logout'));
+
       notify('გასვლა შესრულებულია', 'success');
       closeModal();
       void revokeServerSession(token);
@@ -1506,6 +1508,7 @@ document.addEventListener('DOMContentLoaded', () => {
       generateUniqueCode,
       getUsedCodes,
       saveUsedCodes,
+      clearLocalSession,
       checkAndEnforceGeorgianName,
     };
   }

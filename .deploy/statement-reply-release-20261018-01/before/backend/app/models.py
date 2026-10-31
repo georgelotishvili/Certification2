@@ -422,12 +422,14 @@ class PlanningLetter(Base):
     attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     doc_number: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    statement_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="planning_letters")
 
 
 class Statement(Base):
     __tablename__ = "statements"
+    __table_args__ = ({"sqlite_autoincrement": True},)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -641,7 +643,7 @@ class ExpertUpload(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    unique_code: Mapped[str] = mapped_column(String(32), index=True)
+    unique_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft, submitted
     building_function: Mapped[str] = mapped_column(String(255), default="")
     cadastral_code: Mapped[str] = mapped_column(String(255), default="")

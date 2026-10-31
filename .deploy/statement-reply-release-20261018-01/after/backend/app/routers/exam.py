@@ -55,7 +55,14 @@ from ..services.offline_attempts import (
     register_theory_attempt, require_legacy_theory_submission, utc_response,
     theory_attempt, cancel_interrupted_attempt, require_uncancelled_attempt,
 )
-from ..services.offline_grading import grade_theory_snapshot
+from ..services.offline_grading import (
+    ensure_prepared_theory_block,
+    get_prepared_theory_material,
+    grade_theory_snapshot,
+    prepare_theory_content,
+    record_legacy_theory_answers,
+    theory_blocks,
+)
 from ..services.media_storage import (
     relative_storage_path,
     resolve_storage_path,
@@ -381,71 +388,29 @@ def get_block_questions(
     if not session.active or session.ends_at <= now:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
 
-    block = db.get(Block, block_id)
-    if not block or block.exam_id != session.exam_id or not block.enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Block not found")
-
-    # Load or generate selected map
-    selected_map: Dict[str, List[int]] = {}
-    if session.selected_map:
-        try:
-            selected_map = json.loads(session.selected_map)
-        except Exception:
-            selected_map = {}
-
-    key = str(block.id)
-    if key not in selected_map:
-        q_stmt = (
-            select(Question)
-            .where(Question.block_id == block.id, Question.enabled == True)  # noqa: E712
-            .order_by(Question.order_index)
-        )
-        all_questions = db.scalars(q_stmt).all()
-        if not all_questions:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No questions in block")
-        choose_n = min(block.qty, len(all_questions))
-        selected = random.sample(all_questions, k=choose_n)
-        # shuffle for maximum randomness (both selection and order)
-        random.shuffle(selected)
-        selected_map[key] = [q.id for q in selected]
-        session.selected_map = json.dumps(selected_map)
-        db.add(session)
+    b_snap, changed = ensure_prepared_theory_block(db, session, block_id)
+    if changed:
         db.commit()
-        db.refresh(session)
 
-    selected_ids = selected_map[key]
-    q_stmt2 = (
-        select(Question)
-        .where(Question.id.in_(selected_ids))
-    )
-    questions_unsorted = db.scalars(q_stmt2).all()
-    # Preserve the shuffled order from selected_ids
-    id_to_question = {q.id: q for q in questions_unsorted}
-    questions = [id_to_question[qid] for qid in selected_ids if qid in id_to_question]
-
-    # Eager load options without correctness flag
-    out_questions: List[QuestionOut] = []
-    for q in questions:
-        o_stmt = select(Option).where(Option.question_id == q.id)
-        opts = db.scalars(o_stmt).all()
-        out_questions.append(
-            QuestionOut(
-                id=q.id,
-                code=q.code,
-                text=q.text,
-                order_index=q.order_index,
-                options=[OptionOut(id=o.id, text=o.text) for o in opts],
-            )
+    out_questions = [
+        QuestionOut(
+            id=q["id"],
+            code=q.get("code") or "",
+            text=q.get("text") or "",
+            order_index=q.get("order_index") or 0,
+            options=[OptionOut(id=o["id"], text=o["text"]) for o in q.get("options", [])],
         )
+        for q in b_snap.get("questions", [])
+    ]
 
     return QuestionsResponse(
-        block_id=block.id,
-        block_title=block.title,
-        chapter_id=block.chapter_id,
-        subchapter_id=block.subchapter_id,
-        chapter_name=block.chapter.name if block.chapter else None,
-        subchapter_name=block.subchapter.name if block.subchapter else None,
-        qty=block.qty,
+        block_id=b_snap["id"],
+        block_title=b_snap.get("title") or "",
+        chapter_id=b_snap.get("chapter_id"),
+        subchapter_id=b_snap.get("subchapter_id"),
+        chapter_name=b_snap.get("chapter_name"),
+        subchapter_name=b_snap.get("subchapter_name"),
+        qty=b_snap.get("qty") if b_snap.get("qty") is not None else len(out_questions),
         questions=out_questions,
     )
 
@@ -461,6 +426,33 @@ def get_all_questions(
     now = datetime.utcnow()
     if session.finished_at or session.ends_at <= now:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
+
+    existing_prepared = get_prepared_theory_material(db, session.id)
+    if existing_prepared is not None:
+        snapshot = json.loads(existing_prepared.snapshot)
+        result_blocks: List[AllQuestionsBlockOut] = []
+        for b in sorted(theory_blocks(snapshot), key=lambda item: (item.get("order_index") or 0, item["id"])):
+            out_questions = [
+                QuestionOut(
+                    id=q["id"],
+                    code=q.get("code") or "",
+                    text=q.get("text") or "",
+                    order_index=q.get("order_index") or 0,
+                    options=[OptionOut(id=o["id"], text=o["text"]) for o in q.get("options", [])],
+                )
+                for q in b.get("questions", [])
+            ]
+            result_blocks.append(AllQuestionsBlockOut(
+                block_id=b["id"],
+                block_title=b.get("title") or "",
+                chapter_id=b.get("chapter_id"),
+                subchapter_id=b.get("subchapter_id"),
+                chapter_name=b.get("chapter_name"),
+                subchapter_name=b.get("subchapter_name"),
+                qty=b.get("qty") if b.get("qty") is not None else len(out_questions),
+                questions=out_questions,
+            ))
+        return AllQuestionsResponse(blocks=result_blocks)
 
     blocks_stmt = select(Block).where(
         Block.exam_id == session.exam_id, Block.enabled == True  # noqa: E712
@@ -531,10 +523,12 @@ def get_all_questions(
             questions=out_questions,
         ))
 
-    if map_changed:
+    if map_changed or not session.selected_map:
         session.selected_map = json.dumps(selected_map)
         db.add(session)
-        db.commit()
+        db.flush()
+    prepare_theory_content(db, session)
+    db.commit()
 
     return AllQuestionsResponse(blocks=result_blocks)
 
@@ -556,40 +550,12 @@ def submit_answers_batch(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
     ensure_submission_window(session)
 
-    if not session.selected_map:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Questions not initialized")
-    selected_map: Dict[str, List[int]] = json.loads(session.selected_map)
-    allowed_qids = {qid for ids in selected_map.values() for qid in ids}
-
-    saved_count = 0
-    for item in payload.answers:
-        if item.question_id not in allowed_qids:
-            continue
-
-        opt = db.get(Option, item.option_id)
-        if not opt or opt.question_id != item.question_id:
-            continue
-
-        is_correct = bool(getattr(opt, "is_correct", False))
-
-        existing_stmt = select(Answer).where(
-            Answer.session_id == session.id,
-            Answer.question_id == item.question_id,
-        )
-        existing = db.scalars(existing_stmt).first()
-        if existing:
-            existing.option_id = item.option_id
-            existing.is_correct = is_correct
-        else:
-            ans = Answer(
-                session_id=session.id,
-                question_id=item.question_id,
-                option_id=item.option_id,
-                is_correct=is_correct,
-            )
-            db.add(ans)
-        saved_count += 1
-
+    saved_count = record_legacy_theory_answers(
+        db,
+        session,
+        [(item.question_id, item.option_id) for item in payload.answers],
+        strict=False,
+    )
     db.commit()
     return BatchAnswersResponse(saved=saved_count)
 
@@ -629,42 +595,12 @@ def submit_answer(
     if not session.active or session.ends_at <= now:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session inactive or expired")
 
-    # Ensure question is part of selected set
-    if not session.selected_map:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Questions not initialized")
-    selected_map: Dict[str, List[int]] = json.loads(session.selected_map)
-    allowed_qids = {qid for ids in selected_map.values() for qid in ids}
-    if payload.question_id not in allowed_qids:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question not allowed in this session")
-
-    # Validate option belongs to question
-    opt = db.get(Option, payload.option_id)
-    if not opt:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Option not found")
-    if opt.question_id != payload.question_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Option does not belong to question")
-
-    is_correct = bool(getattr(opt, "is_correct", False))
-
-    # თუ უკვე არსებობს პასუხი ამ კითხვაზე - განვაახლოთ
-    existing_stmt = select(Answer).where(
-        Answer.session_id == session.id,
-        Answer.question_id == payload.question_id,
+    record_legacy_theory_answers(
+        db,
+        session,
+        [(payload.question_id, payload.option_id)],
+        strict=True,
     )
-    existing = db.scalars(existing_stmt).first()
-    if existing:
-        existing.option_id = payload.option_id
-        existing.is_correct = is_correct
-        db.commit()
-        return AnswerResponse(correct=False, saved=True)
-
-    ans = Answer(
-        session_id=session.id,
-        question_id=payload.question_id,
-        option_id=payload.option_id,
-        is_correct=is_correct,
-    )
-    db.add(ans)
     db.commit()
     return AnswerResponse(correct=False, saved=True)
 

@@ -1,0 +1,13 @@
+{
+  "status": "verified-read-only",
+  "version": "1.1.25",
+  "slot": 2,
+  "sha256": "1278b69f64aa2f4c4410274a2f070c8b5628914b46d11f6621bc8aa8fa67625f",
+  "size": 69898208,
+  "service_pid": "241969",
+  "old_binary_preserved": true,
+  "capabilities_verified": true,
+  "admin_only_download_preserved": true,
+  "authenticated_download_tested": false,
+  "reason": "No user session or real candidate used"
+}

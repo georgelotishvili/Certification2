@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status, Request
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -30,9 +30,12 @@ from ..rate_limiter import (
     verification_limiter,
 )
 from ..services import email_verification
+from ..services.exam_stage import STAGE_THEORY
 from ..services.exam_stage_grants import (
     exam_state_with_permissions,
     expire_unused_stage_permissions,
+    lock_user_stage_transitions,
+    require_stage_permission,
 )
 
 
@@ -40,8 +43,36 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _require_user(db: Session, authorization: Optional[str]) -> User:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    user_session = db.scalar(
+        select(UserSession).where(
+            UserSession.token == token,
+            UserSession.expires_at > datetime.utcnow(),
+        )
+    )
+    if not user_session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    user = db.get(User, user_session.user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
 @router.post("/code", response_model=AuthCodeResponse)
-def auth_with_code(payload: AuthCodeRequest, db: Session = Depends(get_db)):
+def auth_with_code(
+    payload: AuthCodeRequest,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    user = _require_user(db, authorization)
+    lock_user_stage_transitions(db, user)
+    stage_grant = require_stage_permission(db, user, STAGE_THEORY, mark_started=True)
+
     exam: Optional[Exam] = db.get(Exam, payload.exam_id)
     if not exam:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
@@ -72,21 +103,35 @@ def auth_with_code(payload: AuthCodeRequest, db: Session = Depends(get_db)):
     if active_session and (active_session.finished_at is None and active_session.ends_at > now):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Active session already exists for this code")
 
+    upd = db.execute(
+        update(ExamCode)
+        .where(
+            ExamCode.id == match.id,
+            ExamCode.used == False,      # noqa: E712
+            ExamCode.disabled == False,  # noqa: E712
+        )
+        .values(used=True, used_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if upd.rowcount != 1:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or used code")
+
     token = generate_session_token()
     ends_at = now + timedelta(minutes=exam.duration_minutes)
     session = ExamSession(
         exam_id=exam.id,
         code_id=match.id,
+        user_id=user.id,
+        stage_grant_id=stage_grant.id if stage_grant else None,
+        candidate_first_name=user.first_name,
+        candidate_last_name=user.last_name,
+        candidate_code=user.code,
         token=token,
         started_at=now,
         ends_at=ends_at,
         active=True,
     )
     db.add(session)
-
-    # Mark code as used (single-use)
-    match.used = True
-    match.used_at = now
 
     db.commit()
     db.refresh(session)
@@ -142,6 +187,9 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     
     # Create session in database
     try:
+        # Authentication accepts only expires_at > now. Prune rejected web
+        # tokens in the same transaction as the new token, never exam sessions.
+        db.execute(delete(UserSession).where(UserSession.expires_at <= now))
         session = UserSession(
             user_id=user.id,
             token=token,

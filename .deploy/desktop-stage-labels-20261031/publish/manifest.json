@@ -1,0 +1,47 @@
+{
+  "service": {
+    "pid": "241969",
+    "media_root": "/var/www/gipc/backend/app/media",
+    "capabilities": {
+      "http://127.0.0.1:8000": {
+        "protocol": 1,
+        "grading_snapshots": true,
+        "interruption_cancellation": true
+      },
+      "https://gipc.org.ge": {
+        "protocol": 1,
+        "grading_snapshots": true,
+        "interruption_cancellation": true
+      },
+      "https://www.gipc.org.ge": {
+        "protocol": 1,
+        "grading_snapshots": true,
+        "interruption_cancellation": true
+      }
+    }
+  },
+  "record": {
+    "id": 2,
+    "storage_path": "app_files/GIPC_exam_1.1.24.exe",
+    "filename": "GIPC_exam_1.1.24.exe",
+    "mime_type": "application/x-msdownload",
+    "size_bytes": 69897678,
+    "created_at": "2026-10-30 15:49:41.115334"
+  },
+  "old_metadata": [
+    998,
+    998,
+    420
+  ],
+  "artifact": {
+    "version": "1.1.25",
+    "new_name": "GIPC_exam_1.1.25.exe",
+    "new_size": 69898208,
+    "new_hash": "1278b69f64aa2f4c4410274a2f070c8b5628914b46d11f6621bc8aa8fa67625f",
+    "old_name": "GIPC_exam_1.1.24.exe",
+    "old_size": 69897678,
+    "old_hash": "05926257a151d391ddbf6e57c8b50fbec7d18657a43ae673744d14f34f53bab5",
+    "verification_sha256": "fcac14a4992c46eb211f503d92cb9434aaf75e0918e1b2fc005cc106d843f8ee",
+    "archive_sha256": "2f81687938d32ea2f80aabdbe2e3a1f0742aae8190e47267d246154ee0e07a1f"
+  }
+}

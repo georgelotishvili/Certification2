@@ -32,6 +32,11 @@ def run() -> None:
         if cert_cols and "is_transitional" not in cert_cols:
             conn.execute("ALTER TABLE certificates ADD COLUMN is_transitional BOOLEAN NOT NULL DEFAULT 0")
 
+        letter_cols = {row[1] for row in conn.execute("PRAGMA table_info(planning_letters)")}
+        if letter_cols and "statement_id" not in letter_cols:
+            conn.execute("ALTER TABLE planning_letters ADD COLUMN statement_id INTEGER")
+            conn.execute("CREATE INDEX IF NOT EXISTS ix_planning_letters_statement_id ON planning_letters (statement_id)")
+
 
 if __name__ == "__main__":
     run()

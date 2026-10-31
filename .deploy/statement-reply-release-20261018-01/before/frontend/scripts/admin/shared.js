@@ -179,7 +179,17 @@
     try {
       const clone = response.clone();
       const data = await clone.json();
-      detail = data?.detail || data?.message || '';
+      const rawDetail = data?.detail ?? data?.message ?? '';
+      if (Array.isArray(rawDetail)) {
+        detail = rawDetail
+          .map((item) => (typeof item === 'string' ? item : item?.msg || JSON.stringify(item)))
+          .filter(Boolean)
+          .join('; ');
+      } else if (rawDetail && typeof rawDetail === 'object') {
+        detail = rawDetail.msg || rawDetail.message || JSON.stringify(rawDetail);
+      } else {
+        detail = String(rawDetail || '');
+      }
     } catch {
       try {
         const text = await response.clone().text();

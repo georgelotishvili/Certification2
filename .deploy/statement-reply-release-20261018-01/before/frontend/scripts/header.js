@@ -1496,8 +1496,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261029-unified1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261029_unified1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261029-audit3';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261029_audit3';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -1532,6 +1532,7 @@
     const profilePage = isMyPage();
     markCurrentPageLinks();
     syncHeaderInitialAuthUI();
+    document.addEventListener('auth:logout', syncHeaderInitialAuthUI);
 
     const dispatchReady = () => {
       document.dispatchEvent(new CustomEvent('headerReady', { detail: { isProfilePage: profilePage } }));
@@ -1818,6 +1819,21 @@
                   credentials: 'include',
                 });
                 if (!resp.ok) {
+                  if (resp.status === 401) {
+                    try {
+                      if (typeof window.Auth?.clearSession === 'function') {
+                        window.Auth.clearSession();
+                      } else {
+                        localStorage.setItem('authLoggedIn', 'false');
+                        localStorage.removeItem('auth_token');
+                        localStorage.removeItem('currentUser');
+                        document.dispatchEvent(new CustomEvent('auth:logout'));
+                      }
+                    } catch {}
+                    alert('გთხოვთ გაიაროთ ავტორიზაცია');
+                    closeOverlay();
+                    return;
+                  }
                   alert('ფაილის ჩამოტვირთვა ვერ მოხერხდა');
                   return;
                 }
@@ -1867,6 +1883,16 @@
         });
         if (!response.ok) {
           if (response.status === 401) {
+            try {
+              if (typeof window.Auth?.clearSession === 'function') {
+                window.Auth.clearSession();
+              } else {
+                localStorage.setItem('authLoggedIn', 'false');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('currentUser');
+                document.dispatchEvent(new CustomEvent('auth:logout'));
+              }
+            } catch {}
             renderPlaceholder('გთხოვთ გაიაროთ ავტორიზაცია', 'statements-error');
             alert('გთხოვთ გაიაროთ ავტორიზაცია');
             closeOverlay();
@@ -1993,23 +2019,26 @@
       if (!incoming.length) return;
       const slotList = examSlotFiles[slotKey];
       let currentTotal = getAllExamSelectedFilesTotalSize();
+      const validAdditions = [];
       for (const file of incoming) {
         if (!/\.(zip|rar|pdf|jpg|jpeg|png|doc|docx)$/i.test(file.name || '')) {
           alert(`ფაილის ტიპი არ არის დაშვებული (${file.name}). დასაშვებია: PDF, JPG, JPEG, PNG, DOC, DOCX, ZIP, RAR`);
           slotDOM.input.value = '';
           return;
         }
-        if ((file.size || 0) + currentTotal > 100 * 1024 * 1024) {
-          alert('ფაილების ჯამური ზომა აღემატება 100MB-ს');
-          slotDOM.input.value = '';
-          return;
-        }
-        const exists = slotList.some((f) => f.name === file.name && f.size === file.size);
+        const exists = slotList.some((f) => f.name === file.name && f.size === file.size)
+          || validAdditions.some((f) => f.name === file.name && f.size === file.size);
         if (!exists) {
-          slotList.push(file);
+          if ((file.size || 0) + currentTotal > 100 * 1024 * 1024) {
+            alert('ფაილების ჯამური ზომა აღემატება 100MB-ს');
+            slotDOM.input.value = '';
+            return;
+          }
+          validAdditions.push(file);
           currentTotal += (file.size || 0);
         }
       }
+      slotList.push(...validAdditions);
       slotDOM.input.value = '';
       renderExamSlotFilesList(slotKey);
     }
@@ -2175,6 +2204,21 @@
           credentials: 'include',
         });
         if (!response.ok) {
+          if (response.status === 401) {
+            try {
+              if (typeof window.Auth?.clearSession === 'function') {
+                window.Auth.clearSession();
+              } else {
+                localStorage.setItem('authLoggedIn', 'false');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('currentUser');
+                document.dispatchEvent(new CustomEvent('auth:logout'));
+              }
+            } catch {}
+            alert('გთხოვთ გაიაროთ ავტორიზაცია');
+            closeOverlay();
+            return;
+          }
           let detail = '';
           try {
             const json = await response.clone().json();
@@ -2243,6 +2287,21 @@
           credentials: 'include',
         });
         if (!response.ok) {
+          if (response.status === 401) {
+            try {
+              if (typeof window.Auth?.clearSession === 'function') {
+                window.Auth.clearSession();
+              } else {
+                localStorage.setItem('authLoggedIn', 'false');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('currentUser');
+                document.dispatchEvent(new CustomEvent('auth:logout'));
+              }
+            } catch {}
+            alert('გთხოვთ გაიაროთ ავტორიზაცია');
+            closeOverlay();
+            return;
+          }
           let detail = '';
           try {
             const json = await response.clone().json();

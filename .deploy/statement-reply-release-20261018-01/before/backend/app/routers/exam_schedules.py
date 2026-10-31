@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from ..database import get_db
 from ..models import Certificate, ExamSchedule, PlanningLetter, User
 from ..schemas import ExamScheduleCreate, ExamScheduleOut, ExamSchedulesResponse
@@ -14,10 +14,29 @@ from ..services.candidate_status import (
     reconcile_user_candidate_status_after_delete,
 )
 from ..services.media_storage import delete_storage_file
-from .admin import _require_admin
+from .admin import _require_admin, _today_in_tbilisi
 
 
 router = APIRouter()
+
+
+def _validate_exam_schedule_date(exam_date: date, existing_date: date | None = None) -> None:
+    if exam_date.weekday() >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="გამოცდის დანიშვნა შაბათ-კვირას დაუშვებელია. გთხოვთ აირჩიოთ სამუშაო დღე (ორშაბათი–პარასკევი).",
+        )
+    if existing_date is not None and exam_date == existing_date:
+        return
+    min_exam_day = _today_in_tbilisi() + timedelta(days=8)
+    if exam_date < min_exam_day:
+        first_workday = min_exam_day
+        while first_workday.weekday() >= 5:
+            first_workday += timedelta(days=1)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"გამოცდის დანიშვნა შესაძლებელია წერილის გაგზავნის დღიდან მინიმუმ მე-8 დღეს ({first_workday.strftime('%d-%m-%Y')}-დან).",
+        )
 
 
 def _require_user(db: Session, user_id: int) -> User:
@@ -56,6 +75,7 @@ def create_exam_schedule(
 ):
     _require_admin(db, authorization)
     user = _require_user(db, user_id)
+    _validate_exam_schedule_date(payload.exam_date)
     has_cert = db.scalar(select(Certificate.id).where(Certificate.user_id == user_id)) is not None
     req_cat = get_user_latest_requested_category(db, user_id) if not has_cert else None
     entry = ExamSchedule(user_id=user_id, exam_date=payload.exam_date, period=payload.period)
@@ -104,6 +124,7 @@ def update_exam_schedule(
     ))
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam schedule not found")
+    _validate_exam_schedule_date(payload.exam_date, existing_date=entry.exam_date)
     entry.exam_date = payload.exam_date
     entry.period = payload.period
     try:
