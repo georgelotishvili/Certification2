@@ -58,7 +58,7 @@ def _name_sort_key(value: str) -> tuple:
             continue
         if char in _GEORGIAN_ORDER:
             result.append((1, _GEORGIAN_ORDER[char]))
-        elif category[0] == "N":
+        elif category[0] in ("N"):
             result.append((0, ord(char)))
         else:
             result.append((2, ord(char)))
@@ -158,10 +158,13 @@ def list_certified_persons_page(
     query = _normalize_text(q)
     if query:
         certificate_code = func.coalesce(func.nullif(Certificate.unique_code, ""), User.code, "")
-        conditions.append(or_(
+        search_clauses = [
             func.instr(func.registry_normalize(full_name), query) > 0,
             func.instr(func.registry_normalize(certificate_code), query) > 0,
-        ))
+        ]
+        if len(query) == 11 and query.isascii() and query.isdigit():
+            search_clauses.append(User.personal_id == query)
+        conditions.append(or_(*search_clauses))
     # No checked boxes or all three include even unknown/legacy levels.
     # Partial selections form a union, as with the original browser filters.
     if 0 < len(selected) < len(QUALIFICATION_ALIASES):
@@ -190,4 +193,3 @@ def list_certified_persons_page(
         items=_serialize_rows(rows, request, canonical_levels=True), total=total,
         filtered_total=filtered_total, offset=offset, limit=limit,
     )
-

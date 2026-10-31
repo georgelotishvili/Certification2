@@ -112,6 +112,7 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
     "ჩვენს შესახებ": frozenset(["60098254270038b3", "a417b2e6079fb740"]),
     "სერტიფიცირება": frozenset([
         "53889f316e914934",
+        "79dceac0558d0ff8",
         "92f7920d4b45b24f",
         "989f160c1cdec4b4",
         "a1adebcbcbda6714",
@@ -119,10 +120,13 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
         "ab32d667de33898a",
         "b679f77565ac3143",
         "b8c10a7fc6e8008f",
+        "debf142d16f53e6f",
     ]),
     "გამოცდა": frozenset([
         "003631669368aa45",
         "082d58ffabbf946b",
+        "2c5e968dfeac0183",
+        "56280cf0bb66ba91",
         "736dd4d1e94487d7",
         "989f160c1cdec4b4",
         "a417b2e6079fb740",
@@ -138,6 +142,8 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
     "საჯარო რეესტრი": frozenset([
         "01198574571bebab",
         "122e49bcd5251446",
+        "2a0be01b4bf050b1",
+        "c8a50e052679e1a1",
         "d07f2a77240f5c5c",
         "e81dbece7be73d1d",
     ]),
@@ -147,7 +153,9 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
         "ee6a95135247dd4f",
     ]),
     "კონფიდენციალურობა და კონტაქტი": frozenset([
+        "3096fc3e4df47047",
         "9f9e8267d3090a48",
+        "c8a50e052679e1a1",
         "e81dbece7be73d1d",
         "fcc5eb7433ea8270",
     ]),

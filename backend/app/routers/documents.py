@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import re
 import unicodedata
 import uuid
 from pathlib import Path
@@ -281,6 +283,45 @@ def _doc_matches_item(doc: SiteDocument, code: str, source_docx: str, default_ti
     return bool(code and code in head)
 
 
+KNOWN_FACTORY_DOC_HTML_HASHES: frozenset[str] = frozenset(
+    {
+        # Legacy bundled / doc 3 factory hashes (normalized whitespace):
+        "98bec4a807e6aa26",  # GIPC-SCH-001 (legacy/doc 3)
+        "74a21e3c0043e5c3",  # GIPC-POL-001 (legacy/doc 3)
+        "8a2dda3397ccab1c",  # GIPC-POL-002 (legacy/doc 3)
+        "e5af1b5cf6975dd1",  # GIPC-PRO-003 (legacy/doc 3)
+        "486f34e87348ba61",  # GIPC-FRM-001 (legacy/doc 3)
+        "e578b5d8fa67a859",  # GIPC-CON-001 (legacy/doc 3)
+        # Legacy bundled / doc 3 factory hashes (raw):
+        "01e9fd9c0ee97b6d",
+        "ba6612c8a634bd94",
+        "dae93f7201246d74",
+        "53a161ce04844721",
+        "7a04c4fbe012c12f",
+        "9bbf285838c91132",
+        # Current doc 4 factory hashes (normalized whitespace):
+        "129950cf874e1458",  # GIPC-SCH-001 (doc 4)
+        "66bcc2376c10da12",  # GIPC-POL-001 (doc 4)
+        "50cdaae12a0b8c23",  # GIPC-POL-002 (doc 4)
+        "c04798ee100e443d",  # GIPC-PRO-003 (doc 4)
+        "8473b3fb5f20cd96",  # GIPC-FRM-001 (doc 4)
+        "e970d8b5a891d944",  # GIPC-CON-001 (doc 4)
+        # Current doc 4 factory hashes (raw):
+        "cc8e7769bbcd4d8e",
+        "cf133ab79250a926",
+        "942f4061ba27148d",
+        "04565d35fe38819c",
+        "4b48fd8daf723a84",
+        "69d063d51bf7e21b",
+    }
+)
+
+
+def _doc_html_hash(html: str | None) -> str:
+    cleaned = re.sub(r"\s+", " ", (html or "").strip())
+    return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:16]
+
+
 def _ensure_default_contracts(db: Session) -> None:
     """Ensure the 5 public official documents and the 6 standard/transitional contracts are seeded in site_documents."""
     new_files_created: list[str] = []
@@ -309,6 +350,7 @@ def _ensure_default_contracts(db: Session) -> None:
             expected_html = _get_bundled_html(md_path, strip_annex=bool(item.get("strip_annex_1")))
 
             matched_content = (matched.content or "").strip() if matched is not None else ""
+            expected_clean = (expected_html or "").strip()
             needs_refresh = (
                 matched is None
                 or not matched_content
@@ -322,6 +364,11 @@ def _ensure_default_contracts(db: Session) -> None:
                         "IMP-2026-001" in matched_content
                         or "შიდა მოხმარების" in matched_content
                     )
+                )
+                or (
+                    bool(expected_clean)
+                    and matched_content != expected_clean
+                    and _doc_html_hash(matched_content) in KNOWN_FACTORY_DOC_HTML_HASHES
                 )
             )
             if not needs_refresh:
@@ -412,6 +459,7 @@ def _ensure_default_contracts(db: Session) -> None:
             target_order = int(slot.get("order_index") or 6)
 
             slot_content = (existing_slot_doc.content or "").strip() if existing_slot_doc is not None else ""
+            expected_slot_clean = (expected_html or "").strip()
             slot_needs_refresh = (
                 existing_slot_doc is None
                 or not slot_content
@@ -422,6 +470,11 @@ def _ensure_default_contracts(db: Session) -> None:
                 or "წარმომადგენელი (დირექტორი / უფლებამოსილი პირი)" not in slot_content
                 or "საგადახდო ქვითრის გამოგზავნიდან" not in slot_content
                 or any(leg in slot_content for leg in ("GIPC-CON-002", "GIPC-CON-003", "GIPC-CON-004", "GIPC-CON-005", "GIPC-CON-006", "საგამოცდო მომსახურების ხელშეკრულება"))
+                or (
+                    bool(expected_slot_clean)
+                    and slot_content != expected_slot_clean
+                    and _doc_html_hash(slot_content) in KNOWN_FACTORY_DOC_HTML_HASHES
+                )
             )
             if not slot_needs_refresh and existing_slot_doc is not None:
                 if (existing_slot_doc.order_index or 0) != target_order:

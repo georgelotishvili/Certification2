@@ -104,9 +104,13 @@ class RegistryPaginationTests(unittest.TestCase):
 
     def test_search_only_exposes_public_certificate_code_not_private_fields(self):
         self.add_person(certificate_code="VISIBLE-CODE", email="PRIVATE-MAIL@example.invalid", phone="PRIVATE-PHONE")
-        for query in ("PRIVATE", "0000000001"):
+        for query in ("PRIVATE", "0000000001", "0000000000"):
             self.assertEqual(self.get_page(q=query)["filtered_total"], 0)
         self.assertEqual(self.get_page(q="VISIBLE-CODE")["filtered_total"], 1)
+        exact_pid_page = self.get_page(q="00000000001")
+        self.assertEqual(exact_pid_page["filtered_total"], 1)
+        self.assertNotIn("personal_id", exact_pid_page["items"][0])
+        self.assertNotIn("00000000001", str(exact_pid_page))
 
     def test_qualification_synonyms_unions_and_all_or_none_preserve_legacy_entries(self):
         ids = {}
@@ -201,7 +205,7 @@ class RegistryPaginationTests(unittest.TestCase):
             for limit in (1, 50):
                 statements.clear()
                 self.get_page(limit=limit, q="Person")
-                self.assertEqual(len(statements), 3)
+                self.assertEqual(len(statements), 4)
                 self.assertFalse(any("password_hash" in sql or "personal_id" in sql for sql in statements))
         finally:
             event.remove(self.engine, "before_cursor_execute", listener)
