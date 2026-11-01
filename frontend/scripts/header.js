@@ -159,9 +159,14 @@
     return `${SITE_DOCS_CACHE_PREFIX}${uid}`;
   }
 
+  let inFlightSiteDocsPromise = null;
+  let inFlightSiteDocsKey = null;
+
   function invalidateSiteDocumentsCache() {
     cachedDocuments = null;
     cachedDocumentsKey = null;
+    inFlightSiteDocsPromise = null;
+    inFlightSiteDocsKey = null;
     try {
       Object.keys(sessionStorage).forEach((k) => {
         if (k.startsWith('gipc_site_docs_')) sessionStorage.removeItem(k);
@@ -171,7 +176,11 @@
 
   document.addEventListener('auth:login', invalidateSiteDocumentsCache);
   document.addEventListener('auth:logout', invalidateSiteDocumentsCache);
-  document.addEventListener('user:refreshed', invalidateSiteDocumentsCache);
+  document.addEventListener('user:refreshed', () => {
+    if (cachedDocumentsKey && getSiteDocsCacheKey() !== cachedDocumentsKey) {
+      invalidateSiteDocumentsCache();
+    }
+  });
 
   async function fetchSiteDocuments(forceRefresh = false) {
     const cacheKey = getSiteDocsCacheKey();
@@ -197,28 +206,40 @@
         }
       } catch {}
     }
-    try {
-      const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/documents`, {
-        cache: forceRefresh ? 'no-cache' : 'default',
-        headers: { ...getOptionalAuthHeaders() },
-      });
-      if (!response.ok) return [];
-      const data = await response.json();
-      const items = Array.isArray(data.items) ? data.items : [];
-      cachedDocuments = items.map((d) => ({
-        ...d,
-        content: populateContractHtmlForCurrentUser(d.content || '', d.contract_type),
-      }));
-      cachedDocumentsKey = cacheKey;
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(cachedDocuments));
-      } catch {}
-      return cachedDocuments;
-    } catch (err) {
-      console.error('Failed to fetch site documents:', err);
-      return [];
+    if (!forceRefresh && inFlightSiteDocsPromise && inFlightSiteDocsKey === cacheKey) {
+      return inFlightSiteDocsPromise;
     }
+    inFlightSiteDocsKey = cacheKey;
+    inFlightSiteDocsPromise = (async () => {
+      try {
+        const API_BASE = getApiBase();
+        const response = await fetch(`${API_BASE}/documents`, {
+          cache: forceRefresh ? 'no-cache' : 'default',
+          headers: { ...getOptionalAuthHeaders() },
+        });
+        if (!response.ok) return [];
+        const data = await response.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        cachedDocuments = items.map((d) => ({
+          ...d,
+          content: populateContractHtmlForCurrentUser(d.content || '', d.contract_type),
+        }));
+        cachedDocumentsKey = cacheKey;
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify(cachedDocuments));
+        } catch {}
+        return cachedDocuments;
+      } catch (err) {
+        console.error('Failed to fetch site documents:', err);
+        return [];
+      } finally {
+        if (inFlightSiteDocsKey === cacheKey) {
+          inFlightSiteDocsPromise = null;
+          inFlightSiteDocsKey = null;
+        }
+      }
+    })();
+    return inFlightSiteDocsPromise;
   }
 
   function escapeHtml(str) {
@@ -348,7 +369,7 @@
   async function populateInfoDropdowns() {
     try {
       const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/guide/documents`, { cache: 'no-cache' });
+      const response = await fetch(`${API_BASE}/guide/documents?summary=1`, { cache: 'no-cache' });
       if (!response.ok) return;
       const data = await response.json();
       const items = Array.isArray(data?.items)
@@ -524,7 +545,10 @@
         script.dataset.loaded = 'true';
         resolve();
       };
-      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      script.onerror = () => {
+        try { script.remove(); } catch {}
+        reject(new Error(`Failed to load ${src}`));
+      };
       document.head.appendChild(script);
     });
   }

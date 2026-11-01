@@ -126,20 +126,15 @@
       if (DOM.errorBox) DOM.errorBox.hidden = true;
 
       try {
-        let docs = [];
-        if (window.SiteDocuments?.fetchSiteDocuments) {
-          docs = await window.SiteDocuments.fetchSiteDocuments(true);
-        } else {
-          const headers = {};
-          try {
-            const token = window.Auth?.getToken?.() || localStorage.getItem('access_token');
-            if (token) headers.Authorization = `Bearer ${token}`;
-          } catch {}
-          const response = await fetch(`${getApiBase()}/documents`, { cache: 'no-cache', headers });
-          if (!response.ok) throw new Error('Failed to load documents');
-          const data = await response.json();
-          docs = data.items || [];
-        }
+        const headers = {};
+        try {
+          const token = window.Auth?.getToken?.() || localStorage.getItem('auth_token') || localStorage.getItem('access_token');
+          if (token) headers.Authorization = `Bearer ${token}`;
+        } catch {}
+        const response = await fetch(`${getApiBase()}/documents`, { cache: 'no-cache', headers });
+        if (!response.ok) throw new Error('Failed to load documents');
+        const data = await response.json();
+        const docs = data.items || [];
         allDocuments = Array.isArray(docs) ? docs : [];
         applyFilter();
 

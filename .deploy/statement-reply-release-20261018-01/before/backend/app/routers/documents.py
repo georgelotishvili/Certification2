@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import re
 import unicodedata
 import uuid
 from pathlib import Path
@@ -281,8 +283,49 @@ def _doc_matches_item(doc: SiteDocument, code: str, source_docx: str, default_ti
     return bool(code and code in head)
 
 
+KNOWN_FACTORY_DOC_HTML_HASHES: frozenset[str] = frozenset(
+    {
+        # Legacy bundled / doc 3 factory hashes (normalized whitespace):
+        "98bec4a807e6aa26",  # GIPC-SCH-001 (legacy/doc 3)
+        "74a21e3c0043e5c3",  # GIPC-POL-001 (legacy/doc 3)
+        "8a2dda3397ccab1c",  # GIPC-POL-002 (legacy/doc 3)
+        "e5af1b5cf6975dd1",  # GIPC-PRO-003 (legacy/doc 3)
+        "486f34e87348ba61",  # GIPC-FRM-001 (legacy/doc 3)
+        "e578b5d8fa67a859",  # GIPC-CON-001 (legacy/doc 3)
+        # Legacy bundled / doc 3 factory hashes (raw):
+        "01e9fd9c0ee97b6d",
+        "ba6612c8a634bd94",
+        "dae93f7201246d74",
+        "53a161ce04844721",
+        "7a04c4fbe012c12f",
+        "9bbf285838c91132",
+        # Current doc 4 factory hashes (normalized whitespace):
+        "129950cf874e1458",  # GIPC-SCH-001 (doc 4)
+        "66bcc2376c10da12",  # GIPC-POL-001 (doc 4)
+        "50cdaae12a0b8c23",  # GIPC-POL-002 (doc 4)
+        "c04798ee100e443d",  # GIPC-PRO-003 (doc 4)
+        "8473b3fb5f20cd96",  # GIPC-FRM-001 (doc 4)
+        "e970d8b5a891d944",  # GIPC-CON-001 (doc 4)
+        # Current doc 4 factory hashes (raw):
+        "cc8e7769bbcd4d8e",
+        "cf133ab79250a926",
+        "942f4061ba27148d",
+        "04565d35fe38819c",
+        "4b48fd8daf723a84",
+        "69d063d51bf7e21b",
+    }
+)
+
+
+def _doc_html_hash(html: str | None) -> str:
+    cleaned = re.sub(r"\s+", " ", (html or "").strip())
+    return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:16]
+
+
 def _ensure_default_contracts(db: Session) -> None:
     """Ensure the 5 public official documents and the 6 standard/transitional contracts are seeded in site_documents."""
+    new_files_created: list[str] = []
+    old_files_to_delete: list[str] = []
     try:
         existing_docs = db.scalars(select(SiteDocument)).all()
         changed = False
@@ -307,18 +350,25 @@ def _ensure_default_contracts(db: Session) -> None:
             expected_html = _get_bundled_html(md_path, strip_annex=bool(item.get("strip_annex_1")))
 
             matched_content = (matched.content or "").strip() if matched is not None else ""
+            expected_clean = (expected_html or "").strip()
             needs_refresh = (
                 matched is None
                 or not matched_content
                 or not _stored_file_exists(matched.file_path)
                 or "<p>– " in matched_content
                 or "იოსებიძ" in matched_content
+                or (code == "GIPC-SCH-001" and "საგადახდო ქვითრის დართვით" not in matched_content)
                 or (
                     item.get("strip_annex_1")
                     and (
                         "IMP-2026-001" in matched_content
                         or "შიდა მოხმარების" in matched_content
                     )
+                )
+                or (
+                    bool(expected_clean)
+                    and matched_content != expected_clean
+                    and _doc_html_hash(matched_content) in KNOWN_FACTORY_DOC_HTML_HASHES
                 )
             )
             if not needs_refresh:
@@ -348,6 +398,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 docx_bytes = markdown_to_docx_bytes(md_text)
 
             file_path, resolved_file_path = _new_document_storage_path(".docx")
+            new_files_created.append(file_path)
             resolved_file_path.write_bytes(docx_bytes)
             filename = source_docx
             file_size_bytes = len(docx_bytes)
@@ -362,7 +413,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 matched.file_size_bytes = file_size_bytes
                 db.add(matched)
                 if old_file and old_file != file_path:
-                    _delete_document_file(old_file)
+                    old_files_to_delete.append(old_file)
             else:
                 doc = SiteDocument(
                     title=default_title,
@@ -397,7 +448,7 @@ def _ensure_default_contracts(db: Session) -> None:
             if obsolete_doc in existing_docs:
                 existing_docs.remove(obsolete_doc)
             if old_fp:
-                _delete_document_file(old_fp)
+                old_files_to_delete.append(old_fp)
             changed = True
 
         for key, slot in CONTRACT_SLOTS.items():
@@ -408,13 +459,22 @@ def _ensure_default_contracts(db: Session) -> None:
             target_order = int(slot.get("order_index") or 6)
 
             slot_content = (existing_slot_doc.content or "").strip() if existing_slot_doc is not None else ""
+            expected_slot_clean = (expected_html or "").strip()
             slot_needs_refresh = (
                 existing_slot_doc is None
                 or not slot_content
                 or not _stored_file_exists(existing_slot_doc.file_path)
                 or "<p>– " in slot_content
                 or "იოსებიძ" in slot_content
+                or "☐" in slot_content
+                or "წარმომადგენელი (დირექტორი / უფლებამოსილი პირი)" not in slot_content
+                or "საგადახდო ქვითრის გამოგზავნიდან" not in slot_content
                 or any(leg in slot_content for leg in ("GIPC-CON-002", "GIPC-CON-003", "GIPC-CON-004", "GIPC-CON-005", "GIPC-CON-006", "საგამოცდო მომსახურების ხელშეკრულება"))
+                or (
+                    bool(expected_slot_clean)
+                    and slot_content != expected_slot_clean
+                    and _doc_html_hash(slot_content) in KNOWN_FACTORY_DOC_HTML_HASHES
+                )
             )
             if not slot_needs_refresh and existing_slot_doc is not None:
                 if (existing_slot_doc.order_index or 0) != target_order:
@@ -449,6 +509,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 docx_bytes = markdown_to_docx_bytes(md_text)
 
             file_path, resolved_file_path = _new_document_storage_path(".docx")
+            new_files_created.append(file_path)
             resolved_file_path.write_bytes(docx_bytes)
             filename = slot["source_docx"]
             file_size_bytes = len(docx_bytes)
@@ -464,7 +525,7 @@ def _ensure_default_contracts(db: Session) -> None:
                 matched.file_size_bytes = file_size_bytes
                 db.add(matched)
                 if old_file and old_file != file_path:
-                    _delete_document_file(old_file)
+                    old_files_to_delete.append(old_file)
             else:
                 doc = SiteDocument(
                     title=slot["default_title"],
@@ -480,11 +541,21 @@ def _ensure_default_contracts(db: Session) -> None:
 
         if changed:
             db.commit()
-    except Exception:
+    except BaseException as exc:
         try:
             db.rollback()
         except Exception:
             pass
+        for new_file in new_files_created:
+            _delete_document_file(new_file)
+        if not isinstance(exc, Exception):
+            raise
+        return
+
+    # Do not let an interruption during old-file cleanup remove committed new
+    # files. Keep this phase outside the transaction's rollback/cleanup handler.
+    for old_file in old_files_to_delete:
+        _delete_document_file(old_file)
 
 
 def _is_admin_user(user: User | None) -> bool:
@@ -516,19 +587,18 @@ def _resolve_target_user(
     token: str | None = None,
     user_id: int | None = None,
 ) -> User | None:
+    if user_id is None:
+        return None
     auth_header = authorization
     if not auth_header and token:
         clean_tok = token.strip()
         auth_header = clean_tok if clean_tok.lower().startswith("bearer ") else f"Bearer {clean_tok}"
 
     caller = _get_user_from_token(db, auth_header)
-    target: User | None = None
-    if user_id is not None:
-        if caller and (_is_admin_user(caller) or caller.id == user_id):
-            target = db.get(User, user_id)
-    else:
-        target = caller
-    return _attach_user_application_context(db, target)
+    if caller and _is_admin_user(caller):
+        target = db.get(User, user_id)
+        return _attach_user_application_context(db, target)
+    return None
 
 
 def _is_contract_document(doc: SiteDocument) -> bool:

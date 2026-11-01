@@ -11,7 +11,7 @@
       getActorHeaders,
     } = context;
 
-    const state = { data: [], examId: 1, saveTimer: null, pendingNotify: false, searchTerm: '', taxonomy: [] };
+    const state = { data: [], examId: 1, saveTimer: null, pendingNotify: false, searchTerm: '', taxonomy: [], loaded: false, loading: false };
 
     // Search input element
     const searchInput = document.getElementById('examBlocksSearch');
@@ -189,6 +189,8 @@
     }
 
     async function loadInitialBlocks() {
+      if (state.loading) return;
+      state.loading = true;
       if (DOM.blocksGrid) {
         DOM.blocksGrid.innerHTML = '<div class="blocks-loading">იტვირთება...</div>';
       }
@@ -197,11 +199,14 @@
         const payload = await fetchBlocksFromServer();
         state.examId = payload.examId || state.examId || 1;
         state.data = migrate(payload.blocks);
+        state.loaded = true;
       } catch (err) {
         if ((err?.message || '') !== 'handled') {
           showToast('ბლოკების ჩატვირთვა ვერ მოხერხდა', 'error');
           state.data = migrate([]);
         }
+      } finally {
+        state.loading = false;
       }
       render();
       updateStats();
@@ -251,8 +256,80 @@
       });
     }
 
+    function buildAnswerRowsHtml(question) {
+      const answersArr = Array.isArray(question?.answers) ? question.answers : [];
+      return answersArr.map((answer, aIndex) => `
+        <div class="answer-row" data-answer-id="${escapeHtml(answer.id)}">
+          <div class="a-order">
+            <button class="i-btn a-up" ${aIndex === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
+            <button class="i-btn a-down" ${aIndex === answersArr.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
+          </div>
+          <textarea class="a-text" rows="2" placeholder="პასუხი ${aIndex + 1}" aria-label="პასუხი ${aIndex + 1}">${escapeHtml(answer.text || '')}</textarea>
+          <label class="a-correct-wrap" title="სწორი პასუხი">
+            <input class="a-correct" type="radio" name="correct-${escapeHtml(question.id)}" ${question.correctAnswerId === answer.id ? 'checked' : ''} />
+            <span>სწორია</span>
+          </label>
+        </div>
+      `).join('');
+    }
+
+    function buildQuestionCardsHtml(questions) {
+      const arr = Array.isArray(questions) ? questions : [];
+      return arr.map((question, qIndex) => `
+        <div class="question-card" data-question-id="${escapeHtml(question.id)}">
+          <div class="q-head">
+            <div class="q-order">
+              <button class="i-btn q-up" ${qIndex === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
+              <button class="i-btn q-down" ${qIndex === arr.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
+            </div>
+            <textarea class="q-text" placeholder="კითხვა" rows="3" aria-label="კითხვა">${escapeHtml(question.text || '')}</textarea>
+            <div class="q-actions">
+              <div class="q-actions-row">
+                <button class="q-toggle" type="button" aria-expanded="false">▾</button>
+                <button class="q-delete" type="button" aria-label="კითხვის წაშლა" title="წაშლა">×</button>
+              </div>
+              <span class="q-code" aria-label="კითხვა კოდი">${escapeHtml(question.code)}</span>
+            </div>
+          </div>
+          <div class="q-details" aria-hidden="true">
+            <div class="q-answers"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function ensureBlockQuestionsRendered(card) {
+      if (!card || card.dataset.questionsRendered === 'true') return;
+      const blockId = card.dataset.blockId;
+      const block = state.data.find((b) => String(b.id) === String(blockId));
+      const listEl = card.querySelector('.questions-list');
+      if (block && listEl) {
+        listEl.innerHTML = buildQuestionCardsHtml(block.questions);
+        card.dataset.questionsRendered = 'true';
+      }
+    }
+
+    function ensureQuestionAnswersRendered(questionCard) {
+      if (!questionCard || questionCard.dataset.answersRendered === 'true') return;
+      const card = questionCard.closest?.('.block-card');
+      const blockId = card?.dataset?.blockId;
+      const questionId = questionCard.dataset.questionId;
+      const block = state.data.find((b) => String(b.id) === String(blockId));
+      const question = (Array.isArray(block?.questions) ? block.questions : []).find(
+        (q) => String(q.id) === String(questionId)
+      );
+      const answersEl = questionCard.querySelector('.q-answers');
+      if (question && answersEl) {
+        answersEl.innerHTML = buildAnswerRowsHtml(question);
+        questionCard.dataset.answersRendered = 'true';
+      }
+    }
+
     function setCardOpen(card, open) {
       if (!card) return;
+      if (open) {
+        ensureBlockQuestionsRendered(card);
+      }
       card.classList.toggle('open', !!open);
       const questions = card.querySelector('.block-questions');
       const toggle = card.querySelector('.head-toggle');
@@ -273,6 +350,9 @@
 
     function setQuestionOpen(questionCard, open) {
       if (!questionCard) return;
+      if (open) {
+        ensureQuestionAnswersRendered(questionCard);
+      }
       questionCard.classList.toggle('open', !!open);
       const details = questionCard.querySelector('.q-details');
       const toggle = questionCard.querySelector('.q-toggle');
@@ -358,43 +438,7 @@
             </div>
           </div>
           <div class="block-questions" aria-hidden="true">
-            <div class="questions-list">
-              ${questions.map((question, qIndex, arr) => `
-                <div class="question-card" data-question-id="${escapeHtml(question.id)}">
-                  <div class="q-head">
-                    <div class="q-order">
-                      <button class="i-btn q-up" ${qIndex === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
-                      <button class="i-btn q-down" ${qIndex === arr.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
-                    </div>
-                    <textarea class="q-text" placeholder="კითხვა" rows="3" aria-label="კითხვა">${escapeHtml(question.text || '')}</textarea>
-                    <div class="q-actions">
-                      <div class="q-actions-row">
-                        <button class="q-toggle" type="button" aria-expanded="false">▾</button>
-                        <button class="q-delete" type="button" aria-label="კითხვის წაშლა" title="წაშლა">×</button>
-                      </div>
-                      <span class="q-code" aria-label="კითხვა კოდი">${escapeHtml(question.code)}</span>
-                    </div>
-                  </div>
-                  <div class="q-details" aria-hidden="true">
-                    <div class="q-answers">
-                      ${(Array.isArray(question.answers) ? question.answers : []).map((answer, aIndex, answersArr) => `
-                        <div class="answer-row" data-answer-id="${escapeHtml(answer.id)}">
-                          <div class="a-order">
-                            <button class="i-btn a-up" ${aIndex === 0 ? 'disabled' : ''} aria-label="ზემოთ">▲</button>
-                            <button class="i-btn a-down" ${aIndex === answersArr.length - 1 ? 'disabled' : ''} aria-label="ქვემოთ">▼</button>
-                          </div>
-                          <textarea class="a-text" rows="2" placeholder="პასუხი ${aIndex + 1}" aria-label="პასუხი ${aIndex + 1}">${escapeHtml(answer.text || '')}</textarea>
-                          <label class="a-correct-wrap" title="სწორი პასუხი">
-                            <input class="a-correct" type="radio" name="correct-${escapeHtml(question.id)}" ${question.correctAnswerId === answer.id ? 'checked' : ''} />
-                            <span>სწორია</span>
-                          </label>
-                        </div>
-                      `).join('')}
-                    </div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
+            <div class="questions-list"></div>
             <div class="block-actions-row">
               <button class="block-tile add-tile q-add-tile" type="button" aria-label="კითხვის დამატება">
                 <span class="add-icon" aria-hidden="true">+</span>
@@ -914,13 +958,21 @@
       render();
     }
 
+    function ensureLoaded() {
+      if (!state.loaded && !state.loading) {
+        void loadInitialBlocks();
+        return;
+      }
+      render();
+    }
+
     function init() {
-      void loadInitialBlocks();
       on(DOM.blocksGrid, 'click', handleGridClick);
       on(DOM.blocksGrid, 'change', handleGridChange);
       on(DOM.blocksGrid, 'keydown', handleGridKeydown);
       on(DOM.blocksGrid, 'focusout', handleGridFocusout);
       global.addEventListener('exam-taxonomy-updated', (event) => {
+        if (!state.loaded) return;
         if (event.detail?.reloadBlocks) {
           void loadInitialBlocks();
           return;
@@ -935,7 +987,7 @@
 
     return {
       init,
-      render: () => render(),
+      render: () => ensureLoaded(),
       reload: () => void loadInitialBlocks(),
       reloadTaxonomy: () => void reloadTaxonomy(),
       openImportModal,

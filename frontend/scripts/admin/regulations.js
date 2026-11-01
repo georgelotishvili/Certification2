@@ -376,17 +376,26 @@
       }
     }
 
+    function ensureLoaded() {
+      if (state.loaded) {
+        render();
+        return;
+      }
+      if (state.loading) return;
+      state.loaded = true;
+      void fetchRegulations();
+    }
+
     function init() {
       if (!ensureDom()) return;
       on(DOM.grid, 'click', handleGridClick);
       on(DOM.grid, 'focusout', handleGridFocusout);
       on(DOM.grid, 'keydown', handleGridKeydown);
-      void fetchRegulations();
     }
 
     return {
       init,
-      render: () => render(),
+      render: () => ensureLoaded(),
       reload: () => fetchRegulations(),
     };
   }

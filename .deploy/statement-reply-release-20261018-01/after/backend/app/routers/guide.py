@@ -17,6 +17,7 @@ from fastapi import (
     Header,
     HTTPException,
     Path as FPath,
+    Query,
     UploadFile,
     status,
 )
@@ -112,6 +113,7 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
     "ჩვენს შესახებ": frozenset(["60098254270038b3", "a417b2e6079fb740"]),
     "სერტიფიცირება": frozenset([
         "53889f316e914934",
+        "79dceac0558d0ff8",
         "92f7920d4b45b24f",
         "989f160c1cdec4b4",
         "a1adebcbcbda6714",
@@ -119,10 +121,13 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
         "ab32d667de33898a",
         "b679f77565ac3143",
         "b8c10a7fc6e8008f",
+        "debf142d16f53e6f",
     ]),
     "გამოცდა": frozenset([
         "003631669368aa45",
         "082d58ffabbf946b",
+        "2c5e968dfeac0183",
+        "56280cf0bb66ba91",
         "736dd4d1e94487d7",
         "989f160c1cdec4b4",
         "a417b2e6079fb740",
@@ -138,6 +143,8 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
     "საჯარო რეესტრი": frozenset([
         "01198574571bebab",
         "122e49bcd5251446",
+        "2a0be01b4bf050b1",
+        "c8a50e052679e1a1",
         "d07f2a77240f5c5c",
         "e81dbece7be73d1d",
     ]),
@@ -147,7 +154,9 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
         "ee6a95135247dd4f",
     ]),
     "კონფიდენციალურობა და კონტაქტი": frozenset([
+        "3096fc3e4df47047",
         "9f9e8267d3090a48",
+        "c8a50e052679e1a1",
         "e81dbece7be73d1d",
         "fcc5eb7433ea8270",
     ]),
@@ -191,12 +200,35 @@ def _get_bundled_doc28_sections() -> list[tuple[int, str, str, str, str]]:
     return sections
 
 
+_GUIDE_DOCS_SYNCED_STATE: dict[int, tuple] = {}
+
+
+def _guide_state_signature(docs: list[GuideDocument], doc28_key: tuple[int, int] | None) -> tuple:
+    return (
+        doc28_key,
+        tuple(
+            (
+                d.id,
+                d.title,
+                d.order_index,
+                d.filename,
+                d.file_path,
+                hash(d.content),
+                _guide_file_exists(d.file_path),
+            )
+            for d in docs
+        ),
+    )
+
+
 def _ensure_default_guide_docs(db: Session) -> None:
     """Keep the 8 default GuideDocument pages synchronized with bundled 28_... .md
     while preserving any page modified by an administrator."""
     sections = _get_bundled_doc28_sections()
     if not sections:
         return
+    doc28_key = _DOC28_SECTIONS_CACHE[0] if _DOC28_SECTIONS_CACHE is not None else None
+    bind_id = id(db.get_bind()) if hasattr(db, "get_bind") else id(db)
     new_files_created: list[str] = []
     old_files_to_delete: list[str] = []
     try:
@@ -205,6 +237,9 @@ def _ensure_default_guide_docs(db: Session) -> None:
                 select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
             ).all()
         )
+        sig = _guide_state_signature(docs, doc28_key)
+        if _GUIDE_DOCS_SYNCED_STATE.get(bind_id) == sig:
+            return
         by_title = {(d.title or "").strip(): d for d in docs}
 
         changed = False
@@ -273,15 +308,30 @@ def _ensure_default_guide_docs(db: Session) -> None:
 
         if changed:
             db.commit()
-            for old_fp in old_files_to_delete:
-                _delete_guide_file_from_disk(old_fp)
-    except BaseException:
+            docs = list(
+                db.scalars(
+                    select(GuideDocument).order_by(GuideDocument.order_index.asc(), GuideDocument.id.asc())
+                ).all()
+            )
+            sig = _guide_state_signature(docs, doc28_key)
+        _GUIDE_DOCS_SYNCED_STATE[bind_id] = sig
+    except BaseException as exc:
         try:
             db.rollback()
         except Exception:
             pass
         for new_fp in new_files_created:
             _delete_guide_file_from_disk(new_fp)
+        # Keep ordinary seeding failures non-fatal, but do not swallow shutdown
+        # or cancellation after cleaning up an uncommitted attempt.
+        if not isinstance(exc, Exception):
+            raise
+        return
+
+    # The new paths are now committed. A failure/interruption while removing
+    # old files must never roll back or delete those committed replacements.
+    for old_fp in old_files_to_delete:
+        _delete_guide_file_from_disk(old_fp)
 
 
 def _get_guide_doc_record(db: Session) -> Optional[GuideDocument]:
@@ -300,7 +350,7 @@ def _get_all_guide_docs(db: Session) -> List[GuideDocument]:
     )
 
 
-def _guide_doc_out(doc: Optional[GuideDocument]) -> GuideDocumentOut:
+def _guide_doc_out(doc: Optional[GuideDocument], include_content: bool = True) -> GuideDocumentOut:
     if not doc:
         return GuideDocumentOut(
             id=None,
@@ -330,7 +380,7 @@ def _guide_doc_out(doc: Optional[GuideDocument]) -> GuideDocumentOut:
     return GuideDocumentOut(
         id=doc.id,
         title=(doc.title or "გზამკვლევი").strip() or "გზამკვლევი",
-        content=doc.content or "",
+        content=(doc.content or "") if include_content else "",
         order_index=int(getattr(doc, "order_index", 0) or 0),
         filename=_safe_guide_filename(doc.filename) if (has_file and doc.filename) else None,
         file_size_bytes=doc.file_size_bytes if has_file else None,
@@ -499,9 +549,12 @@ def _guide_video_out(video: GuideVideo) -> GuideVideoOut:
 
 
 @router.get("/guide/documents", response_model=GuideDocumentsListResponse)
-def public_list_guide_documents(db: Session = Depends(get_db)):
+def public_list_guide_documents(
+    summary: bool = Query(False),
+    db: Session = Depends(get_db),
+):
     docs = _get_all_guide_docs(db)
-    out_items = [_guide_doc_out(d) for d in docs]
+    out_items = [_guide_doc_out(d, include_content=not summary) for d in docs]
     return GuideDocumentsListResponse(items=[it for it in out_items if it.available])
 
 

@@ -2138,6 +2138,14 @@
       const fields = extractUserContractFields(user, overrideCategory, overrideRegime);
       let out = String(rawHtml);
 
+      // These are field labels, not filled values or section headings. Older
+      // templates emphasize them; keep the personalized preview/PDF labels
+      // normal while preserving the bold value inserted immediately after them.
+      out = out.replace(
+        /<(strong|b)\b[^>]*>(\s*(?:მოთხოვნილი\s+კატეგორია|დაშვების\s+რეჟიმი)\s*:\s*)<\/\1>/gi,
+        '$2'
+      );
+
       const safeDirName = escapeHtml(fields.director_name);
       const safeDirPid = escapeHtml(fields.director_personal_id);
       out = out.replace(
@@ -2366,24 +2374,34 @@
         const fontName = 'DejaVuSansUnicode';
         if (!pdf.getFontList?.()?.[fontName]) {
           if (!contractPdfFontPromise) {
-            const fontUrl = new URL('../assets/fonts/dejavu-sans.ttf', global.location.href).toString();
-            contractPdfFontPromise = fetch(fontUrl)
-              .then((r) => {
-                if (!r.ok) throw new Error('Font download failed');
+            const regularUrl = new URL('../assets/fonts/dejavu-sans.ttf', global.location.href).toString();
+            const boldUrl = new URL('../assets/fonts/dejavu-sans-bold.ttf', global.location.href).toString();
+            contractPdfFontPromise = Promise.all([
+              fetch(regularUrl).then((r) => {
+                if (!r.ok) throw new Error('Regular font download failed');
                 return r.arrayBuffer();
-              })
-              .then((buf) => arrayBufferToBase64(buf))
+              }),
+              fetch(boldUrl).then((r) => {
+                if (!r.ok) throw new Error('Bold font download failed');
+                return r.arrayBuffer();
+              }),
+            ])
+              .then(([regBuf, boldBuf]) => ({
+                regularBase64: arrayBufferToBase64(regBuf),
+                boldBase64: arrayBufferToBase64(boldBuf),
+              }))
               .catch((err) => {
                 contractPdfFontPromise = null;
                 throw err;
               });
           }
-          const base64 = await contractPdfFontPromise;
-          pdf.addFileToVFS('DejaVuSans.ttf', base64);
+          const { regularBase64, boldBase64 } = await contractPdfFontPromise;
+          pdf.addFileToVFS('DejaVuSans.ttf', regularBase64);
+          pdf.addFileToVFS('DejaVuSans-Bold.ttf', boldBase64);
           pdf.addFont('DejaVuSans.ttf', fontName, 'normal');
-          pdf.addFont('DejaVuSans.ttf', fontName, 'bold');
+          pdf.addFont('DejaVuSans-Bold.ttf', fontName, 'bold');
           pdf.addFont('DejaVuSans.ttf', fontName, 'italic');
-          pdf.addFont('DejaVuSans.ttf', fontName, 'bolditalic');
+          pdf.addFont('DejaVuSans-Bold.ttf', fontName, 'bolditalic');
         }
         pdf.setFont(fontName, 'normal');
 
@@ -2482,19 +2500,25 @@
           return w;
         };
 
+        const isSameBoldSegment = (left, right) => Boolean(
+          left && right && left.bold && right.bold &&
+          (left.segId || 0) === (right.segId || 0)
+        );
+
+        const measureWordGapWidth = (previousWord, nextWord) => {
+          const previousPart = previousWord.parts[previousWord.parts.length - 1];
+          const nextPart = nextWord.parts[0];
+          pdf.setFont(fontName, isSameBoldSegment(previousPart, nextPart) ? 'bold' : 'normal');
+          return pdf.getTextWidth(' ');
+        };
+
         const coalesceLineRuns = (lineItems) => {
           const runs = [];
           lineItems.forEach((item, wordIdx) => {
             if (wordIdx > 0) {
               const prevRun = runs[runs.length - 1];
               const nextPart = item.word.parts[0];
-              const sameBoldSeg = Boolean(
-                prevRun &&
-                  nextPart &&
-                  prevRun.bold &&
-                  nextPart.bold &&
-                  prevRun.segId === nextPart.segId
-              );
+              const sameBoldSeg = isSameBoldSegment(prevRun, nextPart);
               if (sameBoldSeg) {
                 prevRun.text += ' ';
               } else if (prevRun && !prevRun.bold) {
@@ -2575,8 +2599,6 @@
           pdf.setFontSize(fontSize);
           pdf.setTextColor(0, 0, 0);
           pdf.setFont(fontName, 'normal');
-          const spaceW = pdf.getTextWidth(' ');
-
           const rawWords = tokenizeSegmentsToWords(segments);
           if (!rawWords.length) return;
 
@@ -2604,13 +2626,16 @@
             if (!currentLine.length) {
               currentLine.push(item);
               currentLineWidth = item.width;
-            } else if (currentLineWidth + spaceW + item.width <= width) {
-              currentLine.push(item);
-              currentLineWidth += spaceW + item.width;
             } else {
-              lines.push(currentLine);
-              currentLine = [item];
-              currentLineWidth = item.width;
+              const gapWidth = measureWordGapWidth(currentLine[currentLine.length - 1].word, item.word);
+              if (currentLineWidth + gapWidth + item.width <= width) {
+                currentLine.push(item);
+                currentLineWidth += gapWidth + item.width;
+              } else {
+                lines.push(currentLine);
+                currentLine = [item];
+                currentLineWidth = item.width;
+              }
             }
           });
           if (currentLine.length) {

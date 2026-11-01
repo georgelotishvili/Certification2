@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Certificate, Rating, User
 from ..schemas import RegistryPersonOut
+from ..services.candidate_status import sync_transitional_certificates
 
 
 router = APIRouter()
@@ -130,6 +131,7 @@ def list_certified_persons_registry(
     db: Session = Depends(get_db),
 ) -> List[RegistryPersonOut]:
     # Preserve legacy list shape, limits, fields, level values and date order.
+    sync_transitional_certificates(db)
     stmt, _ = _public_rows_statement()
     rows = db.execute(stmt.order_by(User.created_at.desc(), User.id.desc()).offset(offset).limit(limit)).all()
     return _serialize_rows(rows, request)
@@ -145,6 +147,7 @@ def list_certified_persons_page(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ) -> RegistryPageOut:
+    sync_transitional_certificates(db)
     _prepare_search_connection(db)
     selected = {_normalize_text(part) for part in qualifications.split(",") if part.strip()}
     if any(value not in QUALIFICATION_KEYS for value in selected):

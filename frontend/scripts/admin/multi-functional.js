@@ -910,6 +910,18 @@
       });
     }
 
+    function ensureLoaded() {
+      if (state.initialized || state.loading) {
+        if (state.initialized) render();
+        return;
+      }
+      state.loading = true;
+      void loadSettings();
+      void loadInitialProjects().finally(() => {
+        state.loading = false;
+      });
+    }
+
     function init() {
       DOM_ELEMENTS.grid = document.getElementById('multiFunctionalGrid');
       DOM_ELEMENTS.blocksCount = document.getElementById('multiFunctionalBlocksCount');
@@ -924,13 +936,11 @@
       on(DOM_ELEMENTS.grid, 'change', handleGridClick);
       on(DOM_ELEMENTS.grid, 'keydown', handleGridKeydown);
       on(DOM_ELEMENTS.grid, 'focusout', handleGridFocusout);
-      void loadSettings();
-      void loadInitialProjects();
     }
 
     return {
       init,
-      render: () => render(),
+      render: () => ensureLoaded(),
     };
   }
 

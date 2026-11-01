@@ -180,8 +180,16 @@ def _exam_settings_payload(exam: Exam) -> ExamSettingsResponse:
     )
 
 
-def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
-    ordered_blocks = sorted(exam.blocks, key=lambda b: (b.order_index or 0, b.id))
+def _blocks_payload(exam: Exam, db: Session | None = None) -> AdminBlocksResponse:
+    if db is not None:
+        raw_blocks = db.scalars(
+            select(Block)
+            .where(Block.exam_id == exam.id)
+            .options(selectinload(Block.questions).selectinload(Question.options))
+        ).all()
+    else:
+        raw_blocks = exam.blocks
+    ordered_blocks = sorted(raw_blocks, key=lambda b: (b.order_index or 0, b.id))
     blocks: list[AdminBlockPayload] = []
     for block_index, block in enumerate(ordered_blocks, start=1):
         ordered_questions = sorted(block.questions, key=lambda q: (q.order_index or 0, q.id))
@@ -277,7 +285,7 @@ def get_exam_blocks(
 ):
     _require_admin(db, authorization)
     exam = _get_or_create_exam(db, exam_id)
-    return _blocks_payload(exam)
+    return _blocks_payload(exam, db)
 
 
 @router.put("/exam/blocks", response_model=AdminBlocksResponse)
@@ -443,7 +451,7 @@ def update_exam_blocks(
 
     db.commit()
     refreshed_exam = _get_or_create_exam(db, exam.id)
-    return _blocks_payload(refreshed_exam)
+    return _blocks_payload(refreshed_exam, db)
 
 
 @router.get("/stats", response_model=AdminStatsResponse)
@@ -985,7 +993,36 @@ def _format_pct(value: float | int | None) -> str:
     return f"{val:.2f}".rstrip("0").rstrip(".")
 
 
-def _extract_theory_stage_summary(session: ExamSession) -> dict:
+_THEORY_SUMMARY_FULL_CACHE: dict[tuple, dict] = {}
+_THEORY_SUMMARY_META_CACHE: dict[tuple, dict] = {}
+
+
+def _clone_theory_summary(summary: dict) -> dict:
+    return {
+        "session_id": summary["session_id"],
+        "finished_at": summary["finished_at"],
+        "score_percent": summary["score_percent"],
+        "chapters": [dict(ch) for ch in summary.get("chapters") or []],
+        "level": summary["level"],
+    }
+
+
+def _extract_theory_stage_summary(session: ExamSession, bind_id: int = 0) -> dict:
+    finished_at = session.finished_at or session.started_at
+    score_pct = round(float(session.score_percent or 0.0), 2)
+    full_key = (
+        session.id,
+        str(finished_at),
+        score_pct,
+        hash(session.exam_snapshot),
+        hash(session.block_stats),
+    )
+    if session.id is not None and full_key in _THEORY_SUMMARY_FULL_CACHE:
+        cached = _THEORY_SUMMARY_FULL_CACHE[full_key]
+        if bind_id:
+            _THEORY_SUMMARY_META_CACHE[(bind_id, int(session.id), str(finished_at), score_pct)] = cached
+        return _clone_theory_summary(cached)
+
     snapshot = _load_session_snapshot(session)
     chapters_out: list[dict] = []
     if snapshot:
@@ -1037,7 +1074,6 @@ def _extract_theory_stage_summary(session: ExamSession) -> dict:
         except Exception:
             pass
 
-    score_pct = round(float(session.score_percent or 0.0), 2)
     if chapters_out:
         if any(c["percent"] < 70 for c in chapters_out):
             level = "fail"
@@ -1053,14 +1089,22 @@ def _extract_theory_stage_summary(session: ExamSession) -> dict:
         else:
             level = "bc"
 
-    finished_at = session.finished_at or session.started_at
-    return {
+    result = {
         "session_id": session.id,
         "finished_at": finished_at,
         "score_percent": score_pct,
         "chapters": chapters_out,
         "level": level,
     }
+    if session.id is not None:
+        if len(_THEORY_SUMMARY_FULL_CACHE) > 4096:
+            _THEORY_SUMMARY_FULL_CACHE.clear()
+        if len(_THEORY_SUMMARY_META_CACHE) > 4096:
+            _THEORY_SUMMARY_META_CACHE.clear()
+        _THEORY_SUMMARY_FULL_CACHE[full_key] = result
+        if bind_id:
+            _THEORY_SUMMARY_META_CACHE[(bind_id, int(session.id), str(finished_at), score_pct)] = result
+    return _clone_theory_summary(result)
 
 
 def _extract_practical_stage_summary(eval_row) -> dict:
@@ -1276,8 +1320,16 @@ def _exam_dt_to_tbilisi_date(dt: datetime) -> date:
 
 
 def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
-    s1_rows = db.scalars(
-        select(ExamSession)
+    bind_id = id(db.get_bind())
+    s1_meta_rows = db.execute(
+        select(
+            ExamSession.id,
+            ExamSession.user_id,
+            ExamSession.candidate_code,
+            ExamSession.started_at,
+            ExamSession.finished_at,
+            ExamSession.score_percent,
+        )
         .where(ExamSession.finished_at.is_not(None))
         .order_by(ExamSession.finished_at.asc(), ExamSession.id.asc())
     ).all()
@@ -1290,13 +1342,25 @@ def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
         .order_by(MultiFunctionalEvaluation.finished_at.asc(), MultiFunctionalEvaluation.id.asc())
     ).all()
 
-    if not s1_rows and not s2_rows and not s3_rows:
+    if not s1_meta_rows and not s2_rows and not s3_rows:
         return {}
 
+    missing_s1_ids: list[int] = []
+    for s_id, _s_uid, _s_code, s_started, s_finished, s_score in s1_meta_rows:
+        meta_key = (bind_id, int(s_id), str(s_finished or s_started), round(float(s_score or 0.0), 2))
+        if meta_key not in _THEORY_SUMMARY_META_CACHE:
+            missing_s1_ids.append(int(s_id))
+
+    if missing_s1_ids:
+        for i in range(0, len(missing_s1_ids), 400):
+            chunk = missing_s1_ids[i : i + 400]
+            for full_s in db.scalars(select(ExamSession).where(ExamSession.id.in_(chunk))).all():
+                _extract_theory_stage_summary(full_s, bind_id=bind_id)
+
     all_s1_codes = {
-        s.candidate_code.strip().lower()
-        for s in s1_rows
-        if s.candidate_code and s.candidate_code.strip()
+        s_code.strip().lower()
+        for _s_id, _s_uid, s_code, _s_started, _s_finished, _s_score in s1_meta_rows
+        if s_code and s_code.strip()
     }
     code_to_user_id: dict[str, int] = {}
     if all_s1_codes:
@@ -1311,14 +1375,22 @@ def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
     latest_s2_by_user: dict[int, dict] = {}
     latest_s3_by_user: dict[int, dict] = {}
 
-    for s in s1_rows:
-        uid = s.user_id
-        if s.candidate_code:
-            code_uid = code_to_user_id.get(s.candidate_code.strip().lower())
+    for s_id, s_uid, s_code, s_started, s_finished, s_score in s1_meta_rows:
+        uid = s_uid
+        if s_code:
+            code_uid = code_to_user_id.get(s_code.strip().lower())
             if uid is None or (code_uid is not None and uid != code_uid):
                 uid = code_uid
         if uid is not None:
-            summary = _extract_theory_stage_summary(s)
+            meta_key = (bind_id, int(s_id), str(s_finished or s_started), round(float(s_score or 0.0), 2))
+            cached_summary = _THEORY_SUMMARY_META_CACHE.get(meta_key)
+            if cached_summary is not None:
+                summary = _clone_theory_summary(cached_summary)
+            else:
+                full_s = db.get(ExamSession, int(s_id))
+                if full_s is None:
+                    continue
+                summary = _extract_theory_stage_summary(full_s, bind_id=bind_id)
             latest_s1_by_user[uid] = summary
             attempts_by_user.setdefault(uid, []).append(("stage1", summary))
 

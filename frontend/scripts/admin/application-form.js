@@ -135,6 +135,16 @@
       }
     }
 
+    function ensureLoaded() {
+      if (state.loaded) {
+        render();
+        return;
+      }
+      if (state.loading) return;
+      state.loaded = true;
+      void fetchInfo();
+    }
+
     function init() {
       if (!ensureDom()) return;
       on(DOM.grid, 'click', handleGridClick);
@@ -144,12 +154,11 @@
         e.target.value = '';
         void uploadFile(file);
       });
-      void fetchInfo();
     }
 
     return {
       init,
-      render: () => render(),
+      render: () => ensureLoaded(),
       reload: () => fetchInfo(),
     };
   }

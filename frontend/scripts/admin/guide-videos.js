@@ -966,7 +966,6 @@
 
     function init() {
       bindEvents();
-      void loadGuideDocuments();
     }
 
     return {

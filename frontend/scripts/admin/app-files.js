@@ -420,17 +420,26 @@
       void uploadFile(file);
     }
 
+    function ensureLoaded() {
+      if (state.loaded) {
+        render();
+        return;
+      }
+      if (state.loading) return;
+      state.loaded = true;
+      void fetchFiles();
+    }
+
     function init() {
       if (!ensureDom()) return;
       on(DOM.grid, 'click', handleGridClick);
       on(DOM.addBtn, 'click', handleAddClick);
       on(DOM.fileInput, 'change', handleFileChange);
-      void fetchFiles();
     }
 
     return {
       init,
-      render: () => render(),
+      render: () => ensureLoaded(),
       reload: () => fetchFiles(),
     };
   }

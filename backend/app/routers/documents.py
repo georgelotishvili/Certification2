@@ -322,12 +322,35 @@ def _doc_html_hash(html: str | None) -> str:
     return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:16]
 
 
+_CONTRACTS_SYNCED_STATE: dict[int, tuple] = {}
+
+
+def _contracts_state_signature(docs: list[SiteDocument]) -> tuple:
+    return tuple(
+        (
+            d.id,
+            d.title,
+            d.contract_type,
+            d.order_index,
+            d.filename,
+            d.file_path,
+            hash(d.content),
+            _stored_file_exists(d.file_path),
+        )
+        for d in docs
+    )
+
+
 def _ensure_default_contracts(db: Session) -> None:
     """Ensure the 5 public official documents and the 6 standard/transitional contracts are seeded in site_documents."""
+    bind_id = id(db.get_bind()) if hasattr(db, "get_bind") else id(db)
     new_files_created: list[str] = []
     old_files_to_delete: list[str] = []
     try:
-        existing_docs = db.scalars(select(SiteDocument)).all()
+        existing_docs = list(db.scalars(select(SiteDocument)).all())
+        sig = _contracts_state_signature(existing_docs)
+        if _CONTRACTS_SYNCED_STATE.get(bind_id) == sig:
+            return
         changed = False
 
         # 1. Ensure the 5 public documents (GIPC-SCH-001, GIPC-POL-001, GIPC-POL-002, GIPC-PRO-003, GIPC-FRM-001)
@@ -541,6 +564,9 @@ def _ensure_default_contracts(db: Session) -> None:
 
         if changed:
             db.commit()
+            existing_docs = list(db.scalars(select(SiteDocument)).all())
+            sig = _contracts_state_signature(existing_docs)
+        _CONTRACTS_SYNCED_STATE[bind_id] = sig
     except BaseException as exc:
         try:
             db.rollback()

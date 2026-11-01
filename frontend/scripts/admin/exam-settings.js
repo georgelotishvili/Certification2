@@ -445,9 +445,16 @@
       closeTaxonomyMenus();
     }
 
-    function init() {
+    let loaded = false;
+
+    function ensureLoaded() {
+      if (loaded) return;
+      loaded = true;
       void loadSettings();
       void loadTaxonomy();
+    }
+
+    function init() {
       on(DOM.saveDurationBtn, 'click', saveDuration);
       on(DOM.gatePwdSaveBtn, 'click', saveGatePassword);
       on(DOM.gatePwdInput, 'keydown', handleGatePwdKeydown);
@@ -468,7 +475,7 @@
       document.addEventListener('click', handleOutsideTaxonomyClick);
     }
 
-    return { init };
+    return { init, render: ensureLoaded };
   }
 
   global.AdminModules = global.AdminModules || {};

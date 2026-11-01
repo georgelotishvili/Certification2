@@ -180,8 +180,16 @@ def _exam_settings_payload(exam: Exam) -> ExamSettingsResponse:
     )
 
 
-def _blocks_payload(exam: Exam) -> AdminBlocksResponse:
-    ordered_blocks = sorted(exam.blocks, key=lambda b: (b.order_index or 0, b.id))
+def _blocks_payload(exam: Exam, db: Session | None = None) -> AdminBlocksResponse:
+    if db is not None:
+        raw_blocks = db.scalars(
+            select(Block)
+            .where(Block.exam_id == exam.id)
+            .options(selectinload(Block.questions).selectinload(Question.options))
+        ).all()
+    else:
+        raw_blocks = exam.blocks
+    ordered_blocks = sorted(raw_blocks, key=lambda b: (b.order_index or 0, b.id))
     blocks: list[AdminBlockPayload] = []
     for block_index, block in enumerate(ordered_blocks, start=1):
         ordered_questions = sorted(block.questions, key=lambda q: (q.order_index or 0, q.id))
@@ -277,7 +285,7 @@ def get_exam_blocks(
 ):
     _require_admin(db, authorization)
     exam = _get_or_create_exam(db, exam_id)
-    return _blocks_payload(exam)
+    return _blocks_payload(exam, db)
 
 
 @router.put("/exam/blocks", response_model=AdminBlocksResponse)
@@ -443,7 +451,7 @@ def update_exam_blocks(
 
     db.commit()
     refreshed_exam = _get_or_create_exam(db, exam.id)
-    return _blocks_payload(refreshed_exam)
+    return _blocks_payload(refreshed_exam, db)
 
 
 @router.get("/stats", response_model=AdminStatsResponse)
@@ -925,29 +933,13 @@ def delete_result(
         return
     guard_pending_session_delete(db, session_id)
 
-    # Delete video files from disk before deleting the session
+    # Capture paths before the ORM cascade; filesystem cleanup must follow commit.
     media_records = db.scalars(select(ExamMedia).where(ExamMedia.session_id == session_id)).all()
-    for media in media_records:
-        if media.storage_path:
-            # We keep session directory cleanup logic below, so don't touch parents here
-            delete_storage_file(media.storage_path, remove_empty_parents=False)
-
-    # Delete the session directory if it exists and is empty
-    try:
-        media_root = ensure_media_root()
-        session_dir = media_root / f"session_{session_id}"
-        if session_dir.exists() and session_dir.is_dir():
-            # Try to remove the directory (will only work if empty or all files deleted)
-            try:
-                session_dir.rmdir()
-            except OSError:
-                # Directory not empty or other error, that's okay
-                pass
-    except Exception:
-        pass  # Continue even if directory deletion fails
-
+    namespace = f"session_{session_id}"
+    files = [(media.storage_path, namespace) for media in media_records if media.storage_path]
     db.delete(session_obj)
     db.commit()
+    _cleanup_committed_media(files, {namespace})
     return
 
 
@@ -1001,7 +993,36 @@ def _format_pct(value: float | int | None) -> str:
     return f"{val:.2f}".rstrip("0").rstrip(".")
 
 
-def _extract_theory_stage_summary(session: ExamSession) -> dict:
+_THEORY_SUMMARY_FULL_CACHE: dict[tuple, dict] = {}
+_THEORY_SUMMARY_META_CACHE: dict[tuple, dict] = {}
+
+
+def _clone_theory_summary(summary: dict) -> dict:
+    return {
+        "session_id": summary["session_id"],
+        "finished_at": summary["finished_at"],
+        "score_percent": summary["score_percent"],
+        "chapters": [dict(ch) for ch in summary.get("chapters") or []],
+        "level": summary["level"],
+    }
+
+
+def _extract_theory_stage_summary(session: ExamSession, bind_id: int = 0) -> dict:
+    finished_at = session.finished_at or session.started_at
+    score_pct = round(float(session.score_percent or 0.0), 2)
+    full_key = (
+        session.id,
+        str(finished_at),
+        score_pct,
+        hash(session.exam_snapshot),
+        hash(session.block_stats),
+    )
+    if session.id is not None and full_key in _THEORY_SUMMARY_FULL_CACHE:
+        cached = _THEORY_SUMMARY_FULL_CACHE[full_key]
+        if bind_id:
+            _THEORY_SUMMARY_META_CACHE[(bind_id, int(session.id), str(finished_at), score_pct)] = cached
+        return _clone_theory_summary(cached)
+
     snapshot = _load_session_snapshot(session)
     chapters_out: list[dict] = []
     if snapshot:
@@ -1053,7 +1074,6 @@ def _extract_theory_stage_summary(session: ExamSession) -> dict:
         except Exception:
             pass
 
-    score_pct = round(float(session.score_percent or 0.0), 2)
     if chapters_out:
         if any(c["percent"] < 70 for c in chapters_out):
             level = "fail"
@@ -1069,14 +1089,22 @@ def _extract_theory_stage_summary(session: ExamSession) -> dict:
         else:
             level = "bc"
 
-    finished_at = session.finished_at or session.started_at
-    return {
+    result = {
         "session_id": session.id,
         "finished_at": finished_at,
         "score_percent": score_pct,
         "chapters": chapters_out,
         "level": level,
     }
+    if session.id is not None:
+        if len(_THEORY_SUMMARY_FULL_CACHE) > 4096:
+            _THEORY_SUMMARY_FULL_CACHE.clear()
+        if len(_THEORY_SUMMARY_META_CACHE) > 4096:
+            _THEORY_SUMMARY_META_CACHE.clear()
+        _THEORY_SUMMARY_FULL_CACHE[full_key] = result
+        if bind_id:
+            _THEORY_SUMMARY_META_CACHE[(bind_id, int(session.id), str(finished_at), score_pct)] = result
+    return _clone_theory_summary(result)
 
 
 def _extract_practical_stage_summary(eval_row) -> dict:
@@ -1292,8 +1320,16 @@ def _exam_dt_to_tbilisi_date(dt: datetime) -> date:
 
 
 def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
-    s1_rows = db.scalars(
-        select(ExamSession)
+    bind_id = id(db.get_bind())
+    s1_meta_rows = db.execute(
+        select(
+            ExamSession.id,
+            ExamSession.user_id,
+            ExamSession.candidate_code,
+            ExamSession.started_at,
+            ExamSession.finished_at,
+            ExamSession.score_percent,
+        )
         .where(ExamSession.finished_at.is_not(None))
         .order_by(ExamSession.finished_at.asc(), ExamSession.id.asc())
     ).all()
@@ -1306,13 +1342,25 @@ def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
         .order_by(MultiFunctionalEvaluation.finished_at.asc(), MultiFunctionalEvaluation.id.asc())
     ).all()
 
-    if not s1_rows and not s2_rows and not s3_rows:
+    if not s1_meta_rows and not s2_rows and not s3_rows:
         return {}
 
+    missing_s1_ids: list[int] = []
+    for s_id, _s_uid, _s_code, s_started, s_finished, s_score in s1_meta_rows:
+        meta_key = (bind_id, int(s_id), str(s_finished or s_started), round(float(s_score or 0.0), 2))
+        if meta_key not in _THEORY_SUMMARY_META_CACHE:
+            missing_s1_ids.append(int(s_id))
+
+    if missing_s1_ids:
+        for i in range(0, len(missing_s1_ids), 400):
+            chunk = missing_s1_ids[i : i + 400]
+            for full_s in db.scalars(select(ExamSession).where(ExamSession.id.in_(chunk))).all():
+                _extract_theory_stage_summary(full_s, bind_id=bind_id)
+
     all_s1_codes = {
-        s.candidate_code.strip().lower()
-        for s in s1_rows
-        if s.candidate_code and s.candidate_code.strip()
+        s_code.strip().lower()
+        for _s_id, _s_uid, s_code, _s_started, _s_finished, _s_score in s1_meta_rows
+        if s_code and s_code.strip()
     }
     code_to_user_id: dict[str, int] = {}
     if all_s1_codes:
@@ -1327,14 +1375,22 @@ def _compute_all_exam_histories(db: Session) -> dict[int, dict]:
     latest_s2_by_user: dict[int, dict] = {}
     latest_s3_by_user: dict[int, dict] = {}
 
-    for s in s1_rows:
-        uid = s.user_id
-        if s.candidate_code:
-            code_uid = code_to_user_id.get(s.candidate_code.strip().lower())
+    for s_id, s_uid, s_code, s_started, s_finished, s_score in s1_meta_rows:
+        uid = s_uid
+        if s_code:
+            code_uid = code_to_user_id.get(s_code.strip().lower())
             if uid is None or (code_uid is not None and uid != code_uid):
                 uid = code_uid
         if uid is not None:
-            summary = _extract_theory_stage_summary(s)
+            meta_key = (bind_id, int(s_id), str(s_finished or s_started), round(float(s_score or 0.0), 2))
+            cached_summary = _THEORY_SUMMARY_META_CACHE.get(meta_key)
+            if cached_summary is not None:
+                summary = _clone_theory_summary(cached_summary)
+            else:
+                full_s = db.get(ExamSession, int(s_id))
+                if full_s is None:
+                    continue
+                summary = _extract_theory_stage_summary(full_s, bind_id=bind_id)
             latest_s1_by_user[uid] = summary
             attempts_by_user.setdefault(uid, []).append(("stage1", summary))
 
@@ -2516,6 +2572,64 @@ def admin_update_user(
         requested_category=get_user_latest_requested_category(db, user.id),
     )
 
+def _owned_media_cleanup_path(storage_path: str, namespace: str) -> Path | None:
+    """Reject malformed paths and symlink aliases, even to another in-root owner."""
+    try:
+        root = ensure_media_root().resolve()
+        relative = Path(str(storage_path).replace("\\", "/"))
+        scope = Path(namespace)
+        if (relative.is_absolute() or scope.is_absolute() or
+                ".." in relative.parts or ".." in scope.parts):
+            return None
+        target, owner_root = root / relative, root / scope
+        target.relative_to(owner_root)
+        owner_root.relative_to(root)
+        if owner_root == root:
+            return None
+        current = target
+        while current != root:
+            if current.is_symlink():
+                return None
+            current = current.parent
+        if target.resolve() != target or owner_root.resolve() != owner_root:
+            return None
+        return target
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _cleanup_committed_media(files: list[tuple[str, str]], directories: set[str]) -> None:
+    """Remove exact, owner-contained files and empty directories after DB commit."""
+    for storage_path, namespace in files:
+        target = _owned_media_cleanup_path(storage_path, namespace)
+        if target is None:
+            continue
+        try:
+            target.unlink(missing_ok=True)
+            owner_root = ensure_media_root().resolve() / namespace
+            current = target.parent
+            while current == owner_root or owner_root in current.parents:
+                current.rmdir()
+                current = current.parent
+        except OSError:
+            pass
+    # Deeper empty directories first; no recursive deletion of directory contents.
+    for namespace in sorted(directories, key=lambda value: value.count("/"), reverse=True):
+        directory = _owned_media_cleanup_path(namespace, namespace)
+        if directory is not None:
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+
+
+def _expert_cleanup_namespace(code: str | None) -> str | None:
+    if (not isinstance(code, str) or not code.startswith("EX-") or
+            any(char in code for char in ("/", "\\", ":"))):
+        return None
+    return f"expert/{code}"
+
+
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def admin_delete_user(
     user_id: int,
@@ -2539,141 +2653,65 @@ def admin_delete_user(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="წაშლა ვერ შესრულდა: პირადი ნომრისა და კოდის კავშირი შესამოწმებელია")
 
-    # Delete user photo file before cascade delete
-    _delete_user_photo_file(u)
-
-    # Delete statement attachment files before cascade delete
+    # Snapshot primitive path values before the cascade, without touching disk.
+    # ORM objects without a loaded relationship may expire after DB-level cascade.
+    files: list[tuple[str, str]] = []
+    directories = {f"certificates/{user_id}", f"statements/{user_id}", f"planning/letters/{user_id}"}
+    photo_path = u.photo_path
+    if photo_path and not db.scalar(select(User.id).where(User.id != user_id, User.photo_path == photo_path)):
+        files.append((photo_path, "photos"))
     statements = db.scalars(select(Statement).where(Statement.user_id == user_id)).all()
     for statement in statements:
-        for att_path in iter_statement_attachment_paths(statement):
-            try:
-                delete_storage_file(att_path)
-            except Exception:
-                # Best-effort: continue even if file deletion fails
-                pass
-
-    # Delete expert upload files before cascade delete
+        namespace = f"statements/{user_id}/{statement.id}"
+        files.extend((path, namespace) for path in iter_statement_attachment_paths(statement))
+        directories.add(namespace)
     expert_uploads = db.scalars(select(ExpertUpload).where(ExpertUpload.user_id == user_id)).all()
     for upload in expert_uploads:
-        if upload.expertise_path:
-            try:
-                delete_storage_file(upload.expertise_path)
-            except Exception:
-                pass
-        if upload.project_path:
-            try:
-                delete_storage_file(upload.project_path)
-            except Exception:
-                pass
-
-    # Delete certificate file and directories before cascade delete
+        namespace = _expert_cleanup_namespace(upload.unique_code)
+        if namespace:
+            files.extend((path, namespace) for path in (upload.expertise_path, upload.project_path) if path)
+            directories.add(namespace)
     cert = db.scalar(select(Certificate).where(Certificate.user_id == user_id))
+    expert_certificate_code = None
     if cert:
-        # Delete file from disk if exists
         if cert.file_path:
-            try:
-                delete_storage_file(cert.file_path)
-            except Exception:
-                # Best-effort: continue even if file deletion fails
-                pass
-
-        # Delete certificate directory if it exists and is empty
-        try:
-            media_root = ensure_media_root()
-            cert_dir = media_root / "certificates" / str(user_id)
-            if cert_dir.exists() and cert_dir.is_dir():
-                # Try to remove the directory (will only work if empty)
-                try:
-                    cert_dir.rmdir()
-                except OSError:
-                    # Directory not empty or other error, that's okay
-                    pass
-        except Exception:
-            # Best-effort: continue even if directory deletion fails
-            pass
-
-        # Expert certificate cleanup treats the persisted code as untrusted.
-        if cert.level and cert.level.lower() == "expert" and cert.unique_code:
-            delete_expert_certificate_files(cert.unique_code)
-
+            files.append((cert.file_path, f"certificates/{user_id}"))
+        if (cert.level or "").lower() == "expert":
+            expert_certificate_code = cert.unique_code
+            if expert_certificate_code and (
+                db.scalar(select(Certificate.id).where(Certificate.user_id != user_id, Certificate.unique_code == expert_certificate_code))
+                or db.scalar(select(ExpertUpload.id).where(ExpertUpload.user_id != user_id, ExpertUpload.unique_code == expert_certificate_code))
+            ):
+                expert_certificate_code = None
+    for letter in db.scalars(select(PlanningLetter).where(PlanningLetter.user_id == user_id)).all():
+        if letter.attachment_path:
+            files.append((letter.attachment_path, f"planning/letters/{user_id}"))
+    for session in db.scalars(select(ExamSession).where(ExamSession.user_id == user_id)).all():
+        namespace = f"session_{session.id}"
+        directories.add(namespace)
+        for media in db.scalars(select(ExamMedia).where(ExamMedia.session_id == session.id)).all():
+            if media.storage_path:
+                files.append((media.storage_path, namespace))
     db.delete(u)
     db.commit()
+    _cleanup_committed_media(files, directories)
+    if expert_certificate_code:
+        delete_expert_certificate_files(expert_certificate_code)
+
     return
 
 
-# Bulk delete all non-founder users
-@router.delete("/users", status_code=status.HTTP_204_NO_CONTENT)
+# Retired legacy bulk-delete endpoint: preserve authentication, never mutate data.
+@router.delete("/users", status_code=status.HTTP_410_GONE)
 def admin_delete_all_users(
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
-    settings = get_settings()
-    # Only founder can delete all users
-    founder_email = (settings.founder_admin_email or "").lower()
-    if not _is_founder_actor(authorization, db):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete all users")
-
-    # Do not delete founder
-    users = db.scalars(select(User)).all()  # fetch all users
-    # Validate/preserve every mapping before file cleanup starts, so a conflict
-    # on a later account cannot partially delete earlier accounts' files.
-    try:
-        for u in users:
-            if (u.email or "").lower() != founder_email:
-                remember_user_code(db, u)
-    except (UserCodeConflict, IntegrityError):
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="წაშლა ვერ შესრულდა: პირადი ნომრისა და კოდის კავშირი შესამოწმებელია")
-    for u in users:
-        if (u.email or "").lower() == founder_email:
-            continue
-        
-        # Delete user photo file before cascade delete
-        _delete_user_photo_file(u)
-
-        # Delete statement attachment files before cascade delete
-        statements = db.scalars(select(Statement).where(Statement.user_id == u.id)).all()
-        for statement in statements:
-            for att_path in iter_statement_attachment_paths(statement):
-                try:
-                    delete_storage_file(att_path)
-                except Exception:
-                    # Best-effort: continue even if file deletion fails
-                    pass
-
-        # Delete certificate file and directories before cascade delete
-        cert = db.scalar(select(Certificate).where(Certificate.user_id == u.id))
-        if cert:
-            # Delete file from disk if exists
-            if cert.file_path:
-                try:
-                    delete_storage_file(cert.file_path)
-                except Exception:
-                    # Best-effort: continue even if file deletion fails
-                    pass
-
-            # Delete certificate directory if it exists and is empty
-            try:
-                media_root = ensure_media_root()
-                cert_dir = media_root / "certificates" / str(u.id)
-                if cert_dir.exists() and cert_dir.is_dir():
-                    # Try to remove the directory (will only work if empty)
-                    try:
-                        cert_dir.rmdir()
-                    except OSError:
-                        # Directory not empty or other error, that's okay
-                        pass
-            except Exception:
-                # Best-effort: continue even if directory deletion fails
-                pass
-
-            # Expert certificate cleanup treats the persisted code as untrusted.
-            if cert.level and cert.level.lower() == "expert" and cert.unique_code:
-                delete_expert_certificate_files(cert.unique_code)
-
-        db.delete(u)
-    db.commit()
-    return
+    _require_admin(db, authorization)
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="მომხმარებლების მასობრივი წაშლა გამორთულია. საჭიროების შემთხვევაში წაშალეთ კონკრეტული პირი მისი ბარათიდან.",
+    )
 
 
 def _admin_statement_payload(statement: Statement, user: User) -> AdminStatementOut:
@@ -2793,9 +2831,8 @@ def admin_delete_statement(
     if not statement:
         return
     user = db.get(User, statement.user_id)
-    # Remove stored attachments if present
-    for att_path in iter_statement_attachment_paths(statement):
-        delete_storage_file(att_path)
+    attachment_paths = list(iter_statement_attachment_paths(statement))
+    namespace = f"statements/{statement.user_id}/{statement.id}"
     db.execute(
         PlanningLetter.__table__.update()
         .where(PlanningLetter.statement_id == statement_id)
@@ -2805,6 +2842,7 @@ def admin_delete_statement(
     db.flush()
     reconcile_user_candidate_status_after_delete(db, user, deleted_kind="statement")
     db.commit()
+    _cleanup_committed_media([(path, namespace) for path in attachment_paths], {namespace})
     return
 
 
@@ -2896,17 +2934,6 @@ def admin_mark_statements_seen(
 ALLOWED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_PHOTO_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 PHOTO_UPLOAD_MAX_BYTES = DEFAULT_UPLOAD_MAX_BYTES
-
-
-def _delete_user_photo_file(user: User) -> None:
-    """Delete user photo file from disk if exists."""
-    if user.photo_path:
-        try:
-            delete_storage_file(user.photo_path)
-        except Exception:
-            pass
-    user.photo_path = None
-    user.photo_filename = None
 
 
 @router.post("/users/{user_id}/photo")
@@ -3045,9 +3072,15 @@ def admin_delete_user_photo(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    _delete_user_photo_file(user)
+    photo_path = user.photo_path
+    if photo_path and db.scalar(select(User.id).where(User.id != user_id, User.photo_path == photo_path)):
+        photo_path = None  # Legacy shared reference: do not remove another user's photo.
+    user.photo_path = None
+    user.photo_filename = None
     db.add(user)
     db.commit()
+    if photo_path:
+        _cleanup_committed_media([(photo_path, "photos")], set())
     return
 
 

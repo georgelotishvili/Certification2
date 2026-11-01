@@ -396,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return redirectToHome();
   }
 
-  function wireNavigation({ users, multiApartment, multiFunctional, guide, regulations, documents, appFiles, applicationForm, publicAi }) {
+  function wireNavigation({ users, examSettings, blocksModule, multiApartment, multiFunctional, guide, regulations, documents, appFiles, applicationForm, publicAi }) {
     const setMenu = (open) => {
       DOM.body?.classList.toggle('menu-open', open);
       if (DOM.burger) DOM.burger.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -483,6 +483,12 @@ document.addEventListener('DOMContentLoaded', () => {
         showSection(targetSection);
         const moduleMap = {
           registrations: users,
+          exam: {
+            render: () => {
+              examSettings?.render?.();
+              blocksModule?.render?.();
+            },
+          },
           multiApartment,
           multiFunctional,
           guide,
@@ -533,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const createModule = (factory, fallback = noopObj) => factory ? factory(moduleContextBase) : fallback;
     const createModuleWithContext = (factory, context, fallback = noopObj) => factory ? factory(context) : fallback;
 
-    const examSettings = createModule(modules.createExamSettingsModule, { init: noop });
+    const examSettings = createModule(modules.createExamSettingsModule, { init: noop, render: noop });
     const blocksModule = createModule(modules.createBlocksModule, { init: noop, render: noop, reload: noop });
     const resultsModule = createModule(modules.createResultsModule, { init: noop, open: noop, close: noop });
     const projectResultsModule = createModuleWithContext(modules.createProjectResultsModule, { ...moduleContextBase },
@@ -592,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasAccess = await ensureAdminAccess();
     if (!hasAccess) return;
 
-    wireNavigation({ users: usersModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, appFiles: appFilesModule, applicationForm: applicationFormModule, publicAi: publicAiModule });
+    wireNavigation({ users: usersModule, examSettings, blocksModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, appFiles: appFilesModule, applicationForm: applicationFormModule, publicAi: publicAiModule });
 
     if (isFounderActor()) {
       examSettings.init();

@@ -106,6 +106,12 @@ def create_app() -> FastAPI:
     # Run after the legacy permission/project migrations and fail visibly if
     # the required columns, indexes, or lossless backfill cannot be created.
     run_exam_stage_grants_migration()
+    try:
+        from sqlalchemy import text as _sql_text
+        with engine.begin() as _conn:
+            _conn.execute(_sql_text("UPDATE exam_codes SET disabled = 1 WHERE disabled = 0"))
+    except Exception:
+        pass
 
     ensure_media_root()
 

@@ -184,8 +184,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load header photo
   let currentPhotoObjectUrl = null;
+  let loadedPhotoUserId = null;
+  let inFlightPhotoUserId = null;
   async function loadHeaderPhoto(userId) {
     if (!userId) return;
+    const normalizedId = String(userId);
+    if (loadedPhotoUserId === normalizedId || inFlightPhotoUserId === normalizedId) return;
+    inFlightPhotoUserId = normalizedId;
     try {
       const photoUrl = `${API_BASE}/users/${userId}/photo/file`;
       const authHeaders = !PUBLIC_VIEW ? getActorHeaders() : {};
@@ -198,15 +203,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             try { URL.revokeObjectURL(currentPhotoObjectUrl); } catch {}
           }
           currentPhotoObjectUrl = URL.createObjectURL(blob);
+          loadedPhotoUserId = normalizedId;
           updateHeaderPhoto(currentPhotoObjectUrl);
           return;
         }
+        loadedPhotoUserId = normalizedId;
         updateHeaderPhoto(photoUrl);
         return;
       }
       // Use image preload to check if photo exists (public certified profile)
       const img = new Image();
-      img.onload = () => updateHeaderPhoto(photoUrl);
+      img.onload = () => {
+        loadedPhotoUserId = normalizedId;
+        updateHeaderPhoto(photoUrl);
+      };
       img.onerror = async () => {
         try {
           const fallbackHeaders = getActorHeaders();
@@ -219,12 +229,17 @@ document.addEventListener('DOMContentLoaded', async () => {
               try { URL.revokeObjectURL(currentPhotoObjectUrl); } catch {}
             }
             currentPhotoObjectUrl = URL.createObjectURL(blob);
+            loadedPhotoUserId = normalizedId;
             updateHeaderPhoto(currentPhotoObjectUrl);
           }
         } catch {}
       };
       img.src = photoUrl;
-    } catch {}
+    } catch {} finally {
+      if (inFlightPhotoUserId === normalizedId) {
+        inFlightPhotoUserId = null;
+      }
+    }
   }
 
   // Photo modal

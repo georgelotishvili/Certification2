@@ -459,6 +459,7 @@ def get_all_questions(
     ).options(
         selectinload(Block.chapter),
         selectinload(Block.subchapter),
+        selectinload(Block.questions).selectinload(Question.options),
     ).order_by(Block.order_index)
     blocks = db.scalars(blocks_stmt).all()
 
@@ -474,16 +475,17 @@ def get_all_questions(
 
     map_changed = False
     result_blocks: List[AllQuestionsBlockOut] = []
+    loaded_question_by_id: Dict[int, Question] = {
+        q.id: q for b in blocks for q in b.questions
+    }
 
     for block in blocks:
         key = str(block.id)
         if key not in selected_map:
-            q_stmt = (
-                select(Question)
-                .where(Question.block_id == block.id, Question.enabled == True)  # noqa: E712
-                .order_by(Question.order_index)
+            all_questions = sorted(
+                [q for q in block.questions if q.enabled],
+                key=lambda q: (q.order_index or 0, q.id),
             )
-            all_questions = db.scalars(q_stmt).all()
             if not all_questions:
                 continue
             choose_n = min(block.qty, len(all_questions))
@@ -493,15 +495,20 @@ def get_all_questions(
             map_changed = True
 
         selected_ids = selected_map[key]
-        q_stmt2 = select(Question).where(Question.id.in_(selected_ids))
-        questions_unsorted = db.scalars(q_stmt2).all()
-        id_to_question = {q.id: q for q in questions_unsorted}
-        questions = [id_to_question[qid] for qid in selected_ids if qid in id_to_question]
+        missing_qids = [qid for qid in selected_ids if qid not in loaded_question_by_id]
+        if missing_qids:
+            q_stmt2 = (
+                select(Question)
+                .where(Question.id.in_(missing_qids))
+                .options(selectinload(Question.options))
+            )
+            for q_extra in db.scalars(q_stmt2).all():
+                loaded_question_by_id[q_extra.id] = q_extra
+        questions = [loaded_question_by_id[qid] for qid in selected_ids if qid in loaded_question_by_id]
 
         out_questions: List[QuestionOut] = []
         for q in questions:
-            o_stmt = select(Option).where(Option.question_id == q.id)
-            opts = db.scalars(o_stmt).all()
+            opts = sorted(q.options, key=lambda o: o.id)
             out_questions.append(
                 QuestionOut(
                     id=q.id,

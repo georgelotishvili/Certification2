@@ -110,6 +110,15 @@ def create_app() -> FastAPI:
         from sqlalchemy import text as _sql_text
         with engine.begin() as _conn:
             _conn.execute(_sql_text("UPDATE exam_codes SET disabled = 1 WHERE disabled = 0"))
+            for _idx_ddl in (
+                "CREATE INDEX IF NOT EXISTS ix_blocks_exam_id ON blocks (exam_id)",
+                "CREATE INDEX IF NOT EXISTS ix_questions_block_id ON questions (block_id)",
+                "CREATE INDEX IF NOT EXISTS ix_options_question_id ON options (question_id)",
+                "CREATE INDEX IF NOT EXISTS ix_answers_session_id ON answers (session_id)",
+                "CREATE INDEX IF NOT EXISTS ix_answers_question_id ON answers (question_id)",
+                "CREATE INDEX IF NOT EXISTS ix_answers_option_id ON answers (option_id)",
+            ):
+                _conn.execute(_sql_text(_idx_ddl))
     except Exception:
         pass
 

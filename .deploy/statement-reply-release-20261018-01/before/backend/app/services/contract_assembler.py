@@ -163,6 +163,7 @@ def extract_user_fields(
     if isinstance(user, dict):
         first = str(user.get("first_name") or user.get("firstName") or "").strip()
         last = str(user.get("last_name") or user.get("lastName") or "").strip()
+        direct_full_name = str(user.get("full_name") or user.get("fullName") or "").strip()
         personal_id = str(user.get("personal_id") or user.get("personalId") or "").strip()
         phone = str(user.get("phone") or "").strip()
         email = str(user.get("email") or "").strip()
@@ -183,6 +184,7 @@ def extract_user_fields(
     else:
         first = str(getattr(user, "first_name", "") or "").strip()
         last = str(getattr(user, "last_name", "") or "").strip()
+        direct_full_name = str(getattr(user, "full_name", "") or "").strip()
         personal_id = str(getattr(user, "personal_id", "") or "").strip()
         phone = str(getattr(user, "phone", "") or "").strip()
         email = str(getattr(user, "email", "") or "").strip()
@@ -206,7 +208,7 @@ def extract_user_fields(
     if norm_cat and not norm_regime:
         norm_regime = "standard"
 
-    full_name = f"{first} {last}".strip()
+    full_name = f"{first} {last}".strip() or direct_full_name
     return {
         "full_name": full_name,
         "personal_id": personal_id,

@@ -347,6 +347,8 @@
     } = context;
 
     const mountedPanels = new WeakMap();
+    const mountedPanelCleanup = new WeakMap();
+    const mountedByUserId = new Map();
     const sharedTemplates = {
       exam: {
         kind: 'exam',
@@ -852,9 +854,22 @@
 
     function mount(panel, user, { onChanged = () => {} } = {}) {
       if (!panel || user?.id == null) return { load: async () => {}, openHistoryModal: async () => {} };
+      const numericUserId = Number(user.id);
+      mountedPanelCleanup.get(panel)?.();
+      if (Number.isFinite(numericUserId)) {
+        mountedByUserId.get(numericUserId)?.();
+      }
       const mountToken = {};
       mountedPanels.set(panel, mountToken);
-      const isCurrent = () => mountedPanels.get(panel) === mountToken;
+      let cleanupListeners = () => {};
+      const isCurrent = () => {
+        if (mountedPanels.get(panel) !== mountToken) return false;
+        if (typeof panel.isConnected === 'boolean' && !panel.isConnected) {
+          cleanupListeners();
+          return false;
+        }
+        return true;
+      };
 
       panel.innerHTML = `
         <div class="exam-schedule-card-bar">
@@ -3415,25 +3430,46 @@
         void openScheduleFormModal(null, { mode: 'custom', returnToHistory: false });
       });
 
-      global.addEventListener('admin:certificateNotified', (ev) => {
+      const onCertificateNotified = (ev) => {
         if (ev?.detail?.userId === user.id && isCurrent()) {
           void load();
         }
-      });
+      };
 
-      global.addEventListener('admin:examResultsChanged', (ev) => {
+      const onExamResultsChanged = (ev) => {
         if ((!ev?.detail?.userId || Number(ev.detail.userId) === Number(user.id)) && isCurrent()) {
           void load();
         }
-      });
+      };
 
-      global.addEventListener('admin:openStatementReply', (ev) => {
+      const onOpenStatementReply = (ev) => {
         if (Number(ev?.detail?.userId) === Number(user.id) && isCurrent()) {
           void openReplyTemplateChooserModal(ev.detail.statementItem || null, {
             returnToHistory: Boolean(ev.detail.returnToHistory),
           });
         }
-      });
+      };
+
+      cleanupListeners = () => {
+        global.removeEventListener('admin:certificateNotified', onCertificateNotified);
+        global.removeEventListener('admin:examResultsChanged', onExamResultsChanged);
+        global.removeEventListener('admin:openStatementReply', onOpenStatementReply);
+        if (mountedPanelCleanup.get(panel) === cleanupListeners) {
+          mountedPanelCleanup.delete(panel);
+        }
+        if (Number.isFinite(numericUserId) && mountedByUserId.get(numericUserId) === cleanupListeners) {
+          mountedByUserId.delete(numericUserId);
+        }
+      };
+
+      mountedPanelCleanup.set(panel, cleanupListeners);
+      if (Number.isFinite(numericUserId)) {
+        mountedByUserId.set(numericUserId, cleanupListeners);
+      }
+
+      global.addEventListener('admin:certificateNotified', onCertificateNotified);
+      global.addEventListener('admin:examResultsChanged', onExamResultsChanged);
+      global.addEventListener('admin:openStatementReply', onOpenStatementReply);
 
       updateCardButtonBadge();
 

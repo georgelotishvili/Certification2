@@ -121,47 +121,69 @@
       renderDocuments(filtered, q);
     }
 
-    async function loadDocuments() {
+    let lastLoadedAuthToken = undefined;
+    let inFlightLoadPromise = null;
+
+    function getCurrentAuthToken() {
+      try {
+        return window.Auth?.getToken?.() || localStorage.getItem('auth_token') || localStorage.getItem('access_token') || '';
+      } catch {
+        return '';
+      }
+    }
+
+    async function loadDocuments(options = {}) {
+      const force = Boolean(options && options.force);
+      const currentToken = getCurrentAuthToken();
+      if (!force && lastLoadedAuthToken === currentToken && allDocuments.length > 0) {
+        return;
+      }
+      if (!force && inFlightLoadPromise) {
+        return inFlightLoadPromise;
+      }
       DOM.grid.setAttribute('aria-busy', 'true');
       if (DOM.errorBox) DOM.errorBox.hidden = true;
 
-      try {
-        const headers = {};
+      inFlightLoadPromise = (async () => {
         try {
-          const token = window.Auth?.getToken?.() || localStorage.getItem('auth_token') || localStorage.getItem('access_token');
-          if (token) headers.Authorization = `Bearer ${token}`;
-        } catch {}
-        const response = await fetch(`${getApiBase()}/documents`, { cache: 'no-cache', headers });
-        if (!response.ok) throw new Error('Failed to load documents');
-        const data = await response.json();
-        const docs = data.items || [];
-        allDocuments = Array.isArray(docs) ? docs : [];
-        applyFilter();
+          const headers = {};
+          if (currentToken) headers.Authorization = `Bearer ${currentToken}`;
+          const response = await fetch(`${getApiBase()}/documents`, { cache: 'no-cache', headers });
+          if (!response.ok) throw new Error('Failed to load documents');
+          const data = await response.json();
+          const docs = data.items || [];
+          allDocuments = Array.isArray(docs) ? docs : [];
+          lastLoadedAuthToken = currentToken;
+          applyFilter();
 
-        // Check if URL has ?doc=<id>
-        try {
-          const urlParams = new URLSearchParams(window.location.search);
-          const requestedDocId = urlParams.get('doc');
-          if (requestedDocId && !loadDocuments._openedInitialDoc) {
-            loadDocuments._openedInitialDoc = true;
-            const openRequested = () => {
-              window.SiteDocuments?.openDocumentById?.(requestedDocId);
-            };
-            if (document.getElementById('siteInfoModal')) {
-              openRequested();
-            } else {
-              document.addEventListener('headerReady', openRequested, { once: true });
+          // Check if URL has ?doc=<id>
+          try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const requestedDocId = urlParams.get('doc');
+            if (requestedDocId && !loadDocuments._openedInitialDoc) {
+              loadDocuments._openedInitialDoc = true;
+              const openRequested = () => {
+                window.SiteDocuments?.openDocumentById?.(requestedDocId);
+              };
+              if (document.getElementById('siteInfoModal')) {
+                openRequested();
+              } else {
+                document.addEventListener('headerReady', openRequested, { once: true });
+              }
             }
+          } catch {}
+        } catch (err) {
+          console.error('Failed to load public documents:', err);
+          DOM.grid.setAttribute('aria-busy', 'false');
+          if (DOM.errorBox) {
+            DOM.errorBox.textContent = 'დოკუმენტების ჩატვირთვა ვერ მოხერხდა. გთხოვთ განაახლოთ გვერდი.';
+            DOM.errorBox.hidden = false;
           }
-        } catch {}
-      } catch (err) {
-        console.error('Failed to load public documents:', err);
-        DOM.grid.setAttribute('aria-busy', 'false');
-        if (DOM.errorBox) {
-          DOM.errorBox.textContent = 'დოკუმენტების ჩატვირთვა ვერ მოხერხდა. გთხოვთ განაახლოთ გვერდი.';
-          DOM.errorBox.hidden = false;
+        } finally {
+          inFlightLoadPromise = null;
         }
-      }
+      })();
+      return inFlightLoadPromise;
     }
 
     if (DOM.searchInput) {
@@ -215,8 +237,8 @@
       }
     });
 
-    document.addEventListener('auth:login', () => { void loadDocuments(); });
-    document.addEventListener('auth:logout', () => { void loadDocuments(); });
+    document.addEventListener('auth:login', () => { void loadDocuments({ force: true }); });
+    document.addEventListener('auth:logout', () => { void loadDocuments({ force: true }); });
     document.addEventListener('user:refreshed', () => { void loadDocuments(); });
 
     void loadDocuments();

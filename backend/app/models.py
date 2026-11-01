@@ -89,7 +89,7 @@ class Block(Base):
     __tablename__ = "blocks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"))
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"), index=True)
     chapter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("taxonomy_chapters.id", ondelete="SET NULL"), nullable=True, index=True)
     subchapter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("taxonomy_subchapters.id", ondelete="SET NULL"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255))
@@ -110,7 +110,7 @@ class Question(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    block_id: Mapped[int] = mapped_column(ForeignKey("blocks.id", ondelete="CASCADE"))
+    block_id: Mapped[int] = mapped_column(ForeignKey("blocks.id", ondelete="CASCADE"), index=True)
     code: Mapped[str] = mapped_column(String(64))
     text: Mapped[str] = mapped_column(Text)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
@@ -125,7 +125,7 @@ class Option(Base):
     __tablename__ = "options"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"))
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
     text: Mapped[str] = mapped_column(Text)
     is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -258,9 +258,9 @@ class Answer(Base):
     __tablename__ = "answers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
-    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"))
-    option_id: Mapped[int] = mapped_column(ForeignKey("options.id", ondelete="CASCADE"))
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    option_id: Mapped[int] = mapped_column(ForeignKey("options.id", ondelete="CASCADE"), index=True)
     is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
     answered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

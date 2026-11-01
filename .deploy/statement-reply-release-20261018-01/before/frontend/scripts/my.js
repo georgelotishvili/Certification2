@@ -183,14 +183,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Load header photo
+  let currentPhotoObjectUrl = null;
   async function loadHeaderPhoto(userId) {
     if (!userId) return;
     try {
       const photoUrl = `${API_BASE}/users/${userId}/photo/file`;
-      // Use image preload to check if photo exists
+      const authHeaders = !PUBLIC_VIEW ? getActorHeaders() : {};
+      if (!PUBLIC_VIEW && authHeaders && authHeaders.Authorization) {
+        const res = await fetch(photoUrl, { headers: authHeaders });
+        if (!res || !res.ok) return;
+        if (typeof res.blob === 'function' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+          const blob = await res.blob();
+          if (currentPhotoObjectUrl && typeof URL.revokeObjectURL === 'function') {
+            try { URL.revokeObjectURL(currentPhotoObjectUrl); } catch {}
+          }
+          currentPhotoObjectUrl = URL.createObjectURL(blob);
+          updateHeaderPhoto(currentPhotoObjectUrl);
+          return;
+        }
+        updateHeaderPhoto(photoUrl);
+        return;
+      }
+      // Use image preload to check if photo exists (public certified profile)
       const img = new Image();
       img.onload = () => updateHeaderPhoto(photoUrl);
-      img.onerror = () => {}; // Photo doesn't exist, keep default icon
+      img.onerror = async () => {
+        try {
+          const fallbackHeaders = getActorHeaders();
+          if (!fallbackHeaders || !fallbackHeaders.Authorization) return;
+          const res = await fetch(photoUrl, { headers: fallbackHeaders });
+          if (!res || !res.ok) return;
+          if (typeof res.blob === 'function' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+            const blob = await res.blob();
+            if (currentPhotoObjectUrl && typeof URL.revokeObjectURL === 'function') {
+              try { URL.revokeObjectURL(currentPhotoObjectUrl); } catch {}
+            }
+            currentPhotoObjectUrl = URL.createObjectURL(blob);
+            updateHeaderPhoto(currentPhotoObjectUrl);
+          }
+        } catch {}
+      };
       img.src = photoUrl;
     } catch {}
   }
@@ -291,6 +323,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
           try {
+            window.Auth?.clearSession?.();
+            localStorage.setItem('authLoggedIn', 'false');
             localStorage.removeItem('auth_token');
             localStorage.removeItem('loggedIn');
             localStorage.removeItem('currentUser');

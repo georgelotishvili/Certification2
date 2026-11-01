@@ -151,7 +151,7 @@
   let cachedDocuments = null;
   let cachedDocumentsKey = null;
   let currentModalDoc = null;
-  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v7_';
+  const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v8_';
 
   function getSiteDocsCacheKey() {
     const user = getCurrentUserForContract();
@@ -159,9 +159,14 @@
     return `${SITE_DOCS_CACHE_PREFIX}${uid}`;
   }
 
+  let inFlightSiteDocsPromise = null;
+  let inFlightSiteDocsKey = null;
+
   function invalidateSiteDocumentsCache() {
     cachedDocuments = null;
     cachedDocumentsKey = null;
+    inFlightSiteDocsPromise = null;
+    inFlightSiteDocsKey = null;
     try {
       Object.keys(sessionStorage).forEach((k) => {
         if (k.startsWith('gipc_site_docs_')) sessionStorage.removeItem(k);
@@ -171,7 +176,11 @@
 
   document.addEventListener('auth:login', invalidateSiteDocumentsCache);
   document.addEventListener('auth:logout', invalidateSiteDocumentsCache);
-  document.addEventListener('user:refreshed', invalidateSiteDocumentsCache);
+  document.addEventListener('user:refreshed', () => {
+    if (cachedDocumentsKey && getSiteDocsCacheKey() !== cachedDocumentsKey) {
+      invalidateSiteDocumentsCache();
+    }
+  });
 
   async function fetchSiteDocuments(forceRefresh = false) {
     const cacheKey = getSiteDocsCacheKey();
@@ -197,28 +206,40 @@
         }
       } catch {}
     }
-    try {
-      const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/documents`, {
-        cache: forceRefresh ? 'no-cache' : 'default',
-        headers: { ...getOptionalAuthHeaders() },
-      });
-      if (!response.ok) return [];
-      const data = await response.json();
-      const items = Array.isArray(data.items) ? data.items : [];
-      cachedDocuments = items.map((d) => ({
-        ...d,
-        content: populateContractHtmlForCurrentUser(d.content || '', d.contract_type),
-      }));
-      cachedDocumentsKey = cacheKey;
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(cachedDocuments));
-      } catch {}
-      return cachedDocuments;
-    } catch (err) {
-      console.error('Failed to fetch site documents:', err);
-      return [];
+    if (!forceRefresh && inFlightSiteDocsPromise && inFlightSiteDocsKey === cacheKey) {
+      return inFlightSiteDocsPromise;
     }
+    inFlightSiteDocsKey = cacheKey;
+    inFlightSiteDocsPromise = (async () => {
+      try {
+        const API_BASE = getApiBase();
+        const response = await fetch(`${API_BASE}/documents`, {
+          cache: forceRefresh ? 'no-cache' : 'default',
+          headers: { ...getOptionalAuthHeaders() },
+        });
+        if (!response.ok) return [];
+        const data = await response.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        cachedDocuments = items.map((d) => ({
+          ...d,
+          content: populateContractHtmlForCurrentUser(d.content || '', d.contract_type),
+        }));
+        cachedDocumentsKey = cacheKey;
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify(cachedDocuments));
+        } catch {}
+        return cachedDocuments;
+      } catch (err) {
+        console.error('Failed to fetch site documents:', err);
+        return [];
+      } finally {
+        if (inFlightSiteDocsKey === cacheKey) {
+          inFlightSiteDocsPromise = null;
+          inFlightSiteDocsKey = null;
+        }
+      }
+    })();
+    return inFlightSiteDocsPromise;
   }
 
   function escapeHtml(str) {
@@ -348,7 +369,7 @@
   async function populateInfoDropdowns() {
     try {
       const API_BASE = getApiBase();
-      const response = await fetch(`${API_BASE}/guide/documents`, { cache: 'no-cache' });
+      const response = await fetch(`${API_BASE}/guide/documents?summary=1`, { cache: 'no-cache' });
       if (!response.ok) return;
       const data = await response.json();
       const items = Array.isArray(data?.items)
@@ -524,7 +545,10 @@
         script.dataset.loaded = 'true';
         resolve();
       };
-      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      script.onerror = () => {
+        try { script.remove(); } catch {}
+        reject(new Error(`Failed to load ${src}`));
+      };
       document.head.appendChild(script);
     });
   }
@@ -1416,8 +1440,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261029-contract1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261029_contract1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261101-doc4b';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261101_doc4b';
 
   function syncHeaderInitialAuthUI() {
     try {
@@ -2096,7 +2120,7 @@
         extraInfo,
         '',
         '4. განმცხადებლის დადასტურება',
-        '☑ ვადასტურებ, რომ გავეცანი ვებგვერდზე (gipc.org.ge) გამოქვეყნებულ სერტიფიცირების სქემას, გამოცდის წესებსა და „საგამოცდო და სასერტიფიკაციო ხელშეკრულების“ სტანდარტულ პირობებს; წარმოდგენილი დოკუმენტები და მონაცემები უტყუარია; ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.',
+        '☑ ვადასტურებ, რომ გავეცანი საიტზე gipc.org.ge გამოქვეყნებულ სერტიფიცირების პირობებს, წარმოდგენილი დოკუმენტები უტყუარია, ვიღებ ვალდებულებას შევასრულო სერტიფიცირების მოთხოვნები, წარვადგინო შეფასებისთვის საჭირო ნებისმიერი ინფორმაცია და თანახმა ვარ ჩემი პერსონალური მონაცემების დამუშავებაზე სერტიფიცირების მიზნებისთვის.',
         '',
         `განმცხადებელი: ${fullName || '—'} (დადასტურებულია ელექტრონულად).`,
       ].join('\n');

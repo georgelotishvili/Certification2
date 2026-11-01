@@ -2038,14 +2038,14 @@
       },
       {
         value: 'B',
-        label: '4) კატეგორია B (მხოლოდ სპეციალისტი)',
-        contractText: 'კატეგორია B — მხოლოდ არქიტექტურული პროექტის შემსწავლელი სპეციალისტი (A კატეგორიაზე ჩამონაცვლების გარეშე)',
+        label: '4) კატეგორია B (სპეციალისტი)',
+        contractText: 'კატეგორია B — არქიტექტურული პროექტის შემსწავლელი სპეციალისტი',
         prefix: '4)',
       },
       {
         value: 'C',
-        label: '5) კატეგორია C (მხოლოდ ექსპერტი)',
-        contractText: 'კატეგორია C — მხოლოდ არქიტექტურული პროექტის ექსპერტი (A კატეგორიაზე ჩამონაცვლების გარეშე)',
+        label: '5) კატეგორია C (ექსპერტი)',
+        contractText: 'კატეგორია C — არქიტექტურული პროექტის ექსპერტი',
         prefix: '5)',
       },
     ];
@@ -2137,6 +2137,14 @@
       if (!rawHtml || !user) return rawHtml || '';
       const fields = extractUserContractFields(user, overrideCategory, overrideRegime);
       let out = String(rawHtml);
+
+      // These are field labels, not filled values or section headings. Older
+      // templates emphasize them; keep the personalized preview/PDF labels
+      // normal while preserving the bold value inserted immediately after them.
+      out = out.replace(
+        /<(strong|b)\b[^>]*>(\s*(?:მოთხოვნილი\s+კატეგორია|დაშვების\s+რეჟიმი)\s*:\s*)<\/\1>/gi,
+        '$2'
+      );
 
       const safeDirName = escapeHtml(fields.director_name);
       const safeDirPid = escapeHtml(fields.director_personal_id);
@@ -2492,19 +2500,25 @@
           return w;
         };
 
+        const isSameBoldSegment = (left, right) => Boolean(
+          left && right && left.bold && right.bold &&
+          (left.segId || 0) === (right.segId || 0)
+        );
+
+        const measureWordGapWidth = (previousWord, nextWord) => {
+          const previousPart = previousWord.parts[previousWord.parts.length - 1];
+          const nextPart = nextWord.parts[0];
+          pdf.setFont(fontName, isSameBoldSegment(previousPart, nextPart) ? 'bold' : 'normal');
+          return pdf.getTextWidth(' ');
+        };
+
         const coalesceLineRuns = (lineItems) => {
           const runs = [];
           lineItems.forEach((item, wordIdx) => {
             if (wordIdx > 0) {
               const prevRun = runs[runs.length - 1];
               const nextPart = item.word.parts[0];
-              const sameBoldSeg = Boolean(
-                prevRun &&
-                  nextPart &&
-                  prevRun.bold &&
-                  nextPart.bold &&
-                  prevRun.segId === nextPart.segId
-              );
+              const sameBoldSeg = isSameBoldSegment(prevRun, nextPart);
               if (sameBoldSeg) {
                 prevRun.text += ' ';
               } else if (prevRun && !prevRun.bold) {
@@ -2585,8 +2599,6 @@
           pdf.setFontSize(fontSize);
           pdf.setTextColor(0, 0, 0);
           pdf.setFont(fontName, 'normal');
-          const spaceW = pdf.getTextWidth(' ');
-
           const rawWords = tokenizeSegmentsToWords(segments);
           if (!rawWords.length) return;
 
@@ -2614,13 +2626,16 @@
             if (!currentLine.length) {
               currentLine.push(item);
               currentLineWidth = item.width;
-            } else if (currentLineWidth + spaceW + item.width <= width) {
-              currentLine.push(item);
-              currentLineWidth += spaceW + item.width;
             } else {
-              lines.push(currentLine);
-              currentLine = [item];
-              currentLineWidth = item.width;
+              const gapWidth = measureWordGapWidth(currentLine[currentLine.length - 1].word, item.word);
+              if (currentLineWidth + gapWidth + item.width <= width) {
+                currentLine.push(item);
+                currentLineWidth += gapWidth + item.width;
+              } else {
+                lines.push(currentLine);
+                currentLine = [item];
+                currentLineWidth = item.width;
+              }
             }
           });
           if (currentLine.length) {
