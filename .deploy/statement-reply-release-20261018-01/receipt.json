@@ -1,6 +1,6 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "deployed_at": "2026-11-01T09:47:24.173071+00:00",
+  "deployed_at": "2026-11-01T16:10:25.897622+00:00",
   "remote": {
     "ok": true,
     "service": "active",
@@ -8,134 +8,38 @@
     "has_admin_users_route": true,
     "has_planning_templates_route": true,
     "verified_files": {
-      "backend/app/main.py": true,
-      "backend/app/models.py": true,
-      "backend/app/routers/admin.py": true,
-      "backend/app/routers/documents.py": true,
-      "backend/app/routers/exam.py": true,
-      "backend/app/routers/guide.py": true,
-      "frontend/pages/admin.html": true,
+      "frontend/assets/svg/facebook.svg": true,
       "frontend/pages/documents.html": true,
       "frontend/pages/index.html": true,
       "frontend/pages/my.html": true,
-      "frontend/pages/registry.html": true,
-      "frontend/scripts/admin.js": true,
-      "frontend/scripts/admin/app-files.js": true,
-      "frontend/scripts/admin/application-form.js": true,
-      "frontend/scripts/admin/blocks.js": true,
-      "frontend/scripts/admin/exam-schedules.js": true,
-      "frontend/scripts/admin/exam-settings.js": true,
-      "frontend/scripts/admin/guide-videos.js": true,
-      "frontend/scripts/admin/multi-apartment.js": true,
-      "frontend/scripts/admin/multi-functional.js": true,
-      "frontend/scripts/admin/regulations.js": true,
-      "frontend/scripts/admin/results.js": true,
-      "frontend/scripts/admin/shared.js": true,
-      "frontend/scripts/documents.js": true,
-      "frontend/scripts/header.js": true,
-      "frontend/scripts/my.js": true
+      "frontend/pages/registry.html": true
     }
   },
   "public_checks": {
-    "https://gipc.org.ge/pages/admin.html": {
+    "https://gipc.org.ge/assets/svg/facebook.svg": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "c609144eac8ee8ad98001b9968f47489c3e94f990f382df953be658a13365292"
+      "sha256": "071d247e69fa0919c8d23378335611ca7c31c1d6908da4b35f81365f7891b4df"
     },
     "https://gipc.org.ge/pages/documents.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "b70c5d04ddaa90cdd0e4c9f08d1f45a12123e621fb99ee2b5cd0d2e17e09c9c0"
+      "sha256": "8f5dee42acb93732faba90cb40331e35e739ef8450deda3a5832a6d8a43a485a"
     },
     "https://gipc.org.ge/pages/index.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "e733064238dd5bc18bd5d303d58b0a97d3be5551f623060e24ef5b2131c3feab"
+      "sha256": "8232ab2412580727384b5284c647157ea965af2aa17a5526133c690343dbd92a"
     },
     "https://gipc.org.ge/pages/my.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "a3b9d90fd15b3868edf0b513ad899b691f968f255170cc17e4bd36dc26dede88"
+      "sha256": "ab9f00cede7dd8ef1b6351d0ff42dd848bb862ca9a2120b3204d59c7a021d3d3"
     },
     "https://gipc.org.ge/pages/registry.html": {
       "status": 200,
       "sha256_match": true,
-      "sha256": "3f61282042db0c43572485d122e77d1624c138b4d7ef39ed560a721e8e5263ec"
-    },
-    "https://gipc.org.ge/scripts/admin.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "6662980b3f7d8ff3719298531abd1567692444f6460ab9880ab8fdfe91de5cd7"
-    },
-    "https://gipc.org.ge/scripts/admin/app-files.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "ac9865e1b941aedfcc6533f76fe1ef275b69d213a7fb5558d6834780d5c94095"
-    },
-    "https://gipc.org.ge/scripts/admin/application-form.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "8b585597d9bfcef3b4fab6f262c12285fbea390df5cdb716232d3d3a35b97d55"
-    },
-    "https://gipc.org.ge/scripts/admin/blocks.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "76ed762a7cbc1fb9e834e8f5bfb4d51dd384699a6ed51c4151eda667fb5ab0f5"
-    },
-    "https://gipc.org.ge/scripts/admin/exam-schedules.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "3220db0070ba986700a2a76394f9cc955ea619b94107fb6933e6a246f288df49"
-    },
-    "https://gipc.org.ge/scripts/admin/exam-settings.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "49738bf069a06b38622b3ad0b74ae9f564b0be20c043cc45d52091a5e8777745"
-    },
-    "https://gipc.org.ge/scripts/admin/guide-videos.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "b955fa2ab26550ffde6d5d229a850a37471190b194aba03013b420cedfccbeca"
-    },
-    "https://gipc.org.ge/scripts/admin/multi-apartment.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "50db0db37bd36bd4388e18977090c29099826b5e33f4bbcccbf86ab02b0f4fa9"
-    },
-    "https://gipc.org.ge/scripts/admin/multi-functional.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "2478c18b4584c6fa4875ab2731ac8af32b63adc47ca2062d51a03fc4687b7e45"
-    },
-    "https://gipc.org.ge/scripts/admin/regulations.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "b541347fc2e08fc446147094a181ab73f481b02a399711dad04167496f8c4a9a"
-    },
-    "https://gipc.org.ge/scripts/admin/results.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "9608a618608756701800d2159b398919976902ada22941275283cf101d332cbe"
-    },
-    "https://gipc.org.ge/scripts/admin/shared.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "859230981315123369a043cc639e750db3dbc0cf15b3ac8f1594b0be62ffd116"
-    },
-    "https://gipc.org.ge/scripts/documents.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "3ed762b2ca60726888316db66019f69b2a8718c6d06d3c7e54e32795872075c3"
-    },
-    "https://gipc.org.ge/scripts/header.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "c155df9919678306b0c503ca67c15d7276c3b6dea7f9026c214683d8f9b79bf1"
-    },
-    "https://gipc.org.ge/scripts/my.js": {
-      "status": 200,
-      "sha256_match": true,
-      "sha256": "905d4adbcd6c1905d342898a21ab67f78099e54720ec0c2473e3652f6181a21b"
+      "sha256": "f20d49fa747a61cd11301a75cd99b899fe836ffe1409a2b9d0efc69414495bd5"
     }
   }
 }

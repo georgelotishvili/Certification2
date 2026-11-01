@@ -81,6 +81,7 @@ CANDIDATE_FILES = [
     "backend/scripts/seed.py",
     "frontend/assets/fonts/dejavu-sans.ttf",
     "frontend/assets/fonts/dejavu-sans-bold.ttf",
+    "frontend/assets/svg/facebook.svg",
     "frontend/assets/svg/logo.svg",
     "frontend/pages/admin.html",
     "frontend/pages/documents.html",

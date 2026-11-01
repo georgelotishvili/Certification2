@@ -1,162 +1,36 @@
 {
   "release": "statement-reply-release-20261018-01",
-  "created_at": "2026-11-01T09:46:57.558744+00:00",
+  "created_at": "2026-11-01T16:10:08.182610+00:00",
   "host": "gipcadmin@148.251.167.229",
   "files": [
     {
-      "path": "backend/app/main.py",
-      "before_sha256": "f4defd2a80cb19db636987e9097e33d5c1031517d8be61f9c6924a081fdba2bb",
-      "after_sha256": "449fbab7777e609d8a95b7052c39c4124a1e2d86137f1a33040491784f511f21",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/models.py",
-      "before_sha256": "63a3c41ba06653f7a165710f5e7adca4edc275aecda3c64258c26dc2e476149d",
-      "after_sha256": "19b37fa4b86def8be6df5c8d0d715149096f75ea50d55185773064cabc4c525e",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/admin.py",
-      "before_sha256": "c9713feb89018ebfe932f1ce6299cbcaeda957bf54001018c6431bf331356a81",
-      "after_sha256": "67e87e3a95cfed187e1af11e8eeabfdf11c196e4dc020f3d060ed08a06121042",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/documents.py",
-      "before_sha256": "7c6312fce3ac2214b84e8e4707efbddfea00fa0151938b153e07947bc6a08bef",
-      "after_sha256": "b5db98a883644982b7c63de86f6aecbc7bb010db3c240bda42c461e412a54a06",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/exam.py",
-      "before_sha256": "10053ecd2704ddb7c3b752488e4387974ef47e8084ba24b01171520a226781cb",
-      "after_sha256": "4f7c7c5503d55e956d6f7189b77513f76ee82501aa6efc7a5bd19284abb830f7",
-      "existed_before": true
-    },
-    {
-      "path": "backend/app/routers/guide.py",
-      "before_sha256": "2d18ccafebfd91ab864e94c5fb63575ed39a9cd16718b82a7efae25b4101156f",
-      "after_sha256": "ceefc528f3a35ebd7690e33ddf74017e746f80a52c64e16368301982d0d673d0",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/pages/admin.html",
-      "before_sha256": "1a7b21367ac4561522145346882e6e27d53f0cf39095d06106332a2cf1f0e2e2",
-      "after_sha256": "c609144eac8ee8ad98001b9968f47489c3e94f990f382df953be658a13365292",
-      "existed_before": true
+      "path": "frontend/assets/svg/facebook.svg",
+      "before_sha256": null,
+      "after_sha256": "071d247e69fa0919c8d23378335611ca7c31c1d6908da4b35f81365f7891b4df",
+      "existed_before": false
     },
     {
       "path": "frontend/pages/documents.html",
-      "before_sha256": "36a3235206474c95dcace238db8b6a54509da23a251851f3a545e0e5d6746680",
-      "after_sha256": "b70c5d04ddaa90cdd0e4c9f08d1f45a12123e621fb99ee2b5cd0d2e17e09c9c0",
+      "before_sha256": "b70c5d04ddaa90cdd0e4c9f08d1f45a12123e621fb99ee2b5cd0d2e17e09c9c0",
+      "after_sha256": "8f5dee42acb93732faba90cb40331e35e739ef8450deda3a5832a6d8a43a485a",
       "existed_before": true
     },
     {
       "path": "frontend/pages/index.html",
-      "before_sha256": "82578addea44e425dd9bcffc360ba17e5d0ea2dc4292f52634bf650e845c66e4",
-      "after_sha256": "e733064238dd5bc18bd5d303d58b0a97d3be5551f623060e24ef5b2131c3feab",
+      "before_sha256": "e733064238dd5bc18bd5d303d58b0a97d3be5551f623060e24ef5b2131c3feab",
+      "after_sha256": "8232ab2412580727384b5284c647157ea965af2aa17a5526133c690343dbd92a",
       "existed_before": true
     },
     {
       "path": "frontend/pages/my.html",
-      "before_sha256": "3a2ef758601988564e3e8056b84de5c43f43b5795eaed101927372aec3bd6b7b",
-      "after_sha256": "a3b9d90fd15b3868edf0b513ad899b691f968f255170cc17e4bd36dc26dede88",
+      "before_sha256": "a3b9d90fd15b3868edf0b513ad899b691f968f255170cc17e4bd36dc26dede88",
+      "after_sha256": "ab9f00cede7dd8ef1b6351d0ff42dd848bb862ca9a2120b3204d59c7a021d3d3",
       "existed_before": true
     },
     {
       "path": "frontend/pages/registry.html",
-      "before_sha256": "b871e3b0ccdc823bab31ce7c7be226bd906579f5515181e9941daa5c47a0f3b4",
-      "after_sha256": "3f61282042db0c43572485d122e77d1624c138b4d7ef39ed560a721e8e5263ec",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin.js",
-      "before_sha256": "15a4d99e0e758167d02a420a84f19a62fda57c19f6d68ce212add7f33e64b88e",
-      "after_sha256": "6662980b3f7d8ff3719298531abd1567692444f6460ab9880ab8fdfe91de5cd7",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/app-files.js",
-      "before_sha256": "28414faff3244ad45e84eecdf73d96d0004e87b94f821493ad5f29e1c480bed0",
-      "after_sha256": "ac9865e1b941aedfcc6533f76fe1ef275b69d213a7fb5558d6834780d5c94095",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/application-form.js",
-      "before_sha256": "9648c0cc6e6183448bb8d9e0d98ef9a93037343577ab0ef7b0f28022eb81b21b",
-      "after_sha256": "8b585597d9bfcef3b4fab6f262c12285fbea390df5cdb716232d3d3a35b97d55",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/blocks.js",
-      "before_sha256": "448455712101cd371483e9e31b300fef6ecc8514fdbf11c22e60b6331d69a667",
-      "after_sha256": "76ed762a7cbc1fb9e834e8f5bfb4d51dd384699a6ed51c4151eda667fb5ab0f5",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/exam-schedules.js",
-      "before_sha256": "d02bb30b31de18e81e8e3c0c2439add206a310071708016e0618f3cd4f680f2b",
-      "after_sha256": "3220db0070ba986700a2a76394f9cc955ea619b94107fb6933e6a246f288df49",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/exam-settings.js",
-      "before_sha256": "da0d7c16a204bbacd1bbdf166fe3911bbfbb921097ed033efd8b36c6019eedce",
-      "after_sha256": "49738bf069a06b38622b3ad0b74ae9f564b0be20c043cc45d52091a5e8777745",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/guide-videos.js",
-      "before_sha256": "a8e2ca16d8a1911896bf382744bfa5cc405d5370bdb8a715e9a9eec751023ee8",
-      "after_sha256": "b955fa2ab26550ffde6d5d229a850a37471190b194aba03013b420cedfccbeca",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/multi-apartment.js",
-      "before_sha256": "3e29847373688a26b0a0dc7741c143324edc15f28fb5bf90a00dae66547191d7",
-      "after_sha256": "50db0db37bd36bd4388e18977090c29099826b5e33f4bbcccbf86ab02b0f4fa9",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/multi-functional.js",
-      "before_sha256": "ea4be5dadd5e1bd2b4d7436f5067c1554dd2b0d21a2ddea93ef2453436ec2fbf",
-      "after_sha256": "2478c18b4584c6fa4875ab2731ac8af32b63adc47ca2062d51a03fc4687b7e45",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/regulations.js",
-      "before_sha256": "4ce4bb85df9743e90e20734cb592c74f4d9177e05874a8e68fc5e073c625f850",
-      "after_sha256": "b541347fc2e08fc446147094a181ab73f481b02a399711dad04167496f8c4a9a",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/results.js",
-      "before_sha256": "3fbda20e09a54e2f9d292b5e586ad261887260a8bfe341768f3250dcb2a49d53",
-      "after_sha256": "9608a618608756701800d2159b398919976902ada22941275283cf101d332cbe",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/admin/shared.js",
-      "before_sha256": "5324e57eab6ef3308c3bb3a7ed3806f929d8d5fb428862c5baa9fd61f3421281",
-      "after_sha256": "859230981315123369a043cc639e750db3dbc0cf15b3ac8f1594b0be62ffd116",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/documents.js",
-      "before_sha256": "9249030fb7ef8c57e04dd27ab6b360d929a99897a82c8f848acebc3c319f7819",
-      "after_sha256": "3ed762b2ca60726888316db66019f69b2a8718c6d06d3c7e54e32795872075c3",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/header.js",
-      "before_sha256": "8df707a64d795e5805b3839252c7163dee1e910d029639461044d030fbc0d3e6",
-      "after_sha256": "c155df9919678306b0c503ca67c15d7276c3b6dea7f9026c214683d8f9b79bf1",
-      "existed_before": true
-    },
-    {
-      "path": "frontend/scripts/my.js",
-      "before_sha256": "03bacc755bf1bcc6af53a807125c092bf9cf5b336a4b8d9ba0bd90d8dcadab95",
-      "after_sha256": "905d4adbcd6c1905d342898a21ab67f78099e54720ec0c2473e3652f6181a21b",
+      "before_sha256": "3f61282042db0c43572485d122e77d1624c138b4d7ef39ed560a721e8e5263ec",
+      "after_sha256": "f20d49fa747a61cd11301a75cd99b899fe836ffe1409a2b9d0efc69414495bd5",
       "existed_before": true
     }
   ]
