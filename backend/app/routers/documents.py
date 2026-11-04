@@ -313,6 +313,17 @@ KNOWN_FACTORY_DOC_HTML_HASHES: frozenset[str] = frozenset(
         "04565d35fe38819c",
         "4b48fd8daf723a84",
         "69d063d51bf7e21b",
+        # Updated doc 4 - 1 factory hashes (normalized whitespace & raw):
+        "f7ef0bff50ea325a",  # GIPC-SCH-001 (doc 4 - 1)
+        "852c3bfd744d2357",  # GIPC-POL-001 (doc 4 - 1)
+        "291f7fe0039d0291",  # GIPC-POL-002 (doc 4 - 1)
+        "7b4cddf81fe3b2cb",  # GIPC-PRO-003 (doc 4 - 1)
+        "9ee2e72e66de7d8f",  # GIPC-CON-001 (doc 4 - 1)
+        "9797a017ca289ad5",
+        "e8d343f243acb4f2",
+        "66e492d043b62bc9",
+        "421329679b80534c",
+        "72acdc72265187cc",
     }
 )
 

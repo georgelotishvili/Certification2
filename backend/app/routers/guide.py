@@ -145,12 +145,14 @@ KNOWN_FACTORY_GUIDE_HTML_HASHES: dict[str, frozenset[str]] = {
         "122e49bcd5251446",
         "2a0be01b4bf050b1",
         "c8a50e052679e1a1",
+        "cc0ed9965106dea8",
         "d07f2a77240f5c5c",
         "e81dbece7be73d1d",
     ]),
     "საჩივარი და აპელაცია": frozenset([
         "ab32d667de33898a",
         "aced8d4ea7f785c4",
+        "bccc5a8bcfa2b19b",
         "ee6a95135247dd4f",
     ]),
     "კონფიდენციალურობა და კონტაქტი": frozenset([

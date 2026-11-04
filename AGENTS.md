@@ -41,7 +41,7 @@ python .deploy/deploy_admin_release_20261016.py --deploy
 ## 3. აკრედიტაციის დოკუმენტები და ხელშეკრულებების სისტემა
 
 - **გარე აკრედიტაციის საქაღალდე (წყარო ფაილები კომპიუტერზე):**
-  `C:\Users\george\Desktop\certification kode\akreditacia\ეტაპი 2\არგონი\doc 4\`
+  `C:\Users\george\Desktop\certification kode\akreditacia\ეტაპი 2\არგონი\doc 4 - 1\`
 - **ბექენდის შაბლონების საქაღალდე (აპლიკაციაში):**
   `backend/app/data/contracts/`
 
