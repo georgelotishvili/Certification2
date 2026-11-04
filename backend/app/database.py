@@ -47,6 +47,8 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def get_db():
     db = SessionLocal()
     try:
+        from .services.audit_log import enable_audit
+        enable_audit(db)
         yield db
     finally:
         db.close()

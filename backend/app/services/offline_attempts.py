@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..models import Answer, OfflineExamAttempt, Session as ExamSession, User, UserExamStageGrant
 from .exam_stage import is_admin_like
+from .desktop_sessions import require_matching_device
 from .exam_stage_grants import (
     lock_user_stage_transitions, require_stage_permission, sync_legacy_stage_fields,
 )
@@ -74,6 +75,7 @@ def register_theory_attempt(db: Session, session) -> OfflineExamAttempt:
         return attempt
     attempt = OfflineExamAttempt(
         token=secrets.token_urlsafe(48), user_id=user.id, stage="theory",
+        device_id=session.device_id,
         stage_grant_id=session.stage_grant_id, session_id=session.id,
         started_at=naive_utc(session.started_at), ends_at=naive_utc(session.ends_at),
     )
@@ -84,7 +86,7 @@ def register_theory_attempt(db: Session, session) -> OfflineExamAttempt:
 
 
 def start_project_attempt(db: Session, user: User, stage: str, payload, project_model,
-                          duration_minutes: int) -> OfflineExamAttempt:
+                          duration_minutes: int, *, device_id: str | None = None) -> OfflineExamAttempt:
     lock_user_stage_transitions(db, user)
     request_id = str(payload.startRequestId) if payload.startRequestId else None
     if not payload.projectCode or (is_admin_like(user) and not request_id):
@@ -105,6 +107,9 @@ def start_project_attempt(db: Session, user: User, stage: str, payload, project_
                 or attempt.project_code != payload.projectCode.strip()):
             raise HTTPException(409, "Offline start is already bound to another attempt or project")
         require_uncancelled_attempt(attempt)
+        # Only newly device-bound attempts acquire this extra ownership check.
+        # NULL-owned legacy retries retain their existing authorization rules.
+        require_matching_device(attempt.device_id, device_id)
         return attempt
     prepared = get_prepared_project_material(db, user.id, stage, payload.stageGrantId)
     if prepared is None and not is_admin_like(user):
@@ -139,6 +144,7 @@ def start_project_attempt(db: Session, user: User, stage: str, payload, project_
         raise HTTPException(403, "The original project deadline has passed")
     attempt = OfflineExamAttempt(
         token=secrets.token_urlsafe(48), start_request_id=request_id,
+        device_id=device_id,
         user_id=user.id, stage=stage, stage_grant_id=grant.id if grant else None,
         project_id=project_id, project_code=project_code,
         started_at=started_at, ends_at=ends_at,
@@ -167,6 +173,8 @@ def authorize_final(db: Session, token: str | None, *, stage: str,
         raise HTTPException(403, "Offline submission does not match its authorized attempt")
     if not allow_cancelled:
         require_uncancelled_attempt(attempt)
+    from .audit_log import set_audit_actor
+    set_audit_actor(db, user)
     return attempt, user
 
 
@@ -184,7 +192,10 @@ def check_final(attempt: OfflineExamAttempt, submission_id, finished_at,
                                        ensure_ascii=False).encode("utf-8")).hexdigest()
     if attempt.submission_id is not None:
         if attempt.submission_id != str(submission_id) or attempt.payload_hash != digest:
-            raise HTTPException(409, "This attempt already has a different frozen final submission")
+            raise HTTPException(409, {
+                "code": "EXAM_PAYLOAD_CONFLICT",
+                "message": "ამ მცდელობას უკვე აქვს სხვა მიღებული შედეგი. ლოკალური პასუხები შენარჩუნებულია; საჭიროა ადმინისტრატორის შემოწმება.",
+            })
         if not attempt.receipt:
             raise HTTPException(409, "Offline result receipt is unavailable")
         return digest, json.loads(attempt.receipt)

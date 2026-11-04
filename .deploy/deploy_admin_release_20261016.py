@@ -31,6 +31,8 @@ SSH = [
 
 CANDIDATE_FILES = [
     "backend/app/config.py",
+    "backend/app/database.py",
+    "backend/app/security.py",
     "backend/app/main.py",
     "backend/app/models.py",
     "backend/app/routers/admin.py",
@@ -50,6 +52,8 @@ CANDIDATE_FILES = [
     "backend/app/routers/users.py",
     "backend/app/schemas.py",
     "backend/app/services/candidate_status.py",
+    "backend/app/services/desktop_sessions.py",
+    "backend/app/services/audit_log.py",
     "backend/app/services/contract_assembler.py",
     "backend/app/services/email_verification.py",
     "backend/app/services/exam_lifecycle.py",
@@ -72,6 +76,8 @@ CANDIDATE_FILES = [
     "backend/app/data/contracts/12_ფორმა_განაცხადი.docx",
     "backend/app/data/contracts/28_ვებგვერდზე_განსათავსებელი_სავალდებულო_ინფორმაცია.md",
     "backend/scripts/migrate_candidate_status.py",
+    "backend/scripts/migrate_desktop_sessions.py",
+    "backend/scripts/migrate_audit_events.py",
     "backend/scripts/migrate_certificate_file_cols.py",
     "backend/scripts/migrate_documents.py",
     "backend/scripts/migrate_guide_videos.py",
@@ -223,6 +229,9 @@ for rel in PAYLOAD["rels"]:
 print(json.dumps(files))
 """
     remote_before = run_remote_python(fetch_script, {"rels": rels})
+    for item in changed_items:
+        if remote_before[item["path"]].get("sha256") != item.get("remote_sha256"):
+            raise RuntimeError("Remote file changed since inspection: " + item["path"])
 
     DEPLOY_DIR.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -232,6 +241,7 @@ print(json.dumps(files))
         "files": [],
     }
     upload_files = {}
+    checked_local = {item["path"]: item["local_sha256"] for item in changed_items}
     for rel in rels:
         info = remote_before[rel]
         if info.get("exists"):
@@ -239,6 +249,8 @@ print(json.dumps(files))
             before_path.parent.mkdir(parents=True, exist_ok=True)
             before_path.write_bytes(base64.b64decode(info["b64"]))
         after_bytes = (ROOT / rel).read_bytes()
+        if sha256_bytes(after_bytes) != checked_local[rel]:
+            raise RuntimeError("Local file changed since inspection: " + rel)
         after_path = AFTER_DIR / rel
         after_path.parent.mkdir(parents=True, exist_ok=True)
         after_path.write_bytes(after_bytes)
@@ -251,18 +263,22 @@ print(json.dumps(files))
         upload_files[rel] = {
             "b64": base64.b64encode(after_bytes).decode("ascii"),
             "sha256": sha256_bytes(after_bytes),
+            "before_sha256": info.get("sha256"),
         }
 
     (DEPLOY_DIR / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     apply_script = """
-import base64, hashlib, json, os, subprocess, time, urllib.request
+import base64, fcntl, hashlib, json, os, sqlite3, subprocess, time, urllib.request
 from pathlib import Path
 
 root = Path("/var/www/gipc")
 files = PAYLOAD["files"]
 backups = {}
 created = []
+service_stopped = False
+release_lock = open("/run/lock/gipc-release.lock", "a")
+fcntl.flock(release_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 def wait_for_openapi():
     last_err = None
@@ -292,6 +308,35 @@ def restore():
     subprocess.run(["systemctl", "restart", "gipc.service"], check=False)
 
 try:
+    # Validate every target before any replacement, not only at backup time.
+    for rel, item in files.items():
+        p = root / rel
+        if p.resolve().is_relative_to(root) is False:
+            raise RuntimeError("Invalid deployment target")
+        current_hash = hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None
+        if current_hash != item["before_sha256"]:
+            raise RuntimeError("Remote file changed before apply: " + rel)
+        raw = base64.b64decode(item["b64"])
+        if hashlib.sha256(raw).hexdigest() != item["sha256"]:
+            raise RuntimeError("Payload hash mismatch: " + rel)
+    # Obtain the same SQLite writer lock used by Start before inspecting active
+    # attempts, then stop admission while still holding it. An already committed
+    # exam (or unexpired preparation) aborts this release without writes/restart.
+    db = sqlite3.connect("/var/lib/gipc/db/app.db", timeout=30)
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        active = db.execute("SELECT COUNT(*) FROM sessions WHERE finished_at IS NULL AND (ends_at IS NULL OR datetime(ends_at)>=datetime('now','-5 minutes'))").fetchone()[0]
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "offline_exam_attempts" in tables:
+            active += db.execute("SELECT COUNT(*) FROM offline_exam_attempts WHERE submitted_at IS NULL AND (ends_at IS NULL OR datetime(ends_at)>=datetime('now','-5 minutes'))").fetchone()[0]
+        if active:
+            raise RuntimeError("Active exam detected; deployment postponed without writes")
+        if any(rel.endswith(".py") for rel in files):
+            service_stopped = True
+            subprocess.run(["systemctl", "stop", "gipc.service"], check=True, timeout=45)
+    finally:
+        db.rollback()
+        db.close()
     ref_stat = (root / "backend/app/main.py").stat()
     for rel, item in files.items():
         p = root / rel
@@ -347,7 +392,8 @@ try:
         "verified_files": verified,
     }))
 except Exception as exc:
-    restore()
+    if backups or created or service_stopped:
+        restore()
     raise
 """
     apply_res = run_remote_python(apply_script, {"files": upload_files})
@@ -368,6 +414,8 @@ except Exception as exc:
                 "sha256_match": actual == expected,
                 "sha256": actual,
             }
+            if actual != expected:
+                raise RuntimeError("Public file mismatch after deployment: " + url)
 
     receipt = {
         "release": DEPLOY_DIR.name,

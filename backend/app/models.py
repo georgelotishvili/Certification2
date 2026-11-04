@@ -33,6 +33,26 @@ class Base(DeclarativeBase):
     pass
 
 
+class AuditEvent(Base):
+    """Append-only event snapshots, intentionally without cascading foreign keys."""
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_category_id", "category", "id"),
+        Index("ix_audit_occurred_id", "occurred_at", "id"),
+        {"sqlite_autoincrement": True},
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    action: Mapped[str] = mapped_column(String(96), nullable=False)
+    actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actor_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    details: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+
+
 class Exam(Base):
     __tablename__ = "exams"
 
@@ -158,6 +178,7 @@ class Session(Base):
     ends_at: Mapped[datetime] = mapped_column(DateTime)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    device_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     selected_map: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     stage_grant_id: Mapped[Optional[int]] = mapped_column(
@@ -196,6 +217,7 @@ class OfflineExamAttempt(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    device_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     start_request_id: Mapped[Optional[str]] = mapped_column(String(36), unique=True, nullable=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     stage: Mapped[str] = mapped_column(String(32))
@@ -584,6 +606,8 @@ class UserSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    client_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    device_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="sessions")
 

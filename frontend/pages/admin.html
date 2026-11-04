@@ -6,7 +6,7 @@
     <title>ადმინისტრატორის პანელი - Certification</title>
     <meta name="api-base" content="" />
     <script src="../scripts/config.js?v=4" defer></script>
-    <script src="../scripts/admin/shared.js?v=20261104-audit1" defer></script>
+    <script src="../scripts/admin/shared.js?v=20261104-audit3" defer></script>
     <script src="../scripts/admin/exam-settings.js?v=20261101-perf1" defer></script>
     <script src="../scripts/admin/blocks.js?v=20261101-perf1" defer></script>
     <script src="../scripts/admin/multi-apartment.js?v=20261101-perf1" defer></script>
@@ -25,7 +25,7 @@
     <script src="../scripts/admin/application-form.js?v=20261101-perf1" defer></script>
     <script src="../scripts/admin/documents.js?v=20261029-doc3" defer></script>
     <script src="../scripts/admin/ai-assistant.js?v=20261029-doc3" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261104-audit1" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261104-audit3" />
   </head>
   <body>
     <header>
@@ -946,15 +946,16 @@
               <span class="meta-item" id="auditLogTotalCount">სულ: 0 ჩანაწერი</span>
               <span class="meta-item" id="auditLogLastUpdated"></span>
             </div>
+            <p id="auditLogCoverage" class="audit-log-coverage">მუდმივი ჟურნალი მოიცავს მხოლოდ მისი ამოქმედების შემდეგ აღრიცხულ მოქმედებებს.</p>
           </div>
           <div class="results-modal-actions">
             <button type="button" class="secondary-btn" id="auditLogRefreshBtn">განახლება</button>
-            <button type="button" class="primary-btn" id="auditLogExportCsvBtn">⬇ CSV ექსპორტი</button>
+            <button type="button" class="primary-btn" id="auditLogExportCsvBtn" disabled>CSV — სრული გაფილტრული სია</button>
             <button type="button" class="modal-close" id="auditLogModalClose" aria-label="დახურვა">×</button>
           </div>
         </div>
         <div class="audit-log-toolbar">
-          <input id="auditLogSearchInput" class="audit-log-search-input" type="search" placeholder="ძებნა (სახელი, გვარი, კოდი, ელფოსტა, მოქმედება, დეტალები...)" autocomplete="off" />
+          <input id="auditLogSearchInput" class="audit-log-search-input" type="search" placeholder="ძებნა (მოქმედება, მომხმარებლის ID, ობიექტი, დეტალები...)" autocomplete="off" />
           <select id="auditLogCategorySelect" class="audit-log-select" aria-label="კატეგორიის ფილტრი">
             <option value="all">ყველა კატეგორია</option>
             <option value="auth">ავტორიზაცია / სესიები</option>
@@ -964,6 +965,7 @@
             <option value="letter">ოფიციალური წერილები</option>
             <option value="certificate">სერტიფიკატები</option>
             <option value="registration">რეგისტრაცია</option>
+            <option value="system">სისტემა</option>
           </select>
           <input id="auditLogDateInput" class="audit-log-date-input" type="date" aria-label="თარიღის ფილტრი" title="ფილტრაცია თარიღით" />
           <button type="button" class="audit-log-clear-btn" id="auditLogClearFiltersBtn">გასუფთავება</button>
@@ -988,6 +990,11 @@
               </tbody>
             </table>
           </div>
+        </div>
+        <div class="audit-log-pagination" aria-label="ჟურნალის გვერდები">
+          <button type="button" class="secondary-btn" id="auditLogPreviousBtn" disabled>წინა</button>
+          <span id="auditLogPageLabel" aria-live="polite"></span>
+          <button type="button" class="secondary-btn" id="auditLogNextBtn" disabled>შემდეგი</button>
         </div>
       </div>
     </div>

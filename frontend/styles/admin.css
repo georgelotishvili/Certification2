@@ -10397,3 +10397,24 @@ body.modal-open {
   color: #64748b;
   font-weight: 600;
 }
+
+.audit-log-coverage {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.audit-log-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid #cbd5e1;
+}
+
+.audit-log-modal button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

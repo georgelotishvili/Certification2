@@ -58,6 +58,8 @@ def _get_actor_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     
+    from ..services.audit_log import set_audit_actor
+    set_audit_actor(db, user)
     return user
 
 

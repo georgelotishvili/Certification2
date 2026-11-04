@@ -56,6 +56,7 @@ from ..services.user_codes import (
     move_user_code,
     reserve_registration_code,
 )
+from ..services.desktop_sessions import authenticated_device, is_desktop_request
 from ..rate_limiter import (
     code_verify_limiter,
     verification_account_limiter,
@@ -112,6 +113,8 @@ def _require_auth(db: Session, authorization: str | None) -> User:
     user = _get_user_from_token(db, authorization)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    from ..services.audit_log import set_audit_actor
+    set_audit_actor(db, user)
     return user
 
 
@@ -121,6 +124,8 @@ def _require_admin(db: Session, authorization: str | None) -> User:
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
     if user.email.lower() == founder_email or user.is_admin:
+        from ..services.audit_log import set_audit_actor
+        set_audit_actor(db, user, admin=True)
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
 
@@ -1449,11 +1454,13 @@ def get_current_user_info(
     Returns fresh data from database (not cached).
     """
     user = _require_auth(db, authorization)
-    user_agent = (request.headers.get("user-agent") or "").lower() if request else ""
-    if ("certification-exam-app" in user_agent or "electron/" in user_agent) and authorization:
+    # NULL-owned legacy logins remain valid; only newly bound tokens are checked.
+    authenticated_device(db, authorization, request)
+    if is_desktop_request(request) and authorization:
         token = authorization.split(" ", 1)[1].strip()
         active_sess = db.scalar(select(UserSession).where(UserSession.token == token))
         if active_sess is not None:
+            active_sess.client_type = "desktop"
             active_sess.last_used_at = datetime.utcnow()
             db.add(active_sess)
             db.commit()

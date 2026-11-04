@@ -331,6 +331,7 @@
     letter: 'წერილი',
     certificate: 'სერტიფიკატი',
     registration: 'რეგისტრაცია',
+    system: 'სისტემა',
   };
 
   function getAuditAuthHeaders() {
@@ -360,9 +361,53 @@
     const tableBody = document.getElementById('auditLogTableBody');
     const totalCountEl = document.getElementById('auditLogTotalCount');
     const lastUpdatedEl = document.getElementById('auditLogLastUpdated');
+    const coverageEl = document.getElementById('auditLogCoverage');
+    const previousBtn = document.getElementById('auditLogPreviousBtn');
+    const nextBtn = document.getElementById('auditLogNextBtn');
+    const pageLabel = document.getElementById('auditLogPageLabel');
 
     let currentItems = [];
     let debounceTimer = null;
+    let requestVersion = 0;
+    let requestController = null;
+    let exportController = null;
+    let snapshotId = null;
+    let pageCursors = [null];
+    let pageIndex = 0;
+    let nextCursor = null;
+    let currentFilters = null;
+    const exportLabel = exportCsvBtn?.textContent || 'CSV ექსპორტი';
+
+    function clearLoadedItems() {
+      currentItems = [];
+      if (exportCsvBtn) exportCsvBtn.disabled = true;
+      if (totalCountEl) totalCountEl.textContent = '';
+      if (lastUpdatedEl) lastUpdatedEl.textContent = '';
+      if (previousBtn) previousBtn.disabled = true;
+      if (nextBtn) nextBtn.disabled = true;
+      if (pageLabel) pageLabel.textContent = '';
+    }
+
+    function apiBase() {
+      return typeof global.APP_CONFIG?.API_BASE === 'string' ? global.APP_CONFIG.API_BASE : '';
+    }
+
+    function buildParams(filters, cursor, frozenSnapshot, limit = 300) {
+      const params = new URLSearchParams();
+      params.set('category', filters.category);
+      params.set('limit', String(limit));
+      if (filters.search) params.set('search', filters.search);
+      if (filters.date) params.set('date', filters.date);
+      if (cursor != null) params.set('before_id', String(cursor));
+      if (frozenSnapshot != null) params.set('snapshot_id', String(frozenSnapshot));
+      return params;
+    }
+
+    function cancelExport() {
+      exportController?.abort();
+      exportController = null;
+      if (exportCsvBtn) exportCsvBtn.textContent = exportLabel;
+    }
 
     function openModal() {
       overlay.classList.add('open');
@@ -375,6 +420,11 @@
     }
 
     function closeModal() {
+      requestVersion += 1;
+      requestController?.abort();
+      cancelExport();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      clearLoadedItems();
       overlay.classList.remove('open');
       overlay.setAttribute('aria-hidden', 'true');
       if (!document.querySelector('.results-overlay.open')) {
@@ -406,33 +456,56 @@
       }).join('');
     }
 
-    async function loadAuditLogs() {
+    async function loadAuditLogs(options = {}) {
       if (!tableBody) return;
+      const version = ++requestVersion;
+      requestController?.abort();
+      cancelExport();
+      const controller = new AbortController();
+      requestController = controller;
+      clearLoadedItems();
       tableBody.innerHTML = '<tr><td colspan="6" class="audit-log-empty">იტვირთება...</td></tr>';
-      const apiBase = (global.APP_CONFIG && typeof global.APP_CONFIG.API_BASE === 'string')
-        ? global.APP_CONFIG.API_BASE
-        : '';
-      const params = new URLSearchParams();
-      const cat = (categorySelect?.value || 'all').trim();
-      const search = (searchInput?.value || '').trim();
-      const dateVal = (dateInput?.value || '').trim();
-      params.set('category', cat || 'all');
-      params.set('limit', '300');
-      if (search) params.set('search', search);
-      if (dateVal) params.set('date', dateVal);
+      const paging = Number.isInteger(options.pageIndex) && currentFilters != null;
+      const requestedPage = paging ? options.pageIndex : 0;
+      if (!paging) {
+        snapshotId = null;
+        pageCursors = [null];
+        currentFilters = {
+          category: (categorySelect?.value || 'all').trim() || 'all',
+          search: (searchInput?.value || '').trim(),
+          date: (dateInput?.value || '').trim(),
+        };
+      }
+      const params = buildParams(currentFilters, pageCursors[requestedPage], snapshotId);
 
       try {
-        const response = await fetch(`${apiBase}/admin/audit-logs?${params.toString()}`, {
+        const response = await fetch(`${apiBase()}/admin/audit-logs?${params.toString()}`, {
           headers: { ...getAuditAuthHeaders(), 'Cache-Control': 'no-cache' },
           credentials: 'include',
+          signal: controller.signal,
         });
+        if (version !== requestVersion) return;
         if (!response.ok) {
           await shared.handleAdminErrorResponse(response, 'ლოგირების ჩატვირთვა ვერ მოხერხდა', shared.showToast);
+          if (version !== requestVersion) return;
           tableBody.innerHTML = '<tr><td colspan="6" class="audit-log-empty">ჩატვირთვა ვერ მოხერხდა</td></tr>';
           return;
         }
         const data = await response.json();
+        if (version !== requestVersion) return;
         currentItems = Array.isArray(data?.items) ? data.items : [];
+        snapshotId = Number.isInteger(data?.snapshot_id) && data.snapshot_id >= 0 ? data.snapshot_id : null;
+        nextCursor = Number.isInteger(data?.next_cursor) && data.next_cursor > 0 ? data.next_cursor : null;
+        pageIndex = requestedPage;
+        if (nextCursor != null) pageCursors[pageIndex + 1] = nextCursor;
+        if (exportCsvBtn) exportCsvBtn.disabled = !currentItems.length || snapshotId == null;
+        if (previousBtn) previousBtn.disabled = pageIndex === 0;
+        if (nextBtn) nextBtn.disabled = nextCursor == null;
+        if (pageLabel) pageLabel.textContent = `გვერდი ${pageIndex + 1}`;
+        if (coverageEl) {
+          coverageEl.textContent = String(data?.coverage_note || 'მუდმივი ჟურნალი მოიცავს მხოლოდ მისი ამოქმედების შემდეგ აღრიცხულ მოქმედებებს.');
+          if (data?.journal_started_at) coverageEl.textContent += ` დაწყება: ${shared.formatDateTime(data.journal_started_at)}`;
+        }
         const total = Number(data?.total ?? currentItems.length);
         if (totalCountEl) {
           totalCountEl.textContent = `ნაჩვენებია: ${currentItems.length} / სულ: ${total}`;
@@ -442,37 +515,78 @@
         }
         renderRows(currentItems);
       } catch (err) {
+        if (version !== requestVersion || err?.name === 'AbortError') return;
+        clearLoadedItems();
         tableBody.innerHTML = '<tr><td colspan="6" class="audit-log-empty">სერვერთან დაკავშირება ვერ მოხერხდა</td></tr>';
       }
     }
 
-    function exportCsv() {
-      if (!currentItems.length) {
+    async function exportCsv() {
+      if (!currentItems.length || snapshotId == null || exportController) {
         shared.showToast('ექსპორტისთვის ჩანაწერები არ არის', 'info');
         return;
       }
       const headers = ['თარიღი/დრო', 'კატეგორია', 'მოქმედება', 'შემსრულებელი', 'ობიექტი/პირი', 'დეტალები'];
-      const escapeCsv = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
-      const lines = [
-        headers.map(escapeCsv).join(','),
-        ...currentItems.map((it) => [
-          shared.formatDateTime(it.timestamp),
-          AUDIT_CATEGORY_LABELS[it.category] || it.category || '',
-          it.action || '',
-          it.actor || '',
-          it.target || '',
-          it.details || '',
-        ].map(escapeCsv).join(',')),
-      ];
-      const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `gipc-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      const escapeCsv = (val) => {
+        let text = String(val ?? '');
+        // Quoting alone does not prevent Excel/Calc from executing formulas.
+        // Include leading whitespace/control characters before a formula prefix.
+        if (/^[\s\u0000-\u001f]*[=+@-]/u.test(text) || /^[\t\r\n]/u.test(text)) text = "'" + text;
+        return `"${text.replace(/"/g, '""')}"`;
+      };
+      const version = requestVersion;
+      const frozenSnapshot = snapshotId;
+      const filters = { ...currentFilters };
+      const controller = new AbortController();
+      exportController = controller;
+      exportCsvBtn.disabled = true;
+      const lines = [headers.map(escapeCsv).join(',')];
+      let cursor = null;
+      let expectedTotal = null;
+      try {
+        do {
+          const params = buildParams(filters, cursor, frozenSnapshot, 1000);
+          const response = await fetch(`${apiBase()}/admin/audit-logs?${params.toString()}`, {
+            headers: { ...getAuditAuthHeaders(), 'Cache-Control': 'no-cache' },
+            credentials: 'include', signal: controller.signal,
+          });
+          if (version !== requestVersion || controller.signal.aborted) return;
+          if (!response.ok) {
+            await shared.handleAdminErrorResponse(response, 'CSV ექსპორტი ვერ მოხერხდა', shared.showToast);
+            throw new Error('Audit export request failed');
+          }
+          const data = await response.json();
+          if (version !== requestVersion || controller.signal.aborted) return;
+          if (data?.snapshot_id !== frozenSnapshot || !Array.isArray(data?.items)) throw new Error('Audit export snapshot mismatch');
+          if (expectedTotal == null) expectedTotal = Number(data.total);
+          if (!Number.isSafeInteger(expectedTotal) || expectedTotal < 0 || Number(data.total) !== expectedTotal) throw new Error('Audit export total changed');
+          for (const it of data.items) {
+            lines.push([shared.formatDateTime(it.timestamp), AUDIT_CATEGORY_LABELS[it.category] || it.category || '',
+              it.action || '', it.actor || '', it.target || '', it.details || ''].map(escapeCsv).join(','));
+          }
+          const next = data.next_cursor;
+          if (next != null && (!Number.isSafeInteger(next) || next <= 0 || (cursor != null && next >= cursor) || !data.items.length)) throw new Error('Audit export cursor did not advance');
+          cursor = next ?? null;
+          if (lines.length - 1 > expectedTotal) throw new Error('Audit export exceeded expected count');
+          exportCsvBtn.textContent = `ექსპორტი: ${lines.length - 1} / ${expectedTotal}`;
+        } while (cursor != null);
+        if (lines.length - 1 !== expectedTotal) throw new Error('Incomplete audit export');
+        const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gipc-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } catch (error) {
+        if (version === requestVersion && !controller.signal.aborted) shared.showToast('ექსპორტი ვერ დასრულდა. ნაწილობრივი ფაილი არ შენახულა — სცადეთ ხელახლა.', 'error');
+      } finally {
+        if (exportController === controller) {
+          exportController = null;
+          exportCsvBtn.textContent = exportLabel;
+          exportCsvBtn.disabled = !currentItems.length || snapshotId == null;
+        }
+      }
     }
 
     document.querySelectorAll('[data-open-audit-log="true"]').forEach((btn) => {
@@ -495,8 +609,14 @@
     exportCsvBtn?.addEventListener('click', exportCsv);
     categorySelect?.addEventListener('change', loadAuditLogs);
     dateInput?.addEventListener('change', loadAuditLogs);
+    previousBtn?.addEventListener('click', () => { if (pageIndex > 0) return loadAuditLogs({ pageIndex: pageIndex - 1 }); });
+    nextBtn?.addEventListener('click', () => { if (nextCursor != null) return loadAuditLogs({ pageIndex: pageIndex + 1 }); });
     searchInput?.addEventListener('input', () => {
       if (debounceTimer) clearTimeout(debounceTimer);
+      requestVersion += 1;
+      requestController?.abort();
+      cancelExport();
+      clearLoadedItems();
       debounceTimer = setTimeout(loadAuditLogs, 280);
     });
     clearBtn?.addEventListener('click', () => {
@@ -507,6 +627,7 @@
     });
 
     shared.openAuditLogModal = openModal;
+    clearLoadedItems();
   }
 
   if (document.readyState === 'loading') {

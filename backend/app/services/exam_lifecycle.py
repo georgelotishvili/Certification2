@@ -499,6 +499,8 @@ async def _watch_expired_sessions() -> None:
     while True:
         await asyncio.sleep(AUTO_CLOSE_INTERVAL_SECONDS)
         with SessionLocal() as db:
+            from .audit_log import enable_audit
+            enable_audit(db)
             auto_close_expired_sessions(db)
 
 
@@ -506,6 +508,8 @@ def register_expired_session_tasks(app: Any) -> None:
     @app.on_event("startup")
     async def _startup_auto_close_expired_sessions() -> None:
         with SessionLocal() as db:
+            from .audit_log import enable_audit
+            enable_audit(db)
             auto_close_expired_sessions(db)
         app.state.expired_session_task = asyncio.create_task(_watch_expired_sessions())
 

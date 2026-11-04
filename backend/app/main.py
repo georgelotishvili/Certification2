@@ -68,6 +68,17 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     Base.metadata.create_all(bind=engine)
+    # Required mapper fields: fail visibly instead of serving partially migrated auth.
+    try:
+        from backend.scripts.migrate_desktop_sessions import run as migrate_desktop_sessions
+    except ModuleNotFoundError:
+        from scripts.migrate_desktop_sessions import run as migrate_desktop_sessions
+    migrate_desktop_sessions(engine)
+    try:
+        from backend.scripts.migrate_audit_events import run as migrate_audit_events
+    except ModuleNotFoundError:
+        from scripts.migrate_audit_events import run as migrate_audit_events
+    migrate_audit_events(engine)
     # Ensure additive columns for results exist (idempotent)
     for migrate in (
         run_results_migration,

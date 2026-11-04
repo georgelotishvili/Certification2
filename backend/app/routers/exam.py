@@ -61,6 +61,7 @@ from ..services.exam_lifecycle import (
     finish_response_from_session,
 )
 from ..services.exam_stage import STAGE_THEORY, is_admin_like
+from ..services.desktop_sessions import authenticated_device, require_matching_device
 from ..services.exam_stage_grants import require_stage_permission
 from ..services.offline_attempts import (
     authorize_final, check_final, naive_utc, record_receipt,
@@ -121,6 +122,8 @@ def _get_user_from_auth(db: Session, authorization: Optional[str]) -> User:
     user = db.get(User, user_session.user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    from ..services.audit_log import set_audit_actor
+    set_audit_actor(db, user)
     return user
 
 
@@ -149,7 +152,7 @@ def verify_gate_password(payload: ExamGateVerifyRequest, db: Session = Depends(g
 @router.post("/session/start", response_model=StartSessionResponse)
 def start_session(
     payload: StartSessionRequest,
-    request: Request,
+    request: Request = None,
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
@@ -163,6 +166,7 @@ def start_session(
         else None
     )
     current_user = _get_user_from_auth(db, authorization)
+    device_id = authenticated_device(db, authorization, request)
     if not candidate_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
     if candidate_user.id != current_user.id and not is_admin_like(current_user):
@@ -173,8 +177,6 @@ def start_session(
         STAGE_THEORY,
         mark_started=False,
     )
-    user_agent = (request.headers.get("user-agent") or "").lower() if request else ""
-    is_desktop_app = "certification-exam-app" in user_agent or "electron/" in user_agent
     now = datetime.now(timezone.utc)
     if stage_grant is not None:
         existing_session = db.scalar(
@@ -187,15 +189,10 @@ def start_session(
             .order_by(ExamSession.id.desc())
         )
         if existing_session is not None:
-            if is_desktop_app and (
-                existing_session.selected_map
-                or existing_session.active
-                or stage_grant.started_at is not None
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="ეს საგამოცდო სესია უკვე გახსნილია სხვა კომპიუტერზე. პარალელური შესვლა დაუშვებელია.",
-                )
+            # Same-owner preparation is idempotent even after download. A NULL
+            # owner is legacy: do not block or retroactively claim that attempt.
+            # Existing begin/answer/final execution paths are unchanged.
+            require_matching_device(existing_session.device_id, device_id)
             if not payload.prepare_only and stage_grant.started_at is None:
                 stage_grant = require_stage_permission(
                     db,
@@ -241,6 +238,7 @@ def start_session(
         started_at=now,
         ends_at=ends_at,
         active=False,
+        device_id=device_id,
         user_id=candidate_user.id if candidate_user else None,
         stage_grant_id=stage_grant.id if stage_grant else None,
         candidate_first_name=payload.candidate_first_name,
@@ -271,6 +269,8 @@ def _get_session_or_401(
     session = db.get(ExamSession, session_id)
     if not session or session.token != token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    from ..services.audit_log import set_audit_actor
+    set_audit_actor(db, db.get(User, session.user_id) if session.user_id is not None else None)
     return session
 
 
@@ -657,58 +657,6 @@ def finish_exam(
     return response
 
 
-def _synthetic_theory_receipt(session_id: int, payload: OfflineTheoryFinalRequest) -> dict:
-    answered_count = len(payload.answers or [])
-    total_questions = max(110, answered_count)
-    return {
-        "submission_id": str(payload.submission_id),
-        "session_id": session_id,
-        "stage_grant_id": payload.stage_grant_id,
-        "total_questions": total_questions,
-        "answered": answered_count,
-        "correct": 0,
-        "score_percent": 0.0,
-        "block_stats": [],
-        "chapter_stats": [],
-        "subchapter_stats": [],
-    }
-
-
-def _orphaned_deleted_theory_receipt(
-    db: Session,
-    token: Optional[str],
-    session_id: int,
-    payload: OfflineTheoryFinalRequest,
-) -> Optional[dict]:
-    """Return a no-op receipt when an admin already deleted the completed session.
-
-    When a founder admin deletes a finalized theory result row (`DELETE /admin/results/{id}`),
-    the `ExamSession` and its cascaded `OfflineExamAttempt` are removed, while the
-    consumed/revoked `UserExamStageGrant` remains in `user_exam_stage_grants`.
-    Returning a synthetic receipt lets a secondary/stale desktop outbox acknowledge
-    and clear its local 'pending' record without recreating or mutating DB state.
-    """
-    if not token or token.startswith("sess_"):
-        return None
-    if payload.stage_grant_id is None or payload.submission_id is None:
-        return None
-    if db.get(ExamSession, session_id) is not None:
-        return None
-    grant = db.get(UserExamStageGrant, payload.stage_grant_id)
-    if grant is None or grant.stage != STAGE_THEORY:
-        return None
-    if grant.started_at is None or (grant.consumed_at is None and grant.revoked_at is None):
-        return None
-    if db.get(User, grant.user_id) is None:
-        return None
-    still_bound = db.scalar(
-        select(ExamSession.id).where(ExamSession.stage_grant_id == grant.id)
-    )
-    if still_bound is not None:
-        return None
-    return _synthetic_theory_receipt(session_id, payload)
-
-
 @router.post("/{session_id}/offline-final")
 def finish_offline_exam(
     payload: OfflineTheoryFinalRequest,
@@ -718,24 +666,14 @@ def finish_offline_exam(
     db: Session = Depends(get_db),
 ):
     token = authorization.split(" ", 1)[1] if authorization and authorization.lower().startswith("bearer ") else None
-    try:
-        attempt, _ = authorize_final(db, token, stage=STAGE_THEORY,
-                                     grant_id=payload.stage_grant_id, session_id=session_id)
-    except HTTPException as exc:
-        if exc.status_code == 401:
-            orphaned_receipt = _orphaned_deleted_theory_receipt(db, token, session_id, payload)
-            if orphaned_receipt is not None:
-                return orphaned_receipt
-        raise
-    user_agent = (request.headers.get("user-agent") or "").lower() if request else ""
-    is_desktop_app = "certification-exam-app" in user_agent or "electron/" in user_agent
-    try:
-        digest, receipt = check_final(attempt, payload.submission_id, payload.finished_at,
-                                     payload.model_dump(mode="json"))
-    except HTTPException as exc:
-        if exc.status_code == 409 and is_desktop_app and attempt.submission_id is not None:
-            return _synthetic_theory_receipt(session_id, payload)
-        raise
+    # A receipt is proof of an atomically accepted result, never a mechanism
+    # for dismissing an outbox entry. Deleted/unknown capabilities remain
+    # unauthorized; conflicting frozen submissions remain conflicts. The
+    # desktop keeps those local answers for operator review without grading.
+    attempt, _ = authorize_final(db, token, stage=STAGE_THEORY,
+                                 grant_id=payload.stage_grant_id, session_id=session_id)
+    digest, receipt = check_final(attempt, payload.submission_id, payload.finished_at,
+                                 payload.model_dump(mode="json"))
     if receipt is not None:
         return receipt
     session = db.get(ExamSession, session_id)

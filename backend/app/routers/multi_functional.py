@@ -4,12 +4,13 @@ import random
 import string
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as FPath, Query, UploadFile, File
+from fastapi import APIRouter, Depends, Header, HTTPException, status, Path as FPath, Query, UploadFile, File, Request
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func, exists
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
+from ..services.desktop_sessions import authenticated_device
 from ..models import MultiFunctionalProject, MultiFunctionalAnswer, MultiFunctionalSubmission, MultiFunctionalSettings, MultiFunctionalEvaluation, OfflineExamAttempt, User, UserSession
 from ..schemas import (
     MultiFunctionalProjectsResponse,
@@ -87,6 +88,8 @@ def _require_auth(db: Session, authorization: str | None) -> User:
     user = _get_user_from_token(db, authorization)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    from ..services.audit_log import set_audit_actor
+    set_audit_actor(db, user)
     return user
 
 
@@ -735,12 +738,14 @@ def start_multi_functional_stage(
     payload: ExamStageStartRequest,
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     user = _require_auth(db, authorization)
+    device_id = authenticated_device(db, authorization, request)
     if payload.offline:
         settings = _get_or_create_settings(db)
         attempt = start_project_attempt(db, user, STAGE_PROJECT_2, payload,
-                                        MultiFunctionalProject, settings.duration_minutes)
+                                        MultiFunctionalProject, settings.duration_minutes, device_id=device_id)
         db.commit()
         return ExamStageStartResponse(
             stageGrantId=attempt.stage_grant_id, stage=STAGE_PROJECT_2,

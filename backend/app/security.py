@@ -135,6 +135,8 @@ def get_current_user(
             detail="User not found"
         )
     
+    from .services.audit_log import set_audit_actor
+    set_audit_actor(db, user)
     # Update last_used_at
     session.last_used_at = datetime.utcnow()
     db.commit()
@@ -177,6 +179,8 @@ def require_auth(
             detail="User not found"
         )
     
+    from .services.audit_log import set_audit_actor
+    set_audit_actor(db, user)
     # Update last_used_at
     session.last_used_at = datetime.utcnow()
     db.commit()
@@ -212,6 +216,8 @@ def require_admin(
             detail="Admin access required"
         )
     
+    from .services.audit_log import set_audit_actor
+    set_audit_actor(db, user, admin=True)
     return user
 
 
@@ -231,6 +237,8 @@ def require_founder(
             detail="Founder access required"
         )
     
+    from .services.audit_log import set_audit_actor
+    set_audit_actor(db, user, admin=True)
     return user
 
 

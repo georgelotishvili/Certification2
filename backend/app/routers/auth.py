@@ -30,6 +30,7 @@ from ..rate_limiter import (
     verification_limiter,
 )
 from ..services import email_verification
+from ..services.desktop_sessions import is_desktop_request, request_device_id, require_login_available
 from ..services.exam_stage import STAGE_THEORY
 from ..services.exam_stage_grants import (
     exam_state_with_permissions,
@@ -189,44 +190,25 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     founder_email = (settings.founder_admin_email or "").lower()
     is_founder = email_norm == founder_email
     is_admin_user = is_founder or bool(user.is_admin)
-    user_agent = (request.headers.get("user-agent") or "").lower() if request else ""
-    is_desktop_app = "certification-exam-app" in user_agent or "electron/" in user_agent
+    from ..services.audit_log import set_audit_actor, record_reused_login
+    set_audit_actor(db, user, admin=is_admin_user)
+    device_id = request_device_id(request)
+    is_desktop_app = is_desktop_request(request)
+    reusable_session = None
 
     if is_desktop_app and not is_admin_user:
         lock_user_stage_transitions(db, user)
-        active_desktop_login = db.scalar(
-            select(UserSession.id).where(
-                UserSession.user_id == user.id,
-                UserSession.expires_at > now,
-                UserSession.last_used_at.is_not(None),
-                UserSession.last_used_at >= now - timedelta(seconds=6),
-            )
-        )
-        if active_desktop_login is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="ეს მომხმარებელი უკვე შესულია საგამოცდო აპლიკაციაში სხვა კომპიუტერიდან.",
-            )
-        active_theory = db.scalar(
-            select(ExamSession.id).where(
-                ExamSession.user_id == user.id,
-                ExamSession.finished_at.is_(None),
-                ExamSession.ends_at > now,
-                ExamSession.active == True,  # noqa: E712
-            )
-        )
-        active_offline = db.scalar(
-            select(OfflineExamAttempt.id).where(
-                OfflineExamAttempt.user_id == user.id,
-                OfflineExamAttempt.submitted_at.is_(None),
-                OfflineExamAttempt.ends_at > now,
-            )
-        )
-        if active_theory is not None or active_offline is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="ამ მომხმარებლით გამოცდა უკვე მიმდინარეობს სხვა კომპიუტერზე. პარალელური შესვლა დაუშვებელია.",
-            )
+        # This only controls issuing a website login. It never revokes an exam
+        # token, pauses an active attempt, or changes legacy begin/final routes.
+        # Unknown legacy active owners retain the previous login restriction;
+        # known same-installation owners can log in to cancel a lost Start.
+        now = datetime.utcnow()
+        require_login_available(db, user, device_id, now)
+        if device_id:
+            reusable_session = db.scalar(select(UserSession).where(
+                UserSession.user_id == user.id, UserSession.client_type == "desktop",
+                UserSession.device_id == device_id, UserSession.expires_at > now,
+            ).order_by(UserSession.id.desc()))
 
     # Create session in database
     try:
@@ -234,15 +216,21 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         # tokens in the same transaction as the new token, never exam sessions.
         db.execute(delete(UserSession).where(UserSession.expires_at <= now))
         if is_desktop_app and not is_admin_user:
-            db.execute(delete(UserSession).where(UserSession.user_id == user.id))
-        session = UserSession(
-            user_id=user.id,
-            token=token,
-            created_at=now,
-            expires_at=expires_at,
-            last_used_at=now,
-        )
+            # Browser tokens are independent. Reuse this device's login so a
+            # delayed successful response cannot invalidate its own retry.
+            cleanup = delete(UserSession).where(UserSession.user_id == user.id, UserSession.client_type == "desktop")
+            if reusable_session is not None:
+                cleanup = cleanup.where(UserSession.id != reusable_session.id)
+            db.execute(cleanup)
+        session = reusable_session or UserSession(user_id=user.id, token=token, created_at=now)
+        token = session.token
+        session.expires_at = expires_at
+        session.last_used_at = now
+        session.client_type = "desktop" if is_desktop_app else "web"
+        session.device_id = device_id if is_desktop_app else None
         db.add(session)
+        if reusable_session is not None:
+            record_reused_login(db, session)
         db.commit()
     except Exception as e:
         import logging
@@ -302,6 +290,9 @@ def logout(
                 select(UserSession).where(UserSession.token == token)
             )
             if user_session is not None:
+                from ..services.audit_log import set_audit_actor
+                set_audit_actor(db, db.get(User, user_session.user_id))
+                db.info["audit_logout_session_id"] = user_session.id
                 db.delete(user_session)
                 db.commit()
 
