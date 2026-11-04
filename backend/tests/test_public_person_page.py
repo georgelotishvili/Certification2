@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -16,12 +16,14 @@ try:
     from backend.app.models import Base, Certificate, Comment, ExpertUpload, Rating, User, UserCodeReservation, UserSession
     from backend.app.routers import expert_uploads, reviews, users
     from backend.app.schemas import UserCreateWithVerification
+    from backend.app.services import candidate_status
     from backend.app.services.user_codes import remember_user_code
 except ModuleNotFoundError:
     from app.database import get_db
     from app.models import Base, Certificate, Comment, ExpertUpload, Rating, User, UserCodeReservation, UserSession
     from app.routers import expert_uploads, reviews, users
     from app.schemas import UserCreateWithVerification
+    from app.services import candidate_status
     from app.services.user_codes import remember_user_code
 
 
@@ -29,6 +31,17 @@ class PublicPersonPageTests(unittest.TestCase):
     """Actual HTTP contracts in an isolated database, without live media/email."""
 
     def setUp(self):
+        # 76276fb intentionally made the printed end date inclusive in Tbilisi.
+        # A fixed clock prevents these tests changing at a UTC/local day boundary.
+        self.today = date(2026, 10, 8)
+        self.deadline = date(2029, 12, 20)
+        self.real_today = candidate_status.today_in_tbilisi
+        today_patch = patch.object(candidate_status, "today_in_tbilisi", return_value=self.today)
+        self.clock = today_patch.start()
+        self.addCleanup(today_patch.stop)
+        deadline_patch = patch.object(users, "get_transitional_deadline_date", return_value=self.deadline)
+        deadline_patch.start()
+        self.addCleanup(deadline_patch.stop)
         self.engine = create_engine(
             "sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool,
         )
@@ -64,8 +77,8 @@ class PublicPersonPageTests(unittest.TestCase):
     def add_certificate(self, person, **overrides):
         fields = dict(
             user_id=person.id, unique_code=f"CERT-{person.code}", level="architect", status="active",
-            issue_date=datetime.utcnow() - timedelta(days=2), validity_term=5,
-            valid_until=datetime.utcnow() + timedelta(days=365),
+            issue_date=datetime(2026, 10, 6, 12), validity_term=5,
+            valid_until=datetime(2027, 10, 8, 12),
             file_path="private/certificate.pdf", filename="certificate.pdf", exam_score=100,
         )
         fields.update(overrides)
@@ -91,7 +104,12 @@ class PublicPersonPageTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(set(data), {"id", "code", "first_name", "last_name", "email", "created_at", "certificate"})
-        self.assertEqual(set(data["certificate"]), {"unique_code", "level", "status", "issue_date", "validity_term", "valid_until"})
+        self.assertEqual(set(data["certificate"]), {
+            "unique_code", "level", "status", "issue_date", "validity_term", "valid_until",
+            "is_transitional", "transitional_deadline",
+        })
+        self.assertFalse(data["certificate"]["is_transitional"])
+        self.assertEqual(data["certificate"]["transitional_deadline"], "2029-12-20")
         self.assertEqual(data["code"], self.person.code)
         self.assertEqual(data["certificate"]["unique_code"], self.certificate.unique_code)
         for private in ("personal_id", "phone", "password_hash", "file_path", "exam_score", "is_admin", "is_founder", "exam_permission", "photo_path"):
@@ -119,7 +137,7 @@ class PublicPersonPageTests(unittest.TestCase):
                     self.assertEqual(data["certificate"]["level"], level)
 
     def test_active_past_end_date_is_reported_expired_without_database_write(self):
-        self.certificate.valid_until = datetime.utcnow() - timedelta(seconds=1)
+        self.certificate.valid_until = datetime(2026, 10, 7, 23, 59, 59)
         self.db.commit()
         for url in (self.url(), f"/users/{self.person.id}/public-details"):
             self.assertEqual(self.client.get(url).json()["certificate"]["status"], "expired")
@@ -138,27 +156,74 @@ class PublicPersonPageTests(unittest.TestCase):
         for field in ("unique_code", "issue_date", "validity_term", "valid_until"):
             self.assertIsNone(cert[field])
 
-    def test_expiry_boundary_uses_utc_strictly_before_not_on_equal_instant(self):
-        now = datetime(2026, 10, 8, 12, 0)
-        for offset, expected in ((-1, "expired"), (0, "active"), (1, "active")):
-            self.certificate.valid_until = now + timedelta(seconds=offset)
+    def test_expiry_boundary_preserves_the_complete_tbilisi_calendar_day(self):
+        # Expiry is by printed date, not by the optional time stored with it.
+        for hour in (0, 12, 23):
+            self.certificate.valid_until = datetime(2026, 10, 8, hour)
             self.db.commit()
-            with patch.object(users, "datetime") as clock:
-                clock.utcnow.return_value = now
-                self.assertEqual(users.public_person_page(self.person.id, db=self.db).certificate.status, expected)
+            for day, expected in ((7, "active"), (8, "active"), (9, "expired")):
+                with self.subTest(stored_hour=hour, tbilisi_day=day):
+                    self.clock.return_value = date(2026, 10, day)
+                    for url in (self.url(), f"/users/{self.person.id}/public-details"):
+                        self.assertEqual(self.client.get(url).json()["certificate"]["status"], expected)
+                    self.db.expire_all()
+                    self.assertEqual(self.db.get(Certificate, self.certificate.id).status, "active")
+                    self.assertFalse(self.db.dirty)
 
-    def test_aware_end_date_uses_utc_offset_not_local_wall_time(self):
-        now = datetime(2026, 10, 8, 12, 0)
-        self.certificate.valid_until = datetime(2026, 10, 8, 15, 0, tzinfo=timezone(timedelta(hours=4)))
-        # Keep the aware value in memory; SQLite DateTime normally reloads naive UTC.
-        with self.db.no_autoflush, patch.object(users, "datetime") as clock:
-            clock.utcnow.return_value = now
-            result = users.public_person_page(self.person.id, db=self.db)
-        self.assertEqual(result.certificate.status, "expired")
+    def test_aware_end_date_preserves_printed_calendar_date_not_utc_instant(self):
+        # 00:30 in Tbilisi is the previous UTC day but the printed end date is
+        # October 8. Keep this aware value in memory (SQLite reloads naive).
+        self.certificate.valid_until = datetime(2026, 10, 8, 0, 30, tzinfo=timezone(timedelta(hours=4)))
+        with self.db.no_autoflush:
+            for day, expected in ((8, "active"), (9, "expired")):
+                with self.subTest(tbilisi_day=day):
+                    self.clock.return_value = date(2026, 10, day)
+                    result = users.public_person_page(self.person.id, db=self.db)
+                    self.assertEqual(result.certificate.status, expected)
+
+    def test_tbilisi_midnight_not_utc_midnight_controls_calendar_day(self):
+        self.certificate.valid_until = datetime(2026, 10, 8)
+        self.db.commit()
+        tbilisi = timezone(timedelta(hours=4))
+        for utc_time, expected in (
+            (datetime(2026, 10, 8, 19, 59, 59, tzinfo=timezone.utc), "active"),
+            (datetime(2026, 10, 8, 20, 0, tzinfo=timezone.utc), "expired"),
+        ):
+            with self.subTest(utc_time=utc_time):
+                # Exercise the real date helper with a frozen clock, then
+                # restore datetime before the endpoint's isinstance checks.
+                with patch.object(candidate_status, "datetime") as clock:
+                    clock.now.return_value = utc_time.astimezone(tbilisi)
+                    self.clock.return_value = self.real_today()
+                    clock.now.assert_called_once_with(tbilisi)
+                self.assertEqual(self.client.get(self.url()).json()["certificate"]["status"], expected)
+
+    def test_public_dual_deadline_and_expert_exemption_are_read_only(self):
+        self.certificate.valid_until = datetime(2031, 10, 8)
+        self.certificate.is_transitional = True
+        for level, eligible in (("architect", True), ("municipal", True), ("expert", False), ("architect_expert", False)):
+            self.certificate.level = level
+            self.db.commit()
+            for day in (date(2029, 12, 19), self.deadline, date(2029, 12, 21)):
+                with self.subTest(level=level, day=day):
+                    self.clock.return_value = day
+                    for url in (self.url(), f"/users/{self.person.id}/public-details"):
+                        data = self.client.get(url).json()["certificate"]
+                        self.assertEqual(data["status"], "expired" if eligible and day >= self.deadline else "active")
+                        self.assertEqual(data["is_transitional"], eligible)
+                    self.db.expire_all()
+                    self.assertEqual(self.db.get(Certificate, self.certificate.id).status, "active")
+                    self.assertFalse(self.db.dirty)
+        # A later exception deadline never extends an expired five-year cycle.
+        self.certificate.level = "architect"
+        self.certificate.valid_until = datetime(2026, 10, 7)
+        self.db.commit()
+        self.clock.return_value = self.today
+        self.assertEqual(self.client.get(self.url()).json()["certificate"]["status"], "expired")
 
     def test_suspended_remains_suspended_even_after_end_date(self):
         self.certificate.status = "suspended"
-        self.certificate.valid_until = datetime.utcnow() - timedelta(days=1)
+        self.certificate.valid_until = datetime(2026, 10, 7)
         self.db.commit()
         self.assertEqual(self.client.get(self.url()).json()["certificate"]["status"], "suspended")
 
@@ -202,7 +267,7 @@ class PublicPersonPageTests(unittest.TestCase):
         self.assertEqual(self.client.get(self.url(replacement)).json()["id"], original_id)
 
         payload = UserCreateWithVerification(
-            personal_id=original_pid, first_name="Returned", last_name="Person", phone="555999999",
+            personal_id=original_pid, first_name="საცდელი", last_name="დაბრუნებული", phone="555999999",
             email="returned@example.com", password="Test-password-123!", verification_code="1234",
         )
         with patch.object(users.email_verification, "verify_code", return_value=True), \
@@ -216,7 +281,7 @@ class PublicPersonPageTests(unittest.TestCase):
         result = self.client.get(qr_url)
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()["id"], returned.id)
-        self.assertEqual(result.json()["first_name"], "Returned")
+        self.assertEqual(result.json()["first_name"], "საცდელი")
 
     def test_existing_public_profile_contract_is_unchanged(self):
         response = self.client.get(f"/users/{self.person.id}/public")

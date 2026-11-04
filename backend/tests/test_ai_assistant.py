@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
+import base64
+import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+import zipfile
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -13,9 +16,11 @@ from sqlalchemy.orm import Session
 try:
     from backend.app.models import Base, Statement, User
     from backend.app.routers import ai_assistant
+    from backend.app.services import media_storage
 except ModuleNotFoundError:
     from app.models import Base, Statement, User
     from app.routers import ai_assistant
+    from app.services import media_storage
 
 
 class AiAssistantTests(unittest.TestCase):
@@ -29,6 +34,30 @@ class AiAssistantTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         self.media_root = Path(self.temp_dir.name)
+
+        # Never depend on the deployable knowledge archive, credentials or shared
+        # media/cache. run_isolated_suite also establishes isolation before imports.
+        self.seed_zip = self.media_root / "synthetic_seed.zip"
+        with zipfile.ZipFile(self.seed_zip, "w"):
+            pass
+        for target, name, value in (
+            (ai_assistant, "_seed_zip_path", lambda: self.seed_zip),
+            (ai_assistant, "_KB_MEMORY_CACHE", {"mtime": 0.0, "items": [], "texts_by_id": {}}),
+            (media_storage, "_MEDIA_ROOT_CACHE", self.media_root),
+        ):
+            isolated_patch = patch.object(target, name, value)
+            isolated_patch.start()
+            self.addCleanup(isolated_patch.stop)
+        env_patch = patch.dict(os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": ""})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        for provider in ("_call_gemini_api", "_call_openai_api"):
+            provider_patch = patch.object(ai_assistant, provider, side_effect=AssertionError("Real AI calls are forbidden in tests"))
+            provider_patch.start()
+            self.addCleanup(provider_patch.stop)
+        web_patch = patch.object(ai_assistant, "_fetch_public_web_pages_for_context", return_value=([], []))
+        web_patch.start()
+        self.addCleanup(web_patch.stop)
 
         auth_patch = patch.object(
             ai_assistant,
@@ -55,6 +84,15 @@ class AiAssistantTests(unittest.TestCase):
         self.addCleanup(resolve_patch.stop)
 
     def test_settings_and_chat_with_attachment_and_letter_proposal(self):
+        # inspected_attachments is the complete inspection provenance, not only
+        # candidate uploads: one diploma plus eight selected KB source texts.
+        seed_documents = {
+            f"synthetic/guide_{number}.txt": f"SYNTHETIC_KB_{number}: განცხადების შეფასების სატესტო წესი."
+            for number in range(1, 9)
+        }
+        with zipfile.ZipFile(self.seed_zip, "w") as archive:
+            for filename, content in seed_documents.items():
+                archive.writestr(filename, content.encode("utf-8"))
         updated = ai_assistant.update_ai_settings(
             payload=ai_assistant.AISettingsPayload(
                 api_key="AIzaSyTestKey123456789",
@@ -150,16 +188,25 @@ class AiAssistantTests(unittest.TestCase):
             # Verify Gemini received the inline PDF attachment
             call_kwargs = mocked_gemini.call_args.kwargs
             sent_parts = call_kwargs["contents"][-1]["parts"]
-            has_inline_pdf = any(
-                p.get("inline_data", {}).get("mime_type") == "application/pdf"
-                for p in sent_parts
-            )
-            self.assertTrue(has_inline_pdf)
+            inline_pdfs = [
+                p["inline_data"] for p in sent_parts
+                if p.get("inline_data", {}).get("mime_type") == "application/pdf"
+            ]
+            self.assertEqual(len(inline_pdfs), 1)
+            self.assertEqual(base64.b64decode(inline_pdfs[0]["data"]), pdf_file.read_bytes())
+            context = sent_parts[0]["text"]
+            for content in seed_documents.values():
+                self.assertIn(content, context)
 
         self.assertIn("შევისწავლე გიორგი ბერიძის განცხადება", resp["reply"])
         self.assertNotIn("<PROPOSED_LETTER>", resp["reply"])
-        self.assertEqual(len(resp["inspected_attachments"]), 1)
-        self.assertIn("diploma.pdf", resp["inspected_attachments"][0])
+        labels = resp["inspected_attachments"]
+        self.assertEqual(len(labels), 9)
+        kb_labels = [label for label in labels if label.startswith("📚 ")]
+        self.assertCountEqual(kb_labels, [f"📚 {filename}" for filename in seed_documents])
+        candidate_labels = [label for label in labels if not label.startswith("📚 ")]
+        self.assertEqual(len(candidate_labels), 1)
+        self.assertIn("diploma.pdf", candidate_labels[0])
 
         self.assertEqual(len(resp["proposed_letters"]), 1)
         prop = resp["proposed_letters"][0]
@@ -169,6 +216,33 @@ class AiAssistantTests(unittest.TestCase):
         self.assertEqual(prop["candidate_category"], "A")
         self.assertIn("გიორგი ბერიძე", prop["body"])
         self.assertIn("2026-10-22", prop["body"])
+
+    def test_binary_kb_pdf_inspection_label_matches_actual_admin_payload(self):
+        filename = "01_სერტიფიკაციის_სქემა.pdf"
+        pdf_path = ai_assistant._kb_root_dir() / "files" / "synthetic.pdf"
+        pdf_bytes = b"%PDF-1.4 synthetic binary fixture"
+        pdf_path.write_bytes(pdf_bytes)
+        item = {"id": "synthetic", "filename": filename, "folder": "synthetic", "storage_name": pdf_path.name}
+        with patch.object(ai_assistant, "_load_kb_cache", return_value=([item], {"synthetic": ""})):
+            _, parts, labels = ai_assistant._retrieve_knowledge_base_context(self.db, "სერტიფიკაციის სქემა კატეგორია")
+            pdfs = [part["inline_data"] for part in parts if "inline_data" in part]
+            self.assertEqual(len(pdfs), 1)
+            self.assertEqual(base64.b64decode(pdfs[0]["data"]), pdf_bytes)
+            self.assertEqual(pdfs[0]["filename"], filename)
+            self.assertEqual(labels, [f"📚 synthetic/{filename}"])
+
+            # Public retrieval never gains binary attachments or internal labels.
+            _, public_parts, public_labels = ai_assistant._retrieve_knowledge_base_context(
+                self.db, "სერტიფიკაციის სქემა კატეგორია", is_public=True,
+            )
+            self.assertEqual(public_parts, [])
+            self.assertEqual(public_labels, [])
+
+            # A missing file must not falsely claim to have been sent/read.
+            pdf_path.unlink()
+            _, missing_parts, missing_labels = ai_assistant._retrieve_knowledge_base_context(self.db, "სერტიფიკაციის სქემა კატეგორია")
+            self.assertEqual(missing_parts, [])
+            self.assertEqual(missing_labels, [])
 
     def test_recipient_resolution_prevents_sending_letter_to_wrong_user(self):
         user_a = User(

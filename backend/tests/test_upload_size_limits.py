@@ -9,8 +9,11 @@ from unittest.mock import patch
 
 from fastapi import HTTPException, UploadFile
 from starlette.datastructures import Headers
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
 
 try:
+    from backend.app.models import Base, ExpertUpload, User
     from backend.app.routers import (
         admin,
         app_files,
@@ -22,6 +25,7 @@ try:
     )
     from backend.app.services import bounded_upload, media_storage
 except ModuleNotFoundError:
+    from app.models import Base, ExpertUpload, User
     from app.routers import (
         admin,
         app_files,
@@ -121,6 +125,21 @@ class UploadSizeLimitTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         media_storage._MEDIA_ROOT_CACHE = self._previous_media_root
         self._temporary_directory.cleanup()
+
+    def expert_database(self):
+        # Code allocation now flushes a draft before saving its files. Verify
+        # rollback in a real isolated transaction rather than a no-flush stub.
+        engine = create_engine("sqlite:///:memory:")
+        self.addCleanup(engine.dispose)
+        Base.metadata.create_all(engine)
+        db = Session(engine)
+        self.addCleanup(db.close)
+        actor = User(first_name="Synthetic", last_name="Expert", personal_id="99900000999",
+                     code="9990000999", phone="555000999", email="expert@example.invalid",
+                     password_hash="unused-test-only")
+        db.add(actor)
+        db.commit()
+        return db, actor
 
     def test_sync_writer_accepts_exact_limit_and_removes_oversize_partial(self) -> None:
         exact = self.root / "exact.bin"
@@ -255,14 +274,15 @@ class UploadSizeLimitTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_expert_second_file_oversize_cleans_first_and_skips_db(self) -> None:
-        db = _ExpertCreateDb()
-        actor = SimpleNamespace(id=9)
+        db, actor = self.expert_database()
 
         with (
             patch.object(expert_uploads, "_require_auth", return_value=actor),
             patch.object(expert_uploads, "_must_expert"),
             patch.object(expert_uploads, "_gen_unique_code", return_value="EX-test-001"),
             patch.object(expert_uploads, "MAX_BYTES", 4),
+            patch.object(db, "commit", wraps=db.commit) as commit,
+            patch.object(db, "rollback", wraps=db.rollback) as rollback,
         ):
             with self.assertRaises(HTTPException) as raised:
                 await expert_uploads.create_upload(
@@ -276,15 +296,14 @@ class UploadSizeLimitTests(unittest.IsolatedAsyncioTestCase):
                 )
 
         self.assertEqual(raised.exception.status_code, 413)
-        self.assertEqual(db.added, [])
-        self.assertEqual(db.commit_calls, 0)
-        self.assertEqual(db.rollback_calls, 1)
+        self.assertEqual(list(db.scalars(select(ExpertUpload))), [])
+        commit.assert_not_called()
+        rollback.assert_called_once_with()
         expert_root = self.root / "expert"
         self.assertEqual(list(expert_root.rglob("*")) if expert_root.exists() else [], [])
 
     async def test_small_expert_upload_preserves_api_filenames(self) -> None:
-        db = _ExpertCreateDb()
-        actor = SimpleNamespace(id=9)
+        db, actor = self.expert_database()
 
         with (
             patch.object(expert_uploads, "_require_auth", return_value=actor),
@@ -292,6 +311,7 @@ class UploadSizeLimitTests(unittest.IsolatedAsyncioTestCase):
             patch.object(expert_uploads, "_gen_unique_code", return_value="EX-test-002"),
             patch.object(expert_uploads, "_to_out", side_effect=lambda item: item),
             patch.object(expert_uploads, "MAX_BYTES", 4),
+            patch.object(db, "commit", wraps=db.commit) as commit,
         ):
             created = await expert_uploads.create_upload(
                 building_function="building",
@@ -313,8 +333,51 @@ class UploadSizeLimitTests(unittest.IsolatedAsyncioTestCase):
             media_storage.resolve_storage_path(created.project_path).read_bytes(),
             b"1234",
         )
-        self.assertEqual(db.added, [created])
-        self.assertEqual(db.commit_calls, 1)
+        self.assertEqual(list(db.scalars(select(ExpertUpload))), [created])
+        commit.assert_called_once_with()
+
+    async def test_expert_code_collision_retries_before_writing_any_files(self) -> None:
+        db, actor = self.expert_database()
+        existing = ExpertUpload(user_id=actor.id, unique_code="EX-test-kept", status="draft")
+        db.add(existing)
+        db.commit()
+        with (
+            patch.object(expert_uploads, "_require_auth", return_value=actor),
+            patch.object(expert_uploads, "_must_expert"),
+            patch.object(expert_uploads, "_gen_unique_code", side_effect=["EX-test-kept", "EX-test-new"]) as codes,
+            patch.object(db, "rollback", wraps=db.rollback) as rollback,
+        ):
+            created = await expert_uploads.create_upload(
+                building_function="building", cadastral_code="code", project_address="address",
+                expertise=_upload(b"synthetic", "expertise.pdf"), project=None, authorization=None, db=db)
+        self.assertEqual(codes.call_count, 2)
+        rollback.assert_called_once_with()
+        self.assertEqual(created.unique_code, "EX-test-new")
+        self.assertNotEqual(created.id, existing.id)
+        self.assertIsNone(db.get(ExpertUpload, existing.id).expertise_path)
+        self.assertEqual(set(db.scalars(select(ExpertUpload.unique_code))), {"EX-test-kept", "EX-test-new"})
+        self.assertFalse((self.root / "expert" / "EX-test-kept").exists())
+        stored = db.get(ExpertUpload, created.id)
+        self.assertEqual(media_storage.resolve_storage_path(stored.expertise_path).read_bytes(), b"synthetic")
+
+    async def test_exhausted_expert_code_collisions_preserve_existing_row_and_write_no_files(self) -> None:
+        db, actor = self.expert_database()
+        existing = ExpertUpload(user_id=actor.id, unique_code="EX-test-kept", status="draft")
+        db.add(existing)
+        db.commit()
+        with (
+            patch.object(expert_uploads, "_require_auth", return_value=actor),
+            patch.object(expert_uploads, "_must_expert"),
+            patch.object(expert_uploads, "_gen_unique_code", return_value="EX-test-kept") as codes,
+        ):
+            with self.assertRaises(HTTPException) as caught:
+                await expert_uploads.create_upload(
+                    building_function="building", cadastral_code="code", project_address="address",
+                    expertise=_upload(b"synthetic", "expertise.pdf"), project=None, authorization=None, db=db)
+        self.assertEqual(caught.exception.status_code, 409)
+        self.assertEqual(codes.call_count, 5)
+        self.assertEqual(list(db.scalars(select(ExpertUpload))), [existing])
+        self.assertFalse((self.root / "expert").exists())
 
     def test_statement_oversize_rolls_back_pending_row(self) -> None:
         db = _StatementDb()
@@ -326,6 +389,7 @@ class UploadSizeLimitTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(HTTPException) as raised:
                 statements.create_statement(
                     message="message",
+                    is_exam_application=False,
                     attachment=_upload(b"12345", "proof.pdf", "application/pdf"),
                     authorization=None,
                     db=db,

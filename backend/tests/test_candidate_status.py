@@ -34,6 +34,7 @@ try:
         parse_statement_category,
         resolve_passed_category,
     )
+    from backend.app.services import candidate_status
 except ModuleNotFoundError:
     from app.database import get_db
     from app.models import (
@@ -57,6 +58,7 @@ except ModuleNotFoundError:
         parse_statement_category,
         resolve_passed_category,
     )
+    from app.services import candidate_status
 
 
 def enable_foreign_keys(connection, _record):
@@ -83,6 +85,15 @@ class CandidateStatusLifecycleTests(unittest.TestCase):
         )
         settings.start()
         self.addCleanup(settings.stop)
+        # This fixture schedules 20 October; keep the eight-calendar-day
+        # notice requirement independent of the date on which tests run.
+        for module in (exam_schedules, planning_letters):
+            clock = patch.object(module, "_today_in_tbilisi", return_value=date(2026, 10, 12))
+            clock.start()
+            self.addCleanup(clock.stop)
+        delivery = patch.object(planning_letters, "deliver_letter", return_value=("sent", None))
+        self.delivery = delivery.start()
+        self.addCleanup(delivery.stop)
 
         self.candidate = self.add_user(1)
         self.staff = self.add_user(2, is_admin=True)
@@ -165,6 +176,84 @@ class CandidateStatusLifecycleTests(unittest.TestCase):
         self.assertEqual(resolve_passed_category("C_A", "pass_bc"), "C")
         self.assertIsNone(resolve_passed_category("C_A", "fail"))
 
+    def test_previous_sitting_does_not_satisfy_new_admission(self):
+        admitted_at = datetime(2026, 10, 12, 8)
+        for seconds, expected in ((-60, "exam_candidate"), (-6, "exam_candidate"), (0, "cert_candidate"), (30, "cert_candidate")):
+            with self.subTest(completed_seconds_after_admission=seconds):
+                self.candidate.candidate_status = "exam_candidate"
+                self.candidate.candidate_category = "C_A"
+                self.candidate.candidate_updated_at = admitted_at
+                self.db.commit()
+                candidate_status.sync_all_user_candidates(self.db, {
+                    self.candidate.id: {"sittings": [{
+                        "latest_at": admitted_at + timedelta(seconds=seconds),
+                        "outcome": "pass_a",
+                        "stages": {"stage1": {}, "stage2": {}, "stage3": {}},
+                    }]},
+                })
+                self.db.refresh(self.candidate)
+                self.assertEqual(self.candidate.candidate_status, expected)
+                self.assertEqual(self.candidate.candidate_category, "A" if expected == "cert_candidate" else "C_A")
+                self.assertFalse(self.candidate.exam_permission)
+
+    def test_certificate_candidate_expires_at_30_days_but_manual_renewal_is_preserved(self):
+        fixed_now = datetime(2026, 11, 5, 12)
+
+        class FrozenDateTime(datetime):
+            @classmethod
+            def utcnow(cls):
+                return fixed_now
+
+        self.candidate.candidate_status = "cert_candidate"
+        self.candidate.candidate_category = "C"
+        self.candidate.candidate_updated_at = fixed_now - timedelta(days=30)
+        self.db.add(PlanningLetter(
+            user_id=self.candidate.id, kind="certificate", event_date=fixed_now.date(),
+            event_time="10:00", period="morning", request_id="33333333-3333-4333-8333-333333333333",
+            request_fingerprint="synthetic-expiry", to_email=self.candidate.email,
+            subject="Test", body="Test", status="sent", created_by=self.staff.email,
+            created_at=fixed_now - timedelta(days=30), sent_at=fixed_now - timedelta(days=30),
+        ))
+        self.db.commit()
+        with patch.object(candidate_status, "datetime", FrozenDateTime):
+            candidate_status.sync_all_user_candidates(self.db, {})
+            self.assertIsNone(self.candidate.candidate_status)
+            fixed_now += timedelta(seconds=1)
+            self.candidate.candidate_status = "cert_candidate"
+            self.candidate.candidate_category = "C"
+            self.candidate.candidate_updated_at = fixed_now
+            self.db.commit()
+            candidate_status.sync_all_user_candidates(self.db, {})
+            self.assertEqual(self.candidate.candidate_status, "cert_candidate")
+            self.assertEqual(self.candidate.candidate_category, "C")
+
+    def test_only_confirmed_delivery_marks_statement_answered(self):
+        with self.client() as client:
+            for number, status in enumerate(("failed", "uncertain", "simulated", "sent"), start=1):
+                with self.subTest(delivery_status=status):
+                    stmt = Statement(user_id=self.candidate.id, message="Test request",
+                                     created_at=datetime.utcnow() - timedelta(seconds=1))
+                    self.db.add(stmt)
+                    self.db.commit()
+                    self.delivery.return_value = (status, None)
+                    response = client.post(
+                        f"/admin/users/{self.candidate.id}/planning-letters",
+                        headers={"Authorization": self.auth}, data={
+                            "kind": "exam", "action_mode": "send_only", "event_date": "2026-10-20",
+                            "event_time": "10:00", "period": "morning", "subject": "Test", "body": "Test",
+                            "statement_id": str(stmt.id),
+                            "request_id": f"44444444-4444-4444-8444-{number:012d}",
+                            "expected_to_email": self.candidate.email, "confirmed": "true",
+                        },
+                    )
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.db.refresh(stmt)
+                    self.assertIsNotNone(stmt.seen_at)
+                    self.assertEqual(stmt.answered_at is not None, status == "sent")
+                    self.assertEqual(stmt.answered_by, self.staff.email if status == "sent" else None)
+        self.assertEqual(self.delivery.call_count, 4)
+        self.assertEqual(self.db.query(ExamSchedule).count(), 0)
+
     def test_full_candidate_lifecycle_and_filters(self):
         client = self.client()
         headers = {"Authorization": self.auth}
@@ -200,11 +289,13 @@ class CandidateStatusLifecycleTests(unittest.TestCase):
         self.assertEqual(payload["user_candidate_status"], "exam_candidate")
         self.assertEqual(payload["user_candidate_category"], "C_A")
 
-        # Verify statement was automatically marked as seen and answered ("პასუხი გაცემულია")
+        # Saving an appointment is not sending an answer. No explicit statement
+        # was opened here, so it must remain both unseen and unanswered.
         self.db.refresh(stmt)
-        self.assertIsNotNone(stmt.seen_at)
-        self.assertIsNotNone(stmt.answered_at)
-        self.assertEqual(stmt.answered_by, self.staff.email)
+        self.assertIsNone(stmt.seen_at)
+        self.assertIsNone(stmt.answered_at)
+        self.assertIsNone(stmt.answered_by)
+        self.delivery.assert_not_called()
 
         # Verify filter qualification=exam_candidate returns the user
         list_res = client.get("/admin/users?paginated=true&page=1&qualification=exam_candidate", headers=headers)
@@ -221,6 +312,9 @@ class CandidateStatusLifecycleTests(unittest.TestCase):
         self.db.add_all([exam_obj, ma_proj, mf_proj])
         self.db.flush()
         now = datetime.utcnow()
+        # Simulate a sitting completed after admission, not old results from
+        # before today's scheduling action. Runtime correctly ignores those.
+        self.candidate.candidate_updated_at = now - timedelta(hours=1)
         self.db.add(
             ExamSession(
                 user_id=self.candidate.id,

@@ -14,10 +14,12 @@ try:
     from backend.app.models import Base, User, Statement, Certificate, ExamSchedule, UserSession
     from backend.app.database import get_db
     from backend.app.routers import admin
+    from backend.app.services import candidate_status
 except ModuleNotFoundError:
     from app.models import Base, User, Statement, Certificate, ExamSchedule, UserSession
     from app.database import get_db
     from app.routers import admin
+    from app.services import candidate_status
 
 
 class AdminUserPaginationTests(unittest.TestCase):
@@ -56,9 +58,11 @@ class AdminUserPaginationTests(unittest.TestCase):
         self.db.flush()
         return row
 
-    def certificate(self, user, level, status="active"):
-        self.db.add(Certificate(user_id=user.id, level=level, status=status))
+    def certificate(self, user, level, status="active", **overrides):
+        certificate = Certificate(user_id=user.id, level=level, status=status, **overrides)
+        self.db.add(certificate)
         self.db.flush()
+        return certificate
 
     def schedule(self, user, day, period):
         self.db.add(ExamSchedule(user_id=user.id, exam_date=day, period=period))
@@ -105,14 +109,37 @@ class AdminUserPaginationTests(unittest.TestCase):
 
     def test_qualification_types_and_legacy_architect_alias_keep_existing_semantics(self):
         for number, level in enumerate(("architect", "architect_expert", "expert", "municipal"), 1):
-            self.certificate(self.user(number), level, status="suspended")
+            self.certificate(self.user(number), level)
         self.assertEqual(self.ids(self.list(qualification="architect")), [1, 2])
         self.assertEqual(self.ids(self.list(qualification="expert")), [3])
         self.assertEqual(self.ids(self.list(qualification="municipal")), [4])
-        self.assertEqual(self.ids(self.list(qualification="certified")), [1, 3, 4])
+        # b1af41a includes the legacy architect_expert alias in all certified
+        # users and moves suspended/expired records to their dedicated filter.
+        self.assertEqual(self.ids(self.list(qualification="certified")), [1, 2, 3, 4])
         with self.assertRaises(HTTPException) as caught:
             self.list(qualification="invalid")
         self.assertEqual(caught.exception.status_code, 422)
+
+    def test_inactive_certificates_are_separate_and_last_calendar_day_is_inclusive(self):
+        for number, status, valid_until in (
+            (1, "active", None),
+            (2, "suspended", None),
+            (3, "expired", None),
+            (4, "active", datetime(2026, 10, 7, 23, 59, 59)),
+            (5, "active", datetime(2026, 10, 8, 0)),
+            (6, "active", datetime(2026, 10, 9, 0)),
+        ):
+            self.certificate(self.user(number), "architect", status=status, valid_until=valid_until)
+        self.db.commit()
+        with patch.object(admin, "today_in_tbilisi", return_value=date(2026, 10, 8)), \
+                patch.object(candidate_status, "today_in_tbilisi", return_value=date(2026, 10, 8)):
+            for qualification in ("architect", "certified"):
+                self.assertEqual(self.ids(self.list(qualification=qualification)), [1, 5, 6])
+            first = self.list(qualification="suspended_expired", size=2)
+            self.assertEqual(first["total"], 3)
+            self.assertEqual(self.ids(first), [2, 3])
+            self.assertEqual(self.ids(self.list(qualification="suspended_expired", size=2, page=2)), [4])
+            self.assertEqual(self.ids(self.list(qualification="suspended_expired", search="Person4")), [4])
 
     def test_red_blue_union_and_date_override_count_before_pagination(self):
         red, blue, mixed, answered = [self.user(number) for number in range(1, 5)]
@@ -172,6 +199,7 @@ class AdminUserPaginationTests(unittest.TestCase):
             "exam_stage_remaining_seconds", "exam_stage_permissions",
             "has_unseen_statements", "unseen_statement_count",
             "has_pending_statements", "pending_statement_count", "display_revision",
+            "candidate_status", "candidate_category", "requested_category", "admission_regime",
         })
         self.assertEqual(result["items"][0]["display_revision"],
                          self.list(size=2, search="Person1")["items"][0]["display_revision"])

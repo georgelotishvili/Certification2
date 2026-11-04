@@ -58,6 +58,11 @@ class ExamScheduleTests(unittest.TestCase):
         ))
         settings.start()
         self.addCleanup(settings.stop)
+        # New appointments require eight calendar days' notice. Freeze the
+        # scheduling clock; historical rows are seeded separately below.
+        clock = patch.object(exam_schedules, "_today_in_tbilisi", return_value=date(2026, 9, 30))
+        clock.start()
+        self.addCleanup(clock.stop)
         self.candidate = self.add_user(1)
         self.staff = self.add_user(2, is_admin=True)
         self.other_staff = self.add_user(3, is_admin=True)
@@ -91,6 +96,16 @@ class ExamScheduleTests(unittest.TestCase):
         return exam_schedules.list_exam_schedules(
             (user or self.candidate).id, authorization=auth or self.auth, db=self.db,
         ).items
+
+    def historical(self, day, period="morning", user=None):
+        """Existing history is not a new appointment request made today."""
+        entry = ExamSchedule(
+            user_id=(user or self.candidate).id,
+            exam_date=date.fromisoformat(day), period=period,
+        )
+        self.db.add(entry)
+        self.db.commit()
+        return entry
 
     def delete(self, entry, user=None, auth=None):
         return exam_schedules.delete_exam_schedule(
@@ -165,20 +180,20 @@ class ExamScheduleTests(unittest.TestCase):
             self.assertEqual(error.exception.status_code, 404)
 
     def test_old_dates_and_future_dates_are_both_retained(self):
-        past = self.create("2020-01-02")
+        past = self.historical("2020-01-02")
         future = self.create("2035-12-31", "evening")
         present = self.create()
         self.assertEqual([row.id for row in self.history()], [future.id, present.id, past.id])
         self.assertEqual(self.history()[-1].exam_date, date(2020, 1, 2))
 
     def test_same_person_can_be_planned_again_without_overwriting_history(self):
-        first = self.create("2026-01-01")
-        second = self.create("2026-11-01")
+        first = self.historical("2026-01-01")
+        second = self.create("2026-11-02")
         self.assertNotEqual(first.id, second.id)
         self.assertEqual({row.id for row in self.history()}, {first.id, second.id})
 
     def test_delete_one_record_preserves_other_history_and_other_person(self):
-        old = self.create("2026-01-01")
+        old = self.historical("2026-01-01")
         recent = self.create()
         other = self.create(user=self.other_candidate)
         self.delete(old)
@@ -198,7 +213,7 @@ class ExamScheduleTests(unittest.TestCase):
         self.assertEqual(error.exception.status_code, 404)
 
     def test_stale_delete_does_not_remove_a_new_entry_after_last_row_deleted(self):
-        old = self.create("2026-01-01")
+        old = self.historical("2026-01-01")
         self.delete(old, auth="Bearer token-3")
         new = self.create("2026-12-31", "evening", auth="Bearer token-3")
         self.assertGreater(new.id, old.id)
@@ -219,6 +234,57 @@ class ExamScheduleTests(unittest.TestCase):
         self.assertEqual([row.id for row in self.history()], [first.id])
         self.create("2026-10-09")
         self.assertEqual(len(self.history()), 2)
+
+    def test_new_date_requires_eight_calendar_days_without_changing_permissions(self):
+        before = (self.candidate.candidate_status, self.candidate.exam_permission, self.candidate.exam_stage)
+        for day in ("2020-01-02", "2026-09-30", "2026-10-07"):
+            with self.subTest(day=day), self.assertRaises(HTTPException) as error:
+                self.create(day)
+            self.assertEqual(error.exception.status_code, 422)
+            self.assertEqual(self.history(), [])
+            self.db.refresh(self.candidate)
+            self.assertEqual(
+                (self.candidate.candidate_status, self.candidate.exam_permission, self.candidate.exam_stage),
+                before,
+            )
+        self.assertEqual(self.create("2026-10-08").exam_date, date(2026, 10, 8))
+        self.assertFalse(self.candidate.exam_permission)
+        self.assertEqual(self.candidate.exam_stage, "none")
+
+    def test_new_date_rejects_both_weekend_days_even_after_notice_period(self):
+        for day in ("2026-10-10", "2026-10-11"):
+            with self.subTest(day=day), self.assertRaises(HTTPException) as error:
+                self.create(day)
+            self.assertEqual(error.exception.status_code, 422)
+        self.assertEqual(self.history(), [])
+
+    def test_notice_boundary_on_weekend_points_to_next_workday(self):
+        # Friday + eight calendar days is Saturday; the next Monday is valid.
+        with patch.object(exam_schedules, "_today_in_tbilisi", return_value=date(2026, 10, 2)):
+            with self.assertRaises(HTTPException) as error:
+                self.create("2026-10-09")
+            self.assertEqual(error.exception.status_code, 422)
+            self.assertIn("12-10-2026", error.exception.detail)
+            self.assertEqual(self.create("2026-10-12").exam_date, date(2026, 10, 12))
+
+    def test_existing_date_can_change_group_inside_notice_window_but_not_move_date(self):
+        entry = self.create()
+        with patch.object(exam_schedules, "_today_in_tbilisi", return_value=date(2026, 10, 7)):
+            updated = exam_schedules.update_exam_schedule(
+                self.candidate.id, entry.id,
+                ExamScheduleCreate(exam_date="2026-10-08", period="evening"),
+                authorization=self.auth, db=self.db,
+            )
+            self.assertEqual(updated.period, "evening")
+            with self.assertRaises(HTTPException) as error:
+                exam_schedules.update_exam_schedule(
+                    self.candidate.id, entry.id,
+                    ExamScheduleCreate(exam_date="2026-10-09", period="morning"),
+                    authorization=self.auth, db=self.db,
+                )
+            self.assertEqual(error.exception.status_code, 422)
+            self.assertEqual(self.history()[0].exam_date, date(2026, 10, 8))
+            self.assertEqual(self.history()[0].period, "evening")
 
     def test_same_day_other_group_and_other_person_are_not_duplicates(self):
         self.create()
@@ -336,12 +402,12 @@ class ExamScheduleTests(unittest.TestCase):
             today.assert_called_once()
 
     def test_explicit_date_ignores_today(self):
-        self.create("2020-01-01")
+        self.historical("2020-01-01")
         with patch.object(admin, "_today_in_tbilisi", side_effect=AssertionError("should not use today")):
             self.assertEqual(self.filtered_ids(exam_date=date(2020, 1, 1), exam_morning=True), [1])
 
     def test_past_and_future_filters_work_from_preserved_history(self):
-        self.create("2020-01-01")
+        self.historical("2020-01-01")
         self.create("2030-12-31", "evening")
         self.assertEqual(self.filtered_ids(exam_date=date(2020, 1, 1), exam_morning=True), [1])
         self.assertEqual(self.filtered_ids(exam_date=date(2030, 12, 31), exam_evening=True), [1])
@@ -353,7 +419,7 @@ class ExamScheduleTests(unittest.TestCase):
         self.assertEqual(self.filtered_ids(exam_date=date(2026, 10, 8), exam_morning=True, exam_evening=True), [1])
 
     def test_deleted_record_disappears_from_its_date_filter(self):
-        old = self.create("2020-01-01")
+        old = self.historical("2020-01-01")
         self.create("2030-12-31")
         self.delete(old)
         self.assertEqual(self.filtered_ids(exam_date=date(2020, 1, 1)), [])
@@ -523,7 +589,9 @@ class ExamScheduleMigrationTests(unittest.TestCase):
                 except HTTPException as error:
                     return error.status_code
 
-        with patch.object(exam_schedules, "_require_admin"), ThreadPoolExecutor(max_workers=2) as pool:
+        with patch.object(exam_schedules, "_require_admin"), \
+                patch.object(exam_schedules, "_today_in_tbilisi", return_value=date(2026, 9, 30)), \
+                ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(lambda _number: attempt(), range(2)))
         self.assertEqual(sorted(results), [201, 409])
         with Session(engine) as db:

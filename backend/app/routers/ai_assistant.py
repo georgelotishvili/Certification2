@@ -3801,6 +3801,7 @@ def _retrieve_knowledge_base_context(
                             }
                         }
                     )
+                    inspected_labels.append(f"📚 {folder}/{fname}")
                 except Exception:
                     pass
 

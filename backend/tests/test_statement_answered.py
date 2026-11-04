@@ -123,10 +123,15 @@ class StatementAnsweredTests(unittest.TestCase):
         self.assert_counts(self.state(), 0, 0)
 
         # Exercise the real submission path: no default read/answer state.
-        created = statements.create_statement(
-            message="Another application", attachment=None,
-            authorization="Bearer token-1", db=self.db,
-        )
+        # FastAPI resolves Form(False) for HTTP requests; direct calls must pass
+        # that value explicitly. Never send a real confirmation from this test.
+        with patch.object(statements, "send_statement_confirmation_email") as send_email:
+            created = statements.create_statement(
+                message="Another application", attachment=None,
+                is_exam_application=False,
+                authorization="Bearer token-1", db=self.db,
+            )
+        send_email.assert_called_once_with(self.candidate.email, "Person1 Family")
         self.assertNotEqual(created.id, statement.id)
         self.assert_counts(self.state(), 1, 0)
         self.mark_seen(created.id)

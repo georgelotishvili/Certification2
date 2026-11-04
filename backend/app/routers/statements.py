@@ -97,46 +97,62 @@ def _save_multiple_attachments(
 ) -> tuple[str, str, str | None, int | None]:
     directory = ensure_statement_dir(user_id, statement_id)
     temp_paths = []
-    used_names: dict[str, int] = {}
+    used_names: set[str] = set()
     total_bytes = 0
     zip_path = directory / f"{uuid4().hex}.zip"
+    zip_created = False
     try:
         for idx, upload in enumerate(uploads, start=1):
-            raw_name = os.path.basename(upload.filename or f"document_{idx}")
+            # Archive names must be flat on both Windows and Unix. Keep every
+            # attachment even when a generated suffix matches another filename.
+            raw_name = (upload.filename or f"document_{idx}").replace("\\", "/").rsplit("/", 1)[-1]
+            raw_name = "".join(ch for ch in raw_name if ch.isprintable())
+            if raw_name in {"", ".", ".."}:
+                raw_name = f"document_{idx}"
             base, ext = os.path.splitext(raw_name)
-            count = used_names.get(raw_name.lower(), 0)
-            used_names[raw_name.lower()] = count + 1
-            arcname = f"{base}_{count + 1}{ext}" if count > 0 else raw_name
+            arcname = raw_name
+            suffix = 2
+            while arcname.casefold() in used_names:
+                arcname = f"{base}_{suffix}{ext}"
+                suffix += 1
+            used_names.add(arcname.casefold())
 
             tmp_path = directory / f"tmp_{uuid4().hex}{ext.lower()}"
-            temp_paths.append((tmp_path, arcname))
             remaining = MAX_BYTES - total_bytes
             if remaining <= 0:
                 raise UploadTooLarge("Total upload size exceeded")
             written = save_upload_stream(upload.file, tmp_path, max_bytes=remaining)
+            # The bounded writer removes its own failed partial file. Register
+            # only successful creations so a collision never deletes old data.
+            temp_paths.append((tmp_path, arcname))
             total_bytes += written
 
-        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for tmp_path, arcname in temp_paths:
-                if tmp_path.exists():
+        with open(zip_path, "xb") as output:
+            zip_created = True
+            with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for tmp_path, arcname in temp_paths:
                     zf.write(tmp_path, arcname=arcname)
-    except UploadTooLarge as exc:
-        zip_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="file too large (max 100MB)",
-        ) from exc
+        zip_size = zip_path.stat().st_size
+        rel = relative_storage_path(zip_path)
+        return rel, f"{zip_prefix}_{statement_id}.zip", "application/zip", zip_size or None
+    except BaseException as exc:
+        if zip_created:
+            try:
+                zip_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        if isinstance(exc, UploadTooLarge):
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="file too large (max 100MB)",
+            ) from exc
+        raise
     finally:
         for tmp_path, _ in temp_paths:
             try:
                 tmp_path.unlink(missing_ok=True)
             except OSError:
                 pass
-
-    zip_size = zip_path.stat().st_size if zip_path.exists() else total_bytes
-    rel = relative_storage_path(zip_path)
-    return rel, f"{zip_prefix}_{statement_id}.zip", "application/zip", zip_size or None
-
 
 def _clean_upload_list(items: List[UploadFile] | None) -> List[UploadFile]:
     out: List[UploadFile] = []
@@ -279,17 +295,14 @@ def create_statement(
             attachments=build_statement_attachments_list(st),
         )
     except HTTPException:
-        if not committed:
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            for sp in saved_storage_paths:
-                delete_storage_file(sp)
         raise
     except Exception as e:
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error") from e
+    finally:
+        # Includes interruptions as well as ordinary errors; never remove files
+        # after their statement transaction has successfully committed.
         if not committed:
             try:
                 db.rollback()
@@ -297,7 +310,6 @@ def create_statement(
                 pass
             for sp in saved_storage_paths:
                 delete_storage_file(sp)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.get("/me", response_model=List[StatementOut])
