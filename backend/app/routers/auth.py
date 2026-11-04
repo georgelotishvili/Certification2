@@ -9,7 +9,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Exam, ExamCode, Session as ExamSession, User, UserSession
+from ..models import Exam, ExamCode, OfflineExamAttempt, Session as ExamSession, User, UserSession
 from ..schemas import (
     AuthCodeRequest,
     AuthCodeResponse,
@@ -184,12 +184,57 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     token = generate_session_token()
     now = datetime.utcnow()
     expires_at = now + timedelta(days=30)  # 30 days expiration
-    
+
+    settings = get_settings()
+    founder_email = (settings.founder_admin_email or "").lower()
+    is_founder = email_norm == founder_email
+    is_admin_user = is_founder or bool(user.is_admin)
+    user_agent = (request.headers.get("user-agent") or "").lower() if request else ""
+    is_desktop_app = "certification-exam-app" in user_agent or "electron/" in user_agent
+
+    if is_desktop_app and not is_admin_user:
+        lock_user_stage_transitions(db, user)
+        active_desktop_login = db.scalar(
+            select(UserSession.id).where(
+                UserSession.user_id == user.id,
+                UserSession.expires_at > now,
+                UserSession.last_used_at.is_not(None),
+                UserSession.last_used_at >= now - timedelta(seconds=6),
+            )
+        )
+        if active_desktop_login is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="ეს მომხმარებელი უკვე შესულია საგამოცდო აპლიკაციაში სხვა კომპიუტერიდან.",
+            )
+        active_theory = db.scalar(
+            select(ExamSession.id).where(
+                ExamSession.user_id == user.id,
+                ExamSession.finished_at.is_(None),
+                ExamSession.ends_at > now,
+                ExamSession.active == True,  # noqa: E712
+            )
+        )
+        active_offline = db.scalar(
+            select(OfflineExamAttempt.id).where(
+                OfflineExamAttempt.user_id == user.id,
+                OfflineExamAttempt.submitted_at.is_(None),
+                OfflineExamAttempt.ends_at > now,
+            )
+        )
+        if active_theory is not None or active_offline is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="ამ მომხმარებლით გამოცდა უკვე მიმდინარეობს სხვა კომპიუტერზე. პარალელური შესვლა დაუშვებელია.",
+            )
+
     # Create session in database
     try:
         # Authentication accepts only expires_at > now. Prune rejected web
         # tokens in the same transaction as the new token, never exam sessions.
         db.execute(delete(UserSession).where(UserSession.expires_at <= now))
+        if is_desktop_app and not is_admin_user:
+            db.execute(delete(UserSession).where(UserSession.user_id == user.id))
         session = UserSession(
             user_id=user.id,
             token=token,
@@ -207,12 +252,6 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="?????? ?????? ??? ????????. ?????? ?????? ???????.",
         ) from e
-    
-    # Get user info with proper permissions
-    settings = get_settings()
-    founder_email = (settings.founder_admin_email or "").lower()
-    is_founder = email_norm == founder_email
-    is_admin_user = is_founder or bool(user.is_admin)
     
     if is_founder:
         exam_perm = True

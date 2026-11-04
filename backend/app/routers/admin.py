@@ -20,7 +20,9 @@ from ..models import (
     PlanningLetter,
     MultiApartmentEvaluation,
     MultiFunctionalEvaluation,
+    UserExamStageGrant,
     build_statement_attachments_list,
+    format_letter_doc_number,
     format_statement_doc_number,
     iter_statement_attachment_paths,
 )
@@ -3124,4 +3126,281 @@ def admin_update_certificate_transitional_deadline(
         reactivated_count=int(res["reactivated_count"]),
         expired_count=int(res["expired_count"]),
     )
+
+
+_STAGE_AUDIT_LABELS = {
+    "theory": "I ეტაპი (თეორია)",
+    "project_stage_1": "II ეტაპი (მრავალბინიანი)",
+    "project_stage_2": "III ეტაპი (მრავალფუნქციური)",
+}
+
+
+def _iso_utc(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.isoformat() + "Z"
+
+
+@router.get("/audit-logs")
+def admin_get_audit_logs(
+    category: str | None = Query(None),
+    search: str | None = Query(None),
+    date_filter: str | None = Query(None, alias="date"),
+    limit: int = Query(300, ge=1, le=1000),
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db),
+):
+    """Unified chronological system & administrative audit log."""
+    _require_admin(db, authorization)
+
+    users_by_id: dict[int, User] = {
+        u.id: u for u in db.scalars(select(User)).all()
+    }
+
+    def _user_label(uid: int | None, fallback_name: str = "", fallback_code: str = "") -> str:
+        u = users_by_id.get(uid) if uid is not None else None
+        if u is not None:
+            name = f"{u.first_name or ''} {u.last_name or ''}".strip()
+            code = u.code or ""
+            return f"{name} [{code}]".strip() if code else name
+        if fallback_name or fallback_code:
+            return f"{fallback_name} [{fallback_code}]".strip() if fallback_code else fallback_name
+        return "—"
+
+    events: list[dict] = []
+
+    # 1. User registrations
+    for u in users_by_id.values():
+        if u.created_at:
+            events.append({
+                "timestamp": _iso_utc(u.created_at),
+                "_sort_dt": u.created_at.replace(tzinfo=None) if u.created_at.tzinfo else u.created_at,
+                "category": "registration",
+                "category_label": "რეგისტრაცია",
+                "action": "პირის რეგისტრაცია სისტემაში",
+                "actor": f"{u.first_name or ''} {u.last_name or ''}".strip() or u.email,
+                "target": _user_label(u.id),
+                "details": f"ელფოსტა: {u.email} | პირადი №: {u.personal_id}",
+            })
+
+    # 2. User logins (recent 300 sessions)
+    for sess in db.scalars(select(UserSession).order_by(UserSession.id.desc()).limit(300)).all():
+        if sess.created_at:
+            u = users_by_id.get(sess.user_id)
+            role_txt = "ადმინისტრატორი" if (u and u.is_admin) else "მომხმარებელი / კანდიდატი"
+            events.append({
+                "timestamp": _iso_utc(sess.created_at),
+                "_sort_dt": sess.created_at.replace(tzinfo=None) if sess.created_at.tzinfo else sess.created_at,
+                "category": "auth",
+                "category_label": "ავტორიზაცია",
+                "action": "სისტემაში შესვლა (Login)",
+                "actor": f"{u.email}" if u else f"User #{sess.user_id}",
+                "target": _user_label(sess.user_id),
+                "details": f"როლი: {role_txt} | Session ID: #{sess.id}",
+            })
+
+    # 3. Statements (incoming applications/appeals, seen, answered)
+    for st in db.scalars(select(Statement).order_by(Statement.id.desc()).limit(400)).all():
+        doc_num = format_statement_doc_number(st) or f"IN-{st.id}"
+        u_lbl = _user_label(st.user_id)
+        msg_preview = ((st.message or "").strip().replace("\n", " "))[:110]
+        if st.created_at:
+            events.append({
+                "timestamp": _iso_utc(st.created_at),
+                "_sort_dt": st.created_at.replace(tzinfo=None) if st.created_at.tzinfo else st.created_at,
+                "category": "statement",
+                "category_label": "განცხადება (IN)",
+                "action": "განცხადების შემოსვლა",
+                "actor": u_lbl,
+                "target": doc_num,
+                "details": msg_preview,
+            })
+        if st.seen_at:
+            events.append({
+                "timestamp": _iso_utc(st.seen_at),
+                "_sort_dt": st.seen_at.replace(tzinfo=None) if st.seen_at.tzinfo else st.seen_at,
+                "category": "statement",
+                "category_label": "განცხადება (IN)",
+                "action": "განცხადების გახსნა / განხილვა",
+                "actor": st.seen_by or "ადმინისტრატორი",
+                "target": f"{doc_num} ({u_lbl})",
+                "details": "სტატუსი: ნანახია",
+            })
+        if st.answered_at:
+            events.append({
+                "timestamp": _iso_utc(st.answered_at),
+                "_sort_dt": st.answered_at.replace(tzinfo=None) if st.answered_at.tzinfo else st.answered_at,
+                "category": "statement",
+                "category_label": "განცხადება (IN)",
+                "action": "განცხადებაზე პასუხის დაფიქსირება",
+                "actor": st.answered_by or "ადმინისტრატორი",
+                "target": f"{doc_num} ({u_lbl})",
+                "details": "სტატუსი: პასუხგაცემულია",
+            })
+
+    # 4. Outgoing Official Letters (PlanningLetter)
+    for lt in db.scalars(select(PlanningLetter).order_by(PlanningLetter.id.desc()).limit(400)).all():
+        dt = lt.sent_at or lt.created_at
+        if dt:
+            doc_num = format_letter_doc_number(lt) or f"OUT-{lt.id}"
+            events.append({
+                "timestamp": _iso_utc(dt),
+                "_sort_dt": dt.replace(tzinfo=None) if dt.tzinfo else dt,
+                "category": "letter",
+                "category_label": "წერილი (OUT)",
+                "action": "ოფიციალური შეტყობინების გაგზავნა",
+                "actor": lt.created_by or "ადმინისტრატორი",
+                "target": f"{_user_label(lt.user_id)} ({lt.to_email})",
+                "details": f"{doc_num} | {lt.subject} [{lt.status}]",
+            })
+
+    # 5. Exam Stage Grants
+    for gr in db.scalars(select(UserExamStageGrant).order_by(UserExamStageGrant.id.desc()).limit(400)).all():
+        stg_lbl = _STAGE_AUDIT_LABELS.get(gr.stage, gr.stage)
+        u_lbl = _user_label(gr.user_id)
+        if gr.granted_at:
+            events.append({
+                "timestamp": _iso_utc(gr.granted_at),
+                "_sort_dt": gr.granted_at.replace(tzinfo=None) if gr.granted_at.tzinfo else gr.granted_at,
+                "category": "grant",
+                "category_label": "საგამოცდო დაშვება",
+                "action": f"დაშვების გაცემა — {stg_lbl}",
+                "actor": "ადმინისტრატორი",
+                "target": u_lbl,
+                "details": f"Grant #{gr.id} | ეტაპი: {stg_lbl}",
+            })
+        if gr.started_at:
+            events.append({
+                "timestamp": _iso_utc(gr.started_at),
+                "_sort_dt": gr.started_at.replace(tzinfo=None) if gr.started_at.tzinfo else gr.started_at,
+                "category": "exam",
+                "category_label": "გამოცდა",
+                "action": f"გამოცდის დაწყება — {stg_lbl}",
+                "actor": u_lbl,
+                "target": stg_lbl,
+                "details": f"Grant #{gr.id}",
+            })
+        if gr.revoked_at:
+            events.append({
+                "timestamp": _iso_utc(gr.revoked_at),
+                "_sort_dt": gr.revoked_at.replace(tzinfo=None) if gr.revoked_at.tzinfo else gr.revoked_at,
+                "category": "grant",
+                "category_label": "საგამოცდო დაშვება",
+                "action": f"დაშვების გაუქმება / შეწყვეტა — {stg_lbl}",
+                "actor": "ადმინისტრატორი / სისტემა",
+                "target": u_lbl,
+                "details": f"Grant #{gr.id}",
+            })
+
+    # 6. Theory Exam Sessions
+    for es in db.scalars(select(ExamSession).order_by(ExamSession.id.desc()).limit(300)).all():
+        fallback_name = f"{es.candidate_first_name or ''} {es.candidate_last_name or ''}".strip()
+        u_lbl = _user_label(es.user_id, fallback_name, es.candidate_code or "")
+        if es.finished_at:
+            events.append({
+                "timestamp": _iso_utc(es.finished_at),
+                "_sort_dt": es.finished_at.replace(tzinfo=None) if es.finished_at.tzinfo else es.finished_at,
+                "category": "exam",
+                "category_label": "გამოცდა",
+                "action": "I ეტაპის (თეორია) დასრულება",
+                "actor": u_lbl,
+                "target": f"სესია #{es.id}",
+                "details": f"ქულა: {float(es.score_percent or 0.0):.2f}% | Grant #{es.stage_grant_id or '—'}",
+            })
+
+    # 7. Practical Evaluations (Stage 2 & Stage 3)
+    for ma in db.scalars(select(MultiApartmentEvaluation).order_by(MultiApartmentEvaluation.id.desc()).limit(200)).all():
+        dt = ma.finished_at or ma.started_at
+        if dt:
+            u_lbl = _user_label(ma.user_id)
+            events.append({
+                "timestamp": _iso_utc(dt),
+                "_sort_dt": dt.replace(tzinfo=None) if dt.tzinfo else dt,
+                "category": "exam",
+                "category_label": "გამოცდა",
+                "action": "II ეტაპის (მრავალბინიანი) დასრულება",
+                "actor": u_lbl,
+                "target": f"პროექტი {ma.project_code}",
+                "details": f"შედეგი: {float(ma.percentage or 0.0):.2f}% ({ma.correct_count}/{ma.total_correct_answers})",
+            })
+
+    for mf in db.scalars(select(MultiFunctionalEvaluation).order_by(MultiFunctionalEvaluation.id.desc()).limit(200)).all():
+        dt = mf.finished_at or mf.started_at
+        if dt:
+            u_lbl = _user_label(mf.user_id)
+            events.append({
+                "timestamp": _iso_utc(dt),
+                "_sort_dt": dt.replace(tzinfo=None) if dt.tzinfo else dt,
+                "category": "exam",
+                "category_label": "გამოცდა",
+                "action": "III ეტაპის (მრავალფუნქციური) დასრულება",
+                "actor": u_lbl,
+                "target": f"პროექტი {mf.project_code}",
+                "details": f"შედეგი: {float(mf.percentage or 0.0):.2f}% ({mf.correct_count}/{mf.total_correct_answers})",
+            })
+
+    # 8. Certificates
+    for cert in db.scalars(select(Certificate).order_by(Certificate.id.desc()).limit(300)).all():
+        dt = cert.updated_at or cert.created_at
+        if dt:
+            u_lbl = _user_label(cert.user_id)
+            events.append({
+                "timestamp": _iso_utc(dt),
+                "_sort_dt": dt.replace(tzinfo=None) if dt.tzinfo else dt,
+                "category": "certificate",
+                "category_label": "სერტიფიკატი",
+                "action": "სერტიფიკატის გაცემა / განახლება",
+                "actor": "ადმინისტრატორი",
+                "target": u_lbl,
+                "details": f"№ {cert.unique_code or '—'} | კატეგორია: {cert.level} | სტატუსი: {cert.status}",
+            })
+
+    events.sort(key=lambda item: item["_sort_dt"], reverse=True)
+
+    cat_norm = (category or "").strip().lower()
+    if cat_norm and cat_norm != "all":
+        events = [e for e in events if e["category"] == cat_norm]
+
+    date_norm = (date_filter or "").strip()
+    if date_norm:
+        # Convert UTC timestamp to Tbilisi date (+04:00) for accurate local day filtering
+        filtered_by_date = []
+        for e in events:
+            tbilisi_dt = e["_sort_dt"] + timedelta(hours=4)
+            if tbilisi_dt.strftime("%Y-%m-%d") == date_norm:
+                filtered_by_date.append(e)
+        events = filtered_by_date
+
+    q_norm = (search or "").strip().lower()
+    if q_norm:
+        events = [
+            e for e in events
+            if q_norm in (e["action"] or "").lower()
+            or q_norm in (e["actor"] or "").lower()
+            or q_norm in (e["target"] or "").lower()
+            or q_norm in (e["details"] or "").lower()
+            or q_norm in (e["category_label"] or "").lower()
+        ]
+
+    total = len(events)
+    items = []
+    for idx, e in enumerate(events[:limit], start=1):
+        items.append({
+            "index": idx,
+            "timestamp": e["timestamp"],
+            "category": e["category"],
+            "category_label": e["category_label"],
+            "action": e["action"],
+            "actor": e["actor"],
+            "target": e["target"],
+            "details": e["details"],
+        })
+
+    return {
+        "total": total,
+        "items": items,
+    }
+
 

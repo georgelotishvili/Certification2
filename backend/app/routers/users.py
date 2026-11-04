@@ -1440,6 +1440,7 @@ def get_user_photo(
 
 @router.get("/me", response_model=UserOut)
 def get_current_user_info(
+    request: Request = None,
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
@@ -1448,6 +1449,14 @@ def get_current_user_info(
     Returns fresh data from database (not cached).
     """
     user = _require_auth(db, authorization)
+    user_agent = (request.headers.get("user-agent") or "").lower() if request else ""
+    if ("certification-exam-app" in user_agent or "electron/" in user_agent) and authorization:
+        token = authorization.split(" ", 1)[1].strip()
+        active_sess = db.scalar(select(UserSession).where(UserSession.token == token))
+        if active_sess is not None:
+            active_sess.last_used_at = datetime.utcnow()
+            db.add(active_sess)
+            db.commit()
     
     # Refresh from database to get latest values
     db.refresh(user)

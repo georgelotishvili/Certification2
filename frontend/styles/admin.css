@@ -10202,3 +10202,198 @@ body.modal-open {
     min-width: 0;
   }
 }
+
+
+/* Audit Log Button & Viewer Modal */
+.users-audit-log-btn {
+  height: 36px;
+  padding: 0 14px;
+  border: 1.5px solid #1e293b;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.users-audit-log-btn:hover {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.audit-log-modal {
+  max-width: 1240px;
+  width: 96vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.audit-log-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #cbd5e1;
+  align-items: center;
+}
+
+.audit-log-search-input {
+  flex: 1 1 280px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.audit-log-select,
+.audit-log-date-input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.audit-log-clear-btn {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.audit-log-clear-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.audit-log-modal-body {
+  padding: 0 !important;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+
+.audit-log-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.audit-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  color: #0f172a;
+}
+
+.audit-log-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+  color: #1e293b;
+  font-weight: 700;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1.5px solid #cbd5e1;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.audit-log-table tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+  line-height: 1.4;
+}
+
+.audit-log-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.audit-col-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+  font-weight: 600;
+}
+
+.audit-col-cat {
+  white-space: nowrap;
+}
+
+.audit-col-action {
+  font-weight: 700;
+  color: #0f172a;
+  min-width: 150px;
+}
+
+.audit-col-actor {
+  color: #1e293b;
+  min-width: 140px;
+}
+
+.audit-col-target {
+  color: #0f172a;
+  font-weight: 600;
+  min-width: 160px;
+}
+
+.audit-col-details {
+  color: #334155;
+  min-width: 240px;
+}
+
+.audit-cat-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.audit-cat-badge.cat-exam {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e3a8a;
+}
+
+.audit-cat-badge.cat-grant {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #14532d;
+}
+
+.audit-cat-badge.cat-auth {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.audit-cat-badge.cat-certificate {
+  background: #fefce8;
+  border-color: #fde047;
+  color: #713f12;
+}
+
+.audit-log-empty {
+  text-align: center;
+  padding: 32px 16px !important;
+  color: #64748b;
+  font-weight: 600;
+}

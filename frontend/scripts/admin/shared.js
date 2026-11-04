@@ -323,6 +323,198 @@
     }
   };
 
+  const AUDIT_CATEGORY_LABELS = {
+    auth: 'ავტორიზაცია',
+    exam: 'გამოცდა',
+    grant: 'დაშვება',
+    statement: 'განცხადება',
+    letter: 'წერილი',
+    certificate: 'სერტიფიკატი',
+    registration: 'რეგისტრაცია',
+  };
+
+  function getAuditAuthHeaders() {
+    try {
+      if (global.Auth?.getAuthHeaders) {
+        return global.Auth.getAuthHeaders();
+      }
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        return { Authorization: 'Bearer ' + token };
+      }
+    } catch {}
+    return {};
+  }
+
+  function initAuditLogViewer() {
+    const overlay = document.getElementById('auditLogModalOverlay');
+    if (!overlay) return;
+
+    const closeBtn = document.getElementById('auditLogModalClose');
+    const refreshBtn = document.getElementById('auditLogRefreshBtn');
+    const exportCsvBtn = document.getElementById('auditLogExportCsvBtn');
+    const searchInput = document.getElementById('auditLogSearchInput');
+    const categorySelect = document.getElementById('auditLogCategorySelect');
+    const dateInput = document.getElementById('auditLogDateInput');
+    const clearBtn = document.getElementById('auditLogClearFiltersBtn');
+    const tableBody = document.getElementById('auditLogTableBody');
+    const totalCountEl = document.getElementById('auditLogTotalCount');
+    const lastUpdatedEl = document.getElementById('auditLogLastUpdated');
+
+    let currentItems = [];
+    let debounceTimer = null;
+
+    function openModal() {
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('modal-open');
+      document.querySelector('.other-dropdown')?.classList.remove('show');
+      document.querySelector('.nav-other')?.classList.remove('open');
+      document.body.classList.remove('menu-open');
+      loadAuditLogs();
+    }
+
+    function closeModal() {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+      if (!document.querySelector('.results-overlay.open')) {
+        document.body.classList.remove('modal-open');
+      }
+    }
+
+    function renderRows(items) {
+      if (!tableBody) return;
+      if (!Array.isArray(items) || !items.length) {
+        tableBody.innerHTML = '<tr><td colspan="6" class="audit-log-empty">ჩანაწერები ვერ მოიძებნა</td></tr>';
+        return;
+      }
+      tableBody.innerHTML = items.map((item) => {
+        const cat = String(item.category || '').trim() || 'info';
+        const catLabel = AUDIT_CATEGORY_LABELS[cat] || cat;
+        const severity = String(item.severity || 'info').trim();
+        const tsFormatted = shared.formatDateTime(item.timestamp);
+        return `
+          <tr class="audit-log-row is-${shared.escapeHtml(severity)}">
+            <td class="audit-col-time">${shared.escapeHtml(tsFormatted)}</td>
+            <td class="audit-col-cat"><span class="audit-cat-badge cat-${shared.escapeHtml(cat)}">${shared.escapeHtml(catLabel)}</span></td>
+            <td class="audit-col-action">${shared.escapeHtml(item.action || '—')}</td>
+            <td class="audit-col-actor">${shared.escapeHtml(item.actor || '—')}</td>
+            <td class="audit-col-target">${shared.escapeHtml(item.target || '—')}</td>
+            <td class="audit-col-details">${shared.escapeHtml(item.details || '—')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function loadAuditLogs() {
+      if (!tableBody) return;
+      tableBody.innerHTML = '<tr><td colspan="6" class="audit-log-empty">იტვირთება...</td></tr>';
+      const apiBase = (global.APP_CONFIG && typeof global.APP_CONFIG.API_BASE === 'string')
+        ? global.APP_CONFIG.API_BASE
+        : '';
+      const params = new URLSearchParams();
+      const cat = (categorySelect?.value || 'all').trim();
+      const search = (searchInput?.value || '').trim();
+      const dateVal = (dateInput?.value || '').trim();
+      params.set('category', cat || 'all');
+      params.set('limit', '300');
+      if (search) params.set('search', search);
+      if (dateVal) params.set('date', dateVal);
+
+      try {
+        const response = await fetch(`${apiBase}/admin/audit-logs?${params.toString()}`, {
+          headers: { ...getAuditAuthHeaders(), 'Cache-Control': 'no-cache' },
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          await shared.handleAdminErrorResponse(response, 'ლოგირების ჩატვირთვა ვერ მოხერხდა', shared.showToast);
+          tableBody.innerHTML = '<tr><td colspan="6" class="audit-log-empty">ჩატვირთვა ვერ მოხერხდა</td></tr>';
+          return;
+        }
+        const data = await response.json();
+        currentItems = Array.isArray(data?.items) ? data.items : [];
+        const total = Number(data?.total ?? currentItems.length);
+        if (totalCountEl) {
+          totalCountEl.textContent = `ნაჩვენებია: ${currentItems.length} / სულ: ${total}`;
+        }
+        if (lastUpdatedEl) {
+          lastUpdatedEl.textContent = `განახლდა: ${shared.formatDateTime(new Date().toISOString())}`;
+        }
+        renderRows(currentItems);
+      } catch (err) {
+        tableBody.innerHTML = '<tr><td colspan="6" class="audit-log-empty">სერვერთან დაკავშირება ვერ მოხერხდა</td></tr>';
+      }
+    }
+
+    function exportCsv() {
+      if (!currentItems.length) {
+        shared.showToast('ექსპორტისთვის ჩანაწერები არ არის', 'info');
+        return;
+      }
+      const headers = ['თარიღი/დრო', 'კატეგორია', 'მოქმედება', 'შემსრულებელი', 'ობიექტი/პირი', 'დეტალები'];
+      const escapeCsv = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+      const lines = [
+        headers.map(escapeCsv).join(','),
+        ...currentItems.map((it) => [
+          shared.formatDateTime(it.timestamp),
+          AUDIT_CATEGORY_LABELS[it.category] || it.category || '',
+          it.action || '',
+          it.actor || '',
+          it.target || '',
+          it.details || '',
+        ].map(escapeCsv).join(',')),
+      ];
+      const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gipc-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    document.querySelectorAll('[data-open-audit-log="true"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openModal();
+      });
+    });
+
+    closeBtn?.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) {
+        closeModal();
+      }
+    });
+    refreshBtn?.addEventListener('click', loadAuditLogs);
+    exportCsvBtn?.addEventListener('click', exportCsv);
+    categorySelect?.addEventListener('change', loadAuditLogs);
+    dateInput?.addEventListener('change', loadAuditLogs);
+    searchInput?.addEventListener('input', () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(loadAuditLogs, 280);
+    });
+    clearBtn?.addEventListener('click', () => {
+      if (searchInput) searchInput.value = '';
+      if (categorySelect) categorySelect.value = 'all';
+      if (dateInput) dateInput.value = '';
+      loadAuditLogs();
+    });
+
+    shared.openAuditLogModal = openModal;
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAuditLogViewer);
+  } else {
+    initAuditLogViewer();
+  }
+
   global.AdminShared = shared;
 })(window);
 

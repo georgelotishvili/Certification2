@@ -14,6 +14,7 @@ from fastapi import (
     HTTPException,
     Path,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -21,7 +22,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import Answer, Block, Exam, ExamMedia, Option, Question, Session as ExamSession, User, UserSession
+from ..models import (
+    Answer,
+    Block,
+    Exam,
+    ExamMedia,
+    Option,
+    Question,
+    Session as ExamSession,
+    User,
+    UserExamStageGrant,
+    UserSession,
+)
 from ..schemas import (
     AllQuestionsBlockOut,
     AllQuestionsResponse,
@@ -137,6 +149,7 @@ def verify_gate_password(payload: ExamGateVerifyRequest, db: Session = Depends(g
 @router.post("/session/start", response_model=StartSessionResponse)
 def start_session(
     payload: StartSessionRequest,
+    request: Request,
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
@@ -160,6 +173,8 @@ def start_session(
         STAGE_THEORY,
         mark_started=False,
     )
+    user_agent = (request.headers.get("user-agent") or "").lower() if request else ""
+    is_desktop_app = "certification-exam-app" in user_agent or "electron/" in user_agent
     now = datetime.now(timezone.utc)
     if stage_grant is not None:
         existing_session = db.scalar(
@@ -172,6 +187,15 @@ def start_session(
             .order_by(ExamSession.id.desc())
         )
         if existing_session is not None:
+            if is_desktop_app and (
+                existing_session.selected_map
+                or existing_session.active
+                or stage_grant.started_at is not None
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="ეს საგამოცდო სესია უკვე გახსნილია სხვა კომპიუტერზე. პარალელური შესვლა დაუშვებელია.",
+                )
             if not payload.prepare_only and stage_grant.started_at is None:
                 stage_grant = require_stage_permission(
                     db,
@@ -633,18 +657,85 @@ def finish_exam(
     return response
 
 
+def _synthetic_theory_receipt(session_id: int, payload: OfflineTheoryFinalRequest) -> dict:
+    answered_count = len(payload.answers or [])
+    total_questions = max(110, answered_count)
+    return {
+        "submission_id": str(payload.submission_id),
+        "session_id": session_id,
+        "stage_grant_id": payload.stage_grant_id,
+        "total_questions": total_questions,
+        "answered": answered_count,
+        "correct": 0,
+        "score_percent": 0.0,
+        "block_stats": [],
+        "chapter_stats": [],
+        "subchapter_stats": [],
+    }
+
+
+def _orphaned_deleted_theory_receipt(
+    db: Session,
+    token: Optional[str],
+    session_id: int,
+    payload: OfflineTheoryFinalRequest,
+) -> Optional[dict]:
+    """Return a no-op receipt when an admin already deleted the completed session.
+
+    When a founder admin deletes a finalized theory result row (`DELETE /admin/results/{id}`),
+    the `ExamSession` and its cascaded `OfflineExamAttempt` are removed, while the
+    consumed/revoked `UserExamStageGrant` remains in `user_exam_stage_grants`.
+    Returning a synthetic receipt lets a secondary/stale desktop outbox acknowledge
+    and clear its local 'pending' record without recreating or mutating DB state.
+    """
+    if not token or token.startswith("sess_"):
+        return None
+    if payload.stage_grant_id is None or payload.submission_id is None:
+        return None
+    if db.get(ExamSession, session_id) is not None:
+        return None
+    grant = db.get(UserExamStageGrant, payload.stage_grant_id)
+    if grant is None or grant.stage != STAGE_THEORY:
+        return None
+    if grant.started_at is None or (grant.consumed_at is None and grant.revoked_at is None):
+        return None
+    if db.get(User, grant.user_id) is None:
+        return None
+    still_bound = db.scalar(
+        select(ExamSession.id).where(ExamSession.stage_grant_id == grant.id)
+    )
+    if still_bound is not None:
+        return None
+    return _synthetic_theory_receipt(session_id, payload)
+
+
 @router.post("/{session_id}/offline-final")
 def finish_offline_exam(
     payload: OfflineTheoryFinalRequest,
+    request: Request,
     session_id: int = Path(...),
     authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
     token = authorization.split(" ", 1)[1] if authorization and authorization.lower().startswith("bearer ") else None
-    attempt, _ = authorize_final(db, token, stage=STAGE_THEORY,
-                                 grant_id=payload.stage_grant_id, session_id=session_id)
-    digest, receipt = check_final(attempt, payload.submission_id, payload.finished_at,
-                                 payload.model_dump(mode="json"))
+    try:
+        attempt, _ = authorize_final(db, token, stage=STAGE_THEORY,
+                                     grant_id=payload.stage_grant_id, session_id=session_id)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            orphaned_receipt = _orphaned_deleted_theory_receipt(db, token, session_id, payload)
+            if orphaned_receipt is not None:
+                return orphaned_receipt
+        raise
+    user_agent = (request.headers.get("user-agent") or "").lower() if request else ""
+    is_desktop_app = "certification-exam-app" in user_agent or "electron/" in user_agent
+    try:
+        digest, receipt = check_final(attempt, payload.submission_id, payload.finished_at,
+                                     payload.model_dump(mode="json"))
+    except HTTPException as exc:
+        if exc.status_code == 409 and is_desktop_app and attempt.submission_id is not None:
+            return _synthetic_theory_receipt(session_id, payload)
+        raise
     if receipt is not None:
         return receipt
     session = db.get(ExamSession, session_id)
