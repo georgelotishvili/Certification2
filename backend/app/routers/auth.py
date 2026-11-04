@@ -214,14 +214,17 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     try:
         # Authentication accepts only expires_at > now. Prune rejected web
         # tokens in the same transaction as the new token, never exam sessions.
-        db.execute(delete(UserSession).where(UserSession.expires_at <= now))
+        # Synchronize deleted primary keys even for expired ORM objects before
+        # SQLite can reuse an ID for the new login in this same transaction.
+        db.execute(delete(UserSession).where(UserSession.expires_at <= now)
+                   .execution_options(synchronize_session="fetch"))
         if is_desktop_app and not is_admin_user:
             # Browser tokens are independent. Reuse this device's login so a
             # delayed successful response cannot invalidate its own retry.
             cleanup = delete(UserSession).where(UserSession.user_id == user.id, UserSession.client_type == "desktop")
             if reusable_session is not None:
                 cleanup = cleanup.where(UserSession.id != reusable_session.id)
-            db.execute(cleanup)
+            db.execute(cleanup.execution_options(synchronize_session="fetch"))
         session = reusable_session or UserSession(user_id=user.id, token=token, created_at=now)
         token = session.token
         session.expires_at = expires_at

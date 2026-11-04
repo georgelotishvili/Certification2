@@ -60,6 +60,7 @@ class _MissingUserDb:
 class _LoginDb:
     def __init__(self, user):
         self.user = user
+        self.info = {}
         self.added = []
         self.executed = []
         self.commit_calls = 0
@@ -226,6 +227,7 @@ class AccountRateLimitTests(unittest.TestCase):
             )
 
         self.assertEqual(response.token, "token")
+        self.assertEqual(db.info["audit_actor"]["id"], user.id)
         self.assertNotIn("person@example.com", account_limiter._requests)
         self.assertEqual(ip_limiter._requests["203.0.113.25"], [
             ip_limiter._requests["203.0.113.25"][0]
