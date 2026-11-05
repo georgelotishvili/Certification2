@@ -292,11 +292,12 @@
         if (requestId !== STATE.requestId || error?.name === 'AbortError') return;
         STATE.failed = true;
         if (DOM.resultsCount) DOM.resultsCount.textContent = STATE.loaded
-          ? `${STATE.total} ჩანაწერი` : '—';
+          ? `${STATE.total} ჩანაწერი — წინა შედეგები` : '—';
         const target = STATE.loaded && DOM.error ? DOM.error : DOM.list;
         target.hidden = false;
         target.innerHTML = `<div class="registry-empty">
-          <strong>რეესტრი ვერ ჩაიტვირთა</strong><p>გთხოვთ, სცადოთ ხელახლა.</p>
+          <strong>${STATE.loaded ? 'რეესტრის განახლება ვერ მოხერხდა' : 'რეესტრი ვერ ჩაიტვირთა'}</strong>
+          <p>${STATE.loaded ? 'ნაჩვენებია წინა შედეგები. ' : ''}გთხოვთ, სცადოთ ხელახლა.</p>
           <button type="button" class="registry-retry">კიდევ სცადე</button></div>`;
         target.querySelector('.registry-retry')?.addEventListener('click', (event) => {
           event.preventDefault();

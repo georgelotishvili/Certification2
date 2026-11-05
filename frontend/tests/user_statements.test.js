@@ -41,10 +41,11 @@ class Element {
   }
   appendChild(child) {
     if (child.tagName === '#FRAGMENT') this.children.push(...child.children);
-    else this.children.push(child);
+    else { this.children.push(child); child.parentNode = this; }
     return child;
   }
-  removeChild(child) { this.children.splice(this.children.indexOf(child), 1); }
+  removeChild(child) { this.children.splice(this.children.indexOf(child), 1); child.parentNode = null; }
+  remove() { this.parentNode?.removeChild(this); }
   setAttribute(name, value) { this.attributes[name] = value; if (name === 'disabled') this.disabled = true; }
   removeAttribute(name) { delete this.attributes[name]; if (name === 'disabled') this.disabled = false; }
   addEventListener(type, listener) { (this.events[type] ||= []).push(listener); }
@@ -86,6 +87,8 @@ async function harness(options = {}) {
   });
   const window = new Element();
   const api = 'https://example.invalid/api';
+  const downloads = { created: [], revoked: [], timers: [], blobReads: 0, clearedSessions: 0 };
+  const attachmentBlob = { type: 'application/pdf', synthetic: true };
   Object.assign(window, {
     APP_CONFIG: { API_BASE: api }, location: { href: '' },
     Auth: {
@@ -93,6 +96,7 @@ async function harness(options = {}) {
       getSavedEmail: () => 'candidate@example.invalid',
       getCurrentUser: () => ({ firstName: 'საცდელი', lastName: 'პირი', code: '1234567890' }),
       getAuthHeaders: () => ({ Authorization: 'Bearer test-only' }),
+      clearSession: () => { downloads.clearedSessions++; },
     },
     Utils: { formatDateTime: (date) => date },
   });
@@ -107,6 +111,11 @@ async function harness(options = {}) {
     requests.push({ url, ...request });
     if (url.endsWith('/application-form/info')) return response(options.applicationForm || { available: false });
     if (url.endsWith('/statements/me')) return response(options.history || [], options.historyStatus || 200);
+    if (url.startsWith(`${api}/statements/`) && /\/attachment(?:\?slot=\d+)?$/.test(url)) {
+      if (options.attachmentError) throw new Error(options.attachmentError);
+      return { ...response({}, options.attachmentStatus || 200),
+        blob: async () => { downloads.blobReads++; return attachmentBlob; } };
+    }
     if (url.endsWith('/statements') && request.method === 'POST') {
       assert.equal(submit.disabled, true, 'submit is disabled while sending');
       if (options.submitError) throw new Error(options.submitError);
@@ -117,9 +126,19 @@ async function harness(options = {}) {
   vm.runInNewContext(`${source}\ninitStatementsModule();`, {
     window, document, fetch, FormData: FormDataMock, alert: (message) => alerts.push(message),
     getApiBase: () => api, on: (element, event, listener) => element?.addEventListener(event, listener),
+    URL: {
+      createObjectURL(blob) {
+        assert.equal(blob, attachmentBlob);
+        const url = `blob:synthetic-attachment-${downloads.created.length + 1}`;
+        downloads.created.push(url);
+        return url;
+      },
+      revokeObjectURL: (url) => downloads.revoked.push(url),
+    },
+    setTimeout: (callback, delay) => { downloads.timers.push({ callback, delay }); return downloads.timers.length; },
   });
   await flush();
-  return { ids, form, textarea, fileInput, submit, body, window, document, requests, alerts, created, api,
+  return { ids, form, textarea, fileInput, submit, body, window, document, requests, alerts, created, api, downloads,
     posts: () => requests.filter((request) => request.method === 'POST'),
     async open() { await window.emit('openStatements'); await flush(); },
     send: () => form.emit('submit'),
@@ -236,8 +255,63 @@ test('history renders untrusted message/filename as text and preserves attachmen
   assert.equal(item.children[1].children.length, 0);
   assert.equal(item.children[2].children[1].textContent, `${unsafe}.pdf`);
   await item.children[2].children[0].click();
-  assert.equal(app.window.location.href, `${app.api}/statements/id%2F17/attachment?actor=candidate%40example.invalid`);
+  const request = app.requests.find(request => request.url.includes('/attachment'));
+  assert.equal(request.url, `${app.api}/statements/id%2F17/attachment`);
+  assert.equal(request.headers.Authorization, 'Bearer test-only');
+  assert.equal(request.credentials, 'include');
+  assert.equal(app.window.location.href, '', 'authenticated download must not navigate with an actor-email URL');
+  assert.equal(app.downloads.blobReads, 1);
+  const link = app.created.find(element => element.tagName === 'A');
+  assert.equal(link.href, app.downloads.created[0]);
+  assert.equal(link.download, `${unsafe}.pdf`);
+  assert.equal(link.clicks, 1);
+  assert.equal(app.body.children.includes(link), false);
+  assert.equal(app.downloads.timers.length, 1);
+  assert.equal(app.downloads.timers[0].delay, 1000);
+  app.downloads.timers[0].callback();
+  assert.deepEqual(app.downloads.revoked, app.downloads.created);
+  assert.deepEqual(app.alerts, []);
 });
+
+test('each attachment slot downloads with authorization and no actor identity in the URL', async () => {
+  const app = await harness({ history: [{ id: 17, message: 'საცდელი',
+    attachments: [{ slot: 1, filename: 'first.pdf' }, { slot: 3, filename: 'third.docx' }] }] });
+  await app.open();
+  const item = app.ids.userStatementsList.children[0];
+  await item.children[2].children[0].click();
+  await item.children[3].children[0].click();
+  const requests = app.requests.filter(request => request.url.includes('/attachment'));
+  assert.deepEqual(requests.map(request => request.url), [
+    `${app.api}/statements/17/attachment`, `${app.api}/statements/17/attachment?slot=3`,
+  ]);
+  assert.ok(requests.every(request => request.headers.Authorization === 'Bearer test-only' && request.credentials === 'include'));
+  assert.deepEqual(app.created.filter(element => element.tagName === 'A').map(link => link.download), ['first.pdf', 'third.docx']);
+  assert.deepEqual(app.alerts, []);
+  app.downloads.timers.forEach(timer => timer.callback());
+  assert.deepEqual(app.downloads.revoked, app.downloads.created);
+});
+
+for (const failure of [{ attachmentStatus: 401 }, { attachmentStatus: 500 }, { attachmentError: 'Offline' }]) {
+  test(`failed attachment download (${failure.attachmentStatus || failure.attachmentError}) never saves an error as a file`, async () => {
+    const app = await harness({ ...failure, history: [{ id: 17, message: 'საცდელი', attachment_filename: 'test.pdf' }] });
+    await app.open();
+    await app.ids.userStatementsList.children[0].children[2].children[0].click();
+    assert.equal(app.requests.filter(request => request.url.includes('/attachment')).length, 1);
+    assert.equal(app.downloads.blobReads, 0);
+    assert.deepEqual(app.downloads.created, []);
+    assert.deepEqual(app.downloads.timers, []);
+    assert.equal(app.window.location.href, '');
+    if (failure.attachmentStatus === 401) {
+      assert.equal(app.downloads.clearedSessions, 1);
+      assert.equal(app.ids.userStatementsOverlay.attributes['aria-hidden'], 'true');
+      assert.match(app.alerts[0], /ავტორიზაცია/);
+    } else {
+      assert.equal(app.downloads.clearedSessions, 0);
+      assert.equal(app.ids.userStatementsOverlay.attributes['aria-hidden'], 'false');
+      assert.match(app.alerts[0], /ჩამოტვირთვა ვერ მოხერხდა/);
+    }
+  });
+}
 
 test('opening and closing keep overlay/scroll state consistent', async () => {
   const app = await harness();

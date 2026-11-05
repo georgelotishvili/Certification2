@@ -60,7 +60,13 @@ test('header logo is twenty percent wider without distorting its aspect ratio', 
 for (const page of ['index', 'my', 'registry']) {
   test(`${page} page refreshes the shared header stylesheet for the new logo`, () => {
     const html = read(`pages/${page}.html`);
-    assert.match(html, /href="\.\.\/styles\/header\.css\?v=20261019-publicai4"/);
-    assert.equal((html.match(/styles\/header\.css/g) || []).length, 1);
+    const hrefs = [...html.matchAll(/<link\b[^>]*href="([^"]*header\.css[^"\s]*)"[^>]*>/gi)];
+    assert.equal(hrefs.length, 1, 'exactly one shared header stylesheet is loaded');
+    const url = new URL(hrefs[0][1], `https://synthetic.invalid/frontend/pages/${page}.html`);
+    assert.equal(url.origin, 'https://synthetic.invalid', 'the header style stays local');
+    assert.equal(url.pathname, '/frontend/styles/header.css');
+    assert.equal(url.searchParams.getAll('v').length, 1);
+    assert.match(url.searchParams.get('v'), /^[A-Za-z0-9][A-Za-z0-9._-]*$/);
+    assert.ok(fs.statSync(path.join(frontend, 'styles/header.css')).isFile());
   });
 }

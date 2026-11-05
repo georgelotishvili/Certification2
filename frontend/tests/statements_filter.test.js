@@ -155,7 +155,10 @@ function harness(options = {}) {
       const search = url.searchParams.get('search') || '';
       const morning = url.searchParams.get('exam_morning') === 'true';
       const evening = url.searchParams.get('exam_evening') === 'true';
-      const examDay = url.searchParams.get('exam_date') || ((morning || evening) ? state.today : '');
+      // The UI now sends the shared date as filter_date (3ab7d06). This
+      // schedule-only response fixture tests request/race handling, not SQL joins.
+      assert.equal(url.searchParams.has('exam_date'), false, 'the shared picker must not send the legacy exam-only parameter');
+      const examDay = url.searchParams.get('filter_date') || ((morning || evening) ? state.today : '');
       let items = state.items.filter((user) => (!day || user.days.includes(day)) &&
         (!examDay || (user.schedules || []).some((schedule) => schedule.exam_date === examDay &&
           ((!morning && !evening) || (morning && schedule.period === 'morning') || (evening && schedule.period === 'evening')))) &&
@@ -927,7 +930,7 @@ test('inactive exam filters do not constrain the existing user list', async () =
   const h = examFilterHarness();
   await h.users.render();
   assert.deepEqual(h.visible(), [1, 2, 3, 4, 5]);
-  for (const key of ['exam_date', 'exam_morning', 'exam_evening']) {
+  for (const key of ['filter_date', 'exam_date', 'exam_morning', 'exam_evening']) {
     assert.equal(h.state.requests.at(-1).has(key), false);
   }
 });
@@ -939,7 +942,7 @@ for (const [period, ids] of [['morning', [1, 3]], ['evening', [2, 3]]]) {
     assert.deepEqual(h.visible(), ids);
     const query = h.state.requests.at(-1);
     assert.equal(query.get(`exam_${period}`), 'true');
-    assert.equal(query.has('exam_date'), false, 'client must not guess today using the computer timezone');
+    assert.equal(query.has('filter_date'), false, 'client must not guess today using the computer timezone');
     assert.equal(h.DOM.examScheduleDate.value, '');
   });
 }
@@ -953,11 +956,11 @@ test('both exam group filters form a union without duplicating a candidate', asy
   assert.deepEqual(h.visible(), [1, 2, 3]);
 });
 
-test('date-only exam filter includes both groups and supports past and future dates', async () => {
+test('shared date sends past and future filter_date and renders returned schedule groups', async () => {
   const h = examFilterHarness();
   await h.examDate('2026-09-01');
   assert.deepEqual(h.visible(), [1, 4]);
-  assert.equal(h.state.requests.at(-1).get('exam_date'), '2026-09-01');
+  assert.equal(h.state.requests.at(-1).get('filter_date'), '2026-09-01');
   assert.equal(h.DOM.filterExamMorning.checked, false);
   assert.equal(h.DOM.filterExamEvening.checked, false);
   await h.examDate('2026-11-20');
@@ -987,7 +990,7 @@ test('clearing the exam date retains group selection and returns to the current 
   assert.equal(h.DOM.examScheduleDate.value, '');
   assert.equal(h.DOM.clearExamScheduleDate.disabled, true);
   assert.equal(h.DOM.filterExamMorning.checked, true);
-  assert.equal(h.state.requests.at(-1).has('exam_date'), false);
+  assert.equal(h.state.requests.at(-1).has('filter_date'), false);
   assert.deepEqual(h.visible(), [1, 3]);
 });
 
@@ -1007,7 +1010,7 @@ test('statement and exam dates remain independent and intersect candidate lists'
   assert.equal(h.DOM.statementsDate.value, '2026-10-07');
   assert.equal(h.DOM.examScheduleDate.value, '2026-10-08');
   assert.equal(h.state.requests.at(-1).get('statement_date'), '2026-10-07');
-  assert.equal(h.state.requests.at(-1).get('exam_date'), '2026-10-08');
+  assert.equal(h.state.requests.at(-1).get('filter_date'), '2026-10-08');
   assert.deepEqual(h.visible(), [3]);
   await h.DOM.clearStatementsDate.dispatch('click');
   assert.equal(h.DOM.examScheduleDate.value, '2026-10-08');
@@ -1066,7 +1069,7 @@ test('undated exam group polling rolls over using the backend Tbilisi day', asyn
   h.state.today = '2026-11-20';
   await h.users.refreshLiveUserStates({ force: true });
   assert.deepEqual(h.visible(), [2]);
-  assert.equal(h.state.requests.at(-1).has('exam_date'), false);
+  assert.equal(h.state.requests.at(-1).has('filter_date'), false);
 });
 
 for (const requestType of ['render', 'poll']) {

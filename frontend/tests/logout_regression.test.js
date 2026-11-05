@@ -18,6 +18,13 @@ function logoutHelperSource() {
   return scriptSource.slice(start, end);
 }
 
+function overlayRemovalSource() {
+  const start = scriptSource.indexOf('function removeGeorgianNameOverlay()');
+  const end = scriptSource.indexOf('function checkAndEnforceGeorgianName(', start);
+  assert.ok(start >= 0 && end > start, 'test executes the real overlay-cleanup dependency');
+  return scriptSource.slice(start, end);
+}
+
 function createStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
   return {
@@ -45,7 +52,10 @@ function loadLogoutHelpers(overrides = {}) {
     events: [],
     notifications: [],
     close: 0,
+    overlayRemoved: 0,
+    removedBodyClasses: [],
   };
+  let overlayPresent = overrides.overlayPresent !== false;
   const context = {
     API_BASE: 'https://gipc.org.ge',
     KEYS: { AUTH: 'authLoggedIn', CURRENT_USER: 'currentUser' },
@@ -58,7 +68,14 @@ function loadLogoutHelpers(overrides = {}) {
     updateAuthUI: () => { calls.authUi += 1; },
     updateBanner: () => { calls.banner += 1; },
     updateAdminLinkVisibility: () => { calls.admin += 1; },
-    document: { dispatchEvent: (event) => calls.events.push(event.type) },
+    document: {
+      dispatchEvent: (event) => calls.events.push(event.type),
+      getElementById(id) {
+        assert.equal(id, 'georgianNameForceOverlay');
+        return overlayPresent ? { remove() { overlayPresent = false; calls.overlayRemoved++; } } : null;
+      },
+      body: { classList: { remove: (name) => calls.removedBodyClasses.push(name) } },
+    },
     CustomEvent: class CustomEvent {
       constructor(type) { this.type = type; }
     },
@@ -67,7 +84,7 @@ function loadLogoutHelpers(overrides = {}) {
   };
   vm.createContext(context);
   vm.runInContext(
-    `${logoutHelperSource()}\n` +
+    `${overlayRemovalSource()}\n${logoutHelperSource()}\n` +
       'globalThis.__logoutHelpers = { revokeServerSession, clearLocalSession, performLogout };',
     context,
   );
@@ -122,6 +139,8 @@ test('local logout clears token and current user before any network result', () 
   assert.deepEqual(calls.events, ['auth:logout']);
   assert.equal(calls.notifications.length, 1);
   assert.equal(calls.close, 1);
+  assert.equal(calls.overlayRemoved, 1);
+  assert.deepEqual(calls.removedBodyClasses, ['georgian-name-lock']);
 });
 
 test('one localStorage removal failure does not skip current-user cleanup', () => {
@@ -138,11 +157,21 @@ test('one localStorage removal failure does not skip current-user cleanup', () =
     }
     originalRemove(key);
   };
-  const { helpers } = loadLogoutHelpers({ localStorage });
+  const { helpers, calls } = loadLogoutHelpers({ localStorage });
 
   assert.doesNotThrow(() => helpers.clearLocalSession());
   assert.equal(localStorage.getItem('currentUser'), null);
   assert.deepEqual(localStorage.removals, ['auth_token', 'currentUser']);
+  assert.equal(calls.overlayRemoved, 1);
+  assert.deepEqual(calls.events, ['auth:logout']);
+});
+
+test('logout also clears the name lock when its overlay is already absent', () => {
+  const { helpers, calls } = loadLogoutHelpers({ overlayPresent: false });
+  assert.doesNotThrow(() => helpers.clearLocalSession());
+  assert.equal(calls.overlayRemoved, 0);
+  assert.deepEqual(calls.removedBodyClasses, ['georgian-name-lock']);
+  assert.deepEqual(calls.events, ['auth:logout']);
 });
 
 test('cancelled logout leaves local and server sessions untouched', () => {

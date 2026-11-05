@@ -6,12 +6,16 @@ const vm = require('node:vm');
 const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8').replace(/\r\n/g, '\n');
 
 function loaderHarness() {
-  const scripts = [], timers = new Map();
+  const scripts = [], lookups = [], timers = new Map();
   let timerId = 0;
   const context = { console, Intl, Date, Uint8Array, Map,
     setTimeout(fn) { timers.set(++timerId, fn); return timerId; },
     clearTimeout(id) { timers.delete(id); },
-    document: { createElement() {
+    document: { readyState: 'complete',
+      // The shared module also initializes its optional audit viewer. This page
+      // fixture has no audit modal, just like a DOM lookup for a missing element.
+      getElementById(id) { lookups.push(id); return null; },
+      createElement() {
       const listeners = {};
       return { dataset: {}, addEventListener(name, fn) { listeners[name] = fn; },
         remove() { this.removed = true; }, dispatch(name) { listeners[name]?.(); } };
@@ -19,12 +23,14 @@ function loaderHarness() {
   };
   context.window = context;
   vm.runInNewContext(read('scripts/admin/shared.js'), context);
-  return { load: context.AdminShared.loadExternalScript, scripts, timers, context };
+  return { load: context.AdminShared.loadExternalScript, scripts, timers, context, lookups };
 }
 
 test('document tools do not download until requested; concurrent callers share one load', async () => {
-  const {load, scripts, timers} = loaderHarness();
+  const {load, scripts, timers, lookups} = loaderHarness();
+  assert.deepEqual(lookups, ['auditLogModalOverlay']);
   assert.equal(scripts.length, 0);
+  assert.equal(timers.size, 0);
   const first = load('../vendor/jspdf.umd.min.js');
   const second = load('../vendor/jspdf.umd.min.js');
   assert.strictEqual(first, second);
@@ -37,15 +43,17 @@ test('document tools do not download until requested; concurrent callers share o
 });
 
 test('a failed tool download is removed and can be retried', async () => {
-  const {load, scripts} = loaderHarness();
+  const {load, scripts, timers} = loaderHarness();
   const first = load('../vendor/svg2pdf.min.js');
   scripts[0].dispatch('error');
   await assert.rejects(first, /could not be loaded/);
   assert.equal(scripts[0].removed, true);
+  assert.equal(timers.size, 0);
   const second = load('../vendor/svg2pdf.min.js');
   assert.equal(scripts.length, 2);
   scripts[1].dispatch('load');
   await second;
+  assert.equal(timers.size, 0);
 });
 
 test('a timed-out tool load does not hang actions or poison retry', async () => {
@@ -53,8 +61,14 @@ test('a timed-out tool load does not hang actions or poison retry', async () => 
   const first = load('../vendor/mammoth.browser.min.js');
   [...timers.values()][0]();
   await assert.rejects(first, /timed out/);
+  assert.equal(scripts[0].removed, true);
+  assert.equal(timers.size, 0);
   const retry = load('../vendor/mammoth.browser.min.js');
+  let retryFinished = false;
+  retry.then(() => { retryFinished = true; });
   scripts[0].dispatch('load'); // Ignore a late event from the removed attempt.
+  await Promise.resolve();
+  assert.equal(retryFinished, false);
   assert.equal(scripts.length, 2);
   scripts[1].dispatch('load');
   await retry;

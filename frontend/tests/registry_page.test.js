@@ -278,13 +278,13 @@ for (const [sort, expected] of [
 
 test('summary counts reflect filtered and total records, including no matches', async () => {
   const h = harness(); await settle();
-  assert.match(h.DOM.registryResultsCount.textContent, /\b3\b.*\b3\b/);
+  assert.equal(h.DOM.registryResultsCount.textContent, '3 ჩანაწერი');
   assert.equal(h.DOM.registryTotalCount.textContent, '3');
   await h.filter('Expert');
-  assert.match(h.DOM.registryResultsCount.textContent, /\b1\b.*\b3\b/);
+  assert.equal(h.DOM.registryResultsCount.textContent, '1 / 3');
   assert.equal(h.DOM.registryTotalCount.textContent, '3');
   await h.input('missing');
-  assert.match(h.DOM.registryResultsCount.textContent, /\b0\b.*\b3\b/);
+  assert.equal(h.DOM.registryResultsCount.textContent, '0 / 3');
   assert.match(h.DOM.registryList.textContent, /ჩანაწერები ვერ მოიძებნა/);
 });
 
@@ -312,7 +312,7 @@ test('clear-search control preserves the independently selected qualification fi
 test('empty registry data produces a stable zero count and empty message', async () => {
   const h = harness({ items: [] }); await settle();
   assert.deepEqual(h.names(), []);
-  assert.match(h.DOM.registryResultsCount.textContent, /\b0\b.*\b0\b/);
+  assert.equal(h.DOM.registryResultsCount.textContent, '0 ჩანაწერი');
   assert.equal(h.DOM.registryTotalCount.textContent, '0');
   assert.match(h.DOM.registryList.textContent, /ჩანაწერები ვერ მოიძებნა/);
 });
@@ -320,6 +320,8 @@ test('empty registry data produces a stable zero count and empty message', async
 test('a failed registry request offers retry and retains controls chosen before retry', async () => {
   const h = harness({ fail: true }); await settle();
   assert.match(h.DOM.registryList.textContent, /რეესტრი ვერ ჩაიტვირთა/);
+  assert.equal(h.DOM.registryResultsCount.textContent, '—');
+  assert.doesNotMatch(h.DOM.registryList.textContent, /წინა შედეგები/);
   await h.filter('Municipal'); await h.input('Dato');
   const retry = h.DOM.registryList.querySelector('.registry-retry');
   assert.ok(retry, 'changing controls after a failed load must keep the retry action available');
@@ -328,6 +330,8 @@ test('a failed registry request offers retry and retains controls chosen before 
   assert.equal(h.DOM.registryFilterMunicipal.checked, true);
   assert.equal(h.DOM.registrySearch.value, 'Dato');
   assert.equal(h.state.requests.length, 4);
+  assert.equal(h.DOM.registryResultsCount.textContent, '1 / 3');
+  assert.doesNotMatch(h.DOM.registryList.textContent, /წინა შედეგები|რეესტრი ვერ ჩაიტვირთა/);
 });
 
 test('controls changed while initial data is in flight are respected when data arrives', async () => {
@@ -502,15 +506,48 @@ test('failed background refresh keeps the previous page visible with explicit st
   assert.equal(h.cards()[0], oldCard);
   assert.match(h.DOM.registryResultsCount.textContent, /წინა შედეგები/);
   assert.equal(h.DOM.registryError.hidden, false);
+  assert.match(h.DOM.registryError.textContent, /რეესტრის განახლება ვერ მოხერხდა/);
+  assert.match(h.DOM.registryError.textContent, /ნაჩვენებია წინა შედეგები/);
   assert.equal(h.DOM.registryNext.disabled, true);
-  const retry = h.DOM.registryError.querySelector('.registry-retry'); assert.ok(retry);
+  let retry = h.DOM.registryError.querySelector('.registry-retry'); assert.ok(retry);
+  await retry.dispatch('click');
+  assert.equal(h.cards()[0], oldCard, 'repeated failures must not discard the last successful page');
+  assert.equal(h.DOM.registryResultsCount.textContent, '55 ჩანაწერი — წინა შედეგები');
+  assert.equal(h.state.requests.at(-1).url.searchParams.get('offset'), '50');
+  assert.equal(h.DOM.registryList.getAttribute('aria-busy'), 'false');
+  retry = h.DOM.registryError.querySelector('.registry-retry'); assert.ok(retry);
   h.state.fail = false;
   await retry.dispatch('click');
   assert.equal(h.cards().length, 5);
   assert.equal(h.DOM.registryError.hidden, true);
+  assert.equal(h.DOM.registryError.textContent, '');
   assert.match(h.DOM.registryResultsCount.textContent, /51–55 \/ 55/);
+  assert.doesNotMatch(h.DOM.registryResultsCount.textContent, /წინა შედეგები/);
   assert.equal(h.DOM.registryNext.disabled, true);
   assert.equal(h.DOM.registryPrevious.disabled, false);
+});
+
+test('failed refresh of an empty filtered result preserves that result and retry uses the same filters', async () => {
+  const h = harness(); await settle();
+  await h.filter('Expert'); await h.input('missing');
+  const oldEmpty = h.DOM.registryList.querySelector('.registry-empty');
+  assert.ok(oldEmpty);
+  h.state.fail = true;
+  await h.registry.refresh(true);
+  assert.equal(h.DOM.registryList.querySelector('.registry-empty'), oldEmpty);
+  assert.deepEqual(h.names(), []);
+  assert.match(h.DOM.registryResultsCount.textContent, /წინა შედეგები/);
+  assert.match(h.DOM.registryError.textContent, /ნაჩვენებია წინა შედეგები/);
+  h.state.fail = false;
+  await h.DOM.registryError.querySelector('.registry-retry').dispatch('click');
+  assert.equal(h.state.requests.at(-1).url.searchParams.get('q'), 'missing');
+  assert.equal(h.state.requests.at(-1).url.searchParams.get('qualifications'), 'expert');
+  assert.equal(h.DOM.registryFilterExpert.checked, true);
+  assert.equal(h.DOM.registrySearch.value, 'missing');
+  assert.equal(h.DOM.registryError.hidden, true);
+  assert.equal(h.DOM.registryError.textContent, '');
+  assert.equal(h.DOM.registryResultsCount.textContent, '0 / 3');
+  assert.match(h.DOM.registryList.textContent, /ჩანაწერები ვერ მოიძებნა/);
 });
 
 test('malformed page data reports a retryable failure instead of a false empty registry', async () => {
@@ -533,7 +570,7 @@ test('server-clamped offset is reflected after the last page shrinks', async () 
   assert.equal(h.cards().length, 50);
   assert.equal(h.DOM.registryPrevious.disabled, true);
   assert.equal(h.DOM.registryPagination.hidden, true);
-  assert.match(h.DOM.registryResultsCount.textContent, /1–50 \/ 50/);
+  assert.equal(h.DOM.registryResultsCount.textContent, '50 ჩანაწერი');
 });
 
 test('standalone page has crawlable Georgian title, canonical URL, description, and visible heading', () => {
@@ -624,20 +661,28 @@ test('public registry retains one full-width row per person instead of a multi-c
 
 test('certificate colors mark the outer left contour while qualification labels remain neutral', () => {
   const css = fs.readFileSync(path.join(__dirname, '../styles/registry.css'), 'utf8');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  function declarations(selector) {
+    const matching = rules.filter(([, selectors]) => selectors.split(',').some((value) => value.trim() === selector));
+    assert.ok(matching.length > 0, `missing CSS rule: ${selector}`);
+    return Object.fromEntries(matching.flatMap(([, , body]) => body.split(';').filter((value) => value.trim()).map((value) => {
+      const colon = value.indexOf(':');
+      return [value.slice(0, colon).trim(), value.slice(colon + 1).trim()];
+    })));
+  }
   const colors = {architect: ['#3a5c9e', 'architect'], expert: ['#9e3a3a', 'expert'], municipal: ['#5a9e3a', 'municip']};
   for (const [type, [color, template]] of Object.entries(colors)) {
-    assert.ok(css.includes(`.registry-page .registry-card[data-qualification="${type}"] { --registry-type-color: ${color}; }`));
+    const row = declarations(`.registry-page .registry-card[data-qualification="${type}"]`);
+    assert.equal(row['--registry-type-color'], color);
     const certificate = fs.readFileSync(path.join(__dirname, `../certificate/${template} bac.svg`), 'utf8');
     assert.ok(certificate.toLowerCase().includes(color), 'accent must match the actual certificate');
   }
-  const labels = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector]) => selector.includes('.registry-qualification'));
+  const labels = rules.filter(([, selector]) => selector.includes('.registry-qualification'));
   assert.ok(labels.length > 0);
   assert.ok(labels.every(([, selector]) => !selector.includes('data-qualification') && !selector.includes('data-status')));
-  assert.match(css, /\.registry-qualification\s*\{[^}]*color:\s*#486079;/);
-  const edge = css.match(/\.registry-page \.registry-card\[data-qualification\]::before\s*\{([^}]+)\}/)[1];
-  assert.match(edge, /border-width:\s*3px 0 3px 6px;/);
-  assert.match(edge, /border-radius:\s*5px 0 0 5px;/);
-  assert.match(edge, /pointer-events:\s*none;/);
-  assert.match(edge, /left:\s*-1px;/);
-  assert.match(fs.readFileSync(path.join(__dirname, '../pages/registry.html'), 'utf8'), /registry\.css\?v=20261008-accent1/);
+  assert.equal(declarations('.registry-page .registry-qualification').color, '#475569');
+  const row = declarations('.registry-page .registry-card');
+  assert.equal(row['border-left'].replace(/\s+/g, ' '), '4px solid var(--registry-type-color)');
+  assert.equal(declarations('.registry-page .registry-card:hover')['border-left-color'], 'var(--registry-type-color)');
+  assert.match(fs.readFileSync(path.join(__dirname, '../pages/registry.html'), 'utf8'), /registry\.css\?v=[^"\s]+/);
 });
