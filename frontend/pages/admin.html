@@ -25,7 +25,7 @@
     <script src="../scripts/admin/application-form.js?v=20261101-perf1" defer></script>
     <script src="../scripts/admin/documents.js?v=20261029-doc3" defer></script>
     <script src="../scripts/admin/ai-assistant.js?v=20261029-doc3" defer></script>
-    <link rel="stylesheet" href="../styles/admin.css?v=20261104-audit3" />
+    <link rel="stylesheet" href="../styles/admin.css?v=20261105-audit-header1" />
   </head>
   <body>
     <header>
@@ -33,7 +33,10 @@
         
       <div class="auth-banner">ადმინისტრატორის გვერდი</div>
 
-      <button class="login-btn">მთავარი გვერდი</button>
+      <div class="admin-header-actions">
+        <button id="openAuditLogBtn" class="admin-header-action admin-audit-log-btn" type="button" data-open-audit-log="true" aria-haspopup="dialog" aria-controls="auditLogModalOverlay" title="სისტემური და აუდიტორული ლოგირების ჟურნალი">ლოგირება</button>
+        <button class="login-btn admin-header-action" type="button">მთავარი გვერდი</button>
+      </div>
 
       <!-- Burger toggle for <=1050px (JS-driven) -->
       <button class="burger" aria-controls="mobile-drawer" aria-label="მენიუს გახსნა" aria-expanded="false" type="button">
@@ -181,7 +184,6 @@
                   <option value="name_asc">სახელი/გვარი (ა–ჰ)</option>
                   <option value="name_desc">სახელი/გვარი (ჰ–ა)</option>
                 </select>
-                <button id="openAuditLogBtn" class="users-audit-log-btn" type="button" data-open-audit-log="true" title="სისტემური და აუდიტორული ლოგირების ჟურნალი">ლოგირება</button>
                 <button id="resetUsersFilters" class="users-reset-filters-btn" type="button" hidden title="ყველა ჩართული ფილტრისა და ძებნის გასუფთავება">ფილტრის გასუფთავება ×</button>
               </div>
             </div>

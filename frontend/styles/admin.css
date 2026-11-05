@@ -327,14 +327,20 @@ header {
     z-index: 101;
   }
 
-  .login-btn {
-    width: 150px;
-    height: 40px;
+  .admin-header-actions {
     position: absolute;
     right: 10%;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .admin-header-action {
+    height: 40px;
+    padding: 0 16px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     background: var(--surface-elevated);
@@ -342,19 +348,23 @@ header {
     border: 2px solid var(--border-strong);
     cursor: pointer;
     font-weight: 600;
-    transition: all 200ms ease;
+    white-space: nowrap;
+    transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
     box-shadow: 0 4px 12px rgba(29, 39, 68, 0.12);
   }
 
-    .login-btn:hover { 
+    .admin-header-action:hover {
       background: #f0f4ff;
       border-color: var(--accent);
-      transform: translateY(calc(-50% - 2px));
       box-shadow: 0 10px 24px rgba(47, 91, 168, 0.18);
     }
 
-    .login-btn:active {
-      transform: translateY(-50%);
+    .admin-header-action:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .admin-header-action:active {
       box-shadow: 0 4px 10px rgba(29, 39, 68, 0.2);
     }
 
@@ -5767,12 +5777,25 @@ body.modal-open {
   flex-wrap: wrap;
 }
 
+@media (min-width: 901px) and (max-width: 1100px) {
+  header > .auth-banner {
+    left: 24px;
+    transform: translateY(-50%);
+  }
+}
+
 @media (max-width: 900px) {
   .nav { display: none; }
   .auth-banner { display: none; }
   .drawer-auth-banner { display: block; }
-  .login-btn { display: none; }
-  .burger { display: flex; }
+  .admin-header-actions {
+    left: 12px;
+    right: auto;
+    max-width: calc(100% - 76px);
+    gap: 8px;
+  }
+  .admin-header-action { padding: 0 8px; font-size: 12px; }
+  .burger { display: flex; right: 12px; }
 }
 
 /* APP Files section */
@@ -10204,32 +10227,22 @@ body.modal-open {
 }
 
 
-/* Audit Log Button & Viewer Modal */
-.users-audit-log-btn {
-  height: 36px;
-  padding: 0 14px;
-  border: 1.5px solid #1e293b;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #0f172a;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.users-audit-log-btn:hover {
-  background: #0f172a;
-  color: #ffffff;
-}
-
+/* Audit Log Viewer Modal */
 .audit-log-modal {
   max-width: 1240px;
   width: 96vw;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+}
+
+.audit-log-modal .results-modal-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.audit-log-modal .modal-close {
+  flex-shrink: 0;
 }
 
 .audit-log-toolbar {
