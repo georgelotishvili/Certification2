@@ -151,6 +151,7 @@
   let cachedDocuments = null;
   let cachedDocumentsKey = null;
   let currentModalDoc = null;
+  let siteInfoReturnFocus = null;
   const SITE_DOCS_CACHE_PREFIX = 'gipc_site_docs_v8_';
 
   function getSiteDocsCacheKey() {
@@ -984,10 +985,11 @@
     }
   }
 
-  async function openDocumentById(docId) {
+  async function openDocumentById(docId, options = {}) {
     try {
       const els = getSiteInfoElements();
       if (!els) return;
+      siteInfoReturnFocus = options.returnFocus || null;
 
       currentModalDoc = null;
       if (els.downloadPdfBtn) {
@@ -1183,6 +1185,8 @@
     try {
       const els = getSiteInfoElements();
       if (!els) return;
+      const returnFocus = siteInfoReturnFocus;
+      siteInfoReturnFocus = null;
       currentModalDoc = null;
       if (els.downloadPdfBtn) {
         els.downloadPdfBtn.hidden = true;
@@ -1191,6 +1195,7 @@
       els.modal.setAttribute('aria-hidden', 'true');
       document.body.classList.remove('modal-open');
       if (els.body) els.body.innerHTML = '';
+      if (returnFocus?.isConnected && returnFocus.getClientRects().length) returnFocus.focus();
     } catch {}
   }
 
@@ -1352,6 +1357,7 @@
     // Close menu with Escape
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
+      if (document.getElementById('siteInfoModal')?.classList.contains('show')) event.preventDefault();
       if (DOM.body?.classList.contains('menu-open')) closeMenu();
       closeAboutDropdown();
       closeDrawerAboutSubmenu();
@@ -1440,8 +1446,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261101-doc4b';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261101_doc4b';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261105-registration-privacy1';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261105_registration_privacy1';
 
   function syncHeaderInitialAuthUI() {
     try {

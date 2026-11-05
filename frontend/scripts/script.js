@@ -404,6 +404,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Global escape handling (modal first, then menu)
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
+    // The document reader may be opened above the registration notice.
+    // Escape must dismiss that topmost reader without cancelling registration.
+    if (event.defaultPrevented || document.getElementById('siteInfoModal')?.classList.contains('show')) return;
     if (document.getElementById('georgianNameForceOverlay')) {
       event.preventDefault();
       event.stopPropagation();
@@ -604,6 +607,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // NEED_REGISTER_TEXT removed: banner shows either default or user's name/code
 
     let activeView = 'options';
+    const REGISTRATION_NOTICE_VERSION = '20261105-registration-privacy1';
+    let registrationConsentAccepted = false;
+    let registrationFlowGeneration = 0;
+    let registrationPrivacyPending = false;
 
     function isLoggedIn() {
       return localStorage.getItem(KEYS.AUTH) === 'true';
@@ -925,6 +932,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setView(view) {
       activeView = view;
+      const consentView = document.getElementById('registrationConsentView');
+      if (consentView) consentView.hidden = view !== 'registration-consent';
+      DOM.loginModal?.classList.toggle('registration-consent-open', view === 'registration-consent');
+      if (view === 'registration-consent') DOM.loginModal?.setAttribute('aria-labelledby', 'registrationConsentTitle');
+      else DOM.loginModal?.removeAttribute('aria-labelledby');
       if (!DOM.modalButtons) return;
       const is = (name) => activeView === name;
       DOM.modalButtons.style.display = is('options') ? 'flex' : 'none';
@@ -935,7 +947,86 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showOptions() { setView('options'); }
     function showLogin() { setView('login'); }
-    function showRegister() { setView('register'); }
+    function showRegister() {
+      resetRegisterFlow();
+      setView('registration-consent');
+      document.getElementById('registrationConsentTitle')?.focus?.();
+    }
+
+    function resetRegistrationConsent() {
+      registrationConsentAccepted = false;
+      registrationFlowGeneration++;
+      registrationPrivacyPending = false;
+      const checkbox = document.getElementById('registrationConsentCheckbox');
+      if (checkbox) checkbox.checked = false;
+      const button = document.getElementById('registrationConsentContinue');
+      if (button) button.disabled = true;
+      document.getElementById('registrationPrivacyLink')?.removeAttribute('aria-busy');
+    }
+
+    function continueRegistration() {
+      const checkbox = document.getElementById('registrationConsentCheckbox');
+      if (activeView !== 'registration-consent' || !isModalOpen() || !checkbox?.checked) return;
+      registrationConsentAccepted = true;
+      setView('register');
+      showRegisterStep(1);
+      DOM.registerForm?.querySelector('input[name="personalId"]')?.focus?.();
+    }
+
+    function registrationConsentIsCurrent(generation = registrationFlowGeneration) {
+      return registrationConsentAccepted && generation === registrationFlowGeneration &&
+        activeView === 'register' && isModalOpen();
+    }
+
+    async function openRegistrationPrivacy(event) {
+      event?.preventDefault?.();
+      if (activeView !== 'registration-consent' || !isModalOpen() || registrationPrivacyPending) return;
+      const generation = registrationFlowGeneration;
+      const link = document.getElementById('registrationPrivacyLink');
+      registrationPrivacyPending = true;
+      link?.setAttribute('aria-busy', 'true');
+      try {
+        const documents = await window.SiteDocuments?.fetchSiteDocuments?.();
+        if (generation !== registrationFlowGeneration || activeView !== 'registration-consent' || !isModalOpen()) return;
+        const policies = (Array.isArray(documents) ? documents : []).filter(doc => {
+          if (doc.contract_type) return false;
+          const heading = `${doc.title || ''} ${doc.filename || ''} ${String(doc.content || '').slice(0, 2500)}`;
+          const documentCode = heading.match(/\bGIPC-[A-Z]+-\d{3}\b/)?.[0];
+          return documentCode === 'GIPC-POL-002' ||
+            String(doc.filename || '').startsWith('04_კონფიდენციალურობის_პოლიტიკა') ||
+            String(doc.title || '').trim() === 'კონფიდენციალურობის პოლიტიკა';
+        });
+        if (policies.length !== 1 || !window.SiteDocuments?.openDocumentById) {
+          notify('კონფიდენციალურობის პოლიტიკა ვერ ჩაიტვირთა. გთხოვთ, სცადოთ ხელახლა.', 'error');
+          return;
+        }
+        await window.SiteDocuments.openDocumentById(policies[0].id, { returnFocus: link });
+      } catch {
+        if (generation === registrationFlowGeneration && isModalOpen()) {
+          notify('კონფიდენციალურობის პოლიტიკა ვერ ჩაიტვირთა. გთხოვთ, სცადოთ ხელახლა.', 'error');
+        }
+      } finally {
+        if (generation === registrationFlowGeneration) {
+          registrationPrivacyPending = false;
+          link?.removeAttribute('aria-busy');
+        }
+      }
+    }
+
+    function keepRegistrationNoticeFocus(event) {
+      if (event.key !== 'Tab' || activeView !== 'registration-consent' || !isModalOpen()) return;
+      const reader = document.getElementById('siteInfoModal');
+      const scope = reader?.classList.contains('show') ? reader : DOM.loginModal;
+      const controls = Array.from(scope.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex="0"]'))
+        .filter(element => !element.hidden && element.getClientRects().length);
+      if (!controls.length) return;
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !controls.includes(document.activeElement))) {
+        event.preventDefault(); first.focus();
+      }
+    }
     function showForgot() {
       setView('forgot');
       resetForgotFlow();
@@ -961,6 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeModal() {
       if (!DOM.loginModal) return;
+      const closingRegistration = activeView === 'registration-consent' || activeView === 'register';
       DOM.loginModal.classList.remove('show');
       DOM.loginModal.setAttribute('aria-hidden', 'true');
       DOM.body.style.overflow = '';
@@ -972,6 +1064,7 @@ document.addEventListener('DOMContentLoaded', () => {
       resetForgotFlow();
       resetRegisterFlow();
       showOptions();
+      if (closingRegistration) DOM.loginBtn?.focus?.();
     }
 
     function isModalOpen() {
@@ -1315,13 +1408,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function resetRegisterFlow() {
       registerData = null;
+      resetRegistrationConsent();
       showRegisterStep(1);
       resetOtpInfo('register');
+      setButtonLoading(document.getElementById('registerSendCodeBtn'), false);
+      setButtonLoading(DOM.registerForm?.querySelector('#registerStep2 .submit'), false);
     }
 
     async function handleRegisterSendCode(event) {
       event?.preventDefault?.();
       if (!DOM.registerForm) return;
+      if (!registrationConsentIsCurrent()) {
+        showRegister();
+        return;
+      }
+      const generation = registrationFlowGeneration;
       const formData = new FormData(DOM.registerForm);
       const personalId = utils.getTrimmed(formData, 'personalId');
       const firstName = utils.getTrimmed(formData, 'firstName').replace(/\s+/g, ' ');
@@ -1348,14 +1449,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch(`${API_BASE}/users/send-verification-code`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, purpose: 'register' }),
+          body: JSON.stringify({ email, purpose: 'register',
+            registration_consent_accepted: true, registration_notice_version: REGISTRATION_NOTICE_VERSION }),
         });
+        if (!registrationConsentIsCurrent(generation)) return;
         if (!response.ok) {
           let detail = '';
           try {
             const json = await response.json();
             detail = json?.detail || '';
           } catch {}
+          if (!registrationConsentIsCurrent(generation)) return;
           notify(detail || 'კოდის გაგზავნა ვერ მოხერხდა', 'error');
           return;
         }
@@ -1365,15 +1469,21 @@ document.addEventListener('DOMContentLoaded', () => {
         startOtpTimer('register');
         notify('ვერიფიკაციის კოდი გაიგზავნა ელფოსტაზე', 'success');
       } catch {
-        notify('ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
+        if (registrationConsentIsCurrent(generation)) notify('ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
       } finally {
-        setButtonLoading(button, false);
+        if (generation === registrationFlowGeneration) setButtonLoading(button, false);
       }
     }
 
     async function handleRegisterSubmit(event) {
       event.preventDefault();
+      if (!registrationConsentIsCurrent()) {
+        showRegister();
+        return;
+      }
       if (!DOM.registerForm || !registerData) return;
+      const generation = registrationFlowGeneration;
+      const submittedData = { ...registerData };
       
       const formData = new FormData(DOM.registerForm);
       const verificationCode = utils.getTrimmed(formData, 'verificationCode');
@@ -1396,14 +1506,18 @@ document.addEventListener('DOMContentLoaded', () => {
             email: registerData.email,
             password: registerData.password,
             verification_code: verificationCode,
+            registration_consent_accepted: true,
+            registration_notice_version: REGISTRATION_NOTICE_VERSION,
           }),
         });
+        if (!registrationConsentIsCurrent(generation)) return;
         if (!response.ok) {
           let detail = '';
           try {
             const json = await response.json();
             detail = json?.detail || '';
           } catch {}
+          if (!registrationConsentIsCurrent(generation)) return;
           if (response.status === 409) {
             notify(detail || 'ეს მონაცემები სისტემაში უკვე რეგისტრირებულია', 'error');
             return;
@@ -1412,6 +1526,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         const data = await response.json();
+        if (!registrationConsentIsCurrent(generation)) return;
         if (data.token) {
           try {
             localStorage.setItem('auth_token', data.token);
@@ -1419,16 +1534,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const normalizedUser = {
           id: data.id,
-          firstName: data.first_name || registerData.firstName,
-          lastName: data.last_name || registerData.lastName,
-          personalId: data.personal_id || registerData.personalId || '',
-          phone: data.phone || registerData.phone || '',
+          firstName: data.first_name || submittedData.firstName,
+          lastName: data.last_name || submittedData.lastName,
+          personalId: data.personal_id || submittedData.personalId || '',
+          phone: data.phone || submittedData.phone || '',
           code: data.code,
           isAdmin: !!data.is_admin,
           email: data.email,
         };
         saveCurrentUser(normalizedUser);
-        localStorage.setItem(KEYS.SAVED_EMAIL, registerData.email);
+        localStorage.setItem(KEYS.SAVED_EMAIL, submittedData.email);
         setLoggedIn(true);
         updateAuthUI();
         updateBanner();
@@ -1440,9 +1555,9 @@ document.addEventListener('DOMContentLoaded', () => {
         resetRegisterFlow();
         showOptions();
       } catch {
-        notify('ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
+        if (registrationConsentIsCurrent(generation)) notify('ქსელური პრობლემა - სცადეთ მოგვიანებით', 'error');
       } finally {
-        setButtonLoading(submitButton, false);
+        if (generation === registrationFlowGeneration) setButtonLoading(submitButton, false);
       }
     }
 
@@ -1457,7 +1572,10 @@ document.addEventListener('DOMContentLoaded', () => {
         utils.on(DOM.loginBtn, 'click', () => handleAuthButtonClick(false));
         utils.on(DOM.drawerLoginBtn, 'click', () => handleAuthButtonClick(true));
         utils.on(DOM.modalClose, 'click', closeModal);
-        // Removed overlay click handler - modal should only close via close button
+        // Only the new consent step is dismissible through its backdrop.
+        utils.on(DOM.loginModal, 'click', event => {
+          if (event.target === DOM.loginModal && activeView === 'registration-consent') closeModal();
+        });
         utils.on(DOM.loginOption, 'click', showLogin);
         utils.on(DOM.registerOption, 'click', showRegister);
         utils.on(DOM.forgotPasswordLink, 'click', (event) => { event.preventDefault(); showForgot(); });
@@ -1479,6 +1597,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const registerBackBtn = document.getElementById('registerBackBtn');
         utils.on(registerSendCodeBtn, 'click', handleRegisterSendCode);
         utils.on(registerBackBtn, 'click', handleRegisterBack);
+        const consentCheckbox = document.getElementById('registrationConsentCheckbox');
+        utils.on(consentCheckbox, 'change', () => {
+          const button = document.getElementById('registrationConsentContinue');
+          if (button) button.disabled = !consentCheckbox.checked;
+        });
+        utils.on(document.getElementById('registrationConsentContinue'), 'click', continueRegistration);
+        utils.on(document.getElementById('registrationConsentCancel'), 'click', closeModal);
+        utils.on(document.getElementById('registrationPrivacyLink'), 'click', openRegistrationPrivacy);
+        utils.on(document, 'keydown', keepRegistrationNoticeFocus);
       }
 
       normalizeAuthState();

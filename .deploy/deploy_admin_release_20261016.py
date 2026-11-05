@@ -79,6 +79,7 @@ CANDIDATE_FILES = [
     "backend/app/services/offline_grading.py",
     "backend/app/services/planning_email.py",
     "backend/app/services/user_codes.py",
+    "backend/app/services/registration_notice.py",
     "backend/app/data/ai_knowledge_seed.zip",
     "backend/app/data/contracts/01_სერტიფიკაციის_სქემა.md",
     "backend/app/data/contracts/01_სერტიფიკაციის_სქემა.docx",

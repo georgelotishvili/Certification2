@@ -596,6 +596,17 @@ body.menu-open .burger {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
+.login-modal .modal-content {
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.login-modal .modal-close {
+  flex-shrink: 0;
+}
+
 .login-modal.show .modal-content {
   opacity: 1;
   transform: scale(1);
@@ -682,6 +693,130 @@ body.modal-open {
 .forgot-password-form {
   display: none;
   text-align: left;
+}
+
+/* One notice before the existing registration form. */
+.login-modal.registration-consent-open .modal-content {
+  width: min(100%, 820px);
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  gap: 12px;
+  padding: 24px;
+  text-align: left;
+}
+
+.login-modal.registration-consent-open .modal-content > h3 {
+  display: none;
+}
+
+.registration-consent[hidden] {
+  display: none;
+}
+
+.registration-consent h3 {
+  margin: 0 0 20px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1.5;
+  color: #0f172a;
+}
+
+.registration-consent-copy,
+.registration-consent-choice {
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  color: #0f172a;
+}
+
+.registration-consent-copy p {
+  margin: 0 0 16px;
+}
+
+.registration-privacy-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1c468c;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.registration-consent-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #cbd5e1;
+  cursor: pointer;
+}
+
+.registration-consent-choice input {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  accent-color: #1c468c;
+}
+
+.registration-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.registration-consent-actions .modal-btn {
+  min-height: 44px;
+  min-width: 132px;
+  box-shadow: none;
+  transform: none;
+}
+
+.registration-consent-actions .registration-consent-cancel {
+  background: #ffffff;
+  color: #334155;
+  border-color: #94a3b8;
+}
+
+.registration-consent-actions .modal-btn:disabled {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.registration-consent :focus-visible {
+  outline: 2px solid #1c468c;
+  outline-offset: 3px;
+}
+
+@media (max-width: 540px) {
+  .login-modal.registration-consent-open {
+    padding: 12px;
+  }
+
+  .login-modal.registration-consent-open .modal-content {
+    padding: 16px;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+
+  .registration-consent h3 {
+    font-size: 18px;
+  }
+
+  .registration-consent-actions .modal-btn {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
 }
 
 .register-step,

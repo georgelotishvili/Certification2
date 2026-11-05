@@ -57,6 +57,7 @@ from ..services.user_codes import (
     reserve_registration_code,
 )
 from ..services.desktop_sessions import authenticated_device, is_desktop_request
+from ..services.registration_notice import REGISTRATION_NOTICE_VERSION, record_registration_consent
 from ..rate_limiter import (
     code_verify_limiter,
     verification_account_limiter,
@@ -237,6 +238,17 @@ def verify_code_endpoint(request: Request, payload: VerifyCodeRequest):
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreateWithVerification, db: Session = Depends(get_db)):
+    # Validate the one registration notice before consuming the email OTP.
+    if payload.registration_consent_accepted is not True:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="რეგისტრაციის გასაგრძელებლად გაეცანით პირობებს და მონიშნეთ თანხმობა.",
+        )
+    if payload.registration_notice_version != REGISTRATION_NOTICE_VERSION:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="რეგისტრაციის პირობები განახლდა. განაახლეთ გვერდი და გაეცანით მოქმედ ტექსტს.",
+        )
     # Basic validations
     if len(payload.personal_id) != 11 or not payload.personal_id.isdigit():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="personal_id must be 11 digits")
@@ -296,6 +308,8 @@ def register(payload: UserCreateWithVerification, db: Session = Depends(get_db))
                 is_admin=is_founder or False,
             )
             db.add(user)
+            db.flush()
+            record_registration_consent(db, user)
             db.commit()
             break
         except UserCodeConflict:

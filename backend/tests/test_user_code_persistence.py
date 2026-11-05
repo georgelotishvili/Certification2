@@ -69,6 +69,8 @@ class UserCodePersistenceTests(unittest.TestCase):
             email=f"person{number}@example.com",
             password="Test-password-123!",
             verification_code="1234",
+            registration_consent_accepted=True,
+            registration_notice_version="20261105-registration-privacy1",
         )
         values.update(overrides)
         return UserCreateWithVerification(**values)

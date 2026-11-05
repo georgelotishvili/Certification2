@@ -109,7 +109,8 @@ class ExpiredAuthSessionCleanupTests(unittest.TestCase):
 
     def register(self, **overrides):
         payload = dict(personal_id="99900000003", first_name="საცდელი", last_name="ახალი",
-                       phone="555000003", email="new@example.org", password="Synthetic123!", verification_code="1234")
+                       phone="555000003", email="new@example.org", password="Synthetic123!", verification_code="1234",
+                       registration_consent_accepted=True, registration_notice_version="20261105-registration-privacy1")
         payload.update(overrides)
         return users.register(UserCreateWithVerification(**payload), db=self.db)
 

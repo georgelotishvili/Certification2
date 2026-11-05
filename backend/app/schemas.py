@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Any, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from pydantic import EmailStr
 
 
@@ -1107,6 +1107,8 @@ class UserCreateWithVerification(BaseModel):
     email: EmailStr
     password: str
     verification_code: str
+    registration_consent_accepted: StrictBool = False
+    registration_notice_version: str = Field(default="", max_length=80)
 
 
 # Site documents
