@@ -633,6 +633,8 @@ def _resolve_target_user(
 
     caller = _get_user_from_token(db, auth_header)
     if caller and _is_admin_user(caller):
+        from ..services.admin_mfa import require_admin_mfa
+        require_admin_mfa(db, auth_header, user=caller)
         target = db.get(User, user_id)
         return _attach_user_application_context(db, target)
     return None

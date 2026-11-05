@@ -18,6 +18,7 @@ from sqlalchemy import create_engine, event, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+from backend.tests.admin_mfa_fixtures import add_admin_mfa_elevation, install_mfa_settings
 
 try:
     from backend.app.database import get_db
@@ -68,6 +69,10 @@ class ExamScheduleTests(unittest.TestCase):
         self.other_staff = self.add_user(3, is_admin=True)
         self.other_candidate = self.add_user(4)
         self.founder = self.add_user(5, email="founder@example.test")
+        install_mfa_settings(self)
+        for actor in (2, 3, 5):
+            add_admin_mfa_elevation(self.db, actor, f"token-{actor}")
+        self.db.commit()
         self.auth = "Bearer token-2"
 
     def add_user(self, number, **overrides):

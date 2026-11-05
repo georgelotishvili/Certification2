@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+from backend.tests.admin_mfa_fixtures import add_admin_mfa_elevation, install_mfa_settings
 
 try:
     from backend.app.models import Base, User, Statement, Certificate, ExamSchedule, UserSession
@@ -35,6 +36,8 @@ class AdminUserPaginationTests(unittest.TestCase):
         settings.start()
         self.addCleanup(settings.stop)
         self.staff = self.user(1000, is_admin=True)
+        install_mfa_settings(self)
+        add_admin_mfa_elevation(self.db, self.staff.id, "staff-test-token")
         self.db.add(UserSession(user_id=self.staff.id, token="staff-test-token",
                                 expires_at=datetime.utcnow() + timedelta(hours=1)))
         self.db.commit()

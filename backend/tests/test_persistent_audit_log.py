@@ -198,6 +198,9 @@ class PersistentAuditAPITests(unittest.TestCase):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
         from backend.app.routers import admin
+        from backend.tests.admin_mfa_fixtures import add_admin_mfa_elevation, install_mfa_settings
+        install_mfa_settings(self)
+        add_admin_mfa_elevation(self.db, self.admin.id, "synthetic-admin-token")
         self.db.add_all([
             UserSession(user_id=self.admin.id, token="synthetic-admin-token", expires_at=datetime.utcnow() + timedelta(days=1)),
             UserSession(user_id=self.candidate.id, token="synthetic-candidate-token", expires_at=datetime.utcnow() + timedelta(days=1)),

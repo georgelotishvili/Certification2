@@ -249,6 +249,7 @@ class ExpertCertificateCleanupTests(unittest.TestCase):
 
         with (
             patch.object(admin, "get_settings", return_value=settings),
+            patch.object(admin, "_require_admin"),
             patch.object(admin, "_is_founder_actor", return_value=True),
             patch.object(admin, "remember_user_code") as preserve_code,
             patch.object(admin, "_cleanup_committed_media"),

@@ -61,6 +61,8 @@ def _require_admin(db: Session, authorization: str | None) -> User:
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
     if user.email.lower() == founder_email or user.is_admin:
+        from ..services.admin_mfa import require_admin_mfa
+        require_admin_mfa(db, authorization, user=user)
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin only")
 

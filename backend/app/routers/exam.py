@@ -171,6 +171,9 @@ def start_session(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
     if candidate_user.id != current_user.id and not is_admin_like(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate mismatch")
+    if candidate_user.id != current_user.id:
+        from ..services.admin_mfa import require_admin_mfa
+        require_admin_mfa(db, authorization, user=current_user)
     stage_grant = require_stage_permission(
         db,
         candidate_user,

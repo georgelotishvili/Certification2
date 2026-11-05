@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+from backend.tests.admin_mfa_fixtures import add_admin_mfa_elevation, install_mfa_settings
 
 try:
     from backend.app.database import get_db
@@ -61,6 +62,8 @@ class GuideUploadTransactionTests(unittest.TestCase):
         )
         self.db.add(founder)
         self.db.flush()
+        install_mfa_settings(self)
+        add_admin_mfa_elevation(self.db, founder.id, "admin-token")
         self.db.add(
             UserSession(
                 user_id=founder.id,

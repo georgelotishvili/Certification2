@@ -19,6 +19,7 @@ from backend.app.models import (
 )
 from backend.app.routers import admin, auth, exam, users, multi_apartment, multi_functional
 from backend.app.services import exam_stage, exam_stage_grants
+from backend.tests.admin_mfa_fixtures import add_admin_mfa_elevation, install_mfa_settings
 
 
 STAGES = ("theory", "project_stage_1", "project_stage_2")
@@ -49,6 +50,9 @@ class IndependentStageHTTPTests(unittest.TestCase):
                              first_name="Synthetic", last_name=str(number), phone="555000001",
                              email=email, password_hash="test-only", is_admin=is_admin))
         self.db.flush()
+        install_mfa_settings(self, "founder@example.com")
+        for number in (2, 3):
+            add_admin_mfa_elevation(self.db, number, f"synthetic-{number}")
         for number in (1, 2, 3):
             self.db.add(UserSession(user_id=number, token=f"synthetic-{number}",
                                     expires_at=datetime.utcnow() + timedelta(days=1)))

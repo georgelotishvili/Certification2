@@ -215,7 +215,9 @@ def require_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
         )
-    
+    from .services.admin_mfa import require_admin_mfa
+    require_admin_mfa(db, authorization, user=user)
+
     from .services.audit_log import set_audit_actor
     set_audit_actor(db, user, admin=True)
     return user
@@ -236,7 +238,9 @@ def require_founder(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Founder access required"
         )
-    
+    from .services.admin_mfa import require_admin_mfa
+    require_admin_mfa(db, authorization, user=user)
+
     from .services.audit_log import set_audit_actor
     set_audit_actor(db, user, admin=True)
     return user

@@ -176,6 +176,10 @@ def create_app() -> FastAPI:
                 return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
         response = await call_next(request)
+        if request.url.path.startswith("/auth/admin-mfa"):
+            # Include validation/rate-limit failures, not just route successes.
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -183,9 +187,10 @@ def create_app() -> FastAPI:
         return response
 
     from .routers import auth, exam, admin, users, statements, registry, reviews, expert_uploads, multi_apartment, multi_functional, guide, app_files, regulations, documents, taxonomy
-    from .routers import exam_schedules, planning_letters, ai_assistant
+    from .routers import exam_schedules, planning_letters, ai_assistant, admin_mfa
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
+    app.include_router(admin_mfa.router, prefix="/auth/admin-mfa", tags=["admin-mfa"])
     app.include_router(exam.router, prefix="/exam", tags=["exam"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
     app.include_router(exam_schedules.router, prefix="/admin", tags=["admin"])

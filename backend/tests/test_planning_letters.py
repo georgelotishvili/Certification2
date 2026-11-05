@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+from backend.tests.admin_mfa_fixtures import add_admin_mfa_elevation, install_mfa_settings
 
 try:
     from backend.app.database import get_db
@@ -81,6 +82,9 @@ class PlanningLetterTests(unittest.TestCase):
         self.addCleanup(today_patch.stop)
         self.candidate = self.add_user(1)
         self.staff = self.add_user(2, is_admin=True)
+        install_mfa_settings(self)
+        add_admin_mfa_elevation(self.db, self.staff.id, "token-2")
+        self.db.commit()
         self.other_candidate = self.add_user(3)
         self.auth = {"Authorization": "Bearer token-2"}
         app = FastAPI()

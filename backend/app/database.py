@@ -51,5 +51,19 @@ def get_db():
         enable_audit(db)
         yield db
     finally:
+        mfa_activity = db.info.pop("admin_mfa_activity", None)
+        mfa_bind = db.get_bind() if mfa_activity else None
         db.close()
+        if mfa_activity:
+            # The endpoint's own transaction must be finished first. Activity
+            # tracking may not commit unrelated application mutations.
+            from .services.admin_mfa import touch_admin_mfa_activity
+            try:
+                touch_admin_mfa_activity(mfa_bind, mfa_activity)
+            except Exception:
+                # An activity timestamp failure must not turn an already
+                # committed action into an apparent failure/retry. Without the
+                # touch the grant simply expires earlier (fail closed).
+                import logging
+                logging.getLogger(__name__).warning("Admin MFA activity touch failed")
 

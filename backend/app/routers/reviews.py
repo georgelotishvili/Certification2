@@ -240,6 +240,9 @@ def delete_comment(
 
     if actor.id != c.author_user_id and not bool(actor.is_admin):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    if actor.id != c.author_user_id:
+        from ..services.admin_mfa import require_admin_mfa
+        require_admin_mfa(db, authorization, user=actor)
 
     db.delete(c)
     db.commit()

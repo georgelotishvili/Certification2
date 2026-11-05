@@ -130,11 +130,15 @@ def _require_admin(
     founder_email = (settings.founder_admin_email or "").lower()
     
     if user.email.lower() == founder_email:
+        from ..services.admin_mfa import require_admin_mfa
+        require_admin_mfa(db, authorization, user=user)
         from ..services.audit_log import set_audit_actor
         set_audit_actor(db, user, admin=True)
         return user
     
     if user.is_admin:
+        from ..services.admin_mfa import require_admin_mfa
+        require_admin_mfa(db, authorization, user=user)
         from ..services.audit_log import set_audit_actor
         set_audit_actor(db, user, admin=True)
         return user
@@ -2221,6 +2225,7 @@ def admin_toggle_user(
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
+    _require_admin(db, authorization)
     settings = get_settings()
     if not _is_founder_actor(authorization, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can modify admin status")
@@ -2233,6 +2238,13 @@ def admin_toggle_user(
 
     # Historical candidate grants must never reappear after a later demotion.
     reset_all_stage_permissions(db, u)
+    if bool(u.is_admin) != bool(payload.is_admin):
+        # A later promotion must not revive a verification from the old role.
+        # Enrollment/recovery material stays intact; only session privileges
+        # and unfinished enrollment are revoked in this same transaction.
+        from ..models import AdminMfaElevation, AdminMfaPending
+        db.execute(delete(AdminMfaElevation).where(AdminMfaElevation.user_id == u.id))
+        db.execute(delete(AdminMfaPending).where(AdminMfaPending.user_id == u.id))
     u.is_admin = bool(payload.is_admin)
     # როცა ადმინი ხდება, exam_permission-იც ჩაირთოს
     # როცა ადმინი გაეთიშება, exam_permission-იც გაითიშოს
@@ -2642,6 +2654,7 @@ def admin_delete_user(
     authorization: str | None = Header(None, alias="Authorization"),
     db: Session = Depends(get_db),
 ):
+    _require_admin(db, authorization)
     settings = get_settings()
     if not _is_founder_actor(authorization, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only founder can delete")

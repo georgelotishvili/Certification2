@@ -369,6 +369,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return redirectToHome();
     }
 
+    if (!window.AdminMfa || !await window.AdminMfa.ensureVerified()) {
+      window.location.href = 'index.html';
+      return false;
+    }
+
     try {
       const response = await fetch(`${API_BASE}/admin/auth/verify`, {
         headers: { ...getAdminHeaders(), ...getActorHeaders(), 'Cache-Control': 'no-cache' },
@@ -513,6 +518,10 @@ document.addEventListener('DOMContentLoaded', () => {
   void bootstrapAdmin();
 
   async function bootstrapAdmin() {
+    // Do not create modules, fetch privileged data or start polling before MFA.
+    const hasAccess = await ensureAdminAccess();
+    if (!hasAccess) return;
+
     const moduleContextBase = {
       DOM,
       API_BASE,
@@ -594,9 +603,6 @@ document.addEventListener('DOMContentLoaded', () => {
         aiAssistantModule.refreshStatus?.();
       },
     }, { init: noop, render: noop });
-
-    const hasAccess = await ensureAdminAccess();
-    if (!hasAccess) return;
 
     wireNavigation({ users: usersModule, examSettings, blocksModule, multiApartment: multiApartmentModule, multiFunctional: multiFunctionalModule, guide: guideModule, regulations: regulationsModule, documents: documentsModule, appFiles: appFilesModule, applicationForm: applicationFormModule, publicAi: publicAiModule });
 

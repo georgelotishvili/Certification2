@@ -30,6 +30,14 @@ TABLE_LABELS = {"users": "მომხმარებელი", "user_sessions"
 ACTION_LABELS = {f"{table}.{operation}": f"{label} — {suffix}" for table, label in TABLE_LABELS.items() for operation, suffix in (("created", "დამატება"), ("updated", "ცვლილება"), ("deleted", "წაშლა"))}
 ACTION_LABELS.update({"journal.started": "მუდმივი ჟურნალის დაწყება", "auth.logout": "სისტემიდან გასვლა", "auth.login": "სისტემაში შესვლა", "user_sessions.created": "სისტემაში შესვლა", "user_sessions.deleted": "ავტორიზაციის სესიის გაუქმება", "letter.sent": "წერილის წარმატებით გაგზავნა", "letter.failed": "წერილის გაგზავნის შეცდომა", "letter.simulated": "წერილის შენახვა / სატესტო გაგზავნა", "letter.uncertain": "წერილის გაგზავნის შედეგი დაუდასტურებელია", "letter.sending": "წერილის გაგზავნის მცდელობა", "grant.started": "საგამოცდო ეტაპის დაწყება", "grant.consumed": "საგამოცდო დაშვების გამოყენება", "grant.revoked": "საგამოცდო დაშვების გაუქმება", "grant.expired": "დაუწყებელი დაშვების ვადის გასვლა", "exam.finished": "თეორიული გამოცდის დასრულება"})
 ACTION_LABELS["registration.notice_accepted"] = "რეგისტრაციის პირობებზე თანხმობა"
+ACTION_LABELS.update({
+    "auth.admin_mfa.setup_started": "Google Authenticator-ის მიბმის დაწყება",
+    "auth.admin_mfa.enabled": "Google Authenticator-ის მიბმა / განახლება",
+    "auth.admin_mfa.verified": "ადმინისტრატორის ორფაქტორიანი დადასტურება",
+    "auth.admin_mfa.failed": "ადმინისტრატორის დამატებითი დადასტურების წარუმატებელი მცდელობა",
+    "auth.admin_mfa.recovery_regenerated": "სარეზერვო ავტორიზაციის კოდების განახლება",
+    "auth.admin_mfa.locked": "ადმინისტრატორის დადასტურებული სესიის ჩაკეტვა",
+})
 COVERAGE_NOTE = "მუდმივი ჟურნალი ინახავს ამ განახლების შემდეგ აღრიცხულ მოქმედებებს. მანამდე არსებული სრული ისტორია არ აღდგენილა."
 _HOOKS_LOCK = Lock()
 _HOOKS_INSTALLED = False

@@ -125,6 +125,8 @@ def _require_admin(db: Session, authorization: str | None) -> User:
     settings = get_settings()
     founder_email = (settings.founder_admin_email or "").lower()
     if user.email.lower() == founder_email or user.is_admin:
+        from ..services.admin_mfa import require_admin_mfa
+        require_admin_mfa(db, authorization, user=user)
         from ..services.audit_log import set_audit_actor
         set_audit_actor(db, user, admin=True)
         return user
@@ -471,6 +473,7 @@ def profile(
     email: str = Query(..., description="User email to lookup"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    authorization: str | None = Header(None, alias="Authorization"),
 ):
     # Return public profile (no password) by email
     eml = (email or "").strip().lower()
@@ -488,6 +491,9 @@ def profile(
     # Only self or admin/founder can view
     if current_user.email != eml and not (current_user.is_admin or current_user.email.lower() == founder_email):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    if current_user.id != u.id:
+        from ..services.admin_mfa import require_admin_mfa
+        require_admin_mfa(db, authorization, user=current_user)
     is_admin_user = is_founder or bool(u.is_admin)
     # მთავარ ადმინს ყოველთვის exam_permission = true
     # სხვა ადმინებს exam_permission = true
@@ -1431,6 +1437,9 @@ def get_user_photo(
         )
         if not is_allowed:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
+        if actor.id != user_id:
+            from ..services.admin_mfa import require_admin_mfa
+            require_admin_mfa(db, effective_auth, user=actor)
 
     try:
         path = resolve_storage_path(user.photo_path)

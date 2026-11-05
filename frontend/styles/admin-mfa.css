@@ -1,0 +1,56 @@
+/* Deliberately scoped: does not restyle registration, documents or exam pages. */
+dialog.admin-mfa-dialog {
+  box-sizing: border-box;
+  width: min(520px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  max-height: calc(100dvh - 28px);
+  margin: auto;
+  padding: 24px;
+  border: 1px solid #b9c8dc;
+  border-radius: 6px;
+  background: #fff;
+  color: #25364d;
+  box-shadow: 0 12px 40px #152a4a26;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+  overflow: auto;
+  text-align: left;
+}
+.admin-mfa-dialog::backdrop { background: #14243a77; }
+.admin-mfa-dialog [hidden] { display: none !important; }
+.admin-mfa-dialog .mfa-heading { display: flex; align-items: flex-start; gap: 14px; }
+.admin-mfa-dialog .mfa-title { margin: 0; flex: 1; font-size: 20px; line-height: 1.5; color: #25364d; }
+.admin-mfa-dialog .mfa-description { margin: 12px 0 20px; color: #53647b; font-size: 14px; line-height: 1.7; }
+.admin-mfa-dialog .mfa-content, .admin-mfa-dialog .mfa-form { display: flex; flex-direction: column; gap: 12px; }
+.admin-mfa-dialog .mfa-form { margin: 0; }
+.admin-mfa-dialog .mfa-label { display: block; color: #25364d; font-size: 14px; line-height: 1.6; }
+.admin-mfa-dialog .mfa-input, .admin-mfa-dialog .mfa-recovery-codes {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 10px 12px;
+  border: 1px solid #b9c8dc; border-radius: 4px; background: #fff; color: #25364d;
+  font: inherit; font-size: 16px; line-height: 1.6; box-shadow: none;
+}
+.admin-mfa-dialog .mfa-input { min-height: 46px; }
+.admin-mfa-dialog .mfa-secret, .admin-mfa-dialog .mfa-recovery-codes { font-family: monospace; letter-spacing: .04em; }
+.admin-mfa-dialog .mfa-recovery-codes { resize: vertical; min-height: 120px; }
+.admin-mfa-dialog .mfa-button, .admin-mfa-dialog .mfa-close {
+  box-sizing: border-box; min-height: 42px; padding: 8px 14px; margin: 0;
+  border: 1px solid #b9c8dc; border-radius: 4px; background: #fff; color: #254d84;
+  font: inherit; font-size: 14px; line-height: 1.6; cursor: pointer; box-shadow: none;
+}
+.admin-mfa-dialog .mfa-primary { background: #2d5594; border-color: #2d5594; color: #fff; }
+.admin-mfa-dialog .mfa-close { flex: none; padding: 2px 10px; min-width: 38px; min-height: 38px; font: 24px/1.3 sans-serif; }
+.admin-mfa-dialog .mfa-cancel { margin-top: 16px; width: 100%; }
+.admin-mfa-dialog .mfa-button:disabled { cursor: default; opacity: .55; }
+.admin-mfa-dialog :is(button, input, textarea):focus-visible { outline: 2px solid #2d5594; outline-offset: 2px; }
+.admin-mfa-dialog .mfa-status, .admin-mfa-dialog .mfa-error { margin: 10px 0 0; font-size: 14px; line-height: 1.6; }
+.admin-mfa-dialog .mfa-status:empty, .admin-mfa-dialog .mfa-error:empty { display: none; }
+.admin-mfa-dialog .mfa-error { color: #a52b2b; }
+.admin-mfa-dialog .mfa-qr { width: min(220px, 100%); align-self: center; background: #fff; font-size: 13px; }
+.admin-mfa-dialog .mfa-qr svg { display: block; width: 100%; height: auto; }
+.admin-mfa-dialog .mfa-check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; }
+.admin-mfa-dialog .mfa-check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; }
+@media (max-width: 540px) {
+  dialog.admin-mfa-dialog { padding: 16px; }
+  .admin-mfa-dialog .mfa-title { font-size: 18px; }
+}

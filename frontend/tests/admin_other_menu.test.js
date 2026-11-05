@@ -9,6 +9,7 @@ const expected = [
   ['section', 'regulations', 'რეგულაციები'],
   ['section', 'applicationForm', 'განაცხადის ფორმა'],
   ['action', 'audit-log', 'ლოგირება'],
+  ['action', 'admin-mfa', 'უსაფრთხოება'],
 ];
 
 for (const menuClass of ['other-dropdown', 'drawer-other-submenu']) {
@@ -19,9 +20,10 @@ for (const menuClass of ['other-dropdown', 'drawer-other-submenu']) {
       assert.match(attrs, /href="#"/);
       const target = attrs.match(/\bdata-target="([^"]+)"/);
       const auditAction = /\bdata-open-audit-log="true"/.test(attrs);
-      assert.equal(Number(!!target) + Number(auditAction), 1,
-        'each entry needs exactly one explicit section or audit-modal action');
-      return target ? ['section', target[1], label.trim()] : ['action', 'audit-log', label.trim()];
+      const mfaAction = /\bdata-admin-mfa-settings\b/.test(attrs);
+      assert.equal(Number(!!target) + Number(auditAction) + Number(mfaAction), 1,
+        'each entry needs exactly one explicit section, audit-modal or MFA action');
+      return target ? ['section', target[1], label.trim()] : ['action', mfaAction ? 'admin-mfa' : 'audit-log', label.trim()];
     });
     assert.deepEqual(entries, expected);
   });

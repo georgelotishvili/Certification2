@@ -36,6 +36,7 @@ SSH = [
 ]
 
 CANDIDATE_FILES = [
+    "backend/requirements.txt",
     "backend/app/__init__.py",
     "backend/app/config.py",
     "backend/app/database.py",
@@ -45,6 +46,7 @@ CANDIDATE_FILES = [
     "backend/app/models.py",
     "backend/app/routers/__init__.py",
     "backend/app/routers/admin.py",
+    "backend/app/routers/admin_mfa.py",
     "backend/app/routers/ai_assistant.py",
     "backend/app/routers/app_files.py",
     "backend/app/routers/auth.py",
@@ -68,6 +70,7 @@ CANDIDATE_FILES = [
     "backend/app/services/candidate_status.py",
     "backend/app/services/desktop_sessions.py",
     "backend/app/services/audit_log.py",
+    "backend/app/services/admin_mfa.py",
     "backend/app/services/contract_assembler.py",
     "backend/app/services/email_verification.py",
     "backend/app/services/exam_lifecycle.py",
@@ -159,11 +162,13 @@ CANDIDATE_FILES = [
     "frontend/scripts/registry.mini.js",
     "frontend/scripts/registrations.js",
     "frontend/scripts/script.js",
+    "frontend/scripts/admin-mfa.js",
     "frontend/scripts/vendor/qrcode-generator.js",
     "frontend/scripts/vendor/qrcode-generator.LICENSE.txt",
     "frontend/scripts/vendor/qrcode-generator.SOURCE.txt",
     "frontend/sitemap.xml",
     "frontend/styles/admin.css",
+    "frontend/styles/admin-mfa.css",
     "frontend/styles/documents.css",
     "frontend/styles/header.css",
     "frontend/styles/my.css",

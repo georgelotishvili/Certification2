@@ -9,6 +9,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     app_name: str = "Exam Backend"
     secret_key: str = "dev-secret-key"
+    # Separate from the database/repository; never derive MFA encryption from
+    # the development application secret. Missing configuration fails closed.
+    admin_mfa_encryption_key: Optional[str] = None
+    admin_mfa_key_file: Optional[str] = None
     cors_origins: List[str] = [
         "http://127.0.0.1:3000",
         "http://localhost:3000",

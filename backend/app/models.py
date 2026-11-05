@@ -612,6 +612,55 @@ class UserSession(Base):
     user: Mapped["User"] = relationship("User", back_populates="sessions")
 
 
+class AdminMfaCredential(Base):
+    """Encrypted TOTP seed and persistent account-level attempt protection."""
+    __tablename__ = "admin_mfa_credentials"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    secret_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_totp_counter: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failure_window_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AdminMfaPending(Base):
+    """Enrollment is temporary and belongs to exactly one authenticated session."""
+    __tablename__ = "admin_mfa_pending"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    secret_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    credential_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class AdminMfaElevation(Base):
+    """A bounded administrative elevation, never an examination permission."""
+    __tablename__ = "admin_mfa_elevations"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+
+
+class AdminMfaRecoveryCode(Base):
+    """High-entropy single-use recovery codes; only digests are persisted."""
+    __tablename__ = "admin_mfa_recovery_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ExamMedia(Base):
     __tablename__ = "exam_media"
     __table_args__ = (
