@@ -34,6 +34,10 @@ rehost.ge server.txt
 # Local recovery archives may contain retired uploads and expired tokens.
 .deploy/local-cleanup-archives/
 
+# Deployment snapshots stay on disk, not in the public source repository.
+.deploy/statement-reply-release-20261018-01/
+.deploy/releases/
+
 # AI-to-AI communication file (local-only, not deployed)
 communication.md
 გეგმა.md

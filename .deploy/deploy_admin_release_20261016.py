@@ -8,9 +8,15 @@ import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
-DEPLOY_DIR = ROOT / ".deploy" / "statement-reply-release-20261018-01"
+# Each default invocation keeps its own rollback evidence. Import/check does
+# not create directories; scoped release wrappers may still override these.
+DEPLOY_DIR = ROOT / ".deploy" / "releases" / (
+    datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex
+)
 BEFORE_DIR = DEPLOY_DIR / "before"
 AFTER_DIR = DEPLOY_DIR / "after"
 
@@ -30,11 +36,14 @@ SSH = [
 ]
 
 CANDIDATE_FILES = [
+    "backend/app/__init__.py",
     "backend/app/config.py",
     "backend/app/database.py",
+    "backend/app/rate_limiter.py",
     "backend/app/security.py",
     "backend/app/main.py",
     "backend/app/models.py",
+    "backend/app/routers/__init__.py",
     "backend/app/routers/admin.py",
     "backend/app/routers/ai_assistant.py",
     "backend/app/routers/app_files.py",
@@ -48,19 +57,28 @@ CANDIDATE_FILES = [
     "backend/app/routers/multi_functional.py",
     "backend/app/routers/planning_letters.py",
     "backend/app/routers/registry.py",
+    "backend/app/routers/regulations.py",
+    "backend/app/routers/reviews.py",
     "backend/app/routers/statements.py",
+    "backend/app/routers/taxonomy.py",
     "backend/app/routers/users.py",
     "backend/app/schemas.py",
+    "backend/app/services/__init__.py",
+    "backend/app/services/bounded_upload.py",
     "backend/app/services/candidate_status.py",
     "backend/app/services/desktop_sessions.py",
     "backend/app/services/audit_log.py",
     "backend/app/services/contract_assembler.py",
     "backend/app/services/email_verification.py",
     "backend/app/services/exam_lifecycle.py",
+    "backend/app/services/exam_stage.py",
     "backend/app/services/exam_stage_grants.py",
+    "backend/app/services/expert_certificate_cleanup.py",
+    "backend/app/services/media_storage.py",
     "backend/app/services/offline_attempts.py",
     "backend/app/services/offline_grading.py",
     "backend/app/services/planning_email.py",
+    "backend/app/services/user_codes.py",
     "backend/app/data/ai_knowledge_seed.zip",
     "backend/app/data/contracts/01_სერტიფიკაციის_სქემა.md",
     "backend/app/data/contracts/01_სერტიფიკაციის_სქემა.docx",
@@ -85,10 +103,27 @@ CANDIDATE_FILES = [
     "backend/scripts/migrate_statements_attachment.py",
     "backend/scripts/migrate_doc_numbers.py",
     "backend/scripts/seed.py",
+    "frontend/assets/fonts/bpg_nino_mtavruli_bold.ttf",
+    "frontend/assets/fonts/bpg_nino_mtavruli_bold.woff2",
     "frontend/assets/fonts/dejavu-sans.ttf",
     "frontend/assets/fonts/dejavu-sans-bold.ttf",
+    "frontend/assets/fonts/dejavu-sans.woff2",
+    "frontend/assets/photos/main backenground.jpg",
+    "frontend/assets/svg/E-mail.svg",
     "frontend/assets/svg/facebook.svg",
+    "frontend/assets/svg/header.svg",
+    "frontend/assets/svg/location.svg",
     "frontend/assets/svg/logo.svg",
+    "frontend/assets/svg/phone.svg",
+    "frontend/certificate/architect bac.svg",
+    "frontend/certificate/architect.css",
+    "frontend/certificate/architect.html",
+    "frontend/certificate/expert bac.svg",
+    "frontend/certificate/expert.css",
+    "frontend/certificate/expert.html",
+    "frontend/certificate/municip bac.svg",
+    "frontend/certificate/municipal.css",
+    "frontend/certificate/municipal.html",
     "frontend/pages/admin.html",
     "frontend/pages/documents.html",
     "frontend/pages/index.html",
@@ -96,6 +131,7 @@ CANDIDATE_FILES = [
     "frontend/pages/registrations.html",
     "frontend/pages/registry.html",
     "frontend/partials/header.html",
+    "frontend/robots.txt",
     "frontend/scripts/admin.js",
     "frontend/scripts/admin/ai-assistant.js",
     "frontend/scripts/admin/app-files.js",
@@ -114,18 +150,27 @@ CANDIDATE_FILES = [
     "frontend/scripts/admin/shared.js",
     "frontend/scripts/admin/statements.js",
     "frontend/scripts/admin/users.js",
+    "frontend/scripts/certificate-qr.js",
+    "frontend/scripts/config.js",
     "frontend/scripts/documents.js",
     "frontend/scripts/header.js",
     "frontend/scripts/my.js",
     "frontend/scripts/registry.mini.js",
     "frontend/scripts/registrations.js",
     "frontend/scripts/script.js",
+    "frontend/scripts/vendor/qrcode-generator.js",
+    "frontend/scripts/vendor/qrcode-generator.LICENSE.txt",
+    "frontend/scripts/vendor/qrcode-generator.SOURCE.txt",
+    "frontend/sitemap.xml",
     "frontend/styles/admin.css",
     "frontend/styles/documents.css",
     "frontend/styles/header.css",
     "frontend/styles/my.css",
     "frontend/styles/registry.css",
     "frontend/styles/styles.css",
+    "frontend/vendor/jspdf.umd.min.js",
+    "frontend/vendor/mammoth.browser.min.js",
+    "frontend/vendor/svg2pdf.min.js",
 ]
 
 
@@ -403,7 +448,7 @@ except Exception as exc:
         if not rel.startswith("frontend/"):
             continue
         url_path = rel[len("frontend/"):]
-        url = f"https://gipc.org.ge/{url_path}"
+        url = f"https://gipc.org.ge/{quote(url_path, safe='/')}"
         req = urllib.request.Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "gipc-deploy-verifier/1.0"})
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read()
