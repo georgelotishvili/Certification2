@@ -9,7 +9,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../scripts/script.js'), 'utf8');
 const header = fs.readFileSync(path.join(__dirname, '../scripts/header.js'), 'utf8');
-const NOTICE_VERSION = '20261105-registration-privacy1';
+const NOTICE_VERSION = '20261105-registration-privacy2';
 const authSource = source.slice(source.indexOf('  function createAuthModule()'), source.indexOf('  /* Registry module moved'));
 const escapeSource = source.slice(source.indexOf('  // Global escape handling'), source.indexOf('  // Expose fullscreen helpers'));
 const deferred = () => { let resolve; const promise = new Promise(yes => { resolve = yes; }); return { promise, resolve }; };

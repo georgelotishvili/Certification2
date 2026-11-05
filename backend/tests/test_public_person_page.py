@@ -269,7 +269,7 @@ class PublicPersonPageTests(unittest.TestCase):
         payload = UserCreateWithVerification(
             personal_id=original_pid, first_name="საცდელი", last_name="დაბრუნებული", phone="555999999",
             email="returned@example.com", password="Test-password-123!", verification_code="1234",
-            registration_consent_accepted=True, registration_notice_version="20261105-registration-privacy1",
+            registration_consent_accepted=True, registration_notice_version="20261105-registration-privacy2",
         )
         with patch.object(users.email_verification, "verify_code", return_value=True), \
                 patch.object(users, "hash_code", return_value="test-hash"), \

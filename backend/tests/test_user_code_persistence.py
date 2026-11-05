@@ -70,7 +70,7 @@ class UserCodePersistenceTests(unittest.TestCase):
             password="Test-password-123!",
             verification_code="1234",
             registration_consent_accepted=True,
-            registration_notice_version="20261105-registration-privacy1",
+            registration_notice_version="20261105-registration-privacy2",
         )
         values.update(overrides)
         return UserCreateWithVerification(**values)

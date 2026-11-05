@@ -1446,8 +1446,8 @@
     populateContractHtmlForCurrentUser,
   };
 
-  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261105-registration-privacy1';
-  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261105_registration_privacy1';
+  const HEADER_PARTIAL_URL = '../partials/header.html?v=20261105-registration-privacy2';
+  const HEADER_CACHE_KEY = 'gipc_header_partial_v20261105_registration_privacy2';
 
   function syncHeaderInitialAuthUI() {
     try {

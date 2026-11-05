@@ -607,7 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // NEED_REGISTER_TEXT removed: banner shows either default or user's name/code
 
     let activeView = 'options';
-    const REGISTRATION_NOTICE_VERSION = '20261105-registration-privacy1';
+    const REGISTRATION_NOTICE_VERSION = '20261105-registration-privacy2';
     let registrationConsentAccepted = false;
     let registrationFlowGeneration = 0;
     let registrationPrivacyPending = false;
